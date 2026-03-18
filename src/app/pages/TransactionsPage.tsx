@@ -143,6 +143,7 @@ export function TransactionsPage() {
   const activeCleanupMode = cleanupModeCopy[filters.nature as keyof typeof cleanupModeCopy] ?? cleanupModeCopy.all;
   const isFocusedCleanupMode = filters.nature === "uncategorized" || filters.nature === "untagged";
   const isFlowAuditMode = filters.nature === "shared" || filters.nature === "internal_transfer";
+  const activeOwnerName = filters.ownerPersonId !== "all" ? peopleMap.get(filters.ownerPersonId) ?? null : null;
   const currentCleanupRemaining =
     filters.nature === "uncategorized" ? uncategorizedCount : filters.nature === "untagged" ? untaggedCount : null;
   const currentFlowAuditCount =
@@ -464,6 +465,35 @@ export function TransactionsPage() {
                       대시보드 보기
                     </Link>
                   )}
+                </div>
+              </div>
+            ) : null}
+
+            {activeOwnerName ? (
+              <div className="review-summary-panel mb-3">
+                <div className="review-summary-copy">
+                  <strong>{activeOwnerName}의 거래 흐름을 보고 있습니다</strong>
+                  <p className="mb-0 text-secondary">
+                    지금 화면은 {activeOwnerName}에게 연결된 거래만 좁혀서 보고 있습니다. 정산 화면에서 넘어온 경우라면 이 사람의 공동지출 흐름을 바로 확인하는 용도입니다.
+                  </p>
+                </div>
+                <div className="d-flex flex-wrap gap-2">
+                  <button
+                    className="btn btn-outline-secondary btn-sm"
+                    type="button"
+                    onClick={() => setFilters((current) => ({ ...current, ownerPersonId: "all" }))}
+                  >
+                    사람 필터 해제
+                  </button>
+                  {filters.nature !== "shared" ? (
+                    <button
+                      className="btn btn-outline-primary btn-sm"
+                      type="button"
+                      onClick={() => setFilters((current) => ({ ...current, nature: "shared" }))}
+                    >
+                      공동지출만 보기
+                    </button>
+                  ) : null}
                 </div>
               </div>
             ) : null}
