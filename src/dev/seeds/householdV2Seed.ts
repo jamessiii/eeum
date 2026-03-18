@@ -1,0 +1,221 @@
+import { createFinancialProfileBase, createStarterCategories, createStarterTags, createWorkspaceBase } from "../../domain/app/defaults";
+import type { Account, Card, Person, ReviewItem, Transaction, WorkspaceBundle } from "../../shared/types/models";
+import { createId } from "../../shared/utils/id";
+
+function findCategoryId(categories: WorkspaceBundle["categories"], name: string | null): string | null {
+  if (!name) return null;
+  return categories.find((category) => category.name === name)?.id ?? null;
+}
+
+export function createHouseholdV2DemoBundle(): WorkspaceBundle {
+  const workspace = createWorkspaceBase("가계부 v2 테스트", "demo");
+  const financialProfile = createFinancialProfileBase(workspace.id);
+  financialProfile.monthlyNetIncome = 7_200_000;
+  financialProfile.targetSavingsRate = 0.25;
+
+  const categories = createStarterCategories(workspace.id);
+  const tags = createStarterTags(workspace.id);
+
+  const people: Person[] = [
+    { id: createId("person"), workspaceId: workspace.id, name: "형준", role: "owner" },
+    { id: createId("person"), workspaceId: workspace.id, name: "소정", role: "member" },
+  ];
+  const personMap = new Map(people.map((person) => [person.name, person.id]));
+
+  const accounts: Account[] = [
+    { id: createId("account"), workspaceId: workspace.id, ownerPersonId: personMap.get("형준") ?? null, name: "형준 월급통장", institutionName: "국민은행", accountNumberMasked: "5850", accountType: "checking", isShared: false },
+    { id: createId("account"), workspaceId: workspace.id, ownerPersonId: personMap.get("소정") ?? null, name: "소정 월급통장", institutionName: "카카오뱅크", accountNumberMasked: "3230", accountType: "checking", isShared: false },
+    { id: createId("account"), workspaceId: workspace.id, ownerPersonId: personMap.get("형준") ?? null, name: "형준 카드값", institutionName: "신한은행", accountNumberMasked: "1301", accountType: "checking", isShared: false },
+    { id: createId("account"), workspaceId: workspace.id, ownerPersonId: personMap.get("소정") ?? null, name: "소정 카드값", institutionName: "기업은행", accountNumberMasked: "0530", accountType: "checking", isShared: false },
+    { id: createId("account"), workspaceId: workspace.id, ownerPersonId: null, name: "생활비", institutionName: "카카오뱅크", accountNumberMasked: "6837", accountType: "checking", isShared: true },
+  ];
+
+  const accountMap = new Map(accounts.map((account) => [account.name, account.id]));
+
+  const cards: Card[] = [
+    { id: createId("card"), workspaceId: workspace.id, ownerPersonId: personMap.get("형준") ?? null, name: "우리 Z Family", issuerName: "우리카드", cardNumberMasked: "family", linkedAccountId: accountMap.get("형준 카드값") ?? null },
+    { id: createId("card"), workspaceId: workspace.id, ownerPersonId: personMap.get("형준") ?? null, name: "현대 ZERO", issuerName: "현대카드", cardNumberMasked: "zero", linkedAccountId: accountMap.get("형준 카드값") ?? null },
+    { id: createId("card"), workspaceId: workspace.id, ownerPersonId: personMap.get("소정") ?? null, name: "삼성 트레이더스", issuerName: "삼성카드", cardNumberMasked: "traders", linkedAccountId: accountMap.get("소정 카드값") ?? null },
+    { id: createId("card"), workspaceId: workspace.id, ownerPersonId: personMap.get("소정") ?? null, name: "삼성 개인카드", issuerName: "삼성카드", cardNumberMasked: "4032", linkedAccountId: accountMap.get("소정 카드값") ?? null },
+  ];
+
+  const cardMap = new Map(cards.map((card) => [card.name, card.id]));
+  const testTagId = tags[0]?.id ?? null;
+
+  const transactions: Transaction[] = [
+    {
+      id: createId("tx"),
+      workspaceId: workspace.id,
+      occurredAt: "2026-03-01T00:00:00.000Z",
+      settledAt: "2026-03-01T00:00:00.000Z",
+      transactionType: "transfer",
+      sourceType: "account",
+      ownerPersonId: personMap.get("형준") ?? null,
+      cardId: null,
+      accountId: accountMap.get("형준 월급통장") ?? null,
+      fromAccountId: accountMap.get("형준 월급통장") ?? null,
+      toAccountId: accountMap.get("생활비") ?? null,
+      merchantName: "생활비 이체",
+      description: "형준 월급통장에서 생활비 계좌로 이동",
+      amount: 400000,
+      categoryId: findCategoryId(categories, "기타"),
+      tagIds: testTagId ? [testTagId] : [],
+      isInternalTransfer: true,
+      isExpenseImpact: false,
+      isSharedExpense: false,
+      refundOfTransactionId: null,
+      status: "active",
+    },
+    {
+      id: createId("tx"),
+      workspaceId: workspace.id,
+      occurredAt: "2026-03-01T00:00:00.000Z",
+      settledAt: "2026-03-01T00:00:00.000Z",
+      transactionType: "expense",
+      sourceType: "account",
+      ownerPersonId: personMap.get("소정") ?? null,
+      cardId: null,
+      accountId: accountMap.get("소정 월급통장") ?? null,
+      fromAccountId: accountMap.get("소정 월급통장") ?? null,
+      toAccountId: null,
+      merchantName: "자동차 리스",
+      description: "계좌 지출",
+      amount: 275698,
+      categoryId: findCategoryId(categories, "대출상환"),
+      tagIds: testTagId ? [testTagId] : [],
+      isInternalTransfer: false,
+      isExpenseImpact: true,
+      isSharedExpense: false,
+      refundOfTransactionId: null,
+      status: "active",
+    },
+    {
+      id: createId("tx"),
+      workspaceId: workspace.id,
+      occurredAt: "2026-03-14T00:00:00.000Z",
+      settledAt: "2026-03-16T00:00:00.000Z",
+      transactionType: "expense",
+      sourceType: "card",
+      ownerPersonId: personMap.get("소정") ?? null,
+      cardId: cardMap.get("삼성 트레이더스") ?? null,
+      accountId: accountMap.get("소정 카드값") ?? null,
+      fromAccountId: null,
+      toAccountId: null,
+      merchantName: "퍼펙트 스페셜티커피",
+      description: "카드 사용",
+      amount: 5000,
+      categoryId: findCategoryId(categories, "개인지출"),
+      tagIds: testTagId ? [testTagId] : [],
+      isInternalTransfer: false,
+      isExpenseImpact: true,
+      isSharedExpense: false,
+      refundOfTransactionId: null,
+      status: "active",
+    },
+    {
+      id: createId("tx"),
+      workspaceId: workspace.id,
+      occurredAt: "2026-03-15T00:00:00.000Z",
+      settledAt: "2026-03-16T00:00:00.000Z",
+      transactionType: "expense",
+      sourceType: "card",
+      ownerPersonId: personMap.get("소정") ?? null,
+      cardId: cardMap.get("삼성 개인카드") ?? null,
+      accountId: accountMap.get("소정 카드값") ?? null,
+      fromAccountId: null,
+      toAccountId: null,
+      merchantName: "서울프로공사",
+      description: "카드 사용",
+      amount: 15800,
+      categoryId: findCategoryId(categories, "교통비"),
+      tagIds: testTagId ? [testTagId] : [],
+      isInternalTransfer: false,
+      isExpenseImpact: true,
+      isSharedExpense: false,
+      refundOfTransactionId: null,
+      status: "active",
+    },
+    {
+      id: createId("tx"),
+      workspaceId: workspace.id,
+      occurredAt: "2026-03-17T00:00:00.000Z",
+      settledAt: "2026-03-17T00:00:00.000Z",
+      transactionType: "expense",
+      sourceType: "card",
+      ownerPersonId: personMap.get("형준") ?? null,
+      cardId: cardMap.get("우리 Z Family") ?? null,
+      accountId: accountMap.get("형준 카드값") ?? null,
+      fromAccountId: null,
+      toAccountId: null,
+      merchantName: "엔진키즈박물관",
+      description: "카드 사용",
+      amount: 71710,
+      categoryId: findCategoryId(categories, "가족활동"),
+      tagIds: testTagId ? [testTagId] : [],
+      isInternalTransfer: false,
+      isExpenseImpact: true,
+      isSharedExpense: true,
+      refundOfTransactionId: null,
+      status: "active",
+    },
+    {
+      id: createId("tx"),
+      workspaceId: workspace.id,
+      occurredAt: "2026-03-18T00:00:00.000Z",
+      settledAt: "2026-03-18T00:00:00.000Z",
+      transactionType: "expense",
+      sourceType: "account",
+      ownerPersonId: null,
+      cardId: null,
+      accountId: accountMap.get("생활비") ?? null,
+      fromAccountId: accountMap.get("생활비") ?? null,
+      toAccountId: null,
+      merchantName: "쿠팡",
+      description: "생활비 계좌 결제",
+      amount: 88200,
+      categoryId: findCategoryId(categories, "생필품"),
+      tagIds: testTagId ? [testTagId] : [],
+      isInternalTransfer: false,
+      isExpenseImpact: true,
+      isSharedExpense: true,
+      refundOfTransactionId: null,
+      status: "active",
+    },
+  ];
+
+  const reviews: ReviewItem[] = [
+    {
+      id: createId("review"),
+      workspaceId: workspace.id,
+      reviewType: "internal_transfer_candidate",
+      status: "open",
+      primaryTransactionId: transactions[0].id,
+      relatedTransactionIds: [],
+      confidenceScore: 0.92,
+      summary: "생활비 이체는 내부이체 후보입니다.",
+    },
+    {
+      id: createId("review"),
+      workspaceId: workspace.id,
+      reviewType: "shared_expense_candidate",
+      status: "open",
+      primaryTransactionId: transactions[4].id,
+      relatedTransactionIds: [],
+      confidenceScore: 0.73,
+      summary: "가족활동 지출을 공동지출 정산 대상으로 볼 수 있습니다.",
+    },
+  ];
+
+  return {
+    workspace,
+    financialProfile,
+    people,
+    accounts,
+    cards,
+    categories,
+    tags,
+    transactions,
+    reviews,
+    imports: [],
+  };
+}
