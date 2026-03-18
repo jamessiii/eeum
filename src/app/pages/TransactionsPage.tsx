@@ -37,6 +37,8 @@ export function TransactionsPage() {
     transactionType: "all",
     ownerPersonId: "all",
     status: "all",
+    nature: "all",
+    searchQuery: "",
   });
 
   const transactions = useMemo(
@@ -45,8 +47,23 @@ export function TransactionsPage() {
         .filter((item) => (filters.transactionType === "all" ? true : item.transactionType === filters.transactionType))
         .filter((item) => (filters.ownerPersonId === "all" ? true : item.ownerPersonId === filters.ownerPersonId))
         .filter((item) => (filters.status === "all" ? true : item.status === filters.status))
+        .filter((item) => {
+          if (filters.nature === "all") return true;
+          if (filters.nature === "expense") return item.isExpenseImpact;
+          if (filters.nature === "shared") return item.isSharedExpense;
+          if (filters.nature === "internal_transfer") return item.isInternalTransfer;
+          if (filters.nature === "uncategorized") return item.isExpenseImpact && !item.categoryId;
+          return true;
+        })
+        .filter((item) => {
+          const query = filters.searchQuery.trim().toLowerCase();
+          if (!query) return true;
+          return [item.merchantName, item.description]
+            .filter(Boolean)
+            .some((value) => value.toLowerCase().includes(query));
+        })
         .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)),
-    [filters.ownerPersonId, filters.status, filters.transactionType, scope.transactions],
+    [filters.nature, filters.ownerPersonId, filters.searchQuery, filters.status, filters.transactionType, scope.transactions],
   );
 
   const activeTransactions = transactions.filter((item) => item.status === "active");
@@ -239,6 +256,23 @@ export function TransactionsPage() {
                 <option value="cancelled">제외됨</option>
                 <option value="refunded">환불됨</option>
               </select>
+              <select
+                className="form-select toolbar-select"
+                value={filters.nature}
+                onChange={(event) => setFilters((current) => ({ ...current, nature: event.target.value }))}
+              >
+                <option value="all">전체 성격</option>
+                <option value="expense">실지출만</option>
+                <option value="shared">공동지출만</option>
+                <option value="internal_transfer">내부이체만</option>
+                <option value="uncategorized">미분류만</option>
+              </select>
+              <input
+                className="form-control toolbar-search"
+                value={filters.searchQuery}
+                onChange={(event) => setFilters((current) => ({ ...current, searchQuery: event.target.value }))}
+                placeholder="가맹점 또는 설명 검색"
+              />
             </div>
 
             <div className="table-responsive">
