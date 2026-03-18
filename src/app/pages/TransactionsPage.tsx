@@ -23,6 +23,29 @@ const flowModeLabel = {
   non_expense: "비지출 흐름",
 } as const;
 
+const transactionDraftGuide = {
+  expense: {
+    title: "지출 입력 중",
+    description: "실제 소비가 발생한 거래입니다. 생활비, 식비, 쇼핑처럼 소비 분석에 포함될 항목에 맞습니다.",
+    helper: "공동으로 부담한 지출이면 공동지출도 함께 체크해두세요.",
+  },
+  income: {
+    title: "수입 입력 중",
+    description: "월급, 용돈, 환급처럼 들어온 돈을 기록합니다. 일반적으로 지출 분석에는 포함하지 않습니다.",
+    helper: "수입은 공동지출이나 내부이체와 성격이 다르므로 지출 반영은 꺼두는 편이 자연스럽습니다.",
+  },
+  transfer: {
+    title: "이체 입력 중",
+    description: "내 계좌 간 이동이나 공동 계좌로 옮긴 돈처럼 현금 이동만 있는 경우에 사용합니다.",
+    helper: "내부이체 성격이 강하므로 보통 지출 반영은 끄는 것이 맞습니다.",
+  },
+  adjustment: {
+    title: "조정 입력 중",
+    description: "정정, 보정, 예외 처리성 거래를 기록합니다. 일반 거래 흐름과 분리해서 다루는 용도입니다.",
+    helper: "조정 거래는 통계에 바로 반영하지 않는 편이 안전합니다.",
+  },
+} as const;
+
 export function TransactionsPage() {
   const { addTransaction, state } = useAppState();
   const workspaceId = state.activeWorkspaceId!;
@@ -40,6 +63,9 @@ export function TransactionsPage() {
     nature: "all",
     searchQuery: "",
   });
+  const [draftType, setDraftType] = useState<"expense" | "income" | "transfer" | "adjustment">("expense");
+  const [draftExpenseImpact, setDraftExpenseImpact] = useState(true);
+  const [draftSharedExpense, setDraftSharedExpense] = useState(false);
 
   const transactions = useMemo(
     () =>
@@ -99,6 +125,13 @@ export function TransactionsPage() {
             <p className="mb-0 text-secondary">내 계좌끼리 옮긴 돈은 `이체`로 넣고 `지출 반영`을 꺼야 과소비로 잡히지 않습니다.</p>
           </article>
         </div>
+        <div className="review-summary-panel mb-4">
+          <div className="review-summary-copy">
+            <strong>{transactionDraftGuide[draftType].title}</strong>
+            <p className="mb-0 text-secondary">{transactionDraftGuide[draftType].description}</p>
+          </div>
+          <div className="small text-secondary">{transactionDraftGuide[draftType].helper}</div>
+        </div>
         <form
           className="manual-transaction-form"
           onSubmit={(event) => {
@@ -122,11 +155,28 @@ export function TransactionsPage() {
               isExpenseImpact: String(formData.get("isExpenseImpact") || "") === "on",
             });
             form.reset();
+            setDraftType("expense");
+            setDraftExpenseImpact(true);
+            setDraftSharedExpense(false);
           }}
         >
           <input name="occurredAt" type="date" className="form-control" required />
           <input name="settledAt" type="date" className="form-control" />
-          <select name="transactionType" className="form-select" defaultValue="expense">
+          <select
+            name="transactionType"
+            className="form-select"
+            value={draftType}
+            onChange={(event) => {
+              const nextType = event.target.value as "expense" | "income" | "transfer" | "adjustment";
+              setDraftType(nextType);
+              if (nextType === "expense") {
+                setDraftExpenseImpact(true);
+              } else {
+                setDraftExpenseImpact(false);
+                setDraftSharedExpense(false);
+              }
+            }}
+          >
             <option value="expense">지출</option>
             <option value="income">수입</option>
             <option value="transfer">이체</option>
@@ -173,11 +223,24 @@ export function TransactionsPage() {
           <input name="description" className="form-control" placeholder="설명" />
           <input name="amount" type="number" min="0" step="1" className="form-control" placeholder="금액" required />
           <label className="form-check compact-check">
-            <input defaultChecked name="isExpenseImpact" type="checkbox" className="form-check-input" />
+            <input
+              checked={draftExpenseImpact}
+              name="isExpenseImpact"
+              type="checkbox"
+              className="form-check-input"
+              onChange={(event) => setDraftExpenseImpact(event.target.checked)}
+            />
             <span className="form-check-label">지출 반영</span>
           </label>
           <label className="form-check compact-check">
-            <input name="isSharedExpense" type="checkbox" className="form-check-input" />
+            <input
+              checked={draftSharedExpense}
+              disabled={draftType !== "expense"}
+              name="isSharedExpense"
+              type="checkbox"
+              className="form-check-input"
+              onChange={(event) => setDraftSharedExpense(event.target.checked)}
+            />
             <span className="form-check-label">공동지출</span>
           </label>
           <button className="btn btn-primary" type="submit">
