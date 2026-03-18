@@ -83,6 +83,7 @@ export function DashboardPage() {
     },
   ];
   const journeyProgress = journeySteps.filter((step) => step.completed).length / journeySteps.length;
+  const isJourneyReady = journeySteps.every((step) => step.completed);
   const attentionItems = [
     insights.reviewCount > 0
       ? {
@@ -205,6 +206,23 @@ export function DashboardPage() {
           <h3>재무 코치 메모</h3>
           <p className="mb-0">{insights.coaching}</p>
         </div>
+
+        {isJourneyReady ? (
+          <div className="completion-banner mt-4">
+            <strong>진단 준비를 마쳤습니다.</strong>
+            <p className="mb-0 text-secondary">
+              검토와 카테고리, 태그, 기준선 설정까지 끝나서 이번 달 진단과 저축 가이드를 비교적 안정적으로 볼 수 있습니다.
+            </p>
+            <div className="completion-actions">
+              <Link to="/transactions" className="btn btn-outline-primary btn-sm">
+                거래 화면 보기
+              </Link>
+              <Link to="/settlements" className="btn btn-outline-secondary btn-sm">
+                정산 화면 보기
+              </Link>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <section className="card shadow-sm" style={getMotionStyle(1)}>
