@@ -550,6 +550,62 @@ a {
   gap: 1rem;
 }
 
+.review-summary-panel {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  padding: 1rem 1.1rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(23, 32, 51, 0.08);
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.review-summary-copy {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.review-filter-bar {
+  display: flex;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.review-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid rgba(23, 32, 51, 0.08);
+  border-radius: 999px;
+  background: rgba(248, 250, 252, 0.95);
+  color: #1b2435;
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    background-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.review-filter-chip:hover {
+  transform: translateY(-1px);
+  border-color: rgba(13, 110, 253, 0.25);
+}
+
+.review-filter-chip.active {
+  background: rgba(13, 110, 253, 0.12);
+  border-color: rgba(13, 110, 253, 0.35);
+  box-shadow: 0 14px 32px rgba(13, 110, 253, 0.12);
+}
+
+.review-filter-chip span {
+  font-weight: 700;
+}
+
+.review-filter-chip small {
+  color: #5b6475;
+}
+
 .review-card {
   padding: 1rem 1.1rem;
 }

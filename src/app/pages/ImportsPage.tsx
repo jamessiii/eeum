@@ -1,16 +1,9 @@
 import { Link } from "react-router-dom";
+import { REVIEW_TYPE_LABELS } from "../../domain/reviews/meta";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
-
-const reviewTypeLabel: Record<string, string> = {
-  duplicate_candidate: "중복 후보",
-  refund_candidate: "환불 후보",
-  uncategorized_transaction: "미분류 거래",
-  internal_transfer_candidate: "내부이체 후보",
-  shared_expense_candidate: "공동지출 후보",
-};
 
 export function ImportsPage() {
   const { importWorkbook, state } = useAppState();
@@ -112,8 +105,8 @@ export function ImportsPage() {
         ) : (
           <div className="resource-grid">
             {reviewTypeSummary.map(([reviewType, count], index) => (
-              <article key={reviewType} className="resource-card" style={getMotionStyle(index + 3)}>
-                <h3>{reviewTypeLabel[reviewType] ?? reviewType}</h3>
+                <article key={reviewType} className="resource-card" style={getMotionStyle(index + 3)}>
+                <h3>{REVIEW_TYPE_LABELS[reviewType as keyof typeof REVIEW_TYPE_LABELS] ?? reviewType}</h3>
                 <p className="mb-0 text-secondary">{count}건</p>
               </article>
             ))}
