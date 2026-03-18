@@ -9,10 +9,18 @@ import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
 
+const sourceTypeLabel = {
+  manual: "수동입력",
+  account: "계좌",
+  card: "카드",
+  import: "가져오기",
+} as const;
+
 export function ReviewsPage() {
   const { applyReviewSuggestion, dismissReview, resolveReview, state } = useAppState();
   const [activeFilter, setActiveFilter] = useState<"all" | ReviewType>("all");
   const [activeTagId, setActiveTagId] = useState<string>("all");
+  const [activeSourceType, setActiveSourceType] = useState<"all" | keyof typeof sourceTypeLabel>("all");
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const health = getWorkspaceHealthSummary(scope);
@@ -36,6 +44,11 @@ export function ReviewsPage() {
   const filteredReviews = reviews
     .filter((item) => (activeFilter === "all" ? true : item.reviewType === activeFilter))
     .filter((item) => {
+      if (activeSourceType === "all") return true;
+      const primaryTransaction = transactions.get(item.primaryTransactionId);
+      return primaryTransaction?.sourceType === activeSourceType;
+    })
+    .filter((item) => {
       if (activeTagId === "all") return true;
       const relatedTagIds = [item.primaryTransactionId, ...item.relatedTransactionIds]
         .map((id) => transactions.get(id))
@@ -49,6 +62,13 @@ export function ReviewsPage() {
       .sort((a, b) => b.count - a.count)[0] ?? null;
   const openSharedReviewCount = reviewCounts.shared_expense_candidate ?? 0;
   const openInternalTransferReviewCount = reviewCounts.internal_transfer_candidate ?? 0;
+  const sourceTypeReviewCounts = (["manual", "account", "card", "import"] as const).reduce<Record<keyof typeof sourceTypeLabel, number>>(
+    (accumulator, sourceType) => {
+      accumulator[sourceType] = reviews.filter((review) => transactions.get(review.primaryTransactionId)?.sourceType === sourceType).length;
+      return accumulator;
+    },
+    { manual: 0, account: 0, card: 0, import: 0 },
+  );
   const nextReviewAction = uncategorizedCount
     ? {
         title: "지금 가장 먼저 할 일",
@@ -125,6 +145,17 @@ export function ReviewsPage() {
           <div className="toolbar-row mt-2">
             <select
               className="form-select toolbar-select"
+              value={activeSourceType}
+              onChange={(event) => setActiveSourceType(event.target.value as "all" | keyof typeof sourceTypeLabel)}
+            >
+              <option value="all">전체 수단</option>
+              <option value="manual">수동입력</option>
+              <option value="account">계좌</option>
+              <option value="card">카드</option>
+              <option value="import">가져오기</option>
+            </select>
+            <select
+              className="form-select toolbar-select"
               value={activeTagId}
               onChange={(event) => setActiveTagId(event.target.value)}
             >
@@ -136,6 +167,21 @@ export function ReviewsPage() {
               ))}
             </select>
           </div>
+          <div className="d-flex flex-wrap gap-2 mt-2">
+            <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setActiveSourceType("all")}>
+              전체 {reviews.length}건
+            </button>
+            {(["manual", "account", "card", "import"] as const).map((sourceType) => (
+              <button
+                key={sourceType}
+                className="btn btn-outline-secondary btn-sm"
+                type="button"
+                onClick={() => setActiveSourceType(sourceType)}
+              >
+                {sourceTypeLabel[sourceType]} {sourceTypeReviewCounts[sourceType]}건
+              </button>
+            ))}
+          </div>
           {resolvedReviews.length ? (
             <div className="resource-grid">
               {REVIEW_TYPE_ORDER.filter((type) => (resolvedCounts[type] ?? 0) > 0).map((type) => (
@@ -146,6 +192,25 @@ export function ReviewsPage() {
               ))}
             </div>
           ) : null}
+        </div>
+      ) : null}
+
+      {activeSourceType !== "all" ? (
+        <div className="review-summary-panel mt-3">
+          <div className="review-summary-copy">
+            <strong>{sourceTypeLabel[activeSourceType]} 검토 항목만 보고 있습니다</strong>
+            <p className="mb-0 text-secondary">
+              지금은 {sourceTypeLabel[activeSourceType]} 경로로 들어온 검토 후보만 모아 보고 있습니다. 같은 수단끼리 한 번에 정리하면 연결값 오류를 더 빨리 찾을 수 있습니다.
+            </p>
+          </div>
+          <div className="d-flex flex-wrap gap-2">
+            <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setActiveSourceType("all")}>
+              수단 필터 해제
+            </button>
+            <Link className="btn btn-outline-primary btn-sm" to={`/transactions?sourceType=${activeSourceType}`}>
+              {sourceTypeLabel[activeSourceType]} 거래 보기
+            </Link>
+          </div>
         </div>
       ) : null}
 
