@@ -17,6 +17,7 @@ import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { CompletionBanner } from "../components/CompletionBanner";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
+import { TransactionInlineEditor, type TransactionEditDraft } from "../components/TransactionInlineEditor";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
 
@@ -160,8 +161,8 @@ export function TransactionsPage() {
   const [draftExpenseImpact, setDraftExpenseImpact] = useState(true);
   const [draftSharedExpense, setDraftSharedExpense] = useState(false);
   const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
-  const [editDraft, setEditDraft] = useState({
-    sourceType: "manual" as "card" | "account" | "manual" | "import",
+  const [editDraft, setEditDraft] = useState<TransactionEditDraft>({
+    sourceType: "manual",
     ownerPersonId: "",
     accountId: "",
     cardId: "",
@@ -292,6 +293,10 @@ export function TransactionsPage() {
       description: "",
       amount: "",
     });
+  };
+
+  const updateEditDraft = (patch: Partial<TransactionEditDraft>) => {
+    setEditDraft((current) => ({ ...current, ...patch }));
   };
 
   return (
@@ -1016,129 +1021,29 @@ export function TransactionsPage() {
                             ) : null}
                           </div>
                           {editingTransactionId === transaction.id ? (
-                            <div className="review-summary-panel mt-3">
-                                <div className="review-summary-copy">
-                                  <strong>이 거래 기본 정보 수정</strong>
-                                  <p className="mb-0 text-secondary">수단, 사용자, 계좌, 카드, 사용일, 결제일, 가맹점, 설명, 금액을 바로 수정할 수 있습니다.</p>
-                                </div>
-                                <div className="d-flex flex-column gap-2 w-100">
-                                  <div className="d-flex flex-wrap gap-2">
-                                    <select
-                                      className="form-select form-select-sm"
-                                      value={editDraft.sourceType}
-                                      onChange={(event) =>
-                                        setEditDraft((current) => ({
-                                          ...current,
-                                          sourceType: event.target.value as "card" | "account" | "manual" | "import",
-                                        }))
-                                      }
-                                    >
-                                      {SOURCE_TYPE_OPTIONS.map((sourceType) => (
-                                        <option key={sourceType} value={sourceType}>
-                                          {getSourceTypeLabel(sourceType)}
-                                        </option>
-                                      ))}
-                                    </select>
-                                    <select
-                                      className="form-select form-select-sm"
-                                      value={editDraft.ownerPersonId}
-                                      onChange={(event) => setEditDraft((current) => ({ ...current, ownerPersonId: event.target.value }))}
-                                    >
-                                      <option value="">사용자 선택 없음</option>
-                                      {people.map((person) => (
-                                        <option key={person.id} value={person.id}>
-                                          {person.name}
-                                        </option>
-                                      ))}
-                                    </select>
-                                    <select
-                                      className="form-select form-select-sm"
-                                      value={editDraft.accountId}
-                                      onChange={(event) => setEditDraft((current) => ({ ...current, accountId: event.target.value }))}
-                                    >
-                                      <option value="">계좌 연결 없음</option>
-                                      {accounts.map((account) => (
-                                        <option key={account.id} value={account.id}>
-                                          {account.name}
-                                        </option>
-                                      ))}
-                                    </select>
-                                    <select
-                                      className="form-select form-select-sm"
-                                      value={editDraft.cardId}
-                                      onChange={(event) => setEditDraft((current) => ({ ...current, cardId: event.target.value }))}
-                                    >
-                                      <option value="">카드 연결 없음</option>
-                                      {cards.map((card) => (
-                                        <option key={card.id} value={card.id}>
-                                          {card.name}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </div>
-                                  <div className="d-flex flex-wrap gap-2">
-                                    <input
-                                      className="form-control form-control-sm"
-                                      type="date"
-                                      value={editDraft.occurredAt}
-                                      onChange={(event) => setEditDraft((current) => ({ ...current, occurredAt: event.target.value }))}
-                                    />
-                                    <input
-                                      className="form-control form-control-sm"
-                                      type="date"
-                                      value={editDraft.settledAt}
-                                      onChange={(event) => setEditDraft((current) => ({ ...current, settledAt: event.target.value }))}
-                                    />
-                                  </div>
-                                  <input
-                                    className="form-control form-control-sm"
-                                    value={editDraft.merchantName}
-                                  onChange={(event) => setEditDraft((current) => ({ ...current, merchantName: event.target.value }))}
-                                  placeholder="가맹점 또는 거래명"
-                                />
-                                <input
-                                  className="form-control form-control-sm"
-                                  value={editDraft.description}
-                                  onChange={(event) => setEditDraft((current) => ({ ...current, description: event.target.value }))}
-                                  placeholder="설명"
-                                />
-                                <input
-                                  className="form-control form-control-sm"
-                                  type="number"
-                                  min="0"
-                                  step="1"
-                                  value={editDraft.amount}
-                                  onChange={(event) => setEditDraft((current) => ({ ...current, amount: event.target.value }))}
-                                  placeholder="금액"
-                                />
-                                <div className="d-flex flex-wrap gap-2">
-                                    <button
-                                      className="btn btn-primary btn-sm"
-                                      type="button"
-                                      disabled={!editDraft.occurredAt || !editDraft.merchantName.trim() || !editDraft.amount || Number(editDraft.amount) <= 0}
-                                      onClick={() => {
-                                        updateTransactionDetails(workspaceId, transaction.id, {
-                                          sourceType: editDraft.sourceType,
-                                          ownerPersonId: editDraft.ownerPersonId || null,
-                                          accountId: editDraft.accountId || null,
-                                          cardId: editDraft.cardId || null,
-                                          occurredAt: editDraft.occurredAt,
-                                          settledAt: editDraft.settledAt || null,
-                                          merchantName: editDraft.merchantName.trim(),
-                                          description: editDraft.description.trim(),
-                                          amount: Number(editDraft.amount),
-                                      });
-                                      cancelTransactionEdit();
-                                    }}
-                                  >
-                                    기본 정보 저장
-                                  </button>
-                                  <button className="btn btn-outline-secondary btn-sm" type="button" onClick={cancelTransactionEdit}>
-                                    취소
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
+                            <TransactionInlineEditor
+                              draft={editDraft}
+                              people={people}
+                              accounts={accounts}
+                              cards={cards}
+                              saveDisabled={!editDraft.occurredAt || !editDraft.merchantName.trim() || !editDraft.amount || Number(editDraft.amount) <= 0}
+                              onDraftChange={updateEditDraft}
+                              onSave={() => {
+                                updateTransactionDetails(workspaceId, transaction.id, {
+                                  sourceType: editDraft.sourceType,
+                                  ownerPersonId: editDraft.ownerPersonId || null,
+                                  accountId: editDraft.accountId || null,
+                                  cardId: editDraft.cardId || null,
+                                  occurredAt: editDraft.occurredAt,
+                                  settledAt: editDraft.settledAt || null,
+                                  merchantName: editDraft.merchantName.trim(),
+                                  description: editDraft.description.trim(),
+                                  amount: Number(editDraft.amount),
+                                });
+                                cancelTransactionEdit();
+                              }}
+                              onCancel={cancelTransactionEdit}
+                            />
                           ) : null}
                           {transaction.tagIds.length ? (
                             <div className="transaction-tag-row">
