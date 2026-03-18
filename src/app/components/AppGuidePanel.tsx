@@ -20,7 +20,7 @@ export function AppGuidePanel() {
 
   const currentStep = guide.currentStep;
   const completedSteps = guide.steps.filter((step) => step.completed).length;
-  const currentPath = location.pathname || "/";
+  const currentPath = `${location.pathname || "/"}${location.search || ""}`;
   const upcomingSteps = guide.steps.filter((step) => !step.completed).slice(0, 2);
 
   return (
