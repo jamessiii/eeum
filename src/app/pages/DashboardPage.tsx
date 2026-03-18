@@ -131,8 +131,25 @@ export function DashboardPage() {
         </div>
       </section>
 
+      <section className="card shadow-sm" style={getMotionStyle(1)}>
+        <div className="section-head">
+          <div>
+            <span className="section-kicker">핵심 해석</span>
+            <h2 className="section-title">이번 달에 먼저 읽을 포인트</h2>
+          </div>
+        </div>
+        <div className="resource-grid">
+          {insights.headlineCards.map((card, index) => (
+            <article key={card.title} className="resource-card" style={getMotionStyle(index + 2)}>
+              <h3>{card.title}</h3>
+              <p className="mb-0 text-secondary">{card.description}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
       {attentionItems.length ? (
-        <section className="card shadow-sm" style={getMotionStyle(1)}>
+        <section className="card shadow-sm" style={getMotionStyle(2)}>
           <div className="section-head">
             <div>
               <span className="section-kicker">먼저 정리할 것</span>
@@ -154,7 +171,7 @@ export function DashboardPage() {
       ) : null}
 
       <div className="page-grid">
-        <section className="card shadow-sm" style={getMotionStyle(attentionItems.length ? 2 : 1)}>
+        <section className="card shadow-sm" style={getMotionStyle(attentionItems.length ? 3 : 2)}>
           <div className="section-head">
             <div>
               <span className="section-kicker">다음 행동</span>
@@ -168,7 +185,7 @@ export function DashboardPage() {
           </ul>
         </section>
 
-        <section className="card shadow-sm" style={getMotionStyle(attentionItems.length ? 3 : 2)}>
+        <section className="card shadow-sm" style={getMotionStyle(attentionItems.length ? 4 : 3)}>
           <div className="section-head">
             <div>
               <span className="section-kicker">상위 지출</span>

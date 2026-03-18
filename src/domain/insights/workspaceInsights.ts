@@ -20,6 +20,7 @@ export interface WorkspaceInsights {
   recurringSuggestionCount: number;
   isFinancialProfileReady: boolean;
   topCategories: Array<{ categoryName: string; amount: number }>;
+  headlineCards: Array<{ title: string; description: string }>;
   nextSteps: string[];
   coaching: string;
   spendTone: InsightTone;
@@ -36,6 +37,11 @@ interface WorkspaceContext {
   accountCount: number;
   cardCount: number;
 }
+
+type InsightMetrics = Omit<
+  WorkspaceInsights,
+  "month" | "topCategories" | "headlineCards" | "nextSteps" | "coaching" | "spendTone" | "savingsTone" | "fixedTone"
+>;
 
 function summarizeCategories(transactions: Transaction[], categories: Category[]) {
   const categoryNameMap = new Map(categories.map((category) => [category.id, category.name]));
@@ -74,7 +80,7 @@ function getFixedTone(profile: FinancialProfile | null, fixedExpenseRate: number
   return "stable";
 }
 
-function buildCoaching(context: WorkspaceContext, metrics: Omit<WorkspaceInsights, "nextSteps" | "coaching" | "month" | "topCategories" | "spendTone" | "savingsTone" | "fixedTone">): string {
+function buildCoaching(context: WorkspaceContext, metrics: InsightMetrics): string {
   const profile = context.financialProfile;
   if (!profile) {
     return "월 순수입이 아직 설정되지 않았습니다. 설정 화면에서 재무 기준선을 먼저 입력해주세요.";
@@ -95,7 +101,7 @@ function buildCoaching(context: WorkspaceContext, metrics: Omit<WorkspaceInsight
   return "현재 소비 구조는 비교적 안정적입니다. 검토함과 카테고리 분류를 계속 정리하면 진단 정확도가 더 올라갑니다.";
 }
 
-function buildNextSteps(context: WorkspaceContext, metrics: Omit<WorkspaceInsights, "nextSteps" | "coaching" | "month" | "topCategories" | "spendTone" | "savingsTone" | "fixedTone">): string[] {
+function buildNextSteps(context: WorkspaceContext, metrics: InsightMetrics): string[] {
   const nextSteps: string[] = [];
 
   if (context.peopleCount === 0) nextSteps.push("사람을 추가해서 개인지출과 공동지출을 나눠보세요.");
@@ -111,6 +117,46 @@ function buildNextSteps(context: WorkspaceContext, metrics: Omit<WorkspaceInsigh
   if (!nextSteps.length) nextSteps.push("데이터가 안정적으로 쌓이고 있습니다. 다음 단계로 태그와 공동지출 정산을 더 활용해보세요.");
 
   return nextSteps;
+}
+
+function buildHeadlineCards(
+  topCategories: WorkspaceInsights["topCategories"],
+  metrics: InsightMetrics,
+) {
+  const cards: Array<{ title: string; description: string }> = [];
+
+  if (topCategories.length && metrics.expense > 0) {
+    const biggest = topCategories[0];
+    const share = biggest.amount / metrics.expense;
+    cards.push({
+      title: "가장 큰 지출 원인",
+      description: `${biggest.categoryName}이(가) 이번 달 지출의 ${Math.round(share * 100)}%를 차지하고 있습니다.`,
+    });
+  }
+
+  if (metrics.sharedExpense > 0 && metrics.expense > 0) {
+    const sharedShare = metrics.sharedExpense / metrics.expense;
+    cards.push({
+      title: "공동지출 비중",
+      description: `공동지출이 전체 소비의 ${Math.round(sharedShare * 100)}%입니다. 정산 화면도 함께 확인해보세요.`,
+    });
+  }
+
+  if (metrics.reviewCount > 0 || metrics.uncategorizedCount > 0) {
+    cards.push({
+      title: "데이터 정리 상태",
+      description: `검토 ${metrics.reviewCount}건, 미분류 ${metrics.uncategorizedCount}건이 남아 있어 아직 진단이 더 정교해질 수 있습니다.`,
+    });
+  }
+
+  if (!cards.length) {
+    cards.push({
+      title: "이번 달 요약",
+      description: "핵심 검토와 분류가 정리되어 있어 현재 수치를 비교적 신뢰하고 볼 수 있습니다.",
+    });
+  }
+
+  return cards.slice(0, 3);
 }
 
 export function getWorkspaceInsights(state: AppState, workspaceId: string, baseMonth = monthKey(new Date())): WorkspaceInsights {
@@ -176,6 +222,7 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
     month: baseMonth,
     ...metrics,
     topCategories: summarizeCategories(transactions, categories),
+    headlineCards: buildHeadlineCards(summarizeCategories(transactions, categories), metrics),
     nextSteps: buildNextSteps(context, metrics),
     coaching: buildCoaching(context, metrics),
     spendTone: getSpendTone(financialProfile, spendRate),
