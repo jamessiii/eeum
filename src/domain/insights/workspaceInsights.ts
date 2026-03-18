@@ -1,6 +1,8 @@
 import { monthKey } from "../../shared/utils/date";
 import type { AppState, Category, FinancialProfile, ReviewItem, Transaction } from "../../shared/types/models";
 
+export type InsightTone = "stable" | "caution" | "warning";
+
 export interface WorkspaceInsights {
   month: string;
   income: number;
@@ -16,6 +18,9 @@ export interface WorkspaceInsights {
   topCategories: Array<{ categoryName: string; amount: number }>;
   nextSteps: string[];
   coaching: string;
+  spendTone: InsightTone;
+  savingsTone: InsightTone;
+  fixedTone: InsightTone;
 }
 
 interface WorkspaceContext {
@@ -44,7 +49,28 @@ function summarizeCategories(transactions: Transaction[], categories: Category[]
     .slice(0, 4);
 }
 
-function buildCoaching(context: WorkspaceContext, metrics: Omit<WorkspaceInsights, "nextSteps" | "coaching" | "month" | "topCategories">): string {
+function getSpendTone(profile: FinancialProfile | null, spendRate: number): InsightTone {
+  if (!profile) return "caution";
+  if (spendRate > profile.warningSpendRate) return "warning";
+  if (spendRate > profile.warningSpendRate * 0.85) return "caution";
+  return "stable";
+}
+
+function getSavingsTone(profile: FinancialProfile | null, savingsRate: number): InsightTone {
+  if (!profile) return "caution";
+  if (savingsRate < profile.targetSavingsRate * 0.7) return "warning";
+  if (savingsRate < profile.targetSavingsRate) return "caution";
+  return "stable";
+}
+
+function getFixedTone(profile: FinancialProfile | null, fixedExpenseRate: number): InsightTone {
+  if (!profile) return "caution";
+  if (fixedExpenseRate > profile.warningFixedCostRate) return "warning";
+  if (fixedExpenseRate > profile.warningFixedCostRate * 0.85) return "caution";
+  return "stable";
+}
+
+function buildCoaching(context: WorkspaceContext, metrics: Omit<WorkspaceInsights, "nextSteps" | "coaching" | "month" | "topCategories" | "spendTone" | "savingsTone" | "fixedTone">): string {
   const profile = context.financialProfile;
   if (!profile) {
     return "월 순수입이 아직 설정되지 않았습니다. 설정 화면에서 재무 기준선을 먼저 입력해주세요.";
@@ -65,7 +91,7 @@ function buildCoaching(context: WorkspaceContext, metrics: Omit<WorkspaceInsight
   return "현재 소비 구조는 비교적 안정적입니다. 검토함과 카테고리 분류를 계속 정리하면 진단 정확도가 더 올라갑니다.";
 }
 
-function buildNextSteps(context: WorkspaceContext, metrics: Omit<WorkspaceInsights, "nextSteps" | "coaching" | "month" | "topCategories">): string[] {
+function buildNextSteps(context: WorkspaceContext, metrics: Omit<WorkspaceInsights, "nextSteps" | "coaching" | "month" | "topCategories" | "spendTone" | "savingsTone" | "fixedTone">): string[] {
   const nextSteps: string[] = [];
 
   if (context.peopleCount === 0) nextSteps.push("사람을 추가해서 개인지출과 공동지출을 나눠보세요.");
@@ -143,5 +169,8 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
     topCategories: summarizeCategories(transactions, categories),
     nextSteps: buildNextSteps(context, metrics),
     coaching: buildCoaching(context, metrics),
+    spendTone: getSpendTone(financialProfile, spendRate),
+    savingsTone: getSavingsTone(financialProfile, savingsRate),
+    fixedTone: getFixedTone(financialProfile, fixedExpenseRate),
   };
 }
