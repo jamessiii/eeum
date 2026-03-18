@@ -136,6 +136,10 @@ export function TransactionsPage() {
   const sharedExpenseCount = activeTransactions.filter((item) => item.isSharedExpense).length;
   const uncategorizedCount = activeTransactions.filter((item) => item.isExpenseImpact && !item.categoryId).length;
   const untaggedCount = activeTransactions.filter((item) => item.isExpenseImpact && item.tagIds.length === 0).length;
+  const taggableAmount = taggableTransactions.reduce((sum, item) => sum + item.amount, 0);
+  const categorizableAmount = categorizableTransactions.reduce((sum, item) => sum + item.amount, 0);
+  const selectedBulkTag = scope.tags.find((tag) => tag.id === bulkTagId) ?? null;
+  const selectedBulkCategory = scope.categories.find((category) => category.id === bulkCategoryId) ?? null;
   const activeCleanupMode = cleanupModeCopy[filters.nature as keyof typeof cleanupModeCopy] ?? cleanupModeCopy.all;
   const isFocusedCleanupMode = filters.nature === "uncategorized" || filters.nature === "untagged";
   const currentCleanupRemaining =
@@ -534,6 +538,12 @@ export function TransactionsPage() {
                   태그 일괄 적용
                 </button>
               </form>
+              {selectedBulkTag ? (
+                <div className="small text-secondary mt-2">
+                  지금 보이는 실지출 거래 {taggableTransactions.length}건, {formatCurrency(taggableAmount)}에 태그{" "}
+                  <strong>{selectedBulkTag.name}</strong>를 붙이게 됩니다.
+                </div>
+              ) : null}
             </div>
 
             <div className="review-summary-panel mb-3">
@@ -569,6 +579,12 @@ export function TransactionsPage() {
                   카테고리 일괄 적용
                 </button>
               </form>
+              {selectedBulkCategory ? (
+                <div className="small text-secondary mt-2">
+                  지금 보이는 실지출 거래 {categorizableTransactions.length}건, {formatCurrency(categorizableAmount)}에 카테고리{" "}
+                  <strong>{selectedBulkCategory.name}</strong>를 적용하게 됩니다.
+                </div>
+              ) : null}
             </div>
 
             <div className="table-responsive">
