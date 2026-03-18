@@ -24,6 +24,7 @@ export function CategoriesPage() {
   const scope = getWorkspaceScope(state, workspaceId);
   const uncategorizedTransactions = getUncategorizedTransactions(scope.transactions);
   const recurringSuggestions = getRecurringMerchantSuggestions(scope.transactions, scope.categories);
+  const isCategoryCleanupComplete = recurringSuggestions.length === 0 && uncategorizedTransactions.length === 0;
   const expenseTransactions = scope.transactions.filter(
     (item) => item.status === "active" && item.isExpenseImpact && item.transactionType === "expense",
   );
@@ -107,6 +108,29 @@ export function CategoriesPage() {
             </Link>
           </div>
         </div>
+        {isCategoryCleanupComplete ? (
+          <div className="review-summary-panel mt-3">
+            <div className="review-summary-copy">
+              <strong>카테고리 분류 정리가 끝났습니다</strong>
+              <p className="mb-0 text-secondary">
+                반복 지출 제안과 미분류 거래가 모두 정리됐습니다. 이제 무태그 거래를 묶거나 대시보드와 정산 화면에서 이번 달 흐름을 확인하면 됩니다.
+              </p>
+            </div>
+            <div className="d-flex flex-wrap gap-2">
+              {untaggedExpenseCount ? (
+                <Link to="/transactions?cleanup=untagged" className="btn btn-outline-secondary btn-sm">
+                  무태그 {untaggedExpenseCount}건 정리
+                </Link>
+              ) : null}
+              <Link to="/" className="btn btn-outline-dark btn-sm">
+                대시보드 보기
+              </Link>
+              <Link to="/settlements" className="btn btn-outline-primary btn-sm">
+                정산 화면 보기
+              </Link>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <section className="card shadow-sm" style={getMotionStyle(1)}>
