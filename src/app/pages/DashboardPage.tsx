@@ -300,7 +300,30 @@ export function DashboardPage() {
             ))}
           </div>
         </section>
-      ) : null}
+      ) : (
+        <section className="card shadow-sm" style={getMotionStyle(2)}>
+          <div className="section-head">
+            <div>
+              <span className="section-kicker">정리 상태</span>
+              <h2 className="section-title">지금은 비교적 안정적으로 볼 수 있습니다</h2>
+            </div>
+          </div>
+          <CompletionBanner
+            title="핵심 정리가 끝난 상태입니다"
+            description="열린 검토, 미분류, 무태그, 기준선 입력까지 모두 정리돼서 이번 달 진단과 저축 흐름을 비교적 안정적으로 읽을 수 있습니다."
+            actions={
+              <>
+                <Link to="/transactions" className="btn btn-outline-primary btn-sm">
+                  거래 화면 보기
+                </Link>
+                <Link to="/settlements" className="btn btn-outline-secondary btn-sm">
+                  정산 화면 보기
+                </Link>
+              </>
+            }
+          />
+        </section>
+      )}
 
       <div className="page-grid">
         <section className="card shadow-sm" style={getMotionStyle(attentionItems.length ? 3 : 2)}>
