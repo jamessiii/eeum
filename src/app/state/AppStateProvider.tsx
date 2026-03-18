@@ -68,24 +68,31 @@ type Action =
   | { type: "assignTagByMerchant"; payload: { workspaceId: string; merchantName: string; tagId: string } }
   | {
       type: "updateTransactionFlags";
-      payload: {
-        workspaceId: string;
-        transactionId: string;
-        patch: {
-          isSharedExpense?: boolean;
-          isExpenseImpact?: boolean;
+        payload: {
+          workspaceId: string;
+          transactionId: string;
+          patch: {
+            isSharedExpense?: boolean;
+            isExpenseImpact?: boolean;
+            isInternalTransfer?: boolean;
+          };
         };
       };
-    };
 
 function applyTransactionFlagPatch(
   transaction: Transaction,
   patch: {
     isSharedExpense?: boolean;
     isExpenseImpact?: boolean;
+    isInternalTransfer?: boolean;
   },
 ) {
-  const nextExpenseImpact = patch.isExpenseImpact ?? transaction.isExpenseImpact;
+  const nextExpenseImpact =
+    typeof patch.isExpenseImpact === "boolean"
+      ? patch.isExpenseImpact
+      : transaction.transactionType === "transfer" && typeof patch.isInternalTransfer === "boolean"
+        ? !patch.isInternalTransfer
+        : transaction.isExpenseImpact;
   const requestedSharedExpense = patch.isSharedExpense ?? transaction.isSharedExpense;
   const nextSharedExpense =
     transaction.transactionType === "expense" && transaction.status === "active" && nextExpenseImpact
@@ -417,15 +424,16 @@ interface AppStateContextValue {
   assignTag: (workspaceId: string, transactionId: string, tagId: string) => void;
   assignTagBatch: (workspaceId: string, transactionIds: string[], tagId: string) => void;
   assignTagByMerchant: (workspaceId: string, merchantName: string, tagId: string) => void;
-  updateTransactionFlags: (
-    workspaceId: string,
-    transactionId: string,
-    patch: {
-      isSharedExpense?: boolean;
-      isExpenseImpact?: boolean;
-    },
-  ) => void;
-}
+    updateTransactionFlags: (
+      workspaceId: string,
+      transactionId: string,
+      patch: {
+        isSharedExpense?: boolean;
+        isExpenseImpact?: boolean;
+        isInternalTransfer?: boolean;
+      },
+    ) => void;
+  }
 
 const AppStateContext = createContext<AppStateContextValue | null>(null);
 
@@ -608,6 +616,13 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         if (typeof patch.isSharedExpense === "boolean") {
           showToast(
             patch.isSharedExpense ? "거래를 공동지출로 표시했습니다." : "거래의 공동지출 표시를 해제했습니다.",
+            "success",
+          );
+          return;
+        }
+        if (typeof patch.isInternalTransfer === "boolean") {
+          showToast(
+            patch.isInternalTransfer ? "거래를 내부이체 흐름으로 표시했습니다." : "거래의 내부이체 표시를 해제했습니다.",
             "success",
           );
           return;

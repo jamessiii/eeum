@@ -760,22 +760,35 @@ export function TransactionsPage() {
                         </div>
                         {transaction.status === "active" ? (
                           <div className="d-flex flex-wrap gap-2 mt-2">
-                            {transaction.transactionType === "expense" ? (
-                              <button
-                                className="btn btn-outline-secondary btn-sm"
-                                type="button"
+                              {transaction.transactionType === "expense" ? (
+                                <button
+                                  className="btn btn-outline-secondary btn-sm"
+                                  type="button"
                                 onClick={() =>
                                   updateTransactionFlags(workspaceId, transaction.id, {
                                     isSharedExpense: !transaction.isSharedExpense,
                                   })
                                 }
-                              >
-                                {transaction.isSharedExpense ? "공동 해제" : "공동지출"}
-                              </button>
-                            ) : null}
-                            <button
-                              className="btn btn-outline-secondary btn-sm"
-                              type="button"
+                                >
+                                  {transaction.isSharedExpense ? "공동 해제" : "공동지출"}
+                                </button>
+                              ) : null}
+                              {transaction.transactionType === "transfer" ? (
+                                <button
+                                  className="btn btn-outline-secondary btn-sm"
+                                  type="button"
+                                  onClick={() =>
+                                    updateTransactionFlags(workspaceId, transaction.id, {
+                                      isInternalTransfer: !transaction.isInternalTransfer,
+                                    })
+                                  }
+                                >
+                                  {transaction.isInternalTransfer ? "내부이체 해제" : "내부이체"}
+                                </button>
+                              ) : null}
+                              <button
+                                className="btn btn-outline-secondary btn-sm"
+                                type="button"
                               onClick={() =>
                                 updateTransactionFlags(workspaceId, transaction.id, {
                                   isExpenseImpact: !transaction.isExpenseImpact,
