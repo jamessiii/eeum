@@ -49,7 +49,9 @@ type Action =
   | { type: "addCategory"; payload: { workspaceId: string; name: string } }
   | { type: "addTag"; payload: { workspaceId: string; name: string } }
   | { type: "setFinancialProfile"; payload: { workspaceId: string; values: FinancialProfileInput } }
-  | { type: "addTransaction"; payload: NewTransactionInput };
+  | { type: "addTransaction"; payload: NewTransactionInput }
+  | { type: "assignCategory"; payload: { workspaceId: string; transactionId: string; categoryId: string } }
+  | { type: "assignCategoryByMerchant"; payload: { workspaceId: string; merchantName: string; categoryId: string } };
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -178,6 +180,26 @@ function reducer(state: AppState, action: Action): AppState {
           },
         ],
       };
+    case "assignCategory":
+      return {
+        ...state,
+        transactions: state.transactions.map((transaction) =>
+          transaction.workspaceId === action.payload.workspaceId && transaction.id === action.payload.transactionId
+            ? { ...transaction, categoryId: action.payload.categoryId }
+            : transaction,
+        ),
+      };
+    case "assignCategoryByMerchant":
+      return {
+        ...state,
+        transactions: state.transactions.map((transaction) =>
+          transaction.workspaceId === action.payload.workspaceId &&
+          transaction.merchantName === action.payload.merchantName &&
+          transaction.isExpenseImpact
+            ? { ...transaction, categoryId: action.payload.categoryId }
+            : transaction,
+        ),
+      };
     default:
       return state;
   }
@@ -202,6 +224,8 @@ interface AppStateContextValue {
   addTag: (workspaceId: string, name: string) => void;
   setFinancialProfile: (workspaceId: string, values: FinancialProfileInput) => void;
   addTransaction: (input: NewTransactionInput) => void;
+  assignCategory: (workspaceId: string, transactionId: string, categoryId: string) => void;
+  assignCategoryByMerchant: (workspaceId: string, merchantName: string, categoryId: string) => void;
 }
 
 const AppStateContext = createContext<AppStateContextValue | null>(null);
@@ -336,6 +360,14 @@ export function AppStateProvider({ children }: PropsWithChildren) {
       addTransaction(input) {
         dispatch({ type: "addTransaction", payload: input });
         showToast(`${input.merchantName} 거래를 추가했습니다.`, "success");
+      },
+      assignCategory(workspaceId, transactionId, categoryId) {
+        dispatch({ type: "assignCategory", payload: { workspaceId, transactionId, categoryId } });
+        showToast("거래 카테고리를 지정했습니다.", "success");
+      },
+      assignCategoryByMerchant(workspaceId, merchantName, categoryId) {
+        dispatch({ type: "assignCategoryByMerchant", payload: { workspaceId, merchantName, categoryId } });
+        showToast(`${merchantName} 반복 거래에 카테고리를 반영했습니다.`, "success");
       },
     }),
     [isReady, showToast, state],

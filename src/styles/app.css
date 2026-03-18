@@ -319,6 +319,20 @@ a {
   gap: 0.75rem;
 }
 
+.classification-flow-grid,
+.classification-action-row {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.classification-flow-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.classification-action-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
 .mini-breakdown-row,
 .resource-card {
   display: flex;
@@ -377,7 +391,8 @@ a {
 
   .stats-grid,
   .settings-grid,
-  .resource-grid {
+  .resource-grid,
+  .classification-flow-grid {
     grid-template-columns: 1fr 1fr;
   }
 }
@@ -393,6 +408,8 @@ a {
   .stats-grid,
   .settings-grid,
   .resource-grid,
+  .classification-flow-grid,
+  .classification-action-row,
   .manual-transaction-form,
   .profile-form,
   .simple-inline-form,
