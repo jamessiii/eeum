@@ -1,3 +1,4 @@
+import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
 
@@ -15,7 +16,7 @@ export function ImportsPage() {
         </div>
       </div>
       <p className="text-secondary">
-        현재는 <strong>가계부 v2 워크북</strong> 업로드를 지원합니다. 현대카드, 우리카드, 삼성카드 명세서 전용 파서와 일반화된 규칙 기반 파서는 2차 작업으로 남겨두었습니다.
+        현재는 <strong>가계부 v2 워크북</strong> 업로드를 지원합니다. 현대카드, 우리카드, 삼성카드 전용 파서와 일반화된 규칙 기반 파서는 2차 작업으로 남겨두었습니다.
       </p>
       <label className="upload-dropzone">
         <div>
@@ -36,22 +37,29 @@ export function ImportsPage() {
 
       <div className="mt-4">
         <h3 className="mb-3">업로드 이력</h3>
-        <div className="review-list">
-          {imports.map((item) => (
-            <article key={item.id} className="review-card">
-              <div className="d-flex justify-content-between align-items-start gap-3">
-                <div>
-                  <span className="review-type">{item.parserId}</span>
-                  <h3>{item.fileName}</h3>
-                  <p className="mb-0 text-secondary">
-                    {item.importedAt.slice(0, 19).replace("T", " ")} · 행 {item.rowCount}개 · 검토 {item.reviewCount}건
-                  </p>
+        {!imports.length ? (
+          <EmptyStateCallout
+            kicker="첫 데이터 입력"
+            title="아직 업로드 이력이 없습니다"
+            description="가계부 v2 엑셀 파일을 올리면 새로운 워크스페이스가 생성되고, 이후 분류와 통계를 바로 이어서 할 수 있습니다."
+          />
+        ) : (
+          <div className="review-list">
+            {imports.map((item) => (
+              <article key={item.id} className="review-card">
+                <div className="d-flex justify-content-between align-items-start gap-3">
+                  <div>
+                    <span className="review-type">{item.parserId}</span>
+                    <h3>{item.fileName}</h3>
+                    <p className="mb-0 text-secondary">
+                      {item.importedAt.slice(0, 19).replace("T", " ")} · 행 {item.rowCount}개 · 검토 {item.reviewCount}건
+                    </p>
+                  </div>
                 </div>
-              </div>
-            </article>
-          ))}
-          {!imports.length ? <p className="text-secondary mb-0">아직 업로드 이력이 없습니다.</p> : null}
-        </div>
+              </article>
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );

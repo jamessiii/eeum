@@ -281,6 +281,34 @@ a {
   background: rgba(25, 135, 84, 0.08);
 }
 
+.empty-state-callout {
+  display: grid;
+  gap: 0.55rem;
+  padding: 1.1rem 1.15rem;
+  border: 1px dashed rgba(23, 32, 51, 0.14);
+  border-radius: 1.1rem;
+  background: rgba(248, 250, 252, 0.88);
+}
+
+.empty-state-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.empty-state-copy {
+  margin: 0;
+  color: #64748b;
+  line-height: 1.6;
+}
+
+.empty-state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+}
+
 .page-step-banner {
   display: grid;
   gap: 0.85rem;

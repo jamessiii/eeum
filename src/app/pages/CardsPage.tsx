@@ -1,3 +1,4 @@
+import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
 
@@ -34,15 +35,26 @@ export function CardsPage() {
           카드 추가
         </button>
       </form>
-      <div className="resource-grid mt-4">
-        {cards.map((card) => (
-          <article key={card.id} className="resource-card">
-            <h3>{card.name}</h3>
-            <p className="mb-1 text-secondary">{card.issuerName}</p>
-            <p className="mb-0 text-secondary">{card.cardNumberMasked || "마스킹 없음"}</p>
-          </article>
-        ))}
-      </div>
+
+      {!cards.length ? (
+        <div className="mt-4">
+          <EmptyStateCallout
+            kicker="명세서 준비"
+            title="업로드 전에 카드를 등록해두면 좋아요"
+            description="나중에 카드사별 명세서 파서가 붙으면 카드 정보와 결제 계좌를 연결해 더 정확한 분석을 할 수 있습니다."
+          />
+        </div>
+      ) : (
+        <div className="resource-grid mt-4">
+          {cards.map((card) => (
+            <article key={card.id} className="resource-card">
+              <h3>{card.name}</h3>
+              <p className="mb-1 text-secondary">{card.issuerName}</p>
+              <p className="mb-0 text-secondary">{card.cardNumberMasked || "마스킹 없음"}</p>
+            </article>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

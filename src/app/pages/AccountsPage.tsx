@@ -1,3 +1,4 @@
+import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
 
@@ -34,17 +35,28 @@ export function AccountsPage() {
           계좌 추가
         </button>
       </form>
-      <div className="resource-grid mt-4">
-        {accounts.map((account) => (
-          <article key={account.id} className="resource-card">
-            <h3>{account.name}</h3>
-            <p className="mb-1 text-secondary">{account.institutionName}</p>
-            <p className="mb-0 text-secondary">
-              {account.isShared ? "공동 계좌" : "개인 계좌"} · {account.accountNumberMasked || "마스킹 없음"}
-            </p>
-          </article>
-        ))}
-      </div>
+
+      {!accounts.length ? (
+        <div className="mt-4">
+          <EmptyStateCallout
+            kicker="자산 준비"
+            title="분석 전에 계좌를 등록하세요"
+            description="내부이체와 실제 소비를 구분하려면 계좌가 먼저 필요합니다. 생활비용 공동 계좌가 있다면 함께 등록해두세요."
+          />
+        </div>
+      ) : (
+        <div className="resource-grid mt-4">
+          {accounts.map((account) => (
+            <article key={account.id} className="resource-card">
+              <h3>{account.name}</h3>
+              <p className="mb-1 text-secondary">{account.institutionName}</p>
+              <p className="mb-0 text-secondary">
+                {account.isShared ? "공동 계좌" : "개인 계좌"} · {account.accountNumberMasked || "마스킹 없음"}
+              </p>
+            </article>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
