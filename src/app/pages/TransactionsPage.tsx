@@ -8,6 +8,7 @@ import {
   isUncategorizedExpenseTransaction,
   isUntaggedExpenseTransaction,
 } from "../../domain/transactions/meta";
+import { getSourceTypeCounts } from "../../domain/transactions/sourceTypeCounts";
 import { getSourceTypeLabel, SOURCE_TYPE_OPTIONS } from "../../domain/transactions/sourceTypes";
 import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
@@ -159,13 +160,7 @@ export function TransactionsPage() {
     );
 
   const activeTransactions = transactions.filter(isActiveTransaction);
-  const sourceTypeCounts = SOURCE_TYPE_OPTIONS.reduce<Record<(typeof SOURCE_TYPE_OPTIONS)[number], number>>(
-    (accumulator, sourceType) => {
-      accumulator[sourceType] = transactions.filter((item) => item.sourceType === sourceType).length;
-      return accumulator;
-    },
-    { manual: 0, account: 0, card: 0, import: 0 },
-  );
+  const sourceTypeCounts = getSourceTypeCounts(transactions);
   const categorizableTransactions = activeTransactions.filter(isActiveExpenseImpactTransaction);
   const taggableTransactions = activeTransactions.filter(isActiveExpenseImpactTransaction);
   const activeExpenseCount = activeTransactions.filter(isActiveExpenseImpactTransaction).length;
