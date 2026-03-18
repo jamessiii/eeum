@@ -47,6 +47,8 @@ export function ReviewsPage() {
     REVIEW_TYPE_ORDER
       .map((type) => ({ type, count: reviewCounts[type] ?? 0 }))
       .sort((a, b) => b.count - a.count)[0] ?? null;
+  const openSharedReviewCount = reviewCounts.shared_expense_candidate ?? 0;
+  const openInternalTransferReviewCount = reviewCounts.internal_transfer_candidate ?? 0;
   const nextReviewAction = uncategorizedCount
     ? {
         title: "지금 가장 먼저 할 일",
@@ -61,6 +63,20 @@ export function ReviewsPage() {
           to: "/transactions?cleanup=untagged",
           actionLabel: `무태그 ${untaggedCount}건 정리`,
         }
+      : openSharedReviewCount
+        ? {
+            title: "지금 가장 먼저 할 일",
+            description: `${openSharedReviewCount}건의 공동지출 후보를 거래 화면에서 다시 보면 정산 흐름을 더 빨리 안정화할 수 있습니다.`,
+            to: "/transactions?nature=shared",
+            actionLabel: `공동지출 ${openSharedReviewCount}건 점검`,
+          }
+        : openInternalTransferReviewCount
+          ? {
+              title: "지금 가장 먼저 할 일",
+              description: `${openInternalTransferReviewCount}건의 내부이체 후보를 거래 화면에서 다시 보면 지출 통계가 더 깔끔해집니다.`,
+              to: "/transactions?nature=internal_transfer",
+              actionLabel: `내부이체 ${openInternalTransferReviewCount}건 점검`,
+            }
       : null;
 
   return (
@@ -167,6 +183,16 @@ export function ReviewsPage() {
               무태그 {untaggedCount}건 정리
             </Link>
           ) : null}
+          {!uncategorizedCount && !untaggedCount && openSharedReviewCount ? (
+            <Link className="btn btn-outline-primary btn-sm" to="/transactions?nature=shared">
+              공동지출 {openSharedReviewCount}건 점검
+            </Link>
+          ) : null}
+          {!uncategorizedCount && !untaggedCount && !openSharedReviewCount && openInternalTransferReviewCount ? (
+            <Link className="btn btn-outline-secondary btn-sm" to="/transactions?nature=internal_transfer">
+              내부이체 {openInternalTransferReviewCount}건 점검
+            </Link>
+          ) : null}
           <Link className="btn btn-outline-dark btn-sm" to="/">
             대시보드 보기
           </Link>
@@ -188,6 +214,16 @@ export function ReviewsPage() {
               {untaggedCount ? (
                 <Link className="btn btn-outline-secondary btn-sm" to="/transactions?cleanup=untagged">
                   무태그 {untaggedCount}건 정리
+                </Link>
+              ) : null}
+              {!uncategorizedCount && !untaggedCount && openSharedReviewCount ? (
+                <Link className="btn btn-outline-primary btn-sm" to="/transactions?nature=shared">
+                  공동지출 {openSharedReviewCount}건 점검
+                </Link>
+              ) : null}
+              {!uncategorizedCount && !untaggedCount && !openSharedReviewCount && openInternalTransferReviewCount ? (
+                <Link className="btn btn-outline-secondary btn-sm" to="/transactions?nature=internal_transfer">
+                  내부이체 {openInternalTransferReviewCount}건 점검
                 </Link>
               ) : null}
               <Link className="btn btn-outline-dark btn-sm" to="/">

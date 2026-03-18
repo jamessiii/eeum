@@ -150,8 +150,14 @@ export function TransactionsPage() {
 
   useEffect(() => {
     const cleanup = searchParams.get("cleanup");
+    const nature = searchParams.get("nature");
     if (cleanup === "uncategorized" || cleanup === "untagged") {
       setFilters((current) => ({ ...current, nature: cleanup }));
+      setSearchParams({}, { replace: true });
+      return;
+    }
+    if (nature === "shared" || nature === "internal_transfer") {
+      setFilters((current) => ({ ...current, nature }));
       setSearchParams({}, { replace: true });
     }
   }, [searchParams, setSearchParams]);
