@@ -47,6 +47,21 @@ export function ReviewsPage() {
     REVIEW_TYPE_ORDER
       .map((type) => ({ type, count: reviewCounts[type] ?? 0 }))
       .sort((a, b) => b.count - a.count)[0] ?? null;
+  const nextReviewAction = uncategorizedCount
+    ? {
+        title: "지금 가장 먼저 할 일",
+        description: `${uncategorizedCount}건의 미분류 거래를 먼저 정리하면 검토 이후 흐름이 가장 빠르게 정리됩니다.`,
+        to: "/transactions?cleanup=uncategorized",
+        actionLabel: `미분류 ${uncategorizedCount}건 정리`,
+      }
+    : untaggedCount
+      ? {
+          title: "지금 가장 먼저 할 일",
+          description: `${untaggedCount}건의 무태그 거래를 먼저 묶으면 같은 맥락의 소비를 더 빠르게 비교할 수 있습니다.`,
+          to: "/transactions?cleanup=untagged",
+          actionLabel: `무태그 ${untaggedCount}건 정리`,
+        }
+      : null;
 
   return (
     <section className="card shadow-sm">
@@ -115,6 +130,20 @@ export function ReviewsPage() {
               ))}
             </div>
           ) : null}
+        </div>
+      ) : null}
+
+      {nextReviewAction ? (
+        <div className="review-summary-panel mt-3">
+          <div className="review-summary-copy">
+            <strong>{nextReviewAction.title}</strong>
+            <p className="mb-0 text-secondary">{nextReviewAction.description}</p>
+          </div>
+          <div className="d-flex flex-wrap gap-2">
+            <Link className="btn btn-outline-primary btn-sm" to={nextReviewAction.to}>
+              {nextReviewAction.actionLabel}
+            </Link>
+          </div>
         </div>
       ) : null}
 
