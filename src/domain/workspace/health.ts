@@ -1,4 +1,9 @@
 import type { WorkspaceScope } from "../../app/state/selectors";
+import {
+  isActiveExpenseImpactTransaction,
+  isUncategorizedExpenseTransaction,
+  isUntaggedExpenseTransaction,
+} from "../transactions/meta";
 
 export interface WorkspaceHealthSummary {
   openReviews: WorkspaceScope["reviews"];
@@ -13,9 +18,9 @@ export interface WorkspaceHealthSummary {
 
 export function getWorkspaceHealthSummary(scope: Pick<WorkspaceScope, "transactions" | "reviews">): WorkspaceHealthSummary {
   const openReviews = scope.reviews.filter((item) => item.status === "open");
-  const activeExpenseTransactions = scope.transactions.filter((item) => item.status === "active" && item.isExpenseImpact);
-  const uncategorizedExpenseTransactions = activeExpenseTransactions.filter((item) => !item.categoryId);
-  const untaggedExpenseTransactions = activeExpenseTransactions.filter((item) => item.tagIds.length === 0);
+  const activeExpenseTransactions = scope.transactions.filter(isActiveExpenseImpactTransaction);
+  const uncategorizedExpenseTransactions = scope.transactions.filter(isUncategorizedExpenseTransaction);
+  const untaggedExpenseTransactions = scope.transactions.filter(isUntaggedExpenseTransaction);
 
   return {
     openReviews,

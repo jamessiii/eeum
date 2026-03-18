@@ -1,6 +1,12 @@
 import { monthKey } from "../../shared/utils/date";
 import type { AppState, Category, FinancialProfile, ReviewItem, Tag, Transaction } from "../../shared/types/models";
 import { getRecurringMerchantSuggestions, getUncategorizedTransactions } from "../classification/suggestions";
+import {
+  isActiveExpenseImpactTransaction,
+  isActiveInternalTransferTransaction,
+  isActiveSharedExpenseTransaction,
+  isUntaggedExpenseTransaction,
+} from "../transactions/meta";
 import { getSourceTypeLabel, SOURCE_TYPE_OPTIONS } from "../transactions/sourceTypes";
 
 export type InsightTone = "stable" | "caution" | "warning";
@@ -57,7 +63,7 @@ function summarizeCategories(transactions: Transaction[], categories: Category[]
   const totals = new Map<string, number>();
 
   for (const transaction of transactions) {
-    if (transaction.status !== "active" || !transaction.isExpenseImpact) continue;
+    if (!isActiveExpenseImpactTransaction(transaction)) continue;
     const categoryName = transaction.categoryId ? categoryNameMap.get(transaction.categoryId) ?? "미분류" : "미분류";
     totals.set(categoryName, (totals.get(categoryName) ?? 0) + transaction.amount);
   }
@@ -73,7 +79,7 @@ function summarizeTags(transactions: Transaction[], tags: Tag[]) {
   const totals = new Map<string, { amount: number; count: number; color: string; tagName: string }>();
 
   for (const transaction of transactions) {
-    if (transaction.status !== "active" || !transaction.isExpenseImpact || !transaction.tagIds.length) continue;
+    if (!isActiveExpenseImpactTransaction(transaction) || !transaction.tagIds.length) continue;
 
     for (const tagId of transaction.tagIds) {
       const tag = tagMap.get(tagId);
@@ -99,7 +105,7 @@ function summarizeSourceTypes(transactions: Transaction[]) {
         sourceType,
         count: sourceTransactions.length,
         expenseAmount: sourceTransactions
-          .filter((transaction) => transaction.status === "active" && transaction.isExpenseImpact)
+          .filter(isActiveExpenseImpactTransaction)
           .reduce((sum, transaction) => sum + transaction.amount, 0),
       };
     })
@@ -257,12 +263,12 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
   const accountCount = state.accounts.filter((item) => item.workspaceId === workspaceId).length;
   const cardCount = state.cards.filter((item) => item.workspaceId === workspaceId).length;
   const uncategorizedCount = getUncategorizedTransactions(transactions).length;
-  const untaggedCount = transactions.filter((item) => item.status === "active" && item.isExpenseImpact && item.tagIds.length === 0).length;
+  const untaggedCount = transactions.filter(isUntaggedExpenseTransaction).length;
   const recurringSuggestionCount = getRecurringMerchantSuggestions(transactions, categories).length;
 
   const income = financialProfile?.monthlyNetIncome ?? 0;
   const expense = transactions
-    .filter((item) => item.status === "active" && item.isExpenseImpact)
+    .filter(isActiveExpenseImpactTransaction)
     .reduce((sum, item) => sum + Math.abs(item.amount), 0);
   const savings = Math.max(0, income - expense);
   const spendRate = income > 0 ? expense / income : 0;
@@ -271,17 +277,15 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
     categories.filter((category) => category.fixedOrVariable === "fixed").map((category) => category.id),
   );
   const fixedExpense = transactions
-    .filter((item) => item.status === "active" && item.isExpenseImpact && item.categoryId && fixedCategoryIds.has(item.categoryId))
+    .filter((item) => isActiveExpenseImpactTransaction(item) && item.categoryId && fixedCategoryIds.has(item.categoryId))
     .reduce((sum, item) => sum + Math.abs(item.amount), 0);
   const fixedExpenseRate = income > 0 ? fixedExpense / income : 0;
   const sharedExpense = transactions
-    .filter((item) => item.status === "active" && item.isExpenseImpact && item.isSharedExpense)
+    .filter(isActiveSharedExpenseTransaction)
     .reduce((sum, item) => sum + Math.abs(item.amount), 0);
-  const sharedExpenseCount = transactions.filter(
-    (item) => item.status === "active" && item.isExpenseImpact && item.isSharedExpense,
-  ).length;
+  const sharedExpenseCount = transactions.filter(isActiveSharedExpenseTransaction).length;
   const reviewCount = reviews.filter((item) => item.status === "open").length;
-  const internalTransferCount = transactions.filter((item) => item.status === "active" && item.isInternalTransfer).length;
+  const internalTransferCount = transactions.filter(isActiveInternalTransferTransaction).length;
 
   const metrics = {
     transactionCount: transactions.length,

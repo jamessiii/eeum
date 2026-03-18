@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import {
+  isActiveExpenseImpactTransaction,
+  isActiveInternalTransferTransaction,
+  isActiveSharedExpenseTransaction,
+  isActiveTransaction,
+  isUncategorizedExpenseTransaction,
+  isUntaggedExpenseTransaction,
+} from "../../domain/transactions/meta";
 import { getSourceTypeLabel, SOURCE_TYPE_OPTIONS } from "../../domain/transactions/sourceTypes";
 import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
@@ -168,11 +176,11 @@ export function TransactionsPage() {
         .filter((item) => (filters.status === "all" ? true : item.status === filters.status))
         .filter((item) => {
           if (filters.nature === "all") return true;
-          if (filters.nature === "expense") return item.isExpenseImpact;
-          if (filters.nature === "shared") return item.isSharedExpense;
-          if (filters.nature === "internal_transfer") return item.isInternalTransfer;
-          if (filters.nature === "uncategorized") return item.isExpenseImpact && !item.categoryId;
-          if (filters.nature === "untagged") return item.isExpenseImpact && item.tagIds.length === 0;
+          if (filters.nature === "expense") return isActiveExpenseImpactTransaction(item);
+          if (filters.nature === "shared") return isActiveSharedExpenseTransaction(item);
+          if (filters.nature === "internal_transfer") return isActiveInternalTransferTransaction(item);
+          if (filters.nature === "uncategorized") return isUncategorizedExpenseTransaction(item);
+          if (filters.nature === "untagged") return isUntaggedExpenseTransaction(item);
           return true;
         })
         .filter((item) => (filters.tagId === "all" ? true : item.tagIds.includes(filters.tagId)))
@@ -187,7 +195,7 @@ export function TransactionsPage() {
       [filters.nature, filters.ownerPersonId, filters.searchQuery, filters.sourceType, filters.status, filters.tagId, filters.transactionType, scope.transactions],
     );
 
-  const activeTransactions = transactions.filter((item) => item.status === "active");
+  const activeTransactions = transactions.filter(isActiveTransaction);
   const sourceTypeCounts = SOURCE_TYPE_OPTIONS.reduce<Record<(typeof SOURCE_TYPE_OPTIONS)[number], number>>(
     (accumulator, sourceType) => {
       accumulator[sourceType] = transactions.filter((item) => item.sourceType === sourceType).length;
@@ -195,13 +203,13 @@ export function TransactionsPage() {
     },
     { manual: 0, account: 0, card: 0, import: 0 },
   );
-  const categorizableTransactions = activeTransactions.filter((item) => item.isExpenseImpact);
-  const taggableTransactions = activeTransactions.filter((item) => item.isExpenseImpact);
-  const activeExpenseCount = activeTransactions.filter((item) => item.isExpenseImpact).length;
-  const internalTransferCount = activeTransactions.filter((item) => item.isInternalTransfer).length;
-  const sharedExpenseCount = activeTransactions.filter((item) => item.isSharedExpense).length;
-  const uncategorizedCount = activeTransactions.filter((item) => item.isExpenseImpact && !item.categoryId).length;
-  const untaggedCount = activeTransactions.filter((item) => item.isExpenseImpact && item.tagIds.length === 0).length;
+  const categorizableTransactions = activeTransactions.filter(isActiveExpenseImpactTransaction);
+  const taggableTransactions = activeTransactions.filter(isActiveExpenseImpactTransaction);
+  const activeExpenseCount = activeTransactions.filter(isActiveExpenseImpactTransaction).length;
+  const internalTransferCount = activeTransactions.filter(isActiveInternalTransferTransaction).length;
+  const sharedExpenseCount = activeTransactions.filter(isActiveSharedExpenseTransaction).length;
+  const uncategorizedCount = activeTransactions.filter(isUncategorizedExpenseTransaction).length;
+  const untaggedCount = activeTransactions.filter(isUntaggedExpenseTransaction).length;
   const taggableAmount = taggableTransactions.reduce((sum, item) => sum + item.amount, 0);
   const categorizableAmount = categorizableTransactions.reduce((sum, item) => sum + item.amount, 0);
   const selectedBulkTag = scope.tags.find((tag) => tag.id === bulkTagId) ?? null;

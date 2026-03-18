@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { REVIEW_TYPE_LABELS } from "../../domain/reviews/meta";
+import {
+  isActiveExpenseImpactTransaction,
+  isActiveInternalTransferTransaction,
+  isActiveSharedExpenseTransaction,
+} from "../../domain/transactions/meta";
 import { getSourceTypeLabel, SOURCE_TYPE_OPTIONS } from "../../domain/transactions/sourceTypes";
 import { getWorkspaceHealthSummary } from "../../domain/workspace/health";
 import type { WorkspaceBundle } from "../../shared/types/models";
@@ -24,20 +29,18 @@ export function ImportsPage() {
   const openReviews = health.openReviews;
   const uncategorizedCount = health.uncategorizedCount;
   const untaggedCount = health.untaggedCount;
-  const sharedExpenseCount = scope.transactions.filter(
-    (item) => item.status === "active" && item.isExpenseImpact && item.isSharedExpense,
-  ).length;
-  const internalTransferCount = scope.transactions.filter((item) => item.status === "active" && item.isInternalTransfer).length;
+  const sharedExpenseCount = scope.transactions.filter(isActiveSharedExpenseTransaction).length;
+  const internalTransferCount = scope.transactions.filter(isActiveInternalTransferTransaction).length;
   const sourceBreakdown = SOURCE_TYPE_OPTIONS
     .map((sourceType) => {
       const sourceTransactions = scope.transactions.filter((item) => item.sourceType === sourceType);
-      return {
-        sourceType,
-        count: sourceTransactions.length,
-        expenseAmount: sourceTransactions
-          .filter((item) => item.status === "active" && item.isExpenseImpact)
+        return {
+          sourceType,
+          count: sourceTransactions.length,
+          expenseAmount: sourceTransactions
+          .filter(isActiveExpenseImpactTransaction)
           .reduce((sum, item) => sum + item.amount, 0),
-      };
+        };
     })
     .filter((item) => item.count > 0);
   const latestImport = imports[0] ?? null;
@@ -125,12 +128,12 @@ export function ImportsPage() {
     ? previewBundle.transactions.reduce(
         (accumulator, transaction) => {
           accumulator.byType[transaction.transactionType] = (accumulator.byType[transaction.transactionType] ?? 0) + 1;
-          if (transaction.isExpenseImpact) {
+          if (isActiveExpenseImpactTransaction(transaction)) {
             accumulator.expenseCount += 1;
             accumulator.expenseAmount += transaction.amount;
           }
-          if (transaction.isInternalTransfer) accumulator.internalTransferCount += 1;
-          if (transaction.isSharedExpense) accumulator.sharedExpenseCount += 1;
+          if (isActiveInternalTransferTransaction(transaction)) accumulator.internalTransferCount += 1;
+          if (isActiveSharedExpenseTransaction(transaction)) accumulator.sharedExpenseCount += 1;
           return accumulator;
         },
         {
