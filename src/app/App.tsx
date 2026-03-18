@@ -19,19 +19,41 @@ import { AppStateProvider, useAppState } from "./state/AppStateProvider";
 import { getActiveWorkspace } from "./state/selectors";
 import { ToastProvider } from "./toast/ToastProvider";
 
-const navItems = [
-  { to: "/", label: "대시보드", end: true },
-  { to: "/transactions", label: "거래" },
-  { to: "/people", label: "사람" },
-  { to: "/accounts", label: "계좌관리" },
-  { to: "/cards", label: "카드관리" },
-  { to: "/categories", label: "카테고리" },
-  { to: "/imports", label: "업로드" },
-  { to: "/reviews", label: "검토함" },
-  { to: "/settlements", label: "정산" },
-  { to: "/settings", label: "설정" },
-  { to: "/dev", label: "개발자" },
+const navGroups = [
+  {
+    label: "핵심",
+    items: [
+      { to: "/", label: "대시보드", end: true },
+      { to: "/transactions", label: "거래" },
+      { to: "/settlements", label: "정산" },
+    ],
+  },
+  {
+    label: "데이터 입력",
+    items: [
+      { to: "/imports", label: "업로드" },
+      { to: "/reviews", label: "검토함" },
+      { to: "/categories", label: "분류" },
+    ],
+  },
+  {
+    label: "기반 정보",
+    items: [
+      { to: "/people", label: "사람" },
+      { to: "/accounts", label: "계좌관리" },
+      { to: "/cards", label: "카드관리" },
+    ],
+  },
+  {
+    label: "관리",
+    items: [
+      { to: "/settings", label: "설정" },
+      { to: "/dev", label: "개발자" },
+    ],
+  },
 ];
+
+const navItems = navGroups.flatMap((group) => group.items);
 
 function SidebarNav() {
   const location = useLocation();
@@ -75,7 +97,7 @@ function SidebarNav() {
   }, [activeKey]);
 
   return (
-    <nav ref={navRef} className="nav flex-column app-nav">
+    <nav ref={navRef} className="app-nav">
       <div
         className={`app-nav-indicator${indicatorStyle.visible ? " visible" : ""}`}
         style={{
@@ -83,18 +105,25 @@ function SidebarNav() {
           transform: `translateY(${indicatorStyle.y}px)`,
         }}
       />
-      {navItems.map((item) => (
-        <NavLink
-          key={item.to}
-          ref={(element) => {
-            linkRefs.current[item.to] = element;
-          }}
-          to={item.to}
-          end={item.end}
-          className="nav-link"
-        >
-          {item.label}
-        </NavLink>
+      {navGroups.map((group) => (
+        <section key={group.label} className="app-nav-group">
+          <div className="app-nav-group-label">{group.label}</div>
+          <div className="nav flex-column">
+            {group.items.map((item) => (
+              <NavLink
+                key={item.to}
+                ref={(element) => {
+                  linkRefs.current[item.to] = element;
+                }}
+                to={item.to}
+                end={item.end}
+                className="nav-link"
+              >
+                {item.label}
+              </NavLink>
+            ))}
+          </div>
+        </section>
       ))}
     </nav>
   );
@@ -115,6 +144,7 @@ function AppFrame() {
         <div>
           <span className="sidebar-kicker">Household Web App</span>
           <h1>가계부 웹앱</h1>
+          <p className="sidebar-copy">입력, 분류, 검토, 정산까지 한 흐름으로 관리합니다.</p>
         </div>
         <select
           className="form-select workspace-select"
