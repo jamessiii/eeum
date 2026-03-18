@@ -123,6 +123,8 @@ export function TransactionsPage() {
   const categories = new Map(scope.categories.map((item) => [item.id, item.name]));
   const tags = new Map(scope.tags.map((item) => [item.id, item]));
   const peopleMap = new Map(scope.people.map((person) => [person.id, person.name]));
+  const accountMap = new Map(scope.accounts.map((account) => [account.id, account.name]));
+  const cardMap = new Map(scope.cards.map((card) => [card.id, card.name]));
   const people = scope.people;
   const cards = scope.cards;
   const accounts = scope.accounts;
@@ -886,6 +888,15 @@ export function TransactionsPage() {
                               <strong>{transaction.merchantName}</strong>
                               <div className="small text-secondary">
                                 {transaction.description || (transaction.isInternalTransfer ? "내부이체로 처리된 거래" : "설명 없음")}
+                              </div>
+                              <div className="small text-secondary mt-1">
+                                {[
+                                  transaction.ownerPersonId ? `사용자 ${peopleMap.get(transaction.ownerPersonId) ?? "-"}` : null,
+                                  transaction.accountId ? `계좌 ${accountMap.get(transaction.accountId) ?? "-"}` : null,
+                                  transaction.cardId ? `카드 ${cardMap.get(transaction.cardId) ?? "-"}` : null,
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ") || "연결 정보 없음"}
                               </div>
                             </div>
                             {transaction.status === "active" ? (
