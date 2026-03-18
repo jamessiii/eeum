@@ -9,7 +9,13 @@ export interface RecurringMerchantSuggestion {
 
 export function getUncategorizedTransactions(transactions: Transaction[]) {
   return transactions
-    .filter((transaction) => transaction.isExpenseImpact && transaction.transactionType === "expense" && !transaction.categoryId)
+    .filter(
+      (transaction) =>
+        transaction.status === "active" &&
+        transaction.isExpenseImpact &&
+        transaction.transactionType === "expense" &&
+        !transaction.categoryId,
+    )
     .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
 }
 
@@ -18,6 +24,7 @@ export function getRecurringMerchantSuggestions(transactions: Transaction[], cat
   const merchantMap = new Map<string, Transaction[]>();
 
   for (const transaction of transactions) {
+    if (transaction.status !== "active") continue;
     if (!transaction.isExpenseImpact || transaction.transactionType !== "expense") continue;
     if (transaction.categoryId && categoryIds.has(transaction.categoryId)) continue;
     const key = transaction.merchantName.trim();

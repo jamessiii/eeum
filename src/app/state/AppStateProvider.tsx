@@ -10,7 +10,7 @@ import {
 } from "../../domain/app/defaults";
 import { parseHouseholdWorkbook } from "../../domain/imports/householdWorkbook";
 import { createHouseholdV2DemoBundle } from "../../dev/seeds/householdV2Seed";
-import type { AppState, FinancialProfile, Transaction, WorkspaceBundle } from "../../shared/types/models";
+import type { AppState, FinancialProfile, ReviewItem, Transaction, WorkspaceBundle } from "../../shared/types/models";
 import { createId } from "../../shared/utils/id";
 import { useToast } from "../toast/ToastProvider";
 
@@ -43,6 +43,7 @@ type Action =
   | { type: "reset" }
   | { type: "replaceState"; payload: AppState }
   | { type: "resolveReview"; payload: { reviewId: string; status: "resolved" | "dismissed" } }
+  | { type: "applyReviewSuggestion"; payload: { reviewId: string } }
   | { type: "addPerson"; payload: { workspaceId: string; name: string } }
   | { type: "addAccount"; payload: { workspaceId: string; name: string; institutionName: string } }
   | { type: "addCard"; payload: { workspaceId: string; name: string; issuerName: string } }
@@ -52,6 +53,48 @@ type Action =
   | { type: "addTransaction"; payload: NewTransactionInput }
   | { type: "assignCategory"; payload: { workspaceId: string; transactionId: string; categoryId: string } }
   | { type: "assignCategoryByMerchant"; payload: { workspaceId: string; merchantName: string; categoryId: string } };
+
+function applyReviewSuggestionToTransactions(transactions: Transaction[], review: ReviewItem) {
+  const relatedTransactionId = review.relatedTransactionIds[0] ?? null;
+
+  return transactions.map((transaction) => {
+    if (transaction.id !== review.primaryTransactionId) {
+      return transaction;
+    }
+
+    switch (review.reviewType) {
+      case "duplicate_candidate":
+        return {
+          ...transaction,
+          status: "cancelled" as const,
+          isExpenseImpact: false,
+        };
+      case "refund_candidate":
+        return {
+          ...transaction,
+          transactionType: "income" as const,
+          amount: Math.abs(transaction.amount),
+          isExpenseImpact: false,
+          refundOfTransactionId: relatedTransactionId,
+        };
+      case "internal_transfer_candidate":
+        return {
+          ...transaction,
+          transactionType: "transfer" as const,
+          isInternalTransfer: true,
+          isExpenseImpact: false,
+          categoryId: null,
+        };
+      case "shared_expense_candidate":
+        return {
+          ...transaction,
+          isSharedExpense: true,
+        };
+      default:
+        return transaction;
+    }
+  });
+}
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -72,6 +115,18 @@ function reducer(state: AppState, action: Action): AppState {
           review.id === action.payload.reviewId ? { ...review, status: action.payload.status } : review,
         ),
       };
+    case "applyReviewSuggestion": {
+      const review = state.reviews.find((item) => item.id === action.payload.reviewId);
+      if (!review) return state;
+
+      return {
+        ...state,
+        transactions: applyReviewSuggestionToTransactions(state.transactions, review),
+        reviews: state.reviews.map((item) =>
+          item.id === action.payload.reviewId ? { ...item, status: "resolved" } : item,
+        ),
+      };
+    }
     case "addPerson":
       return {
         ...state,
@@ -217,6 +272,7 @@ interface AppStateContextValue {
   importState: (file: File) => Promise<void>;
   resolveReview: (reviewId: string) => void;
   dismissReview: (reviewId: string) => void;
+  applyReviewSuggestion: (reviewId: string) => void;
   addPerson: (workspaceId: string, name: string) => void;
   addAccount: (workspaceId: string, name: string, institutionName: string) => void;
   addCard: (workspaceId: string, name: string, issuerName: string) => void;
@@ -283,7 +339,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         dispatch({ type: "setActiveWorkspace", payload: workspaceId });
         const workspace = state.workspaces.find((item) => item.id === workspaceId);
         if (workspace) {
-          showToast(`${workspace.name}으로 전환했습니다.`, "info");
+          showToast(`${workspace.name}로 전환했습니다.`, "info");
         }
       },
       async resetApp() {
@@ -331,7 +387,11 @@ export function AppStateProvider({ children }: PropsWithChildren) {
       },
       dismissReview(reviewId) {
         dispatch({ type: "resolveReview", payload: { reviewId, status: "dismissed" } });
-        showToast("검토 항목을 나중에 보기로 옮겼습니다.", "info");
+        showToast("검토 항목을 나중에 보기로 넘겼습니다.", "info");
+      },
+      applyReviewSuggestion(reviewId) {
+        dispatch({ type: "applyReviewSuggestion", payload: { reviewId } });
+        showToast("검토 제안을 거래 데이터에 반영했습니다.", "success");
       },
       addPerson(workspaceId, name) {
         dispatch({ type: "addPerson", payload: { workspaceId, name } });
