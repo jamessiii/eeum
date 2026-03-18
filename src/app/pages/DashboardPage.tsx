@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { getWorkspaceInsights } from "../../domain/insights/workspaceInsights";
 import { formatCurrency, formatPercent } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
@@ -7,10 +8,56 @@ function toneClass(tone: "stable" | "caution" | "warning") {
   return tone === "warning" ? "warning" : tone === "caution" ? "caution" : "stable";
 }
 
+interface DashboardAttentionItem {
+  key: string;
+  title: string;
+  description: string;
+  actionLabel: string;
+  to: string;
+}
+
 export function DashboardPage() {
   const { state } = useAppState();
   const workspaceId = state.activeWorkspaceId!;
   const insights = getWorkspaceInsights(state, workspaceId);
+  const attentionItems = [
+    insights.reviewCount > 0
+      ? {
+          key: "reviews",
+          title: "검토함 정리가 필요합니다",
+          description: `${insights.reviewCount}건의 자동 검토 후보가 남아 있어 지출 해석이 달라질 수 있습니다.`,
+          actionLabel: "검토함 열기",
+          to: "/reviews",
+        }
+      : null,
+    insights.recurringSuggestionCount > 0
+      ? {
+          key: "recurring",
+          title: "반복 지출 제안을 먼저 적용해보세요",
+          description: `${insights.recurringSuggestionCount}개의 반복 지출 후보가 있어 카테고리를 한 번에 정리할 수 있습니다.`,
+          actionLabel: "분류 화면 열기",
+          to: "/categories",
+        }
+      : null,
+    insights.uncategorizedCount > 0
+      ? {
+          key: "uncategorized",
+          title: "미분류 거래가 남아 있습니다",
+          description: `${insights.uncategorizedCount}건이 아직 미분류 상태라 상위 지출 분석이 왜곡될 수 있습니다.`,
+          actionLabel: "미분류 거래 정리",
+          to: "/categories",
+        }
+      : null,
+    !insights.isFinancialProfileReady
+      ? {
+          key: "profile",
+          title: "재무 기준선 입력이 필요합니다",
+          description: "월 순수입과 목표 저축률이 비어 있어 지출률과 저축률 진단이 약하게 동작하고 있습니다.",
+          actionLabel: "기준선 설정하기",
+          to: "/settings",
+        }
+      : null,
+  ].filter((item): item is DashboardAttentionItem => Boolean(item));
 
   return (
     <div className="page-stack">
@@ -84,8 +131,30 @@ export function DashboardPage() {
         </div>
       </section>
 
-      <div className="page-grid">
+      {attentionItems.length ? (
         <section className="card shadow-sm" style={getMotionStyle(1)}>
+          <div className="section-head">
+            <div>
+              <span className="section-kicker">먼저 정리할 것</span>
+              <h2 className="section-title">아직 숫자를 더 다듬을 수 있습니다</h2>
+            </div>
+          </div>
+          <div className="resource-grid">
+            {attentionItems.map((item, index) => (
+              <article key={item.key} className="resource-card" style={getMotionStyle(index + 2)}>
+                <h3>{item.title}</h3>
+                <p className="mb-0 text-secondary">{item.description}</p>
+                <Link to={item.to} className="btn btn-outline-primary btn-sm mt-3">
+                  {item.actionLabel}
+                </Link>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <div className="page-grid">
+        <section className="card shadow-sm" style={getMotionStyle(attentionItems.length ? 2 : 1)}>
           <div className="section-head">
             <div>
               <span className="section-kicker">다음 행동</span>
@@ -99,7 +168,7 @@ export function DashboardPage() {
           </ul>
         </section>
 
-        <section className="card shadow-sm" style={getMotionStyle(2)}>
+        <section className="card shadow-sm" style={getMotionStyle(attentionItems.length ? 3 : 2)}>
           <div className="section-head">
             <div>
               <span className="section-kicker">상위 지출</span>

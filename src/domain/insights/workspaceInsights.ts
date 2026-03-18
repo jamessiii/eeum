@@ -1,5 +1,6 @@
 import { monthKey } from "../../shared/utils/date";
 import type { AppState, Category, FinancialProfile, ReviewItem, Transaction } from "../../shared/types/models";
+import { getRecurringMerchantSuggestions, getUncategorizedTransactions } from "../classification/suggestions";
 
 export type InsightTone = "stable" | "caution" | "warning";
 
@@ -15,6 +16,9 @@ export interface WorkspaceInsights {
   sharedExpense: number;
   reviewCount: number;
   internalTransferCount: number;
+  uncategorizedCount: number;
+  recurringSuggestionCount: number;
+  isFinancialProfileReady: boolean;
   topCategories: Array<{ categoryName: string; amount: number }>;
   nextSteps: string[];
   coaching: string;
@@ -119,6 +123,8 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
   const peopleCount = state.people.filter((item) => item.workspaceId === workspaceId).length;
   const accountCount = state.accounts.filter((item) => item.workspaceId === workspaceId).length;
   const cardCount = state.cards.filter((item) => item.workspaceId === workspaceId).length;
+  const uncategorizedCount = getUncategorizedTransactions(transactions).length;
+  const recurringSuggestionCount = getRecurringMerchantSuggestions(transactions, categories).length;
 
   const income = financialProfile?.monthlyNetIncome ?? 0;
   const expense = transactions
@@ -151,6 +157,9 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
     sharedExpense,
     reviewCount,
     internalTransferCount,
+    uncategorizedCount,
+    recurringSuggestionCount,
+    isFinancialProfileReady: income > 0,
   };
 
   const context: WorkspaceContext = {
