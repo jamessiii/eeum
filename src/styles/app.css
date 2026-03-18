@@ -636,6 +636,12 @@ a {
   gap: 0.75rem;
 }
 
+.transaction-mode-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .classification-flow-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -663,6 +669,12 @@ a {
 .resource-card {
   align-items: flex-start;
   flex-direction: column;
+}
+
+.transaction-nature-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
 }
 
 .resource-card h3 {
@@ -703,6 +715,7 @@ a {
   .stats-grid,
   .settings-grid,
   .resource-grid,
+  .transaction-mode-grid,
   .classification-flow-grid,
   .guide-step-list,
   .transaction-filter-row,
@@ -722,6 +735,7 @@ a {
   .stats-grid,
   .settings-grid,
   .resource-grid,
+  .transaction-mode-grid,
   .classification-flow-grid,
   .classification-action-row,
   .guide-panel-main,

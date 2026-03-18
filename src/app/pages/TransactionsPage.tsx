@@ -18,6 +18,11 @@ const transactionStatusLabel = {
   cancelled: "제외됨",
 } as const;
 
+const flowModeLabel = {
+  expense: "실지출",
+  non_expense: "비지출 흐름",
+} as const;
+
 export function TransactionsPage() {
   const { addTransaction, state } = useAppState();
   const workspaceId = state.activeWorkspaceId!;
@@ -47,6 +52,7 @@ export function TransactionsPage() {
   const activeTransactions = transactions.filter((item) => item.status === "active");
   const activeExpenseCount = activeTransactions.filter((item) => item.isExpenseImpact).length;
   const internalTransferCount = activeTransactions.filter((item) => item.isInternalTransfer).length;
+  const sharedExpenseCount = activeTransactions.filter((item) => item.isSharedExpense).length;
   const uncategorizedCount = activeTransactions.filter((item) => item.isExpenseImpact && !item.categoryId).length;
 
   return (
@@ -62,6 +68,20 @@ export function TransactionsPage() {
           업로드로 들어오지 않은 거래나 빠진 항목은 여기서 직접 추가할 수 있습니다. 사용일과 결제일을 분리해서 넣어두면 카드 소비와
           실제 현금흐름을 나눠서 볼 수 있습니다.
         </p>
+        <div className="transaction-mode-grid mb-4">
+          <article className="resource-card">
+            <h3>실지출로 넣을 때</h3>
+            <p className="mb-0 text-secondary">생활비, 외식, 쇼핑처럼 실제 소비가 발생한 거래는 `지출 반영`을 켠 상태로 등록합니다.</p>
+          </article>
+          <article className="resource-card">
+            <h3>공동지출일 때</h3>
+            <p className="mb-0 text-secondary">함께 부담할 거래라면 `공동지출`도 함께 켜두면 정산 화면에서 자동으로 계산됩니다.</p>
+          </article>
+          <article className="resource-card">
+            <h3>내부이체일 때</h3>
+            <p className="mb-0 text-secondary">내 계좌끼리 옮긴 돈은 `이체`로 넣고 `지출 반영`을 꺼야 과소비로 잡히지 않습니다.</p>
+          </article>
+        </div>
         <form
           className="manual-transaction-form"
           onSubmit={(event) => {
@@ -179,6 +199,10 @@ export function TransactionsPage() {
                 <span className="stat-label">내부이체</span>
                 <strong>{internalTransferCount}건</strong>
               </article>
+              <article className="stat-card">
+                <span className="stat-label">공동지출</span>
+                <strong>{sharedExpenseCount}건</strong>
+              </article>
             </div>
 
             <div className="toolbar-row transaction-filter-row mb-3">
@@ -225,6 +249,7 @@ export function TransactionsPage() {
                     <th>결제일</th>
                     <th>유형</th>
                     <th>상태</th>
+                    <th>성격</th>
                     <th>가맹점/설명</th>
                     <th>사용자</th>
                     <th>카테고리</th>
@@ -255,6 +280,15 @@ export function TransactionsPage() {
                         </span>
                       </td>
                       <td>
+                        <div className="transaction-nature-stack">
+                          <span className={`badge ${transaction.isExpenseImpact ? "text-bg-danger-subtle" : "text-bg-secondary-subtle"}`}>
+                            {transaction.isExpenseImpact ? flowModeLabel.expense : flowModeLabel.non_expense}
+                          </span>
+                          {transaction.isInternalTransfer ? <span className="badge text-bg-info-subtle">내부이체</span> : null}
+                          {transaction.isSharedExpense ? <span className="badge text-bg-warning-subtle">공동지출</span> : null}
+                        </div>
+                      </td>
+                      <td>
                         <strong>{transaction.merchantName}</strong>
                         <div className="small text-secondary">
                           {transaction.description || (transaction.isInternalTransfer ? "내부이체로 처리된 거래" : "설명 없음")}
@@ -264,7 +298,7 @@ export function TransactionsPage() {
                       <td>{transaction.categoryId ? categories.get(transaction.categoryId) : "미분류"}</td>
                       <td className="text-end transaction-amount-cell">
                         <strong>{formatCurrency(transaction.amount)}</strong>
-                        {transaction.isSharedExpense ? <div className="small text-secondary">공동지출</div> : null}
+                        {!transaction.isExpenseImpact ? <div className="small text-secondary">통계 제외 흐름</div> : null}
                       </td>
                     </tr>
                   ))}
