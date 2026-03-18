@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { REVIEW_ACTION_LABELS, REVIEW_TYPE_LABELS, REVIEW_TYPE_ORDER, type ReviewType } from "../../domain/reviews/meta";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { ReviewTypeFilterBar } from "../components/ReviewTypeFilterBar";
@@ -17,6 +18,12 @@ export function ReviewsPage() {
   const reviews = scope.reviews.filter((item) => item.status === "open");
   const resolvedReviews = scope.reviews.filter((item) => item.status === "resolved");
   const dismissedReviews = scope.reviews.filter((item) => item.status === "dismissed");
+  const uncategorizedCount = scope.transactions.filter(
+    (item) => item.status === "active" && item.isExpenseImpact && !item.categoryId,
+  ).length;
+  const untaggedCount = scope.transactions.filter(
+    (item) => item.status === "active" && item.isExpenseImpact && item.tagIds.length === 0,
+  ).length;
   const totalReviewCount = scope.reviews.length;
   const reviewProgress = totalReviewCount ? (resolvedReviews.length + dismissedReviews.length) / totalReviewCount : 1;
   const reviewCounts = reviews.reduce<Partial<Record<ReviewType, number>>>((accumulator, item) => {
@@ -111,6 +118,32 @@ export function ReviewsPage() {
           ) : null}
         </div>
       ) : null}
+
+      <div className="review-summary-panel mt-3">
+        <div className="review-summary-copy">
+          <strong>{reviews.length ? "검토 후 바로 이어서 할 일" : "검토는 끝났고 다음 단계만 남았습니다"}</strong>
+          <p className="mb-0 text-secondary">
+            {reviews.length
+              ? "검토 후보를 줄인 뒤에는 미분류 거래와 무태그 거래를 정리해야 대시보드 해석이 더 정확해집니다."
+              : "열린 검토 항목은 모두 정리됐습니다. 이제 분류와 태그 정리를 끝내고 진단 화면으로 넘어가면 됩니다."}
+          </p>
+        </div>
+        <div className="d-flex flex-wrap gap-2">
+          {uncategorizedCount ? (
+            <Link className="btn btn-outline-primary btn-sm" to="/transactions?cleanup=uncategorized">
+              미분류 {uncategorizedCount}건 정리
+            </Link>
+          ) : null}
+          {untaggedCount ? (
+            <Link className="btn btn-outline-secondary btn-sm" to="/transactions?cleanup=untagged">
+              무태그 {untaggedCount}건 정리
+            </Link>
+          ) : null}
+          <Link className="btn btn-outline-dark btn-sm" to="/">
+            대시보드 보기
+          </Link>
+        </div>
+      </div>
 
       {!reviews.length ? (
         <EmptyStateCallout
