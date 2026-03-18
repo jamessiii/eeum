@@ -129,8 +129,25 @@ function getFixedTone(profile: FinancialProfile | null, fixedExpenseRate: number
 
 function buildCoaching(context: WorkspaceContext, metrics: InsightMetrics): string {
   const profile = context.financialProfile;
+  const sourceBreakdown = summarizeSourceTypes(context.transactions);
+  const topSource = sourceBreakdown[0] ?? null;
   if (!profile) {
     return "월 순수입이 아직 설정되지 않았습니다. 설정 화면에서 재무 기준선을 먼저 입력해주세요.";
+  }
+
+  if (topSource && topSource.count > 0) {
+    const sourceShare = topSource.count / Math.max(1, metrics.transactionCount);
+    if (sourceShare >= 0.7) {
+      const sourceLabel =
+        topSource.sourceType === "manual"
+          ? "수동입력"
+          : topSource.sourceType === "account"
+            ? "계좌"
+            : topSource.sourceType === "card"
+              ? "카드"
+              : "가져오기";
+      return `이번 달 거래의 ${Math.round(sourceShare * 100)}%가 ${sourceLabel} 경로에 몰려 있습니다. 이 수단의 연결값과 분류 상태를 먼저 점검해보세요.`;
+    }
   }
 
   if (metrics.spendRate > profile.warningSpendRate) {
@@ -150,11 +167,24 @@ function buildCoaching(context: WorkspaceContext, metrics: InsightMetrics): stri
 
 function buildNextSteps(context: WorkspaceContext, metrics: InsightMetrics): string[] {
   const nextSteps: string[] = [];
+  const sourceBreakdown = summarizeSourceTypes(context.transactions);
+  const topSource = sourceBreakdown[0] ?? null;
 
   if (context.peopleCount === 0) nextSteps.push("사람을 추가해서 개인지출과 공동지출을 나눠보세요.");
   if (context.accountCount === 0) nextSteps.push("계좌를 등록하면 내부이체와 실제 지출을 더 정확하게 구분할 수 있습니다.");
   if (context.cardCount === 0) nextSteps.push("카드를 등록하면 카드 명세서 업로드와 소비 흐름 분석이 쉬워집니다.");
   if (context.transactions.length === 0) nextSteps.push("첫 거래를 입력하거나 엑셀 파일을 업로드해서 분석을 시작해보세요.");
+  if (topSource && topSource.count / Math.max(1, metrics.transactionCount) >= 0.7) {
+    const sourceLabel =
+      topSource.sourceType === "manual"
+        ? "수동입력"
+        : topSource.sourceType === "account"
+          ? "계좌"
+          : topSource.sourceType === "card"
+            ? "카드"
+            : "가져오기";
+    nextSteps.push(`${sourceLabel} 거래가 대부분을 차지합니다. 이 수단 흐름을 먼저 점검하면 전체 데이터 정확도를 빠르게 높일 수 있습니다.`);
+  }
   if (context.reviews.some((review) => review.status === "open")) {
     nextSteps.push(`검토함에 ${context.reviews.filter((review) => review.status === "open").length}건이 남아 있습니다. 자동 제안을 먼저 정리해보세요.`);
   }
@@ -180,6 +210,7 @@ function buildNextSteps(context: WorkspaceContext, metrics: InsightMetrics): str
 
 function buildHeadlineCards(
   topCategories: WorkspaceInsights["topCategories"],
+  sourceBreakdown: WorkspaceInsights["sourceBreakdown"],
   metrics: InsightMetrics,
 ) {
   const cards: Array<{ title: string; description: string }> = [];
@@ -198,6 +229,23 @@ function buildHeadlineCards(
     cards.push({
       title: "공동지출 비중",
       description: `공동지출이 전체 소비의 ${Math.round(sharedShare * 100)}%입니다. 정산 화면도 함께 확인해보세요.`,
+    });
+  }
+
+  if (sourceBreakdown.length) {
+    const biggestSource = sourceBreakdown[0];
+    const sourceShare = biggestSource.count / Math.max(1, metrics.transactionCount);
+    const sourceLabel =
+      biggestSource.sourceType === "manual"
+        ? "수동입력"
+        : biggestSource.sourceType === "account"
+          ? "계좌"
+          : biggestSource.sourceType === "card"
+            ? "카드"
+            : "가져오기";
+    cards.push({
+      title: "가장 큰 입력 경로",
+      description: `${sourceLabel} 경로가 이번 달 거래의 ${Math.round(sourceShare * 100)}%를 차지하고 있습니다.`,
     });
   }
 
@@ -293,7 +341,7 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
     topCategories: summarizeCategories(transactions, categories),
     topTags: summarizeTags(transactions, tags),
     sourceBreakdown: summarizeSourceTypes(transactions),
-    headlineCards: buildHeadlineCards(summarizeCategories(transactions, categories), metrics),
+    headlineCards: buildHeadlineCards(summarizeCategories(transactions, categories), summarizeSourceTypes(transactions), metrics),
     nextSteps: buildNextSteps(context, metrics),
     coaching: buildCoaching(context, metrics),
     spendTone: getSpendTone(financialProfile, spendRate),
