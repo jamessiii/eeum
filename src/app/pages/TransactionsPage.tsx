@@ -19,6 +19,7 @@ import { CompletionBanner } from "../components/CompletionBanner";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { TransactionCategoryEditor } from "../components/TransactionCategoryEditor";
 import { TransactionInlineEditor, type TransactionEditDraft } from "../components/TransactionInlineEditor";
+import { TransactionQuickActions } from "../components/TransactionQuickActions";
 import { TransactionTagEditor } from "../components/TransactionTagEditor";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
@@ -895,47 +896,24 @@ export function TransactionsPage() {
                             {transaction.isSharedExpense ? <span className="badge text-bg-warning-subtle">공동지출</span> : null}
                           </div>
                           <div className="small text-secondary mt-2">{getSharedTransactionFlowSummary(transaction)}</div>
-                          {transaction.status === "active" ? (
-                            <div className="d-flex flex-wrap gap-2 mt-2">
-                              {transaction.transactionType === "expense" ? (
-                                <button
-                                  className="btn btn-outline-secondary btn-sm"
-                                  type="button"
-                                onClick={() =>
-                                  updateTransactionFlags(workspaceId, transaction.id, {
-                                    isSharedExpense: !transaction.isSharedExpense,
-                                  })
-                                }
-                                >
-                                  {transaction.isSharedExpense ? "공동 해제" : "공동지출"}
-                                </button>
-                              ) : null}
-                              {transaction.transactionType === "transfer" ? (
-                                <button
-                                  className="btn btn-outline-secondary btn-sm"
-                                  type="button"
-                                  onClick={() =>
-                                    updateTransactionFlags(workspaceId, transaction.id, {
-                                      isInternalTransfer: !transaction.isInternalTransfer,
-                                    })
-                                  }
-                                >
-                                  {transaction.isInternalTransfer ? "내부이체 해제" : "내부이체"}
-                                </button>
-                              ) : null}
-                              <button
-                                className="btn btn-outline-secondary btn-sm"
-                                type="button"
-                              onClick={() =>
-                                updateTransactionFlags(workspaceId, transaction.id, {
-                                  isExpenseImpact: !transaction.isExpenseImpact,
-                                })
-                              }
-                            >
-                              {transaction.isExpenseImpact ? "통계 제외" : "통계 반영"}
-                            </button>
-                          </div>
-                        ) : null}
+                          <TransactionQuickActions
+                            transaction={transaction}
+                            onToggleSharedExpense={() =>
+                              updateTransactionFlags(workspaceId, transaction.id, {
+                                isSharedExpense: !transaction.isSharedExpense,
+                              })
+                            }
+                            onToggleInternalTransfer={() =>
+                              updateTransactionFlags(workspaceId, transaction.id, {
+                                isInternalTransfer: !transaction.isInternalTransfer,
+                              })
+                            }
+                            onToggleExpenseImpact={() =>
+                              updateTransactionFlags(workspaceId, transaction.id, {
+                                isExpenseImpact: !transaction.isExpenseImpact,
+                              })
+                            }
+                          />
                       </td>
                         <td>
                           <div className="d-flex flex-wrap justify-content-between align-items-start gap-2">
