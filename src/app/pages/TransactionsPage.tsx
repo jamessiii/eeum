@@ -20,6 +20,7 @@ import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { TransactionCategoryEditor } from "../components/TransactionCategoryEditor";
 import { TransactionInlineEditor, type TransactionEditDraft } from "../components/TransactionInlineEditor";
 import { TransactionQuickActions } from "../components/TransactionQuickActions";
+import { TransactionRowHeader } from "../components/TransactionRowHeader";
 import { TransactionTagEditor } from "../components/TransactionTagEditor";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
@@ -916,39 +917,29 @@ export function TransactionsPage() {
                           />
                       </td>
                         <td>
-                          <div className="d-flex flex-wrap justify-content-between align-items-start gap-2">
-                            <div>
-                              <strong>{transaction.merchantName}</strong>
-                              <div className="small text-secondary">
-                                {transaction.description || (transaction.isInternalTransfer ? "내부이체로 처리된 거래" : "설명 없음")}
-                              </div>
-                              <div className="small text-secondary mt-1">
-                                {[
-                                  `수단 ${getSourceTypeLabel(transaction.sourceType)}`,
-                                  transaction.ownerPersonId ? `사용자 ${peopleMap.get(transaction.ownerPersonId) ?? "-"}` : null,
-                                  transaction.accountId ? `계좌 ${accountMap.get(transaction.accountId) ?? "-"}` : null,
-                                  transaction.cardId ? `카드 ${cardMap.get(transaction.cardId) ?? "-"}` : null,
-                                ]
-                                  .filter(Boolean)
-                                  .join(" · ") || "연결 정보 없음"}
-                              </div>
-                            </div>
-                            {transaction.status === "active" ? (
-                              <button
-                                className="btn btn-outline-secondary btn-sm"
-                                type="button"
-                                onClick={() => {
-                                  if (editingTransactionId === transaction.id) {
-                                    cancelTransactionEdit();
-                                    return;
-                                  }
-                                  beginTransactionEdit(transaction);
-                                }}
-                              >
-                                {editingTransactionId === transaction.id ? "수정 닫기" : "기본 정보 수정"}
-                              </button>
-                            ) : null}
-                          </div>
+                          <TransactionRowHeader
+                            merchantName={transaction.merchantName}
+                            description={transaction.description || (transaction.isInternalTransfer ? "내부이체로 처리된 거래" : null)}
+                            connectionSummary={
+                              [
+                                `수단 ${getSourceTypeLabel(transaction.sourceType)}`,
+                                transaction.ownerPersonId ? `사용자 ${peopleMap.get(transaction.ownerPersonId) ?? "-"}` : null,
+                                transaction.accountId ? `계좌 ${accountMap.get(transaction.accountId) ?? "-"}` : null,
+                                transaction.cardId ? `카드 ${cardMap.get(transaction.cardId) ?? "-"}` : null,
+                              ]
+                                .filter(Boolean)
+                                .join(" · ") || "연결 정보 없음"
+                            }
+                            canEdit={transaction.status === "active"}
+                            isEditing={editingTransactionId === transaction.id}
+                            onToggleEdit={() => {
+                              if (editingTransactionId === transaction.id) {
+                                cancelTransactionEdit();
+                                return;
+                              }
+                              beginTransactionEdit(transaction);
+                            }}
+                          />
                           {editingTransactionId === transaction.id ? (
                             <TransactionInlineEditor
                               draft={editDraft}
