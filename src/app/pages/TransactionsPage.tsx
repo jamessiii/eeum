@@ -25,6 +25,35 @@ const flowModeLabel = {
   non_expense: "비지출 흐름",
 } as const;
 
+function getTransactionFlowSummary(transaction: {
+  transactionType: "expense" | "income" | "transfer" | "adjustment";
+  isExpenseImpact: boolean;
+  isInternalTransfer: boolean;
+  isSharedExpense: boolean;
+}) {
+  if (transaction.isInternalTransfer) {
+    return "내부이체로 처리되어 소비 통계에서는 제외됩니다.";
+  }
+
+  if (transaction.isSharedExpense) {
+    return "공동지출로 계산되어 정산 화면에도 함께 반영됩니다.";
+  }
+
+  if (transaction.isExpenseImpact) {
+    return "실지출로 계산되어 소비 통계와 진단에 반영됩니다.";
+  }
+
+  if (transaction.transactionType === "income") {
+    return "수입 흐름으로 기록되어 지출 통계에서는 제외됩니다.";
+  }
+
+  if (transaction.transactionType === "adjustment") {
+    return "조정 흐름으로 기록되어 일반 소비 흐름과 분리됩니다.";
+  }
+
+  return "비지출 흐름으로 기록되어 소비 통계에서는 제외됩니다.";
+}
+
 const cleanupModeCopy = {
   all: {
     title: "전체 거래를 보고 있습니다",
@@ -750,16 +779,17 @@ export function TransactionsPage() {
                           {transactionStatusLabel[transaction.status]}
                         </span>
                       </td>
-                      <td>
-                        <div className="transaction-nature-stack">
-                          <span className={`badge ${transaction.isExpenseImpact ? "text-bg-danger-subtle" : "text-bg-secondary-subtle"}`}>
-                            {transaction.isExpenseImpact ? flowModeLabel.expense : flowModeLabel.non_expense}
+                        <td>
+                          <div className="transaction-nature-stack">
+                            <span className={`badge ${transaction.isExpenseImpact ? "text-bg-danger-subtle" : "text-bg-secondary-subtle"}`}>
+                              {transaction.isExpenseImpact ? flowModeLabel.expense : flowModeLabel.non_expense}
                           </span>
-                          {transaction.isInternalTransfer ? <span className="badge text-bg-info-subtle">내부이체</span> : null}
-                          {transaction.isSharedExpense ? <span className="badge text-bg-warning-subtle">공동지출</span> : null}
-                        </div>
-                        {transaction.status === "active" ? (
-                          <div className="d-flex flex-wrap gap-2 mt-2">
+                            {transaction.isInternalTransfer ? <span className="badge text-bg-info-subtle">내부이체</span> : null}
+                            {transaction.isSharedExpense ? <span className="badge text-bg-warning-subtle">공동지출</span> : null}
+                          </div>
+                          <div className="small text-secondary mt-2">{getTransactionFlowSummary(transaction)}</div>
+                          {transaction.status === "active" ? (
+                            <div className="d-flex flex-wrap gap-2 mt-2">
                               {transaction.transactionType === "expense" ? (
                                 <button
                                   className="btn btn-outline-secondary btn-sm"
