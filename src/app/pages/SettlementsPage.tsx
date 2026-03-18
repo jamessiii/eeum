@@ -279,7 +279,17 @@ export function SettlementsPage() {
                         </p>
                         <p className="mb-0 text-secondary">{transaction.description || "설명 없음"}</p>
                       </div>
-                      <strong>{formatCurrency(transaction.amount)}</strong>
+                      <div className="d-flex flex-column align-items-end gap-2">
+                        <strong>{formatCurrency(transaction.amount)}</strong>
+                        {transaction.ownerPersonId ? (
+                          <Link
+                            to={`/transactions?nature=shared&ownerPersonId=${transaction.ownerPersonId}`}
+                            className="btn btn-outline-secondary btn-sm"
+                          >
+                            이 사람 거래 보기
+                          </Link>
+                        ) : null}
+                      </div>
                     </div>
                   </article>
                 ))}
@@ -297,11 +307,21 @@ export function SettlementsPage() {
                           정산 전 편차 {formatCurrency(Math.abs(row.delta))} · 남은 편차 {formatCurrency(Math.abs(row.remainingDelta))}
                         </p>
                       </div>
-                      <span className={`badge ${row.remainingDelta > 0 ? "text-bg-warning" : "text-bg-success"}`}>
-                        {row.remainingDelta > 0
-                          ? `${formatCurrency(row.remainingDelta)} 더 부담`
-                          : `${formatCurrency(Math.abs(row.remainingDelta))} 덜 부담`}
-                      </span>
+                      <div className="d-flex flex-column align-items-end gap-2">
+                        <span className={`badge ${row.remainingDelta > 0 ? "text-bg-warning" : "text-bg-success"}`}>
+                          {row.remainingDelta > 0
+                            ? `${formatCurrency(row.remainingDelta)} 더 부담`
+                            : `${formatCurrency(Math.abs(row.remainingDelta))} 덜 부담`}
+                        </span>
+                        {row.personId !== "shared" ? (
+                          <Link
+                            to={`/transactions?nature=shared&ownerPersonId=${row.personId}`}
+                            className="btn btn-outline-secondary btn-sm"
+                          >
+                            이 사람 공동지출 보기
+                          </Link>
+                        ) : null}
+                      </div>
                     </div>
                   </article>
                 ))}

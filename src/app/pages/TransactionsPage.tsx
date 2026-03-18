@@ -151,16 +151,26 @@ export function TransactionsPage() {
   useEffect(() => {
     const cleanup = searchParams.get("cleanup");
     const nature = searchParams.get("nature");
+    const ownerPersonId = searchParams.get("ownerPersonId");
     if (cleanup === "uncategorized" || cleanup === "untagged") {
       setFilters((current) => ({ ...current, nature: cleanup }));
       setSearchParams({}, { replace: true });
       return;
     }
     if (nature === "shared" || nature === "internal_transfer") {
-      setFilters((current) => ({ ...current, nature }));
+      setFilters((current) => ({
+        ...current,
+        nature,
+        ownerPersonId: ownerPersonId && people.some((person) => person.id === ownerPersonId) ? ownerPersonId : current.ownerPersonId,
+      }));
+      setSearchParams({}, { replace: true });
+      return;
+    }
+    if (ownerPersonId && people.some((person) => person.id === ownerPersonId)) {
+      setFilters((current) => ({ ...current, ownerPersonId }));
       setSearchParams({}, { replace: true });
     }
-  }, [searchParams, setSearchParams]);
+  }, [people, searchParams, setSearchParams]);
 
   return (
     <div className="page-stack">
