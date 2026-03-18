@@ -7,7 +7,8 @@ import {
   isActiveSharedExpenseTransaction,
   isUntaggedExpenseTransaction,
 } from "../transactions/meta";
-import { getSourceTypeLabel, SOURCE_TYPE_OPTIONS } from "../transactions/sourceTypes";
+import { getSourceTypeLabel } from "../transactions/sourceTypes";
+import { getSourceBreakdown } from "../transactions/sourceBreakdown";
 
 export type InsightTone = "stable" | "caution" | "warning";
 
@@ -97,21 +98,6 @@ function summarizeTags(transactions: Transaction[], tags: Tag[]) {
   return [...totals.values()].sort((a, b) => b.amount - a.amount).slice(0, 4);
 }
 
-function summarizeSourceTypes(transactions: Transaction[]) {
-  return SOURCE_TYPE_OPTIONS
-    .map((sourceType) => {
-      const sourceTransactions = transactions.filter((transaction) => transaction.sourceType === sourceType);
-      return {
-        sourceType,
-        count: sourceTransactions.length,
-        expenseAmount: sourceTransactions
-          .filter(isActiveExpenseImpactTransaction)
-          .reduce((sum, transaction) => sum + transaction.amount, 0),
-      };
-    })
-    .filter((item) => item.count > 0);
-}
-
 function getSpendTone(profile: FinancialProfile | null, spendRate: number): InsightTone {
   if (!profile) return "caution";
   if (spendRate > profile.warningSpendRate) return "warning";
@@ -135,7 +121,7 @@ function getFixedTone(profile: FinancialProfile | null, fixedExpenseRate: number
 
 function buildCoaching(context: WorkspaceContext, metrics: InsightMetrics): string {
   const profile = context.financialProfile;
-  const sourceBreakdown = summarizeSourceTypes(context.transactions);
+  const sourceBreakdown = getSourceBreakdown(context.transactions);
   const topSource = sourceBreakdown[0] ?? null;
   if (!profile) {
     return "월 순수입이 아직 설정되지 않았습니다. 설정 화면에서 재무 기준선을 먼저 입력해주세요.";
@@ -166,7 +152,7 @@ function buildCoaching(context: WorkspaceContext, metrics: InsightMetrics): stri
 
 function buildNextSteps(context: WorkspaceContext, metrics: InsightMetrics): string[] {
   const nextSteps: string[] = [];
-  const sourceBreakdown = summarizeSourceTypes(context.transactions);
+  const sourceBreakdown = getSourceBreakdown(context.transactions);
   const topSource = sourceBreakdown[0] ?? null;
 
   if (context.peopleCount === 0) nextSteps.push("사람을 추가해서 개인지출과 공동지출을 나눠보세요.");
@@ -319,7 +305,7 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
   };
   const topCategories = summarizeCategories(transactions, categories);
   const topTags = summarizeTags(transactions, tags);
-  const sourceBreakdown = summarizeSourceTypes(transactions);
+  const sourceBreakdown = getSourceBreakdown(transactions);
   const dominantSource = sourceBreakdown[0]
     ? {
         ...sourceBreakdown[0],

@@ -6,7 +6,8 @@ import {
   isActiveInternalTransferTransaction,
   isActiveSharedExpenseTransaction,
 } from "../../domain/transactions/meta";
-import { getSourceTypeLabel, SOURCE_TYPE_OPTIONS } from "../../domain/transactions/sourceTypes";
+import { getSourceBreakdown } from "../../domain/transactions/sourceBreakdown";
+import { getSourceTypeLabel } from "../../domain/transactions/sourceTypes";
 import { getWorkspaceHealthSummary } from "../../domain/workspace/health";
 import type { WorkspaceBundle } from "../../shared/types/models";
 import { formatCurrency } from "../../shared/utils/format";
@@ -31,18 +32,7 @@ export function ImportsPage() {
   const untaggedCount = health.untaggedCount;
   const sharedExpenseCount = scope.transactions.filter(isActiveSharedExpenseTransaction).length;
   const internalTransferCount = scope.transactions.filter(isActiveInternalTransferTransaction).length;
-  const sourceBreakdown = SOURCE_TYPE_OPTIONS
-    .map((sourceType) => {
-      const sourceTransactions = scope.transactions.filter((item) => item.sourceType === sourceType);
-        return {
-          sourceType,
-          count: sourceTransactions.length,
-          expenseAmount: sourceTransactions
-          .filter(isActiveExpenseImpactTransaction)
-          .reduce((sum, item) => sum + item.amount, 0),
-        };
-    })
-    .filter((item) => item.count > 0);
+  const sourceBreakdown = getSourceBreakdown(scope.transactions);
   const latestImport = imports[0] ?? null;
   const postImportFlow = [
     {
