@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { REVIEW_TYPE_LABELS } from "../../domain/reviews/meta";
 import type { WorkspaceBundle } from "../../shared/types/models";
+import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { useAppState } from "../state/AppStateProvider";
@@ -35,6 +36,32 @@ export function ImportsPage() {
         }, {}),
       ).sort((a, b) => b[1] - a[1])
     : [];
+  const previewTransactionSummary = previewBundle
+    ? previewBundle.transactions.reduce(
+        (accumulator, transaction) => {
+          accumulator.byType[transaction.transactionType] = (accumulator.byType[transaction.transactionType] ?? 0) + 1;
+          if (transaction.isExpenseImpact) {
+            accumulator.expenseCount += 1;
+            accumulator.expenseAmount += transaction.amount;
+          }
+          if (transaction.isInternalTransfer) accumulator.internalTransferCount += 1;
+          if (transaction.isSharedExpense) accumulator.sharedExpenseCount += 1;
+          return accumulator;
+        },
+        {
+          byType: {
+            expense: 0,
+            income: 0,
+            transfer: 0,
+            adjustment: 0,
+          },
+          expenseCount: 0,
+          expenseAmount: 0,
+          internalTransferCount: 0,
+          sharedExpenseCount: 0,
+        },
+      )
+    : null;
 
   return (
     <div className="page-stack">
@@ -125,6 +152,31 @@ export function ImportsPage() {
               </article>
             )}
           </div>
+          {previewTransactionSummary ? (
+            <div className="resource-grid mt-4">
+              <article className="resource-card">
+                <h3>실지출로 반영될 거래</h3>
+                <p className="mb-0 text-secondary">
+                  {previewTransactionSummary.expenseCount}건 · {formatCurrency(previewTransactionSummary.expenseAmount)}
+                </p>
+              </article>
+              <article className="resource-card">
+                <h3>거래 유형 구성</h3>
+                <p className="mb-0 text-secondary">
+                  지출 {previewTransactionSummary.byType.expense}건 · 수입 {previewTransactionSummary.byType.income}건 · 이체{" "}
+                  {previewTransactionSummary.byType.transfer}건
+                </p>
+              </article>
+              <article className="resource-card">
+                <h3>내부이체 후보</h3>
+                <p className="mb-0 text-secondary">{previewTransactionSummary.internalTransferCount}건</p>
+              </article>
+              <article className="resource-card">
+                <h3>공동지출 후보</h3>
+                <p className="mb-0 text-secondary">{previewTransactionSummary.sharedExpenseCount}건</p>
+              </article>
+            </div>
+          ) : null}
           <div className="d-flex flex-wrap gap-2 mt-4">
             <button
               className="btn btn-primary"
