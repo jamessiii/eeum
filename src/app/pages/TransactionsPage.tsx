@@ -138,6 +138,7 @@ export function TransactionsPage() {
 
   const [filters, setFilters] = useState({
     transactionType: "all",
+    sourceType: "all",
     ownerPersonId: "all",
     status: "all",
     nature: "all",
@@ -165,10 +166,11 @@ export function TransactionsPage() {
   const [bulkTagId, setBulkTagId] = useState("");
 
   const transactions = useMemo(
-    () =>
-      scope.transactions
-        .filter((item) => (filters.transactionType === "all" ? true : item.transactionType === filters.transactionType))
-        .filter((item) => (filters.ownerPersonId === "all" ? true : item.ownerPersonId === filters.ownerPersonId))
+      () =>
+        scope.transactions
+          .filter((item) => (filters.transactionType === "all" ? true : item.transactionType === filters.transactionType))
+          .filter((item) => (filters.sourceType === "all" ? true : item.sourceType === filters.sourceType))
+          .filter((item) => (filters.ownerPersonId === "all" ? true : item.ownerPersonId === filters.ownerPersonId))
         .filter((item) => (filters.status === "all" ? true : item.status === filters.status))
         .filter((item) => {
           if (filters.nature === "all") return true;
@@ -188,8 +190,8 @@ export function TransactionsPage() {
             .some((value) => value.toLowerCase().includes(query));
         })
         .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)),
-    [filters.nature, filters.ownerPersonId, filters.searchQuery, filters.status, filters.tagId, filters.transactionType, scope.transactions],
-  );
+      [filters.nature, filters.ownerPersonId, filters.searchQuery, filters.sourceType, filters.status, filters.tagId, filters.transactionType, scope.transactions],
+    );
 
   const activeTransactions = transactions.filter((item) => item.status === "active");
   const categorizableTransactions = activeTransactions.filter((item) => item.isExpenseImpact);
@@ -655,21 +657,32 @@ export function TransactionsPage() {
               </div>
             </div>
 
-            <div className="toolbar-row transaction-filter-row mb-3">
-              <select
-                className="form-select toolbar-select"
-                value={filters.transactionType}
-                onChange={(event) => setFilters((current) => ({ ...current, transactionType: event.target.value }))}
+              <div className="toolbar-row transaction-filter-row mb-3">
+                <select
+                  className="form-select toolbar-select"
+                  value={filters.transactionType}
+                  onChange={(event) => setFilters((current) => ({ ...current, transactionType: event.target.value }))}
               >
                 <option value="all">전체 유형</option>
                 <option value="expense">지출</option>
                 <option value="income">수입</option>
-                <option value="transfer">이체</option>
-                <option value="adjustment">조정</option>
-              </select>
-              <select
-                className="form-select toolbar-select"
-                value={filters.ownerPersonId}
+                  <option value="transfer">이체</option>
+                  <option value="adjustment">조정</option>
+                </select>
+                <select
+                  className="form-select toolbar-select"
+                  value={filters.sourceType}
+                  onChange={(event) => setFilters((current) => ({ ...current, sourceType: event.target.value }))}
+                >
+                  <option value="all">전체 수단</option>
+                  <option value="manual">수동입력</option>
+                  <option value="account">계좌</option>
+                  <option value="card">카드</option>
+                  <option value="import">가져오기</option>
+                </select>
+                <select
+                  className="form-select toolbar-select"
+                  value={filters.ownerPersonId}
                 onChange={(event) => setFilters((current) => ({ ...current, ownerPersonId: event.target.value }))}
               >
                 <option value="all">전체 사용자</option>
