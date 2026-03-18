@@ -67,6 +67,9 @@ export function ImportsPage() {
       completed: openReviews.length === 0 && uncategorizedCount === 0 && untaggedCount === 0,
     },
   ];
+  const completedPostImportSteps = postImportFlow.filter((step) => step.completed).length;
+  const postImportProgress = postImportFlow.length ? completedPostImportSteps / postImportFlow.length : 0;
+  const isPostImportReady = postImportFlow.every((step) => step.completed);
   const reviewTypeSummary = Object.entries(
     openReviews.reduce<Record<string, number>>((accumulator, item) => {
       accumulator[item.reviewType] = (accumulator[item.reviewType] ?? 0) + 1;
@@ -255,6 +258,15 @@ export function ImportsPage() {
             <span className="section-kicker">업로드 결과 보기</span>
             <h2 className="section-title">방금 가져온 데이터에서 볼 것</h2>
           </div>
+          <span className="badge text-bg-dark">{Math.round(postImportProgress * 100)}%</span>
+        </div>
+        <div className="guide-progress">
+          <div className="guide-progress-bar" aria-hidden="true">
+            <div className="guide-progress-fill" style={{ width: `${postImportProgress * 100}%` }} />
+          </div>
+          <div className="small text-secondary mt-3">
+            업로드 이후 흐름 {postImportFlow.length}단계 중 {completedPostImportSteps}단계가 정리됐습니다.
+          </div>
         </div>
         <div className="flow-journey-grid mb-4">
           {postImportFlow.map((step, index) => (
@@ -268,6 +280,22 @@ export function ImportsPage() {
             </article>
           ))}
         </div>
+        {isPostImportReady ? (
+          <div className="completion-banner mb-4">
+            <strong>업로드 이후 정리를 마쳤습니다.</strong>
+            <p className="mb-0 text-secondary">
+              검토와 분류, 태그 정리까지 끝나서 이제 대시보드와 정산 화면에서 이번 달 흐름을 비교적 안정적으로 볼 수 있습니다.
+            </p>
+            <div className="completion-actions">
+              <Link to="/" className="btn btn-primary btn-sm">
+                대시보드 보기
+              </Link>
+              <Link to="/settlements" className="btn btn-outline-secondary btn-sm">
+                정산 화면 보기
+              </Link>
+            </div>
+          </div>
+        ) : null}
         <div className="classification-flow-grid">
           <article className="stat-card">
             <span className="stat-label">열린 검토</span>
