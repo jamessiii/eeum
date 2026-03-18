@@ -98,6 +98,23 @@ a {
   font-weight: 800;
 }
 
+.sidebar-brand-button {
+  display: block;
+  width: fit-content;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.sidebar-brand-button:focus-visible {
+  outline: 2px solid rgba(13, 110, 253, 0.4);
+  outline-offset: 0.35rem;
+  border-radius: 0.75rem;
+}
+
 .sidebar-copy {
   margin-top: 0.7rem;
   margin-bottom: 0;

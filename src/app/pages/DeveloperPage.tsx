@@ -1,7 +1,11 @@
 import { useAppState } from "../state/AppStateProvider";
 import { getActiveWorkspace, getWorkspaceScope } from "../state/selectors";
 
-export function DeveloperPage() {
+type DeveloperPageProps = {
+  onLockDeveloperMode: () => void;
+};
+
+export function DeveloperPage({ onLockDeveloperMode }: DeveloperPageProps) {
   const { createDemoWorkspace, createEmptyWorkspace, state } = useAppState();
   const activeWorkspace = getActiveWorkspace(state);
   const scope = activeWorkspace ? getWorkspaceScope(state, activeWorkspace.id) : null;
@@ -25,7 +29,13 @@ export function DeveloperPage() {
             <span className="section-kicker">개발자 모드</span>
             <h2 className="section-title">상태 주입과 빠른 재현</h2>
           </div>
+          <button className="btn btn-outline-secondary btn-sm" onClick={onLockDeveloperMode}>
+            개발자 모드 숨기기
+          </button>
         </div>
+        <p className="text-secondary mb-4">
+          테스트 워크스페이스 생성과 현재 상태 확인을 여기서 빠르게 할 수 있습니다. 해금 뒤에만 메뉴에 노출됩니다.
+        </p>
         <div className="d-flex flex-wrap gap-2 mb-4">
           <button className="btn btn-outline-primary" onClick={() => createEmptyWorkspace(`빈 워크스페이스 ${state.workspaces.length + 1}`)}>
             빈 워크스페이스 추가

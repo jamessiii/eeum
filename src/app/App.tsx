@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { HashRouter, NavLink, Route, Routes, useLocation } from "react-router-dom";
+import { HashRouter, Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { MotionProvider } from "./motion/MotionProvider";
 import { AppGuidePanel } from "./components/AppGuidePanel";
 import { PageStepBanner } from "./components/PageStepBanner";
@@ -18,9 +18,22 @@ import { SettlementsPage } from "./pages/SettlementsPage";
 import { TransactionsPage } from "./pages/TransactionsPage";
 import { AppStateProvider, useAppState } from "./state/AppStateProvider";
 import { getActiveWorkspace } from "./state/selectors";
-import { ToastProvider } from "./toast/ToastProvider";
+import { ToastProvider, useToast } from "./toast/ToastProvider";
 
-const navGroups = [
+const DEVELOPER_MODE_KEY = "household-webapp.developer-mode";
+
+type NavItem = {
+  to: string;
+  label: string;
+  end?: boolean;
+};
+
+type NavGroup = {
+  label: string;
+  items: NavItem[];
+};
+
+const baseNavGroups: NavGroup[] = [
   {
     label: "핵심",
     items: [
@@ -54,9 +67,42 @@ const navGroups = [
   },
 ];
 
-const navItems = navGroups.flatMap((group) => group.items);
+function useDeveloperMode() {
+  const [isDeveloperModeUnlocked, setIsDeveloperModeUnlocked] = useState(false);
+  const [unlockAttempts, setUnlockAttempts] = useState<number[]>([]);
+  const { showToast } = useToast();
 
-function SidebarNav() {
+  useEffect(() => {
+    const stored = window.localStorage.getItem(DEVELOPER_MODE_KEY);
+    setIsDeveloperModeUnlocked(stored === "unlocked");
+  }, []);
+
+  const registerUnlockTap = () => {
+    if (isDeveloperModeUnlocked) return;
+
+    const now = Date.now();
+    const nextAttempts = [...unlockAttempts.filter((attempt) => now - attempt < 1800), now];
+    setUnlockAttempts(nextAttempts);
+
+    if (nextAttempts.length >= 5) {
+      window.localStorage.setItem(DEVELOPER_MODE_KEY, "unlocked");
+      setIsDeveloperModeUnlocked(true);
+      setUnlockAttempts([]);
+      showToast("개발자 모드가 해금되었습니다.", "success");
+    }
+  };
+
+  const lockDeveloperMode = () => {
+    window.localStorage.removeItem(DEVELOPER_MODE_KEY);
+    setIsDeveloperModeUnlocked(false);
+    setUnlockAttempts([]);
+    showToast("개발자 모드를 다시 숨겼습니다.", "info");
+  };
+
+  return { isDeveloperModeUnlocked, registerUnlockTap, lockDeveloperMode };
+}
+
+function SidebarNav({ isDeveloperModeUnlocked }: { isDeveloperModeUnlocked: boolean }) {
   const location = useLocation();
   const navRef = useRef<HTMLElement | null>(null);
   const linkRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
@@ -66,13 +112,24 @@ function SidebarNav() {
     visible: false,
   });
 
+  const navGroups = useMemo(
+    () =>
+      baseNavGroups.map((group) => ({
+        ...group,
+        items: group.items.filter((item) => isDeveloperModeUnlocked || item.to !== "/dev"),
+      })),
+    [isDeveloperModeUnlocked],
+  );
+
+  const navItems = navGroups.flatMap((group) => group.items);
+
   const activeKey = useMemo(() => {
     const pathname = location.pathname || "/";
     const exact = navItems.find((item) => item.to === pathname);
     if (exact) return exact.to;
     const partial = navItems.find((item) => item.to !== "/" && pathname.startsWith(item.to));
     return partial?.to ?? "/";
-  }, [location.pathname]);
+  }, [location.pathname, navItems]);
 
   useEffect(() => {
     const syncIndicator = () => {
@@ -132,6 +189,7 @@ function SidebarNav() {
 
 function AppFrame() {
   const { isReady, setActiveWorkspace, state } = useAppState();
+  const { isDeveloperModeUnlocked, registerUnlockTap, lockDeveloperMode } = useDeveloperMode();
 
   if (!isReady) return <LoadingScreen />;
   if (!state.workspaces.length) return <EmptyWorkspaceScreen />;
@@ -144,7 +202,9 @@ function AppFrame() {
       <aside className="app-sidebar">
         <div>
           <span className="sidebar-kicker">Household Web App</span>
-          <h1>가계부 웹앱</h1>
+          <button type="button" className="sidebar-brand-button" onClick={registerUnlockTap}>
+            <h1>가계부 웹앱</h1>
+          </button>
           <p className="sidebar-copy">입력, 분류, 검토, 정산까지 한 흐름으로 관리합니다.</p>
         </div>
         <select
@@ -158,7 +218,7 @@ function AppFrame() {
             </option>
           ))}
         </select>
-        <SidebarNav />
+        <SidebarNav isDeveloperModeUnlocked={isDeveloperModeUnlocked} />
       </aside>
 
       <div className="app-main">
@@ -200,7 +260,16 @@ function AppFrame() {
                 <Route path="/reviews" element={<ReviewsPage />} />
                 <Route path="/settlements" element={<SettlementsPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
-                <Route path="/dev" element={<DeveloperPage />} />
+                <Route
+                  path="/dev"
+                  element={
+                    isDeveloperModeUnlocked ? (
+                      <DeveloperPage onLockDeveloperMode={lockDeveloperMode} />
+                    ) : (
+                      <Navigate to="/settings" replace />
+                    )
+                  }
+                />
               </Routes>
             </div>
           </div>
