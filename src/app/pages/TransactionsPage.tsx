@@ -140,6 +140,7 @@ export function TransactionsPage() {
   const [draftSharedExpense, setDraftSharedExpense] = useState(false);
   const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState({
+    ownerPersonId: "",
     occurredAt: "",
     settledAt: "",
     merchantName: "",
@@ -226,6 +227,7 @@ export function TransactionsPage() {
   const beginTransactionEdit = (transaction: (typeof transactions)[number]) => {
     setEditingTransactionId(transaction.id);
     setEditDraft({
+      ownerPersonId: transaction.ownerPersonId ?? "",
       occurredAt: transaction.occurredAt.slice(0, 10),
       settledAt: transaction.settledAt?.slice(0, 10) ?? "",
       merchantName: transaction.merchantName,
@@ -237,6 +239,7 @@ export function TransactionsPage() {
   const cancelTransactionEdit = () => {
     setEditingTransactionId(null);
     setEditDraft({
+      ownerPersonId: "",
       occurredAt: "",
       settledAt: "",
       merchantName: "",
@@ -899,9 +902,21 @@ export function TransactionsPage() {
                             <div className="review-summary-panel mt-3">
                                 <div className="review-summary-copy">
                                   <strong>이 거래 기본 정보 수정</strong>
-                                  <p className="mb-0 text-secondary">사용일, 결제일, 가맹점, 설명, 금액을 바로 수정할 수 있습니다.</p>
+                                  <p className="mb-0 text-secondary">사용자, 사용일, 결제일, 가맹점, 설명, 금액을 바로 수정할 수 있습니다.</p>
                                 </div>
                                 <div className="d-flex flex-column gap-2 w-100">
+                                  <select
+                                    className="form-select form-select-sm"
+                                    value={editDraft.ownerPersonId}
+                                    onChange={(event) => setEditDraft((current) => ({ ...current, ownerPersonId: event.target.value }))}
+                                  >
+                                    <option value="">사용자 선택 없음</option>
+                                    {people.map((person) => (
+                                      <option key={person.id} value={person.id}>
+                                        {person.name}
+                                      </option>
+                                    ))}
+                                  </select>
                                   <div className="d-flex flex-wrap gap-2">
                                     <input
                                       className="form-control form-control-sm"
@@ -944,6 +959,7 @@ export function TransactionsPage() {
                                       disabled={!editDraft.occurredAt || !editDraft.merchantName.trim() || !editDraft.amount || Number(editDraft.amount) <= 0}
                                       onClick={() => {
                                         updateTransactionDetails(workspaceId, transaction.id, {
+                                          ownerPersonId: editDraft.ownerPersonId || null,
                                           occurredAt: editDraft.occurredAt,
                                           settledAt: editDraft.settledAt || null,
                                           merchantName: editDraft.merchantName.trim(),

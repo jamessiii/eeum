@@ -66,6 +66,7 @@ type Action =
         workspaceId: string;
         transactionId: string;
         patch: {
+          ownerPersonId?: string | null;
           occurredAt?: string;
           settledAt?: string | null;
           merchantName?: string;
@@ -328,6 +329,10 @@ function reducer(state: AppState, action: Action): AppState {
           transaction.workspaceId === action.payload.workspaceId && transaction.id === action.payload.transactionId
             ? {
                 ...transaction,
+                ownerPersonId:
+                  typeof action.payload.patch.ownerPersonId !== "undefined"
+                    ? action.payload.patch.ownerPersonId
+                    : transaction.ownerPersonId,
                 occurredAt: action.payload.patch.occurredAt ?? transaction.occurredAt,
                 settledAt:
                   typeof action.payload.patch.settledAt !== "undefined" ? action.payload.patch.settledAt : transaction.settledAt,
@@ -476,6 +481,7 @@ interface AppStateContextValue {
     workspaceId: string,
     transactionId: string,
     patch: {
+      ownerPersonId?: string | null;
       occurredAt?: string;
       settledAt?: string | null;
       merchantName?: string;
