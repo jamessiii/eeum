@@ -7,8 +7,6 @@ import {
   isActiveTransaction,
   isUncategorizedExpenseTransaction,
   isUntaggedExpenseTransaction,
-  TRANSACTION_STATUS_LABELS as SHARED_TRANSACTION_STATUS_LABELS,
-  TRANSACTION_TYPE_LABELS as SHARED_TRANSACTION_TYPE_LABELS,
 } from "../../domain/transactions/meta";
 import { getSourceTypeLabel, SOURCE_TYPE_OPTIONS } from "../../domain/transactions/sourceTypes";
 import { formatCurrency } from "../../shared/utils/format";
@@ -19,7 +17,9 @@ import { TransactionCategoryEditor } from "../components/TransactionCategoryEdit
 import { TransactionInlineEditor, type TransactionEditDraft } from "../components/TransactionInlineEditor";
 import { TransactionNatureCell } from "../components/TransactionNatureCell";
 import { TransactionRowHeader } from "../components/TransactionRowHeader";
+import { TransactionStatusBadge } from "../components/TransactionStatusBadge";
 import { TransactionTagEditor } from "../components/TransactionTagEditor";
+import { TransactionTypeBadge } from "../components/TransactionTypeBadge";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
 
@@ -869,22 +869,10 @@ export function TransactionsPage() {
                       <td>{transaction.occurredAt.slice(0, 10)}</td>
                       <td>{transaction.settledAt?.slice(0, 10) ?? "-"}</td>
                       <td>
-                        <span className={`badge ${transaction.isExpenseImpact ? "text-bg-danger-subtle" : "text-bg-secondary"}`}>
-                          {SHARED_TRANSACTION_TYPE_LABELS[transaction.transactionType]}
-                        </span>
+                        <TransactionTypeBadge transaction={transaction} />
                       </td>
                       <td>
-                        <span
-                          className={`badge ${
-                            transaction.status === "active"
-                              ? "text-bg-success"
-                              : transaction.status === "cancelled"
-                                ? "text-bg-secondary"
-                                : "text-bg-info"
-                          }`}
-                        >
-                          {SHARED_TRANSACTION_STATUS_LABELS[transaction.status]}
-                        </span>
+                        <TransactionStatusBadge transaction={transaction} />
                       </td>
                         <td>
                           <TransactionNatureCell
