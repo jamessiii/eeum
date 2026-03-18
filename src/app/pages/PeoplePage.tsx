@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { useAppState } from "../state/AppStateProvider";
@@ -7,7 +8,9 @@ import { getWorkspaceScope } from "../state/selectors";
 export function PeoplePage() {
   const { addPerson, state } = useAppState();
   const workspaceId = state.activeWorkspaceId!;
-  const people = getWorkspaceScope(state, workspaceId).people;
+  const scope = getWorkspaceScope(state, workspaceId);
+  const people = scope.people;
+  const transactions = scope.transactions.filter((item) => item.status === "active");
 
   return (
     <div className="page-stack">
@@ -62,10 +65,20 @@ export function PeoplePage() {
         ) : (
           <div className="resource-grid">
             {people.map((person, index) => (
-              <article key={person.id} className="resource-card" style={getMotionStyle(index + 2)}>
-                <h3>{person.name}</h3>
-                <p className="mb-0 text-secondary">{person.role === "owner" ? "기본 사용자" : "구성원"}</p>
-              </article>
+              (() => {
+                const ownedTransactions = transactions.filter((item) => item.ownerPersonId === person.id);
+                const sharedExpenseAmount = ownedTransactions
+                  .filter((item) => item.isExpenseImpact && item.isSharedExpense)
+                  .reduce((sum, item) => sum + item.amount, 0);
+                return (
+                  <article key={person.id} className="resource-card" style={getMotionStyle(index + 2)}>
+                    <h3>{person.name}</h3>
+                    <p className="mb-1 text-secondary">{person.role === "owner" ? "기본 사용자" : "구성원"}</p>
+                    <p className="mb-1 text-secondary">거래 {ownedTransactions.length}건</p>
+                    <p className="mb-0 text-secondary">공동지출 {formatCurrency(sharedExpenseAmount)}</p>
+                  </article>
+                );
+              })()
             ))}
           </div>
         )}

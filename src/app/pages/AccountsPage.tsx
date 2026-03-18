@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { useAppState } from "../state/AppStateProvider";
@@ -7,7 +8,9 @@ import { getWorkspaceScope } from "../state/selectors";
 export function AccountsPage() {
   const { addAccount, state } = useAppState();
   const workspaceId = state.activeWorkspaceId!;
-  const accounts = getWorkspaceScope(state, workspaceId).accounts;
+  const scope = getWorkspaceScope(state, workspaceId);
+  const accounts = scope.accounts;
+  const transactions = scope.transactions.filter((item) => item.status === "active");
 
   return (
     <div className="page-stack">
@@ -65,13 +68,28 @@ export function AccountsPage() {
         ) : (
           <div className="resource-grid">
             {accounts.map((account, index) => (
-              <article key={account.id} className="resource-card" style={getMotionStyle(index + 2)}>
-                <h3>{account.name}</h3>
-                <p className="mb-1 text-secondary">{account.institutionName}</p>
-                <p className="mb-0 text-secondary">
-                  {account.isShared ? "공동 계좌" : "개인 계좌"} · {account.accountNumberMasked || "마스킹 없음"}
-                </p>
-              </article>
+              (() => {
+                const linkedTransactions = transactions.filter(
+                  (item) => item.accountId === account.id || item.fromAccountId === account.id || item.toAccountId === account.id,
+                );
+                const expenseAmount = linkedTransactions
+                  .filter((item) => item.isExpenseImpact)
+                  .reduce((sum, item) => sum + item.amount, 0);
+                const internalTransferCount = linkedTransactions.filter((item) => item.isInternalTransfer).length;
+                return (
+                  <article key={account.id} className="resource-card" style={getMotionStyle(index + 2)}>
+                    <h3>{account.name}</h3>
+                    <p className="mb-1 text-secondary">{account.institutionName}</p>
+                    <p className="mb-1 text-secondary">
+                      {account.isShared ? "공동 계좌" : "개인 계좌"} · {account.accountNumberMasked || "마스킹 없음"}
+                    </p>
+                    <p className="mb-1 text-secondary">연결 거래 {linkedTransactions.length}건</p>
+                    <p className="mb-0 text-secondary">
+                      실지출 {formatCurrency(expenseAmount)} · 내부이체 {internalTransferCount}건
+                    </p>
+                  </article>
+                );
+              })()
             ))}
           </div>
         )}

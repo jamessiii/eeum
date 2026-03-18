@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { useAppState } from "../state/AppStateProvider";
@@ -7,7 +8,10 @@ import { getWorkspaceScope } from "../state/selectors";
 export function CardsPage() {
   const { addCard, state } = useAppState();
   const workspaceId = state.activeWorkspaceId!;
-  const cards = getWorkspaceScope(state, workspaceId).cards;
+  const scope = getWorkspaceScope(state, workspaceId);
+  const cards = scope.cards;
+  const accountMap = new Map(scope.accounts.map((item) => [item.id, item.name]));
+  const transactions = scope.transactions.filter((item) => item.status === "active");
 
   return (
     <div className="page-stack">
@@ -65,11 +69,24 @@ export function CardsPage() {
         ) : (
           <div className="resource-grid">
             {cards.map((card, index) => (
-              <article key={card.id} className="resource-card" style={getMotionStyle(index + 2)}>
-                <h3>{card.name}</h3>
-                <p className="mb-1 text-secondary">{card.issuerName}</p>
-                <p className="mb-0 text-secondary">{card.cardNumberMasked || "마스킹 없음"}</p>
-              </article>
+              (() => {
+                const cardTransactions = transactions.filter((item) => item.cardId === card.id);
+                const cardSpend = cardTransactions
+                  .filter((item) => item.isExpenseImpact)
+                  .reduce((sum, item) => sum + item.amount, 0);
+                return (
+                  <article key={card.id} className="resource-card" style={getMotionStyle(index + 2)}>
+                    <h3>{card.name}</h3>
+                    <p className="mb-1 text-secondary">{card.issuerName}</p>
+                    <p className="mb-1 text-secondary">{card.cardNumberMasked || "마스킹 없음"}</p>
+                    <p className="mb-1 text-secondary">사용 거래 {cardTransactions.length}건</p>
+                    <p className="mb-1 text-secondary">누적 사용액 {formatCurrency(cardSpend)}</p>
+                    <p className="mb-0 text-secondary">
+                      결제 계좌 {card.linkedAccountId ? accountMap.get(card.linkedAccountId) ?? "연결 안 됨" : "연결 안 됨"}
+                    </p>
+                  </article>
+                );
+              })()
             ))}
           </div>
         )}
