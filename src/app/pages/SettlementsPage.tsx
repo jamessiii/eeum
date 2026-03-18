@@ -1,6 +1,8 @@
+import { Link } from "react-router-dom";
 import { monthKey } from "../../shared/utils/date";
 import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
+import { CompletionBanner } from "../components/CompletionBanner";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
@@ -97,6 +99,27 @@ export function SettlementsPage() {
         },
       ].filter((card): card is SettlementHeadlineCard => Boolean(card))
     : [];
+  const nextSettlementAction = sharedTransactions.length
+    ? receiver && sender && suggestedSettlementAmount > 0
+      ? {
+          title: "지금 가장 먼저 할 일",
+          description: `${sender.name}에서 ${receiver.name} 쪽으로 ${formatCurrency(suggestedSettlementAmount)} 정산 흐름이 잡혀 있습니다. 거래 화면에서 공동지출 흐름을 다시 보고, 맞다면 정산 완료로 기록해보세요.`,
+          to: "/transactions?nature=shared",
+          actionLabel: "공동지출 점검하기",
+        }
+      : {
+          title: "지금 가장 먼저 할 일",
+          description: "이번 달 공동지출은 잡혀 있지만 남은 정산 편차는 크지 않습니다. 공동지출 흐름과 완료 기록이 맞는지 한 번 더 확인해보세요.",
+          to: "/transactions?nature=shared",
+          actionLabel: "공동지출 흐름 보기",
+        }
+    : {
+        title: "지금 가장 먼저 할 일",
+        description: "아직 이번 달 공동지출 거래가 없습니다. 거래 화면에서 공동지출로 표시된 항목이 있는지 먼저 확인해보세요.",
+        to: "/transactions?nature=shared",
+        actionLabel: "공동지출 거래 보기",
+      };
+  const isSettlementBalanced = sharedTransactions.length > 0 && !receiver && !sender;
 
   return (
     <div className="page-stack">
@@ -111,6 +134,34 @@ export function SettlementsPage() {
           공동지출로 표시된 거래만 합산해서 각 사람이 얼마나 부담했는지 비교합니다. 이번 달 정산 후보를 보고 실제로 끝낸 정산은 아래
           기록으로 남길 수 있습니다.
         </p>
+        <div className="review-summary-panel mt-4">
+          <div className="review-summary-copy">
+            <strong>{nextSettlementAction.title}</strong>
+            <p className="mb-0 text-secondary">{nextSettlementAction.description}</p>
+          </div>
+          <div className="d-flex flex-wrap gap-2">
+            <Link to={nextSettlementAction.to} className="btn btn-outline-primary btn-sm">
+              {nextSettlementAction.actionLabel}
+            </Link>
+          </div>
+        </div>
+        {isSettlementBalanced ? (
+          <CompletionBanner
+            className="mt-3"
+            title="이번 달 정산 균형이 맞춰졌습니다"
+            description="공동지출은 있었지만 현재 남아 있는 정산 편차는 거의 없습니다. 거래 흐름과 완료 기록만 가볍게 확인하면 됩니다."
+            actions={
+              <>
+                <Link to="/transactions?nature=shared" className="btn btn-outline-primary btn-sm">
+                  공동지출 흐름 보기
+                </Link>
+                <Link to="/" className="btn btn-outline-secondary btn-sm">
+                  대시보드 보기
+                </Link>
+              </>
+            }
+          />
+        ) : null}
       </section>
 
       {settlementHeadlineCards.length ? (
