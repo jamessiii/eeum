@@ -1,9 +1,22 @@
 import { Link } from "react-router-dom";
-import { getRecurringMerchantSuggestions, getUncategorizedTransactions } from "../../domain/classification/suggestions";
+import {
+  getRecurringMerchantSuggestions,
+  getUncategorizedTransactions,
+  type RecurringMerchantSuggestion,
+} from "../../domain/classification/suggestions";
 import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
+
+const recurringConfidenceLabel = {
+  high: "신뢰도 높음",
+  medium: "검토 후 적용 권장",
+} as const;
+
+function getRecurringConfidenceLabel(confidence: RecurringMerchantSuggestion["confidence"]) {
+  return recurringConfidenceLabel[confidence];
+}
 
 export function CategoriesPage() {
   const { addCategory, addTag, assignCategory, assignCategoryByMerchant, state } = useAppState();
@@ -26,7 +39,7 @@ export function CategoriesPage() {
           <article className="stat-card" style={getMotionStyle(1)}>
             <span className="stat-label">반복 지출 자동 제안</span>
             <strong>{recurringSuggestions.length}개</strong>
-            <div className="small text-secondary mt-2">같은 가맹점이 반복되면 고정지출 후보로 먼저 보여줍니다.</div>
+            <div className="small text-secondary mt-2">여러 달에 걸쳐 반복되고 금액 편차가 작은 거래를 우선적으로 보여줍니다.</div>
           </article>
           <article className="stat-card" style={getMotionStyle(2)}>
             <span className="stat-label">미분류 거래</span>
@@ -86,12 +99,16 @@ export function CategoriesPage() {
                     <span className="review-type">고정지출 후보</span>
                     <h3>{suggestion.merchantName}</h3>
                     <p className="mb-1 text-secondary">
-                      반복 {suggestion.count}건 · 평균 {formatCurrency(suggestion.amountAverage)}
+                      반복 {suggestion.count}건 · {suggestion.monthCount}개월 · 평균 {formatCurrency(suggestion.amountAverage)}
                     </p>
                     <p className="mb-0 text-secondary">
-                      반복성이 보이는 거래라서 카테고리를 한 번에 적용할 수 있도록 먼저 제안합니다.
+                      {getRecurringConfidenceLabel(suggestion.confidence)} · 최근 {suggestion.lastOccurredAt.slice(0, 10)} · 금액 편차{" "}
+                      {Math.round(suggestion.amountSpreadRate * 100)}%
                     </p>
                   </div>
+                  <span className={`badge ${suggestion.confidence === "high" ? "text-bg-primary" : "text-bg-light"}`}>
+                    {getRecurringConfidenceLabel(suggestion.confidence)}
+                  </span>
                 </div>
                 <form
                   className="classification-action-row mt-3"
@@ -120,7 +137,9 @@ export function CategoriesPage() {
               </article>
             ))}
             {!recurringSuggestions.length ? (
-              <p className="text-secondary mb-0">지금은 반복 지출 자동 제안이 없습니다. 더 많은 거래가 쌓이면 후보가 자동으로 잡힙니다.</p>
+              <p className="text-secondary mb-0">
+                지금은 여러 달에 걸쳐 반복된 미분류 지출이 없습니다. 거래가 더 쌓이거나 카테고리 정보가 정리되면 후보가 자동으로 잡힙니다.
+              </p>
             ) : null}
           </div>
         </section>

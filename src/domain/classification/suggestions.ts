@@ -3,8 +3,21 @@ import type { Category, Transaction } from "../../shared/types/models";
 export interface RecurringMerchantSuggestion {
   merchantName: string;
   count: number;
+  monthCount: number;
   amountAverage: number;
+  amountSpreadRate: number;
+  confidence: "high" | "medium";
+  lastOccurredAt: string;
   transactionIds: string[];
+}
+
+function getAmountSpreadRate(amounts: number[]) {
+  if (!amounts.length) return 0;
+  const min = Math.min(...amounts);
+  const max = Math.max(...amounts);
+  const average = amounts.reduce((sum, amount) => sum + amount, 0) / amounts.length;
+  if (!average) return 0;
+  return (max - min) / average;
 }
 
 export function getUncategorizedTransactions(transactions: Transaction[]) {
@@ -33,12 +46,31 @@ export function getRecurringMerchantSuggestions(transactions: Transaction[], cat
   }
 
   return [...merchantMap.entries()]
-    .map(([merchantName, items]) => ({
-      merchantName,
-      count: items.length,
-      amountAverage: Math.round(items.reduce((sum, item) => sum + item.amount, 0) / items.length),
-      transactionIds: items.map((item) => item.id),
-    }))
-    .filter((item) => item.count >= 2)
-    .sort((a, b) => b.count - a.count || b.amountAverage - a.amountAverage);
+    .map<RecurringMerchantSuggestion>(([merchantName, items]) => {
+      const monthSet = new Set(items.map((item) => item.occurredAt.slice(0, 7)));
+      const amounts = items.map((item) => item.amount);
+      const amountAverage = Math.round(amounts.reduce((sum, amount) => sum + amount, 0) / amounts.length);
+      const amountSpreadRate = getAmountSpreadRate(amounts);
+      const confidence: RecurringMerchantSuggestion["confidence"] =
+        monthSet.size >= 2 && amountSpreadRate <= 0.35 ? "high" : "medium";
+
+      return {
+        merchantName,
+        count: items.length,
+        monthCount: monthSet.size,
+        amountAverage,
+        amountSpreadRate,
+        confidence,
+        lastOccurredAt: [...items].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))[0]?.occurredAt ?? "",
+        transactionIds: items.map((item) => item.id),
+      };
+    })
+    .filter((item) => item.count >= 2 && item.monthCount >= 2)
+    .sort(
+      (a, b) =>
+        Number(b.confidence === "high") - Number(a.confidence === "high") ||
+        b.monthCount - a.monthCount ||
+        b.count - a.count ||
+        b.amountAverage - a.amountAverage,
+    );
 }
