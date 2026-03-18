@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
@@ -136,6 +136,7 @@ export function TransactionsPage() {
   const uncategorizedCount = activeTransactions.filter((item) => item.isExpenseImpact && !item.categoryId).length;
   const untaggedCount = activeTransactions.filter((item) => item.isExpenseImpact && item.tagIds.length === 0).length;
   const activeCleanupMode = cleanupModeCopy[filters.nature as keyof typeof cleanupModeCopy] ?? cleanupModeCopy.all;
+  const isFocusedCleanupMode = filters.nature === "uncategorized" || filters.nature === "untagged";
 
   useEffect(() => {
     const cleanup = searchParams.get("cleanup");
@@ -347,6 +348,36 @@ export function TransactionsPage() {
               </article>
             </div>
 
+            {isFocusedCleanupMode ? (
+              <div className="review-summary-panel mb-3">
+                <div className="review-summary-copy">
+                  <strong>업로드 후 정리 모드로 바로 들어왔습니다</strong>
+                  <p className="mb-0 text-secondary">
+                    지금은 {filters.nature === "uncategorized" ? "미분류 거래" : "무태그 거래"}만 모아둔 상태입니다. 아래 일괄 정리 도구로
+                    먼저 묶고, 남은 작업이 있으면 다른 정리 모드로 이어가면 됩니다.
+                  </p>
+                </div>
+                <div className="d-flex flex-wrap gap-2">
+                  {filters.nature === "uncategorized" && untaggedCount ? (
+                    <button className="btn btn-outline-primary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, nature: "untagged" }))}>
+                      무태그 정리로 이어가기
+                    </button>
+                  ) : null}
+                  {filters.nature === "untagged" && uncategorizedCount ? (
+                    <button className="btn btn-outline-primary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, nature: "uncategorized" }))}>
+                      미분류 정리로 이어가기
+                    </button>
+                  ) : null}
+                  <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, nature: "all", tagId: "all", searchQuery: "" }))}>
+                    전체 거래로 돌아가기
+                  </button>
+                  <Link className="btn btn-outline-dark btn-sm" to="/">
+                    대시보드 보기
+                  </Link>
+                </div>
+              </div>
+            ) : null}
+
             <div className="review-summary-panel mb-3">
               <div className="review-summary-copy">
                 <strong>{activeCleanupMode.title}</strong>
@@ -418,6 +449,7 @@ export function TransactionsPage() {
                 <option value="shared">공동지출만</option>
                 <option value="internal_transfer">내부이체만</option>
                 <option value="uncategorized">미분류만</option>
+                <option value="untagged">무태그만</option>
               </select>
               <select
                 className="form-select toolbar-select"
