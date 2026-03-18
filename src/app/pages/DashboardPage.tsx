@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { getWorkspaceInsights } from "../../domain/insights/workspaceInsights";
+import { getJourneyProgress } from "../../domain/journey/progress";
 import { getSourceTypeLabel } from "../../domain/transactions/sourceTypes";
 import { formatCurrency, formatPercent } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
@@ -87,8 +88,7 @@ export function DashboardPage() {
       completed: isDiagnosisReady,
     },
   ];
-  const journeyProgress = journeySteps.filter((step) => step.completed).length / journeySteps.length;
-  const isJourneyReady = journeySteps.every((step) => step.completed);
+  const { progress: journeyProgress, isReady: isJourneyReady } = getJourneyProgress(journeySteps);
   const dominantSource = insights.dominantSource;
   const attentionItems = [
     insights.reviewCount > 0

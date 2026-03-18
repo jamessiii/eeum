@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { REVIEW_TYPE_LABELS } from "../../domain/reviews/meta";
+import { getJourneyProgress } from "../../domain/journey/progress";
 import {
   isActiveExpenseImpactTransaction,
   isActiveInternalTransferTransaction,
@@ -97,9 +98,11 @@ export function ImportsPage() {
       completed: health.postImportReady,
     },
   ];
-  const completedPostImportSteps = postImportFlow.filter((step) => step.completed).length;
-  const postImportProgress = postImportFlow.length ? completedPostImportSteps / postImportFlow.length : 0;
-  const isPostImportReady = postImportFlow.every((step) => step.completed);
+  const {
+    completedCount: completedPostImportSteps,
+    progress: postImportProgress,
+    isReady: isPostImportReady,
+  } = getJourneyProgress(postImportFlow);
   const nextPostImportStep = postImportFlow.find((step) => !step.completed) ?? null;
   const reviewTypeSummary = Object.entries(
     openReviews.reduce<Record<string, number>>((accumulator, item) => {
