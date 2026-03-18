@@ -215,6 +215,7 @@ export function TransactionsPage() {
   const isFocusedCleanupMode = filters.nature === "uncategorized" || filters.nature === "untagged";
   const isFlowAuditMode = filters.nature === "shared" || filters.nature === "internal_transfer";
   const activeOwnerName = filters.ownerPersonId !== "all" ? peopleMap.get(filters.ownerPersonId) ?? null : null;
+  const activeSourceTypeLabel = filters.sourceType !== "all" ? sourceTypeLabel[filters.sourceType as keyof typeof sourceTypeLabel] : null;
   const currentCleanupRemaining =
     filters.nature === "uncategorized" ? uncategorizedCount : filters.nature === "untagged" ? untaggedCount : null;
   const currentFlowAuditCount =
@@ -593,6 +594,32 @@ export function TransactionsPage() {
                       onClick={() => setFilters((current) => ({ ...current, nature: "shared" }))}
                     >
                       공동지출만 보기
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            {activeSourceTypeLabel ? (
+              <div className="review-summary-panel mb-3">
+                <div className="review-summary-copy">
+                  <strong>{activeSourceTypeLabel} 거래만 보고 있습니다</strong>
+                  <p className="mb-0 text-secondary">
+                    지금 화면은 {activeSourceTypeLabel} 경로로 들어온 거래만 좁혀서 보고 있습니다. 수단별 정리 상태를 점검하거나 연결값을 수정하기 좋은 흐름입니다.
+                  </p>
+                </div>
+                <div className="d-flex flex-wrap gap-2">
+                  <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, sourceType: "all" }))}>
+                    수단 필터 해제
+                  </button>
+                  {filters.sourceType !== "card" ? (
+                    <button className="btn btn-outline-primary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, sourceType: "card" }))}>
+                      카드 흐름 보기
+                    </button>
+                  ) : null}
+                  {filters.sourceType !== "account" ? (
+                    <button className="btn btn-outline-primary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, sourceType: "account" }))}>
+                      계좌 흐름 보기
                     </button>
                   ) : null}
                 </div>
