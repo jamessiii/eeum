@@ -69,6 +69,7 @@ export function ImportsPage() {
   const completedPostImportSteps = postImportFlow.filter((step) => step.completed).length;
   const postImportProgress = postImportFlow.length ? completedPostImportSteps / postImportFlow.length : 0;
   const isPostImportReady = postImportFlow.every((step) => step.completed);
+  const nextPostImportStep = postImportFlow.find((step) => !step.completed) ?? null;
   const reviewTypeSummary = Object.entries(
     openReviews.reduce<Record<string, number>>((accumulator, item) => {
       accumulator[item.reviewType] = (accumulator[item.reviewType] ?? 0) + 1;
@@ -267,6 +268,19 @@ export function ImportsPage() {
             업로드 이후 흐름 {postImportFlow.length}단계 중 {completedPostImportSteps}단계가 정리됐습니다.
           </div>
         </div>
+        {nextPostImportStep ? (
+          <div className="review-summary-panel mt-4">
+            <div className="review-summary-copy">
+              <strong>지금 가장 먼저 할 일</strong>
+              <p className="mb-0 text-secondary">{nextPostImportStep.description}</p>
+            </div>
+            <div className="d-flex flex-wrap gap-2">
+              <Link to={nextPostImportStep.to} className="btn btn-outline-primary btn-sm">
+                {nextPostImportStep.actionLabel}
+              </Link>
+            </div>
+          </div>
+        ) : null}
         <div className="flow-journey-grid mb-4">
           {postImportFlow.map((step, index) => (
             <article key={step.id} className={`flow-journey-card${step.completed ? " completed" : ""}`} style={getMotionStyle(index + 1)}>
