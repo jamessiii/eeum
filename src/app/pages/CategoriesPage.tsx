@@ -30,6 +30,16 @@ export function CategoriesPage() {
   const categorizedCount = expenseTransactions.filter((item) => item.categoryId).length;
   const classificationProgress = expenseTransactions.length ? categorizedCount / expenseTransactions.length : 0;
   const remainingWorkCount = recurringSuggestions.reduce((sum, suggestion) => sum + suggestion.transactionIds.length, 0) + uncategorizedTransactions.length;
+  const categoryUsage = new Map<string, { count: number; amount: number }>();
+  for (const transaction of expenseTransactions) {
+    if (!transaction.categoryId) continue;
+    const current = categoryUsage.get(transaction.categoryId) ?? { count: 0, amount: 0 };
+    categoryUsage.set(transaction.categoryId, {
+      count: current.count + 1,
+      amount: current.amount + transaction.amount,
+    });
+  }
+  const usedTagIds = new Set(scope.transactions.flatMap((transaction) => transaction.tagIds));
 
   return (
     <div className="page-stack">
@@ -251,7 +261,10 @@ export function CategoriesPage() {
                 <p className="mb-1 text-secondary">
                   {category.direction} · {category.fixedOrVariable}
                 </p>
-                <p className="mb-0 text-secondary">{category.necessity}</p>
+                <p className="mb-1 text-secondary">{category.necessity}</p>
+                <p className="mb-0 text-secondary">
+                  사용 {categoryUsage.get(category.id)?.count ?? 0}건 · {formatCurrency(categoryUsage.get(category.id)?.amount ?? 0)}
+                </p>
               </article>
             ))}
           </div>
@@ -285,6 +298,7 @@ export function CategoriesPage() {
               <article key={tag.id} className="resource-card">
                 <h3>{tag.name}</h3>
                 <div className="tag-color-chip" style={{ backgroundColor: tag.color }} />
+                <p className="mb-0 text-secondary">{usedTagIds.has(tag.id) ? "거래에 사용 중" : "아직 미사용"}</p>
               </article>
             ))}
           </div>
