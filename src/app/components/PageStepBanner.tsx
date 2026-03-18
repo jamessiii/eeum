@@ -27,7 +27,7 @@ export function PageStepBanner() {
           <li key={tip}>{tip}</li>
         ))}
       </ul>
-      <div className="page-step-banner-foot">이 단계를 끝내면 시작 가이드가 자동으로 다음 단계로 이동합니다.</div>
+      <div className="page-step-banner-foot">이 단계를 끝내면 시작 가이드가 자동으로 다음 단계로 넘어갑니다.</div>
     </section>
   );
 }

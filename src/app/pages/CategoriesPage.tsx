@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { getRecurringMerchantSuggestions, getUncategorizedTransactions } from "../../domain/classification/suggestions";
 import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
@@ -10,6 +11,7 @@ export function CategoriesPage() {
   const scope = getWorkspaceScope(state, workspaceId);
   const uncategorizedTransactions = getUncategorizedTransactions(scope.transactions);
   const recurringSuggestions = getRecurringMerchantSuggestions(scope.transactions, scope.categories);
+  const categorizedCount = scope.transactions.filter((item) => item.status === "active" && item.isExpenseImpact && item.categoryId).length;
 
   return (
     <div className="page-stack">
@@ -32,15 +34,44 @@ export function CategoriesPage() {
             <div className="small text-secondary mt-2">반복 규칙에 안 걸린 거래는 사용자가 직접 분류합니다.</div>
           </article>
           <article className="stat-card" style={getMotionStyle(3)}>
-            <span className="stat-label">분류 후 가능 작업</span>
-            <strong>통계 / 진단</strong>
-            <div className="small text-secondary mt-2">카테고리 지정이 끝나야 대시보드와 코칭이 더 정확해집니다.</div>
+            <span className="stat-label">분류 완료 거래</span>
+            <strong>{categorizedCount}건</strong>
+            <div className="small text-secondary mt-2">분류가 쌓일수록 통계와 문제 지출 진단 정확도가 올라갑니다.</div>
+          </article>
+        </div>
+      </section>
+
+      <section className="card shadow-sm" style={getMotionStyle(1)}>
+        <div className="section-head">
+          <div>
+            <span className="section-kicker">분류 진행도</span>
+            <h2 className="section-title">지금 어디까지 끝났는지 보기</h2>
+          </div>
+        </div>
+        <div className="classification-flow-grid">
+          <article className="stat-card">
+            <span className="stat-label">1단계</span>
+            <strong>{recurringSuggestions.length ? "반복 지출 검토 필요" : "반복 지출 정리됨"}</strong>
+            <div className="small text-secondary mt-2">반복적으로 등장하는 가맹점부터 카테고리를 한 번에 적용해보세요.</div>
+          </article>
+          <article className="stat-card">
+            <span className="stat-label">2단계</span>
+            <strong>{uncategorizedTransactions.length ? "미분류 거래 남음" : "미분류 거래 없음"}</strong>
+            <div className="small text-secondary mt-2">반복 규칙에서 빠진 거래는 개별 분류로 마무리하면 됩니다.</div>
+          </article>
+          <article className="stat-card">
+            <span className="stat-label">3단계</span>
+            <strong>통계 확인</strong>
+            <div className="small text-secondary mt-2">분류를 정리한 뒤 대시보드에서 이번 달 문제 지출과 저축률을 확인해보세요.</div>
+            <Link to="/" className="btn btn-outline-primary btn-sm mt-3">
+              대시보드로 이동
+            </Link>
           </article>
         </div>
       </section>
 
       <div className="page-grid">
-        <section className="card shadow-sm" style={getMotionStyle(1)}>
+        <section className="card shadow-sm" style={getMotionStyle(2)}>
           <div className="section-head">
             <div>
               <span className="section-kicker">자동 제안</span>
@@ -57,7 +88,9 @@ export function CategoriesPage() {
                     <p className="mb-1 text-secondary">
                       반복 {suggestion.count}건 · 평균 {formatCurrency(suggestion.amountAverage)}
                     </p>
-                    <p className="mb-0 text-secondary">반복적으로 등장하는 거래이므로 카테고리 일괄 적용을 먼저 제안합니다.</p>
+                    <p className="mb-0 text-secondary">
+                      반복성이 보이는 거래라서 카테고리를 한 번에 적용할 수 있도록 먼저 제안합니다.
+                    </p>
                   </div>
                 </div>
                 <form
@@ -87,12 +120,12 @@ export function CategoriesPage() {
               </article>
             ))}
             {!recurringSuggestions.length ? (
-              <p className="text-secondary mb-0">아직 반복 지출 자동 제안이 없습니다. 업로드 데이터가 더 쌓이면 후보가 생깁니다.</p>
+              <p className="text-secondary mb-0">지금은 반복 지출 자동 제안이 없습니다. 더 많은 거래가 쌓이면 후보가 자동으로 잡힙니다.</p>
             ) : null}
           </div>
         </section>
 
-        <section className="card shadow-sm" style={getMotionStyle(2)}>
+        <section className="card shadow-sm" style={getMotionStyle(3)}>
           <div className="section-head">
             <div>
               <span className="section-kicker">수동 분류</span>
@@ -138,13 +171,15 @@ export function CategoriesPage() {
                 </form>
               </article>
             ))}
-            {!uncategorizedTransactions.length ? <p className="text-secondary mb-0">미분류 거래가 없습니다. 이제 통계를 더 신뢰할 수 있습니다.</p> : null}
+            {!uncategorizedTransactions.length ? (
+              <p className="text-secondary mb-0">미분류 거래가 없습니다. 이제 통계와 문제 지출 진단을 더 믿고 볼 수 있습니다.</p>
+            ) : null}
           </div>
         </section>
       </div>
 
       <div className="page-grid">
-        <section className="card shadow-sm" style={getMotionStyle(3)}>
+        <section className="card shadow-sm" style={getMotionStyle(4)}>
           <div className="section-head">
             <div>
               <span className="section-kicker">분류 관리</span>
@@ -180,7 +215,7 @@ export function CategoriesPage() {
           </div>
         </section>
 
-        <section className="card shadow-sm" style={getMotionStyle(4)}>
+        <section className="card shadow-sm" style={getMotionStyle(5)}>
           <div className="section-head">
             <div>
               <span className="section-kicker">분류 관리</span>
