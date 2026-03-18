@@ -17,61 +17,12 @@ import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { CompletionBanner } from "../components/CompletionBanner";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
+import { TransactionCategoryEditor } from "../components/TransactionCategoryEditor";
 import { TransactionInlineEditor, type TransactionEditDraft } from "../components/TransactionInlineEditor";
+import { TransactionTagEditor } from "../components/TransactionTagEditor";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
 
-const transactionTypeLabel = {
-  expense: "지출",
-  income: "수입",
-  transfer: "이체",
-  adjustment: "조정",
-} as const;
-
-const transactionStatusLabel = {
-  active: "활성",
-  refunded: "환불됨",
-  cancelled: "제외됨",
-} as const;
-
-const flowModeLabel = {
-  expense: "실지출",
-  non_expense: "비지출 흐름",
-} as const;
-
-function getTransactionFlowSummary(transaction: {
-  transactionType: "expense" | "income" | "transfer" | "adjustment";
-  isExpenseImpact: boolean;
-  isInternalTransfer: boolean;
-  isSharedExpense: boolean;
-}) {
-  if (transaction.isInternalTransfer) {
-    return "내부이체로 처리되어 소비 통계에서는 제외됩니다.";
-  }
-
-  if (transaction.isSharedExpense) {
-    return "공동지출로 계산되어 정산 화면에도 함께 반영됩니다.";
-  }
-
-  if (transaction.isExpenseImpact) {
-    return "실지출로 계산되어 소비 통계와 진단에 반영됩니다.";
-  }
-
-  if (transaction.transactionType === "income") {
-    return "수입 흐름으로 기록되어 지출 통계에서는 제외됩니다.";
-  }
-
-  if (transaction.transactionType === "adjustment") {
-    return "조정 흐름으로 기록되어 일반 소비 흐름과 분리됩니다.";
-  }
-
-  return "비지출 흐름으로 기록되어 소비 통계에서는 제외됩니다.";
-}
-
-void transactionTypeLabel;
-void transactionStatusLabel;
-void flowModeLabel;
-void getTransactionFlowSummary;
 
 const cleanupModeCopy = {
   all: {
@@ -1045,127 +996,48 @@ export function TransactionsPage() {
                               onCancel={cancelTransactionEdit}
                             />
                           ) : null}
-                          {transaction.tagIds.length ? (
-                            <div className="transaction-tag-row">
-                              {transaction.tagIds
-                                .map((tagId) => tags.get(tagId))
-                                .filter((tag): tag is NonNullable<typeof tag> => Boolean(tag))
-                                .map((tag) => (
-                                  <span key={tag.id} className="tag-pill" style={{ ["--tag-color" as string]: tag.color }}>
-                                    {tag.name}
-                                    {transaction.status === "active" && transaction.isExpenseImpact ? (
-                                      <button
-                                        className="btn btn-link btn-sm p-0 ms-1 text-reset text-decoration-none"
-                                        type="button"
-                                        aria-label={`${tag.name} 태그 제거`}
-                                        onClick={() => removeTag(workspaceId, transaction.id, tag.id)}
-                                      >
-                                        ×
-                                      </button>
-                                    ) : null}
-                                  </span>
-                                ))}
-                            </div>
-                          ) : null}
-                        {transaction.status === "active" && transaction.isExpenseImpact ? (
-                          <>
-                            <div className="d-flex flex-wrap gap-2 mt-2">
-                              <select
-                                className="form-select form-select-sm"
-                                style={{ maxWidth: 180 }}
-                                value={pendingTagByTransaction[transaction.id] ?? ""}
-                                onChange={(event) =>
-                                  setPendingTagByTransaction((current) => ({
-                                    ...current,
-                                    [transaction.id]: event.target.value,
-                                  }))
-                                }
-                              >
-                                <option value="">태그 선택</option>
-                                {scope.tags.map((tag) => (
-                                  <option key={tag.id} value={tag.id}>
-                                    {tag.name}
-                                  </option>
-                                ))}
-                              </select>
-                              <button
-                                className="btn btn-outline-secondary btn-sm"
-                                type="button"
-                                disabled={!(pendingTagByTransaction[transaction.id] ?? "")}
-                                onClick={() => {
-                                  const tagId = pendingTagByTransaction[transaction.id];
-                                  if (!tagId) return;
-                                  assignTag(workspaceId, transaction.id, tagId);
-                                  setPendingTagByTransaction((current) => ({ ...current, [transaction.id]: "" }));
-                                }}
-                              >
-                                {transaction.tagIds.length ? "태그 더하기" : "태그 추가"}
-                              </button>
-                            </div>
-                            {(pendingTagByTransaction[transaction.id] ?? "") ? (
-                              <div className="small text-secondary mt-2">
-                                이 거래에 태그{" "}
-                                <strong>{tags.get(pendingTagByTransaction[transaction.id] ?? "")?.name ?? "선택한 태그"}</strong>를
-                                {transaction.tagIds.length ? " 추가" : " 적용"}합니다.
-                              </div>
-                            ) : null}
-                          </>
-                          ) : null}
+                          <TransactionTagEditor
+                            transaction={transaction}
+                            tags={scope.tags}
+                            pendingTagId={pendingTagByTransaction[transaction.id] ?? ""}
+                            selectedTagName={tags.get(pendingTagByTransaction[transaction.id] ?? "")?.name ?? null}
+                            onPendingTagChange={(tagId) =>
+                              setPendingTagByTransaction((current) => ({
+                                ...current,
+                                [transaction.id]: tagId,
+                              }))
+                            }
+                            onApplyTag={() => {
+                              const tagId = pendingTagByTransaction[transaction.id];
+                              if (!tagId) return;
+                              assignTag(workspaceId, transaction.id, tagId);
+                              setPendingTagByTransaction((current) => ({ ...current, [transaction.id]: "" }));
+                            }}
+                            onRemoveTag={(tagId) => removeTag(workspaceId, transaction.id, tagId)}
+                          />
                         </td>
                         <td>{peopleMap.get(transaction.ownerPersonId ?? "") ?? "-"}</td>
                         <td>
-                          {transaction.categoryId ? categories.get(transaction.categoryId) : "미분류"}
-                          {transaction.status === "active" && transaction.isExpenseImpact && transaction.categoryId ? (
-                            <div className="mt-2">
-                              <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => clearCategory(workspaceId, transaction.id)}>
-                                카테고리 해제
-                              </button>
-                            </div>
-                          ) : null}
-                        {transaction.status === "active" && transaction.isExpenseImpact ? (
-                          <>
-                            <div className="d-flex flex-wrap gap-2 mt-2">
-                              <select
-                                className="form-select form-select-sm"
-                                style={{ maxWidth: 180 }}
-                                value={pendingCategoryByTransaction[transaction.id] ?? ""}
-                                onChange={(event) =>
-                                  setPendingCategoryByTransaction((current) => ({
-                                    ...current,
-                                    [transaction.id]: event.target.value,
-                                  }))
-                                }
-                              >
-                                <option value="">카테고리 선택</option>
-                                {scope.categories.map((category) => (
-                                  <option key={category.id} value={category.id}>
-                                    {category.name}
-                                  </option>
-                                ))}
-                              </select>
-                              <button
-                                className="btn btn-outline-primary btn-sm"
-                                type="button"
-                                disabled={!(pendingCategoryByTransaction[transaction.id] ?? "")}
-                                onClick={() => {
-                                  const categoryId = pendingCategoryByTransaction[transaction.id];
-                                  if (!categoryId) return;
-                                  assignCategory(workspaceId, transaction.id, categoryId);
-                                  setPendingCategoryByTransaction((current) => ({ ...current, [transaction.id]: "" }));
-                                }}
-                              >
-                                {transaction.categoryId ? "분류 변경" : "분류 적용"}
-                              </button>
-                            </div>
-                            {(pendingCategoryByTransaction[transaction.id] ?? "") ? (
-                              <div className="small text-secondary mt-2">
-                                이 거래의 카테고리를{" "}
-                                <strong>{categories.get(pendingCategoryByTransaction[transaction.id] ?? "") ?? "선택한 카테고리"}</strong>로
-                                {transaction.categoryId ? " 변경" : " 지정"}합니다.
-                              </div>
-                            ) : null}
-                          </>
-                          ) : null}
+                          <TransactionCategoryEditor
+                            transaction={transaction}
+                            categories={scope.categories}
+                            categoryName={transaction.categoryId ? categories.get(transaction.categoryId) ?? null : null}
+                            pendingCategoryId={pendingCategoryByTransaction[transaction.id] ?? ""}
+                            selectedCategoryName={categories.get(pendingCategoryByTransaction[transaction.id] ?? "") ?? null}
+                            onPendingCategoryChange={(categoryId) =>
+                              setPendingCategoryByTransaction((current) => ({
+                                ...current,
+                                [transaction.id]: categoryId,
+                              }))
+                            }
+                            onApplyCategory={() => {
+                              const categoryId = pendingCategoryByTransaction[transaction.id];
+                              if (!categoryId) return;
+                              assignCategory(workspaceId, transaction.id, categoryId);
+                              setPendingCategoryByTransaction((current) => ({ ...current, [transaction.id]: "" }));
+                            }}
+                            onClearCategory={() => clearCategory(workspaceId, transaction.id)}
+                          />
                         </td>
                       <td className="text-end transaction-amount-cell">
                         <strong>{formatCurrency(transaction.amount)}</strong>
@@ -1182,3 +1054,4 @@ export function TransactionsPage() {
     </div>
   );
 }
+
