@@ -9,9 +9,11 @@ import { getWorkspaceScope } from "../state/selectors";
 export function ReviewsPage() {
   const { applyReviewSuggestion, dismissReview, resolveReview, state } = useAppState();
   const [activeFilter, setActiveFilter] = useState<"all" | ReviewType>("all");
+  const [activeTagId, setActiveTagId] = useState<string>("all");
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const transactions = new Map(scope.transactions.map((item) => [item.id, item]));
+  const tags = new Map(scope.tags.map((item) => [item.id, item]));
   const reviews = scope.reviews.filter((item) => item.status === "open");
   const resolvedReviews = scope.reviews.filter((item) => item.status === "resolved");
   const dismissedReviews = scope.reviews.filter((item) => item.status === "dismissed");
@@ -25,8 +27,16 @@ export function ReviewsPage() {
     accumulator[item.reviewType] = (accumulator[item.reviewType] ?? 0) + 1;
     return accumulator;
   }, {});
-  const filteredReviews =
-    activeFilter === "all" ? reviews : reviews.filter((item) => item.reviewType === activeFilter);
+  const filteredReviews = reviews
+    .filter((item) => (activeFilter === "all" ? true : item.reviewType === activeFilter))
+    .filter((item) => {
+      if (activeTagId === "all") return true;
+      const relatedTagIds = [item.primaryTransactionId, ...item.relatedTransactionIds]
+        .map((id) => transactions.get(id))
+        .filter((transaction): transaction is NonNullable<typeof transaction> => Boolean(transaction))
+        .flatMap((transaction) => transaction.tagIds);
+      return relatedTagIds.includes(activeTagId);
+    });
   const dominantType =
     REVIEW_TYPE_ORDER
       .map((type) => ({ type, count: reviewCounts[type] ?? 0 }))
@@ -75,6 +85,20 @@ export function ReviewsPage() {
             totalCount={reviews.length}
             onChange={setActiveFilter}
           />
+          <div className="toolbar-row mt-2">
+            <select
+              className="form-select toolbar-select"
+              value={activeTagId}
+              onChange={(event) => setActiveTagId(event.target.value)}
+            >
+              <option value="all">전체 태그</option>
+              {scope.tags.map((tag) => (
+                <option key={tag.id} value={tag.id}>
+                  {tag.name}
+                </option>
+              ))}
+            </select>
+          </div>
           {resolvedReviews.length ? (
             <div className="resource-grid">
               {REVIEW_TYPE_ORDER.filter((type) => (resolvedCounts[type] ?? 0) > 0).map((type) => (
@@ -120,6 +144,18 @@ export function ReviewsPage() {
                         {relatedTransactions
                           .map((item) => `${item.merchantName} ${item.amount.toLocaleString("ko-KR")}원`)
                           .join(", ")}
+                      </div>
+                    ) : null}
+                    {primaryTransaction?.tagIds.length ? (
+                      <div className="transaction-tag-row mt-2">
+                        {primaryTransaction.tagIds
+                          .map((tagId) => tags.get(tagId))
+                          .filter((tag): tag is NonNullable<typeof tag> => Boolean(tag))
+                          .map((tag) => (
+                            <span key={tag.id} className="tag-pill" style={{ ["--tag-color" as string]: tag.color }}>
+                              {tag.name}
+                            </span>
+                          ))}
                       </div>
                     ) : null}
                   </div>
