@@ -61,7 +61,9 @@ type Action =
   | { type: "addSettlement"; payload: SettlementInput }
   | { type: "addTransaction"; payload: NewTransactionInput }
   | { type: "assignCategory"; payload: { workspaceId: string; transactionId: string; categoryId: string } }
-  | { type: "assignCategoryByMerchant"; payload: { workspaceId: string; merchantName: string; categoryId: string } };
+  | { type: "assignCategoryByMerchant"; payload: { workspaceId: string; merchantName: string; categoryId: string } }
+  | { type: "assignTag"; payload: { workspaceId: string; transactionId: string; tagId: string } }
+  | { type: "assignTagByMerchant"; payload: { workspaceId: string; merchantName: string; tagId: string } };
 
 function applyReviewSuggestionToTransactions(transactions: Transaction[], review: ReviewItem) {
   const relatedTransactionId = review.relatedTransactionIds[0] ?? null;
@@ -277,7 +279,37 @@ function reducer(state: AppState, action: Action): AppState {
           transaction.workspaceId === action.payload.workspaceId &&
           transaction.merchantName === action.payload.merchantName &&
           transaction.isExpenseImpact
-            ? { ...transaction, categoryId: action.payload.categoryId }
+             ? { ...transaction, categoryId: action.payload.categoryId }
+             : transaction,
+        ),
+      };
+    case "assignTag":
+      return {
+        ...state,
+        transactions: state.transactions.map((transaction) =>
+          transaction.workspaceId === action.payload.workspaceId && transaction.id === action.payload.transactionId
+            ? {
+                ...transaction,
+                tagIds: transaction.tagIds.includes(action.payload.tagId)
+                  ? transaction.tagIds
+                  : [...transaction.tagIds, action.payload.tagId],
+              }
+            : transaction,
+        ),
+      };
+    case "assignTagByMerchant":
+      return {
+        ...state,
+        transactions: state.transactions.map((transaction) =>
+          transaction.workspaceId === action.payload.workspaceId &&
+          transaction.merchantName === action.payload.merchantName &&
+          transaction.isExpenseImpact
+            ? {
+                ...transaction,
+                tagIds: transaction.tagIds.includes(action.payload.tagId)
+                  ? transaction.tagIds
+                  : [...transaction.tagIds, action.payload.tagId],
+              }
             : transaction,
         ),
       };
@@ -310,6 +342,8 @@ interface AppStateContextValue {
   addTransaction: (input: NewTransactionInput) => void;
   assignCategory: (workspaceId: string, transactionId: string, categoryId: string) => void;
   assignCategoryByMerchant: (workspaceId: string, merchantName: string, categoryId: string) => void;
+  assignTag: (workspaceId: string, transactionId: string, tagId: string) => void;
+  assignTagByMerchant: (workspaceId: string, merchantName: string, tagId: string) => void;
 }
 
 const AppStateContext = createContext<AppStateContextValue | null>(null);
@@ -467,6 +501,16 @@ export function AppStateProvider({ children }: PropsWithChildren) {
       assignCategoryByMerchant(workspaceId, merchantName, categoryId) {
         dispatch({ type: "assignCategoryByMerchant", payload: { workspaceId, merchantName, categoryId } });
         showToast(`${merchantName} 반복 거래에 카테고리를 반영했습니다.`, "success");
+      },
+      assignTag(workspaceId, transactionId, tagId) {
+        dispatch({ type: "assignTag", payload: { workspaceId, transactionId, tagId } });
+        const tag = state.tags.find((item) => item.id === tagId);
+        showToast(`${tag?.name ?? "태그"} 태그를 거래에 추가했습니다.`, "success");
+      },
+      assignTagByMerchant(workspaceId, merchantName, tagId) {
+        dispatch({ type: "assignTagByMerchant", payload: { workspaceId, merchantName, tagId } });
+        const tag = state.tags.find((item) => item.id === tagId);
+        showToast(`${merchantName} 반복 거래에 ${tag?.name ?? "태그"}를 반영했습니다.`, "success");
       },
     }),
     [isReady, showToast, state],

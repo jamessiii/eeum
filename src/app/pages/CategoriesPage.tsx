@@ -19,7 +19,7 @@ function getRecurringConfidenceLabel(confidence: RecurringMerchantSuggestion["co
 }
 
 export function CategoriesPage() {
-  const { addCategory, addTag, assignCategory, assignCategoryByMerchant, state } = useAppState();
+  const { addCategory, addTag, assignCategory, assignCategoryByMerchant, assignTag, assignTagByMerchant, state } = useAppState();
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const uncategorizedTransactions = getUncategorizedTransactions(scope.transactions);
@@ -149,9 +149,14 @@ export function CategoriesPage() {
                     event.preventDefault();
                     const form = event.currentTarget;
                     const select = form.elements.namedItem("categoryId") as HTMLSelectElement | null;
+                    const tagSelect = form.elements.namedItem("tagId") as HTMLSelectElement | null;
                     const categoryId = select?.value ?? "";
+                    const tagId = tagSelect?.value ?? "";
                     if (!categoryId) return;
                     assignCategoryByMerchant(workspaceId, suggestion.merchantName, categoryId);
+                    if (tagId) {
+                      assignTagByMerchant(workspaceId, suggestion.merchantName, tagId);
+                    }
                     form.reset();
                   }}
                 >
@@ -160,6 +165,14 @@ export function CategoriesPage() {
                     {scope.categories.map((category) => (
                       <option key={category.id} value={category.id}>
                         {category.name}
+                      </option>
+                    ))}
+                  </select>
+                  <select name="tagId" className="form-select" defaultValue="">
+                    <option value="">태그 선택 안 함</option>
+                    {scope.tags.map((tag) => (
+                      <option key={tag.id} value={tag.id}>
+                        {tag.name}
                       </option>
                     ))}
                   </select>
@@ -203,9 +216,14 @@ export function CategoriesPage() {
                     event.preventDefault();
                     const form = event.currentTarget;
                     const select = form.elements.namedItem("categoryId") as HTMLSelectElement | null;
+                    const tagSelect = form.elements.namedItem("tagId") as HTMLSelectElement | null;
                     const categoryId = select?.value ?? "";
+                    const tagId = tagSelect?.value ?? "";
                     if (!categoryId) return;
                     assignCategory(workspaceId, transaction.id, categoryId);
+                    if (tagId) {
+                      assignTag(workspaceId, transaction.id, tagId);
+                    }
                     form.reset();
                   }}
                 >
@@ -214,6 +232,14 @@ export function CategoriesPage() {
                     {scope.categories.map((category) => (
                       <option key={category.id} value={category.id}>
                         {category.name}
+                      </option>
+                    ))}
+                  </select>
+                  <select name="tagId" className="form-select" defaultValue="">
+                    <option value="">태그 선택 안 함</option>
+                    {scope.tags.map((tag) => (
+                      <option key={tag.id} value={tag.id}>
+                        {tag.name}
                       </option>
                     ))}
                   </select>
