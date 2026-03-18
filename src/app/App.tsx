@@ -1,24 +1,31 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { HashRouter, Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { MotionProvider } from "./motion/MotionProvider";
 import { AppGuidePanel } from "./components/AppGuidePanel";
 import { PageStepBanner } from "./components/PageStepBanner";
-import { AccountsPage } from "./pages/AccountsPage";
-import { CardsPage } from "./pages/CardsPage";
-import { CategoriesPage } from "./pages/CategoriesPage";
-import { DashboardPage } from "./pages/DashboardPage";
-import { DeveloperPage } from "./pages/DeveloperPage";
 import { EmptyWorkspaceScreen } from "./pages/EmptyWorkspaceScreen";
-import { ImportsPage } from "./pages/ImportsPage";
 import { LoadingScreen } from "./pages/LoadingScreen";
-import { PeoplePage } from "./pages/PeoplePage";
-import { ReviewsPage } from "./pages/ReviewsPage";
-import { SettingsPage } from "./pages/SettingsPage";
-import { SettlementsPage } from "./pages/SettlementsPage";
-import { TransactionsPage } from "./pages/TransactionsPage";
 import { AppStateProvider, useAppState } from "./state/AppStateProvider";
 import { getActiveWorkspace } from "./state/selectors";
 import { ToastProvider, useToast } from "./toast/ToastProvider";
+
+const DashboardPage = lazy(() => import("./pages/DashboardPage").then((module) => ({ default: module.DashboardPage })));
+const TransactionsPage = lazy(() =>
+  import("./pages/TransactionsPage").then((module) => ({ default: module.TransactionsPage })),
+);
+const PeoplePage = lazy(() => import("./pages/PeoplePage").then((module) => ({ default: module.PeoplePage })));
+const AccountsPage = lazy(() => import("./pages/AccountsPage").then((module) => ({ default: module.AccountsPage })));
+const CardsPage = lazy(() => import("./pages/CardsPage").then((module) => ({ default: module.CardsPage })));
+const CategoriesPage = lazy(() =>
+  import("./pages/CategoriesPage").then((module) => ({ default: module.CategoriesPage })),
+);
+const ImportsPage = lazy(() => import("./pages/ImportsPage").then((module) => ({ default: module.ImportsPage })));
+const ReviewsPage = lazy(() => import("./pages/ReviewsPage").then((module) => ({ default: module.ReviewsPage })));
+const SettlementsPage = lazy(() =>
+  import("./pages/SettlementsPage").then((module) => ({ default: module.SettlementsPage })),
+);
+const SettingsPage = lazy(() => import("./pages/SettingsPage").then((module) => ({ default: module.SettingsPage })));
+const DeveloperPage = lazy(() => import("./pages/DeveloperPage").then((module) => ({ default: module.DeveloperPage })));
 
 const DEVELOPER_MODE_KEY = "household-webapp.developer-mode";
 
@@ -187,6 +194,41 @@ function SidebarNav({ isDeveloperModeUnlocked }: { isDeveloperModeUnlocked: bool
   );
 }
 
+function AppRoutes({
+  isDeveloperModeUnlocked,
+  lockDeveloperMode,
+}: {
+  isDeveloperModeUnlocked: boolean;
+  lockDeveloperMode: () => void;
+}) {
+  return (
+    <Suspense fallback={<LoadingScreen message="화면을 준비하는 중입니다." />}>
+      <Routes>
+        <Route path="/" element={<DashboardPage />} />
+        <Route path="/transactions" element={<TransactionsPage />} />
+        <Route path="/people" element={<PeoplePage />} />
+        <Route path="/accounts" element={<AccountsPage />} />
+        <Route path="/cards" element={<CardsPage />} />
+        <Route path="/categories" element={<CategoriesPage />} />
+        <Route path="/imports" element={<ImportsPage />} />
+        <Route path="/reviews" element={<ReviewsPage />} />
+        <Route path="/settlements" element={<SettlementsPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
+        <Route
+          path="/dev"
+          element={
+            isDeveloperModeUnlocked ? (
+              <DeveloperPage onLockDeveloperMode={lockDeveloperMode} />
+            ) : (
+              <Navigate to="/settings" replace />
+            )
+          }
+        />
+      </Routes>
+    </Suspense>
+  );
+}
+
 function AppFrame() {
   const { isReady, setActiveWorkspace, state } = useAppState();
   const { isDeveloperModeUnlocked, registerUnlockTap, lockDeveloperMode } = useDeveloperMode();
@@ -249,28 +291,10 @@ function AppFrame() {
           <PageStepBanner />
           <div className="route-stage">
             <div className="route-page">
-              <Routes>
-                <Route path="/" element={<DashboardPage />} />
-                <Route path="/transactions" element={<TransactionsPage />} />
-                <Route path="/people" element={<PeoplePage />} />
-                <Route path="/accounts" element={<AccountsPage />} />
-                <Route path="/cards" element={<CardsPage />} />
-                <Route path="/categories" element={<CategoriesPage />} />
-                <Route path="/imports" element={<ImportsPage />} />
-                <Route path="/reviews" element={<ReviewsPage />} />
-                <Route path="/settlements" element={<SettlementsPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
-                <Route
-                  path="/dev"
-                  element={
-                    isDeveloperModeUnlocked ? (
-                      <DeveloperPage onLockDeveloperMode={lockDeveloperMode} />
-                    ) : (
-                      <Navigate to="/settings" replace />
-                    )
-                  }
-                />
-              </Routes>
+              <AppRoutes
+                isDeveloperModeUnlocked={isDeveloperModeUnlocked}
+                lockDeveloperMode={lockDeveloperMode}
+              />
             </div>
           </div>
         </main>
