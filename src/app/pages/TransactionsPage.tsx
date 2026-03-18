@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { getSourceTypeLabel, SOURCE_TYPE_OPTIONS } from "../../domain/transactions/sourceTypes";
 import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { CompletionBanner } from "../components/CompletionBanner";
@@ -23,13 +24,6 @@ const transactionStatusLabel = {
 const flowModeLabel = {
   expense: "실지출",
   non_expense: "비지출 흐름",
-} as const;
-
-const sourceTypeLabel = {
-  manual: "수동입력",
-  account: "계좌",
-  card: "카드",
-  import: "가져오기",
 } as const;
 
 function getTransactionFlowSummary(transaction: {
@@ -194,12 +188,13 @@ export function TransactionsPage() {
     );
 
   const activeTransactions = transactions.filter((item) => item.status === "active");
-  const sourceTypeCounts = {
-    manual: transactions.filter((item) => item.sourceType === "manual").length,
-    account: transactions.filter((item) => item.sourceType === "account").length,
-    card: transactions.filter((item) => item.sourceType === "card").length,
-    import: transactions.filter((item) => item.sourceType === "import").length,
-  };
+  const sourceTypeCounts = SOURCE_TYPE_OPTIONS.reduce<Record<(typeof SOURCE_TYPE_OPTIONS)[number], number>>(
+    (accumulator, sourceType) => {
+      accumulator[sourceType] = transactions.filter((item) => item.sourceType === sourceType).length;
+      return accumulator;
+    },
+    { manual: 0, account: 0, card: 0, import: 0 },
+  );
   const categorizableTransactions = activeTransactions.filter((item) => item.isExpenseImpact);
   const taggableTransactions = activeTransactions.filter((item) => item.isExpenseImpact);
   const activeExpenseCount = activeTransactions.filter((item) => item.isExpenseImpact).length;
@@ -215,7 +210,7 @@ export function TransactionsPage() {
   const isFocusedCleanupMode = filters.nature === "uncategorized" || filters.nature === "untagged";
   const isFlowAuditMode = filters.nature === "shared" || filters.nature === "internal_transfer";
   const activeOwnerName = filters.ownerPersonId !== "all" ? peopleMap.get(filters.ownerPersonId) ?? null : null;
-  const activeSourceTypeLabel = filters.sourceType !== "all" ? sourceTypeLabel[filters.sourceType as keyof typeof sourceTypeLabel] : null;
+  const activeSourceTypeLabel = filters.sourceType !== "all" ? getSourceTypeLabel(filters.sourceType as (typeof SOURCE_TYPE_OPTIONS)[number]) : null;
   const currentCleanupRemaining =
     filters.nature === "uncategorized" ? uncategorizedCount : filters.nature === "untagged" ? untaggedCount : null;
   const currentFlowAuditCount =
@@ -245,8 +240,9 @@ export function TransactionsPage() {
       setSearchParams({}, { replace: true });
       return;
     }
-    if (sourceType === "manual" || sourceType === "account" || sourceType === "card" || sourceType === "import") {
-      setFilters((current) => ({ ...current, sourceType }));
+    const matchedSourceType = SOURCE_TYPE_OPTIONS.find((item) => item === sourceType);
+    if (matchedSourceType) {
+      setFilters((current) => ({ ...current, sourceType: matchedSourceType }));
       setSearchParams({}, { replace: true });
     }
   }, [people, searchParams, setSearchParams]);
@@ -369,9 +365,11 @@ export function TransactionsPage() {
             <option value="adjustment">조정</option>
           </select>
           <select name="sourceType" className="form-select" defaultValue="manual">
-            <option value="manual">수동입력</option>
-            <option value="account">계좌</option>
-            <option value="card">카드</option>
+            {SOURCE_TYPE_OPTIONS.filter((sourceType) => sourceType !== "import").map((sourceType) => (
+              <option key={sourceType} value={sourceType}>
+                {getSourceTypeLabel(sourceType)}
+              </option>
+            ))}
           </select>
           <select name="ownerPersonId" className="form-select" defaultValue="">
             <option value="">사용자 선택 없음</option>
@@ -705,18 +703,16 @@ export function TransactionsPage() {
                   <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, sourceType: "all" }))}>
                     전체 {transactions.length}건
                   </button>
-                  <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, sourceType: "manual" }))}>
-                    수동입력 {sourceTypeCounts.manual}건
-                  </button>
-                  <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, sourceType: "account" }))}>
-                    계좌 {sourceTypeCounts.account}건
-                  </button>
-                  <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, sourceType: "card" }))}>
-                    카드 {sourceTypeCounts.card}건
-                  </button>
-                  <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, sourceType: "import" }))}>
-                    가져오기 {sourceTypeCounts.import}건
-                  </button>
+                  {SOURCE_TYPE_OPTIONS.map((sourceType) => (
+                    <button
+                      key={sourceType}
+                      className="btn btn-outline-secondary btn-sm"
+                      type="button"
+                      onClick={() => setFilters((current) => ({ ...current, sourceType }))}
+                    >
+                      {getSourceTypeLabel(sourceType)} {sourceTypeCounts[sourceType]}건
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -977,7 +973,7 @@ export function TransactionsPage() {
                               </div>
                               <div className="small text-secondary mt-1">
                                 {[
-                                  `수단 ${sourceTypeLabel[transaction.sourceType]}`,
+                                  `수단 ${getSourceTypeLabel(transaction.sourceType)}`,
                                   transaction.ownerPersonId ? `사용자 ${peopleMap.get(transaction.ownerPersonId) ?? "-"}` : null,
                                   transaction.accountId ? `계좌 ${accountMap.get(transaction.accountId) ?? "-"}` : null,
                                   transaction.cardId ? `카드 ${cardMap.get(transaction.cardId) ?? "-"}` : null,
@@ -1020,10 +1016,11 @@ export function TransactionsPage() {
                                         }))
                                       }
                                     >
-                                      <option value="manual">수동입력</option>
-                                      <option value="account">계좌</option>
-                                      <option value="card">카드</option>
-                                      <option value="import">가져오기</option>
+                                      {SOURCE_TYPE_OPTIONS.map((sourceType) => (
+                                        <option key={sourceType} value={sourceType}>
+                                          {getSourceTypeLabel(sourceType)}
+                                        </option>
+                                      ))}
                                     </select>
                                     <select
                                       className="form-select form-select-sm"

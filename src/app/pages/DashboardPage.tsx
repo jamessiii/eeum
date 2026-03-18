@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { getWorkspaceInsights } from "../../domain/insights/workspaceInsights";
+import { getSourceTypeLabel } from "../../domain/transactions/sourceTypes";
 import { formatCurrency, formatPercent } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { useAppState } from "../state/AppStateProvider";
@@ -8,13 +9,6 @@ import { CompletionBanner } from "../components/CompletionBanner";
 function toneClass(tone: "stable" | "caution" | "warning") {
   return tone === "warning" ? "warning" : tone === "caution" ? "caution" : "stable";
 }
-
-const sourceTypeLabel = {
-  manual: "수동입력",
-  account: "계좌",
-  card: "카드",
-  import: "가져오기",
-} as const;
 
 interface DashboardAttentionItem {
   key: string;
@@ -153,9 +147,9 @@ export function DashboardPage() {
     dominantSource && dominantSource.share >= 0.7
       ? {
           key: "source-dominance",
-          title: `${sourceTypeLabel[dominantSource.sourceType]} 흐름이 많이 몰려 있습니다`,
-          description: `${sourceTypeLabel[dominantSource.sourceType]} 경로가 이번 달 거래의 ${Math.round(dominantSource.share * 100)}%를 차지하고 있어 이 수단 흐름을 먼저 점검하면 전체 정확도를 빠르게 높일 수 있습니다.`,
-          actionLabel: `${sourceTypeLabel[dominantSource.sourceType]} 거래 보기`,
+          title: `${getSourceTypeLabel(dominantSource.sourceType)} 흐름이 많이 몰려 있습니다`,
+          description: `${getSourceTypeLabel(dominantSource.sourceType)} 경로가 이번 달 거래의 ${Math.round(dominantSource.share * 100)}%를 차지하고 있어 이 수단 흐름을 먼저 점검하면 전체 정확도를 빠르게 높일 수 있습니다.`,
+          actionLabel: `${getSourceTypeLabel(dominantSource.sourceType)} 거래 보기`,
           to: `/transactions?sourceType=${dominantSource.sourceType}`,
         }
       : null,
@@ -432,11 +426,11 @@ export function DashboardPage() {
             <div className="resource-grid mt-3">
               {insights.sourceBreakdown.map((item, index) => (
                 <article key={item.sourceType} className="resource-card" style={getMotionStyle(index + 9)}>
-                  <h3>{sourceTypeLabel[item.sourceType]}</h3>
+                  <h3>{getSourceTypeLabel(item.sourceType)}</h3>
                   <p className="mb-1 text-secondary">이번 달 거래 {item.count}건</p>
                   <p className="mb-0 text-secondary">이 경로에서 실지출로 반영된 금액은 {formatCurrency(item.expenseAmount)}입니다.</p>
                   <Link to={`/transactions?sourceType=${item.sourceType}`} className="btn btn-outline-primary btn-sm mt-3">
-                    {sourceTypeLabel[item.sourceType]} 거래 보기
+                    {getSourceTypeLabel(item.sourceType)} 거래 보기
                   </Link>
                 </article>
               ))}

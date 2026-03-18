@@ -1,6 +1,7 @@
 import { monthKey } from "../../shared/utils/date";
 import type { AppState, Category, FinancialProfile, ReviewItem, Tag, Transaction } from "../../shared/types/models";
 import { getRecurringMerchantSuggestions, getUncategorizedTransactions } from "../classification/suggestions";
+import { getSourceTypeLabel, SOURCE_TYPE_OPTIONS } from "../transactions/sourceTypes";
 
 export type InsightTone = "stable" | "caution" | "warning";
 
@@ -91,9 +92,7 @@ function summarizeTags(transactions: Transaction[], tags: Tag[]) {
 }
 
 function summarizeSourceTypes(transactions: Transaction[]) {
-  const sourceTypes: Transaction["sourceType"][] = ["manual", "account", "card", "import"];
-
-  return sourceTypes
+  return SOURCE_TYPE_OPTIONS
     .map((sourceType) => {
       const sourceTransactions = transactions.filter((transaction) => transaction.sourceType === sourceType);
       return {
@@ -139,14 +138,7 @@ function buildCoaching(context: WorkspaceContext, metrics: InsightMetrics): stri
   if (topSource && topSource.count > 0) {
     const sourceShare = topSource.count / Math.max(1, metrics.transactionCount);
     if (sourceShare >= 0.7) {
-      const sourceLabel =
-        topSource.sourceType === "manual"
-          ? "수동입력"
-          : topSource.sourceType === "account"
-            ? "계좌"
-            : topSource.sourceType === "card"
-              ? "카드"
-              : "가져오기";
+      const sourceLabel = getSourceTypeLabel(topSource.sourceType);
       return `이번 달 거래의 ${Math.round(sourceShare * 100)}%가 ${sourceLabel} 경로에 몰려 있습니다. 이 수단의 연결값과 분류 상태를 먼저 점검해보세요.`;
     }
   }
@@ -176,14 +168,7 @@ function buildNextSteps(context: WorkspaceContext, metrics: InsightMetrics): str
   if (context.cardCount === 0) nextSteps.push("카드를 등록하면 카드 명세서 업로드와 소비 흐름 분석이 쉬워집니다.");
   if (context.transactions.length === 0) nextSteps.push("첫 거래를 입력하거나 엑셀 파일을 업로드해서 분석을 시작해보세요.");
   if (topSource && topSource.count / Math.max(1, metrics.transactionCount) >= 0.7) {
-    const sourceLabel =
-      topSource.sourceType === "manual"
-        ? "수동입력"
-        : topSource.sourceType === "account"
-          ? "계좌"
-          : topSource.sourceType === "card"
-            ? "카드"
-            : "가져오기";
+    const sourceLabel = getSourceTypeLabel(topSource.sourceType);
     nextSteps.push(`${sourceLabel} 거래가 대부분을 차지합니다. 이 수단 흐름을 먼저 점검하면 전체 데이터 정확도를 빠르게 높일 수 있습니다.`);
   }
   if (context.reviews.some((review) => review.status === "open")) {
@@ -236,14 +221,7 @@ function buildHeadlineCards(
   if (sourceBreakdown.length) {
     const biggestSource = sourceBreakdown[0];
     const sourceShare = biggestSource.count / Math.max(1, metrics.transactionCount);
-    const sourceLabel =
-      biggestSource.sourceType === "manual"
-        ? "수동입력"
-        : biggestSource.sourceType === "account"
-          ? "계좌"
-          : biggestSource.sourceType === "card"
-            ? "카드"
-            : "가져오기";
+    const sourceLabel = getSourceTypeLabel(biggestSource.sourceType);
     cards.push({
       title: "가장 큰 입력 경로",
       description: `${sourceLabel} 경로가 이번 달 거래의 ${Math.round(sourceShare * 100)}%를 차지하고 있습니다.`,
@@ -335,20 +313,24 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
     accountCount,
     cardCount,
   };
+  const topCategories = summarizeCategories(transactions, categories);
+  const topTags = summarizeTags(transactions, tags);
+  const sourceBreakdown = summarizeSourceTypes(transactions);
+  const dominantSource = sourceBreakdown[0]
+    ? {
+        ...sourceBreakdown[0],
+        share: sourceBreakdown[0].count / Math.max(1, metrics.transactionCount),
+      }
+    : null;
 
   return {
     month: baseMonth,
     ...metrics,
-    topCategories: summarizeCategories(transactions, categories),
-    topTags: summarizeTags(transactions, tags),
-    sourceBreakdown: summarizeSourceTypes(transactions),
-    dominantSource: summarizeSourceTypes(transactions)[0]
-      ? {
-          ...summarizeSourceTypes(transactions)[0],
-          share: summarizeSourceTypes(transactions)[0].count / Math.max(1, metrics.transactionCount),
-        }
-      : null,
-    headlineCards: buildHeadlineCards(summarizeCategories(transactions, categories), summarizeSourceTypes(transactions), metrics),
+    topCategories,
+    topTags,
+    sourceBreakdown,
+    dominantSource,
+    headlineCards: buildHeadlineCards(topCategories, sourceBreakdown, metrics),
     nextSteps: buildNextSteps(context, metrics),
     coaching: buildCoaching(context, metrics),
     spendTone: getSpendTone(financialProfile, spendRate),

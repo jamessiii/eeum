@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { REVIEW_TYPE_LABELS } from "../../domain/reviews/meta";
+import { getSourceTypeLabel, SOURCE_TYPE_OPTIONS } from "../../domain/transactions/sourceTypes";
 import { getWorkspaceHealthSummary } from "../../domain/workspace/health";
 import type { WorkspaceBundle } from "../../shared/types/models";
 import { formatCurrency } from "../../shared/utils/format";
@@ -9,13 +10,6 @@ import { CompletionBanner } from "../components/CompletionBanner";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
-
-const sourceTypeLabel = {
-  manual: "수동입력",
-  account: "계좌",
-  card: "카드",
-  import: "가져오기",
-} as const;
 
 export function ImportsPage() {
   const { commitImportedBundle, previewWorkbookImport, state } = useAppState();
@@ -34,7 +28,7 @@ export function ImportsPage() {
     (item) => item.status === "active" && item.isExpenseImpact && item.isSharedExpense,
   ).length;
   const internalTransferCount = scope.transactions.filter((item) => item.status === "active" && item.isInternalTransfer).length;
-  const sourceBreakdown = (["manual", "account", "card", "import"] as const)
+  const sourceBreakdown = SOURCE_TYPE_OPTIONS
     .map((sourceType) => {
       const sourceTransactions = scope.transactions.filter((item) => item.sourceType === sourceType);
       return {
@@ -408,11 +402,11 @@ export function ImportsPage() {
           <div className="resource-grid mt-3">
             {sourceBreakdown.map((item, index) => (
               <article key={item.sourceType} className="resource-card" style={getMotionStyle(index + 6)}>
-                <h3>{sourceTypeLabel[item.sourceType]}</h3>
+                <h3>{getSourceTypeLabel(item.sourceType)}</h3>
                 <p className="mb-1 text-secondary">이번 달 거래 {item.count}건</p>
                 <p className="mb-0 text-secondary">이 경로에서 실지출로 반영된 금액은 {formatCurrency(item.expenseAmount)}입니다.</p>
                 <Link to={`/transactions?sourceType=${item.sourceType}`} className="btn btn-outline-secondary btn-sm mt-3">
-                  {sourceTypeLabel[item.sourceType]} 거래 보기
+                  {getSourceTypeLabel(item.sourceType)} 거래 보기
                 </Link>
               </article>
             ))}

@@ -1,6 +1,7 @@
 import { getRecurringMerchantSuggestions } from "../classification/suggestions";
 import type { AppState } from "../../shared/types/models";
 import { getWorkspaceScope } from "../../app/state/selectors";
+import { getSourceTypeLabel, SOURCE_TYPE_OPTIONS } from "../transactions/sourceTypes";
 import { getWorkspaceHealthSummary } from "../workspace/health";
 
 export interface GuideStep {
@@ -26,7 +27,7 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
   const monthlyIncome = scope.financialProfile?.monthlyNetIncome ?? 0;
   const hasImportedData = scope.imports.length > 0;
   const hasTransactions = scope.transactions.length > 0;
-  const sourceBreakdown = (["manual", "account", "card", "import"] as const)
+  const sourceBreakdown = SOURCE_TYPE_OPTIONS
     .map((sourceType) => ({
       sourceType,
       count: scope.transactions.filter((transaction) => transaction.sourceType === sourceType).length,
@@ -34,16 +35,7 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
     .sort((a, b) => b.count - a.count);
   const dominantSource = sourceBreakdown[0] ?? null;
   const dominantSourceShare = dominantSource ? dominantSource.count / Math.max(1, scope.transactions.length) : 0;
-  const dominantSourceLabel =
-    dominantSource?.sourceType === "manual"
-      ? "수동입력"
-      : dominantSource?.sourceType === "account"
-        ? "계좌"
-        : dominantSource?.sourceType === "card"
-          ? "카드"
-          : dominantSource?.sourceType === "import"
-            ? "가져오기"
-            : null;
+  const dominantSourceLabel = dominantSource ? getSourceTypeLabel(dominantSource.sourceType) : null;
   const readyForInsights =
     hasTransactions &&
     recurringSuggestions.length === 0 &&
