@@ -194,6 +194,12 @@ export function TransactionsPage() {
     );
 
   const activeTransactions = transactions.filter((item) => item.status === "active");
+  const sourceTypeCounts = {
+    manual: transactions.filter((item) => item.sourceType === "manual").length,
+    account: transactions.filter((item) => item.sourceType === "account").length,
+    card: transactions.filter((item) => item.sourceType === "card").length,
+    import: transactions.filter((item) => item.sourceType === "import").length,
+  };
   const categorizableTransactions = activeTransactions.filter((item) => item.isExpenseImpact);
   const taggableTransactions = activeTransactions.filter((item) => item.isExpenseImpact);
   const activeExpenseCount = activeTransactions.filter((item) => item.isExpenseImpact).length;
@@ -633,11 +639,11 @@ export function TransactionsPage() {
                 현재 보이는 거래 {transactions.length}건 중 실지출 {activeExpenseCount}건, 미분류 {uncategorizedCount}건, 무태그 {untaggedCount}건입니다.
               </div>
             </div>
-            <div className="review-summary-panel mb-3">
-              <div className="review-summary-copy">
-                <strong>빠르게 정리할 거래 고르기</strong>
-                <p className="mb-0 text-secondary">남은 정리 작업이 많은 거래만 바로 좁혀 보고, 아래 일괄 정리 도구로 이어서 정리할 수 있습니다.</p>
-              </div>
+              <div className="review-summary-panel mb-3">
+                <div className="review-summary-copy">
+                  <strong>빠르게 정리할 거래 고르기</strong>
+                  <p className="mb-0 text-secondary">남은 정리 작업이 많은 거래만 바로 좁혀 보고, 아래 일괄 정리 도구로 이어서 정리할 수 있습니다.</p>
+                </div>
               <div className="d-flex flex-wrap gap-2">
                 <button className="btn btn-outline-primary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, nature: "uncategorized" }))}>
                   미분류만 보기
@@ -653,9 +659,33 @@ export function TransactionsPage() {
                 </button>
                 <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, nature: "all", tagId: "all", searchQuery: "" }))}>
                   정리 필터 초기화
-                </button>
+                  </button>
+                </div>
               </div>
-            </div>
+
+              <div className="review-summary-panel mb-3">
+                <div className="review-summary-copy">
+                  <strong>현재 보이는 거래 수단 구성</strong>
+                  <p className="mb-0 text-secondary">거래가 어떤 경로로 들어온 것인지 빠르게 보고, 필요한 수단만 바로 좁혀서 점검할 수 있습니다.</p>
+                </div>
+                <div className="d-flex flex-wrap gap-2">
+                  <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, sourceType: "all" }))}>
+                    전체 {transactions.length}건
+                  </button>
+                  <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, sourceType: "manual" }))}>
+                    수동입력 {sourceTypeCounts.manual}건
+                  </button>
+                  <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, sourceType: "account" }))}>
+                    계좌 {sourceTypeCounts.account}건
+                  </button>
+                  <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, sourceType: "card" }))}>
+                    카드 {sourceTypeCounts.card}건
+                  </button>
+                  <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, sourceType: "import" }))}>
+                    가져오기 {sourceTypeCounts.import}건
+                  </button>
+                </div>
+              </div>
 
               <div className="toolbar-row transaction-filter-row mb-3">
                 <select
