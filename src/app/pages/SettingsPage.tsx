@@ -1,3 +1,4 @@
+import { formatCurrency, formatPercent } from "../../shared/utils/format";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
@@ -6,6 +7,7 @@ export function SettingsPage() {
   const { exportState, importState, resetApp, setFinancialProfile, state } = useAppState();
   const workspaceId = state.activeWorkspaceId!;
   const profile = getWorkspaceScope(state, workspaceId).financialProfile;
+  const hasBaseline = Boolean(profile?.monthlyNetIncome);
 
   return (
     <div className="page-grid">
@@ -20,6 +22,40 @@ export function SettingsPage() {
           기준값이 있어야 지출률, 저축률, 과소비 경고가 제대로 동작합니다. 아직 정확한 금액이 아니어도 대략적인 값부터 넣고 나중에
           조정해도 괜찮습니다.
         </p>
+        <div className="resource-grid mb-4">
+          <article className="resource-card">
+            <h3>월 순수입</h3>
+            <p className="mb-0 text-secondary">
+              {hasBaseline ? formatCurrency(profile?.monthlyNetIncome ?? 0) : "아직 입력 전"}
+            </p>
+          </article>
+          <article className="resource-card">
+            <h3>목표 저축률</h3>
+            <p className="mb-0 text-secondary">
+              {hasBaseline ? formatPercent(profile?.targetSavingsRate ?? 0) : "입력 필요"}
+            </p>
+          </article>
+          <article className="resource-card">
+            <h3>지출 경고 기준</h3>
+            <p className="mb-0 text-secondary">
+              {hasBaseline ? formatPercent(profile?.warningSpendRate ?? 0) : "입력 필요"}
+            </p>
+          </article>
+          <article className="resource-card">
+            <h3>고정지출 경고 기준</h3>
+            <p className="mb-0 text-secondary">
+              {hasBaseline ? formatPercent(profile?.warningFixedCostRate ?? 0) : "입력 필요"}
+            </p>
+          </article>
+        </div>
+        <div className="guide-progress mb-4">
+          <span className="section-kicker">입력하면 바로 좋아지는 것</span>
+          <ul className="next-step-list mt-3">
+            <li>대시보드에서 지출률과 저축률이 단순 숫자가 아니라 경고 단계로 해석됩니다.</li>
+            <li>이번 달 소비가 많은지, 아직 괜찮은지 더 명확하게 안내할 수 있습니다.</li>
+            <li>재무 코치 메모가 실제 기준선을 바탕으로 조언하도록 바뀝니다.</li>
+          </ul>
+        </div>
         <form
           className="profile-form"
           onSubmit={(event) => {
@@ -105,7 +141,15 @@ export function SettingsPage() {
             description="지금은 기준선이 비어 있어서 저축률과 과소비 가이드가 약하게 동작합니다. 위 입력 폼부터 먼저 채워보세요."
           />
         ) : (
-          <p className="text-secondary">개발 중 반복 테스트가 필요할 때 전체 로컬 데이터를 초기화할 수 있습니다.</p>
+          <div className="guide-progress">
+            <span className="section-kicker">현재 기준선 상태</span>
+            <ul className="next-step-list mt-3">
+              <li>월 순수입 {formatCurrency(profile.monthlyNetIncome)} 기준으로 지출률과 저축률을 계산합니다.</li>
+              <li>지출 경고 기준 {formatPercent(profile.warningSpendRate)}를 넘기면 대시보드 경고가 강해집니다.</li>
+              <li>고정지출이 {formatPercent(profile.warningFixedCostRate)}를 넘기면 구조적 비용 부담 경고가 켜집니다.</li>
+            </ul>
+            <p className="text-secondary mb-0 mt-3">개발 중 반복 테스트가 필요할 때 아래에서 전체 로컬 데이터를 초기화할 수 있습니다.</p>
+          </div>
         )}
         <button className="btn btn-outline-danger mt-3" onClick={() => void resetApp()}>
           전체 데이터 초기화
