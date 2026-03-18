@@ -47,14 +47,24 @@ export function ImportsPage() {
       completed: uncategorizedCount === 0,
     },
     {
+      id: "tags",
+      title: "태그 흐름 정리",
+      description: untaggedCount
+        ? `${untaggedCount}건의 무태그 거래를 묶으면 같은 맥락의 소비를 더 빠르게 비교할 수 있습니다.`
+        : "무태그 거래가 없어 태그 기준 흐름도 바로 확인할 수 있습니다.",
+      to: untaggedCount ? "/transactions?cleanup=untagged" : "/transactions",
+      actionLabel: "태그 정리 열기",
+      completed: untaggedCount === 0,
+    },
+    {
       id: "dashboard",
       title: "진단 확인",
-      description: openReviews.length === 0 && uncategorizedCount === 0
+      description: openReviews.length === 0 && uncategorizedCount === 0 && untaggedCount === 0
         ? "이번 달 소비 진단과 저축률 가이드를 확인할 준비가 되었습니다."
-        : "검토와 분류를 먼저 끝내면 이번 달 진단을 더 정확히 볼 수 있습니다.",
+        : "검토와 분류, 태그 정리를 먼저 끝내면 이번 달 진단을 더 정확히 볼 수 있습니다.",
       to: "/",
       actionLabel: "대시보드 보기",
-      completed: openReviews.length === 0 && uncategorizedCount === 0,
+      completed: openReviews.length === 0 && uncategorizedCount === 0 && untaggedCount === 0,
     },
   ];
   const reviewTypeSummary = Object.entries(
