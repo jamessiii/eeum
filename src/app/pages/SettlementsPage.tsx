@@ -32,22 +32,42 @@ export function SettlementsPage() {
   const totalSharedExpense = [...totalsByPerson.values()].reduce((sum, amount) => sum + amount, 0);
   const splitTarget = totalSharedExpense / participantCount;
 
-  const rows = [...totalsByPerson.entries()]
+  const baseRows = [...totalsByPerson.entries()]
     .map(([personId, amount]) => ({
       personId,
       name: peopleMap.get(personId) ?? "공동 계정",
       amount,
       delta: amount - splitTarget,
-    }))
-    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
-
-  const receiver = rows.find((row) => row.delta > 0);
-  const sender = rows.find((row) => row.delta < 0);
-  const suggestedSettlementAmount = receiver && sender ? Math.min(receiver.delta, Math.abs(sender.delta)) : 0;
+    }));
 
   const settlementHistory = [...scope.settlements]
     .filter((item) => item.month === currentMonth)
     .sort((a, b) => b.completedAt.localeCompare(a.completedAt));
+  const completedSettlementAmount = settlementHistory.reduce((sum, item) => sum + item.amount, 0);
+
+  const remainingDeltaByPerson = new Map(baseRows.map((row) => [row.personId, row.delta]));
+  for (const item of settlementHistory) {
+    const fromKey = item.fromPersonId ?? "shared";
+    const toKey = item.toPersonId ?? "shared";
+    if (remainingDeltaByPerson.has(fromKey)) {
+      remainingDeltaByPerson.set(fromKey, (remainingDeltaByPerson.get(fromKey) ?? 0) + item.amount);
+    }
+    if (remainingDeltaByPerson.has(toKey)) {
+      remainingDeltaByPerson.set(toKey, (remainingDeltaByPerson.get(toKey) ?? 0) - item.amount);
+    }
+  }
+
+  const rows = baseRows
+    .map((row) => ({
+      ...row,
+      remainingDelta: remainingDeltaByPerson.get(row.personId) ?? row.delta,
+    }))
+    .sort((a, b) => Math.abs(b.remainingDelta) - Math.abs(a.remainingDelta));
+
+  const receiver = rows.find((row) => row.remainingDelta > 0);
+  const sender = rows.find((row) => row.remainingDelta < 0);
+  const suggestedSettlementAmount =
+    receiver && sender ? Math.min(receiver.remainingDelta, Math.abs(sender.remainingDelta)) : 0;
 
   return (
     <div className="page-stack">
@@ -93,19 +113,25 @@ export function SettlementsPage() {
                   <span className="stat-label">공동지출 건수</span>
                   <strong>{sharedTransactions.length}건</strong>
                 </article>
+                <article className="stat-card">
+                  <span className="stat-label">완료된 정산</span>
+                  <strong>{formatCurrency(completedSettlementAmount)}</strong>
+                </article>
               </div>
 
               <div className="settlement-summary-box mt-4">
-                <span className="section-kicker">추천 정산</span>
+                <span className="section-kicker">남은 정산 기준</span>
                 <h3 className="settlement-summary-title">
                   {receiver && sender
                     ? `${sender.name} → ${receiver.name} ${formatCurrency(suggestedSettlementAmount)}`
-                    : "현재는 정산 후보를 계산할 수 없습니다"}
+                    : "현재는 남은 정산 후보가 없습니다"}
                 </h3>
                 <p className="text-secondary mb-0">
                   {receiver && sender
-                    ? "가장 단순한 정산 흐름을 기준으로 보여줍니다. 실제로 정산이 끝났다면 아래 버튼으로 기록을 남겨둘 수 있습니다."
-                    : "공동지출 참여자와 거래가 더 쌓이면 정산 방향을 자동으로 제안합니다."}
+                    ? "이미 기록한 정산을 반영한 뒤, 아직 남아 있는 최소 정산 흐름을 기준으로 보여줍니다."
+                    : settlementHistory.length
+                      ? "현재 기록 기준으로는 이번 달 정산이 거의 끝난 상태입니다."
+                      : "공동지출 참여자와 거래가 더 쌓이면 정산 방향을 자동으로 제안합니다."}
                 </p>
                 {receiver && sender ? (
                   <div className="d-flex flex-wrap gap-2 mt-3">
@@ -135,10 +161,15 @@ export function SettlementsPage() {
                       <div>
                         <span className="review-type">정산 요약</span>
                         <h3>{row.name}</h3>
-                        <p className="mb-0 text-secondary">현재 부담액 {formatCurrency(row.amount)}</p>
+                        <p className="mb-1 text-secondary">현재 부담액 {formatCurrency(row.amount)}</p>
+                        <p className="mb-0 text-secondary">
+                          정산 전 편차 {formatCurrency(Math.abs(row.delta))} · 남은 편차 {formatCurrency(Math.abs(row.remainingDelta))}
+                        </p>
                       </div>
-                      <span className={`badge ${row.delta > 0 ? "text-bg-warning" : "text-bg-success"}`}>
-                        {row.delta > 0 ? `${formatCurrency(row.delta)} 더 부담` : `${formatCurrency(Math.abs(row.delta))} 덜 부담`}
+                      <span className={`badge ${row.remainingDelta > 0 ? "text-bg-warning" : "text-bg-success"}`}>
+                        {row.remainingDelta > 0
+                          ? `${formatCurrency(row.remainingDelta)} 더 부담`
+                          : `${formatCurrency(Math.abs(row.remainingDelta))} 덜 부담`}
                       </span>
                     </div>
                   </article>
