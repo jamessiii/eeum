@@ -47,7 +47,7 @@ const transactionDraftGuide = {
 } as const;
 
 export function TransactionsPage() {
-  const { addTransaction, assignTagBatch, state } = useAppState();
+  const { addTransaction, assignCategoryBatch, assignTagBatch, state } = useAppState();
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const categories = new Map(scope.categories.map((item) => [item.id, item.name]));
@@ -68,6 +68,7 @@ export function TransactionsPage() {
   const [draftType, setDraftType] = useState<"expense" | "income" | "transfer" | "adjustment">("expense");
   const [draftExpenseImpact, setDraftExpenseImpact] = useState(true);
   const [draftSharedExpense, setDraftSharedExpense] = useState(false);
+  const [bulkCategoryId, setBulkCategoryId] = useState("");
   const [bulkTagId, setBulkTagId] = useState("");
 
   const transactions = useMemo(
@@ -97,6 +98,7 @@ export function TransactionsPage() {
   );
 
   const activeTransactions = transactions.filter((item) => item.status === "active");
+  const categorizableTransactions = activeTransactions.filter((item) => item.isExpenseImpact);
   const taggableTransactions = activeTransactions.filter((item) => item.isExpenseImpact);
   const activeExpenseCount = activeTransactions.filter((item) => item.isExpenseImpact).length;
   const internalTransferCount = activeTransactions.filter((item) => item.isInternalTransfer).length;
@@ -397,6 +399,41 @@ export function TransactionsPage() {
                 <div className="small text-secondary d-flex align-items-center">필터된 실지출 거래 전체에 같은 태그를 붙입니다.</div>
                 <button className="btn btn-outline-primary" type="submit" disabled={!bulkTagId || !taggableTransactions.length}>
                   태그 일괄 적용
+                </button>
+              </form>
+            </div>
+
+            <div className="review-summary-panel mb-3">
+              <div className="review-summary-copy">
+                <strong>현재 보이는 거래 카테고리 정리</strong>
+                <p className="mb-0 text-secondary">
+                  현재 필터 결과에서 카테고리를 정리할 수 있는 실지출 거래는 {categorizableTransactions.length}건입니다. 같은 소비 묶음이 보이면 카테고리를 한 번에 맞춰 통계 정확도를 빠르게 높일 수 있습니다.
+                </p>
+              </div>
+              <form
+                className="classification-action-row"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (!bulkCategoryId || !categorizableTransactions.length) return;
+                  assignCategoryBatch(
+                    workspaceId,
+                    categorizableTransactions.map((item) => item.id),
+                    bulkCategoryId,
+                  );
+                  setBulkCategoryId("");
+                }}
+              >
+                <select className="form-select" value={bulkCategoryId} onChange={(event) => setBulkCategoryId(event.target.value)}>
+                  <option value="">일괄 적용할 카테고리 선택</option>
+                  {scope.categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="small text-secondary d-flex align-items-center">필터된 실지출 거래 전체에 같은 카테고리를 붙입니다.</div>
+                <button className="btn btn-outline-primary" type="submit" disabled={!bulkCategoryId || !categorizableTransactions.length}>
+                  카테고리 일괄 적용
                 </button>
               </form>
             </div>
