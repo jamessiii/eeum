@@ -26,6 +26,7 @@ export interface WorkspaceInsights {
   topCategories: Array<{ categoryName: string; amount: number }>;
   topTags: Array<{ tagName: string; amount: number; color: string; count: number }>;
   sourceBreakdown: Array<{ sourceType: Transaction["sourceType"]; count: number; expenseAmount: number }>;
+  dominantSource: { sourceType: Transaction["sourceType"]; count: number; expenseAmount: number; share: number } | null;
   headlineCards: Array<{ title: string; description: string }>;
   nextSteps: string[];
   coaching: string;
@@ -47,7 +48,7 @@ interface WorkspaceContext {
 
 type InsightMetrics = Omit<
   WorkspaceInsights,
-  "month" | "topCategories" | "topTags" | "sourceBreakdown" | "headlineCards" | "nextSteps" | "coaching" | "spendTone" | "savingsTone" | "fixedTone"
+  "month" | "topCategories" | "topTags" | "sourceBreakdown" | "dominantSource" | "headlineCards" | "nextSteps" | "coaching" | "spendTone" | "savingsTone" | "fixedTone"
 >;
 
 function summarizeCategories(transactions: Transaction[], categories: Category[]) {
@@ -341,6 +342,12 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
     topCategories: summarizeCategories(transactions, categories),
     topTags: summarizeTags(transactions, tags),
     sourceBreakdown: summarizeSourceTypes(transactions),
+    dominantSource: summarizeSourceTypes(transactions)[0]
+      ? {
+          ...summarizeSourceTypes(transactions)[0],
+          share: summarizeSourceTypes(transactions)[0].count / Math.max(1, metrics.transactionCount),
+        }
+      : null,
     headlineCards: buildHeadlineCards(summarizeCategories(transactions, categories), summarizeSourceTypes(transactions), metrics),
     nextSteps: buildNextSteps(context, metrics),
     coaching: buildCoaching(context, metrics),

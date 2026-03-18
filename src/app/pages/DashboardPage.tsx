@@ -94,6 +94,7 @@ export function DashboardPage() {
   ];
   const journeyProgress = journeySteps.filter((step) => step.completed).length / journeySteps.length;
   const isJourneyReady = journeySteps.every((step) => step.completed);
+  const dominantSource = insights.dominantSource;
   const attentionItems = [
     insights.reviewCount > 0
       ? {
@@ -147,6 +148,15 @@ export function DashboardPage() {
           description: `${insights.internalTransferCount}건의 내부이체가 있어 소비 통계에 과하게 잡히지 않는지 다시 보면 좋습니다.`,
           actionLabel: "내부이체 점검하기",
           to: "/transactions?nature=internal_transfer",
+        }
+      : null,
+    dominantSource && dominantSource.share >= 0.7
+      ? {
+          key: "source-dominance",
+          title: `${sourceTypeLabel[dominantSource.sourceType]} 흐름이 많이 몰려 있습니다`,
+          description: `${sourceTypeLabel[dominantSource.sourceType]} 경로가 이번 달 거래의 ${Math.round(dominantSource.share * 100)}%를 차지하고 있어 이 수단 흐름을 먼저 점검하면 전체 정확도를 빠르게 높일 수 있습니다.`,
+          actionLabel: `${sourceTypeLabel[dominantSource.sourceType]} 거래 보기`,
+          to: `/transactions?sourceType=${dominantSource.sourceType}`,
         }
       : null,
     !insights.isFinancialProfileReady
