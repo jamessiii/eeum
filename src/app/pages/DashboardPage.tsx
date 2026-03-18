@@ -45,7 +45,16 @@ export function DashboardPage() {
           title: "미분류 거래가 남아 있습니다",
           description: `${insights.uncategorizedCount}건이 아직 미분류 상태라 상위 지출 분석이 왜곡될 수 있습니다.`,
           actionLabel: "미분류 거래 정리",
-          to: "/categories",
+          to: "/transactions?cleanup=uncategorized",
+        }
+      : null,
+    insights.untaggedCount > 0
+      ? {
+          key: "untagged",
+          title: "무태그 거래를 묶어두면 해석이 더 좋아집니다",
+          description: `${insights.untaggedCount}건의 지출에 아직 태그가 없어 같은 맥락의 소비 흐름을 한 번에 보기 어렵습니다.`,
+          actionLabel: "무태그 거래 정리",
+          to: "/transactions?cleanup=untagged",
         }
       : null,
     !insights.isFinancialProfileReady
@@ -87,10 +96,14 @@ export function DashboardPage() {
             <span className="stat-label">검토 필요 항목</span>
             <strong>{insights.reviewCount}건</strong>
           </article>
+          <article className="stat-card" style={getMotionStyle(5)}>
+            <span className="stat-label">무태그 거래</span>
+            <strong>{insights.untaggedCount}건</strong>
+          </article>
         </div>
 
         <div className="insight-status-grid mt-4">
-          <article className={`insight-status-card ${toneClass(insights.spendTone)}`} style={getMotionStyle(5)}>
+          <article className={`insight-status-card ${toneClass(insights.spendTone)}`} style={getMotionStyle(6)}>
             <span className="stat-label">지출률</span>
             <strong>{formatPercent(insights.spendRate)}</strong>
             <p className="mb-0 small">
@@ -101,7 +114,7 @@ export function DashboardPage() {
                   : "안정적인 범위 안에 있습니다."}
             </p>
           </article>
-          <article className={`insight-status-card ${toneClass(insights.savingsTone)}`} style={getMotionStyle(6)}>
+          <article className={`insight-status-card ${toneClass(insights.savingsTone)}`} style={getMotionStyle(7)}>
             <span className="stat-label">저축률</span>
             <strong>{formatPercent(insights.savingsRate)}</strong>
             <p className="mb-0 small">
@@ -112,7 +125,7 @@ export function DashboardPage() {
                   : "목표 수준을 잘 지키고 있습니다."}
             </p>
           </article>
-          <article className={`insight-status-card ${toneClass(insights.fixedTone)}`} style={getMotionStyle(7)}>
+          <article className={`insight-status-card ${toneClass(insights.fixedTone)}`} style={getMotionStyle(8)}>
             <span className="stat-label">고정지출 비중</span>
             <strong>{formatPercent(insights.fixedExpenseRate)}</strong>
             <p className="mb-0 small">

@@ -17,6 +17,7 @@ export interface WorkspaceInsights {
   reviewCount: number;
   internalTransferCount: number;
   uncategorizedCount: number;
+  untaggedCount: number;
   recurringSuggestionCount: number;
   isFinancialProfileReady: boolean;
   topCategories: Array<{ categoryName: string; amount: number }>;
@@ -136,6 +137,12 @@ function buildNextSteps(context: WorkspaceContext, metrics: InsightMetrics): str
   if (context.reviews.some((review) => review.status === "open")) {
     nextSteps.push(`검토함에 ${context.reviews.filter((review) => review.status === "open").length}건이 남아 있습니다. 자동 제안을 먼저 정리해보세요.`);
   }
+  if (metrics.uncategorizedCount > 0) {
+    nextSteps.push(`미분류 거래 ${metrics.uncategorizedCount}건을 정리하면 상위 지출 분석이 더 정확해집니다.`);
+  }
+  if (metrics.untaggedCount > 0) {
+    nextSteps.push(`무태그 거래 ${metrics.untaggedCount}건을 묶어두면 태그 기준 소비 흐름을 더 선명하게 볼 수 있습니다.`);
+  }
   if (metrics.savingsRate < (context.financialProfile?.targetSavingsRate ?? 0.2)) {
     nextSteps.push("저축 목표에 못 미치고 있습니다. 상위 지출 카테고리와 공동지출부터 조정해보세요.");
   }
@@ -167,10 +174,10 @@ function buildHeadlineCards(
     });
   }
 
-  if (metrics.reviewCount > 0 || metrics.uncategorizedCount > 0) {
+  if (metrics.reviewCount > 0 || metrics.uncategorizedCount > 0 || metrics.untaggedCount > 0) {
     cards.push({
       title: "데이터 정리 상태",
-      description: `검토 ${metrics.reviewCount}건, 미분류 ${metrics.uncategorizedCount}건이 남아 있어 아직 진단이 더 정교해질 수 있습니다.`,
+      description: `검토 ${metrics.reviewCount}건, 미분류 ${metrics.uncategorizedCount}건, 무태그 ${metrics.untaggedCount}건이 남아 있어 아직 진단이 더 정교해질 수 있습니다.`,
     });
   }
 
@@ -196,6 +203,7 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
   const accountCount = state.accounts.filter((item) => item.workspaceId === workspaceId).length;
   const cardCount = state.cards.filter((item) => item.workspaceId === workspaceId).length;
   const uncategorizedCount = getUncategorizedTransactions(transactions).length;
+  const untaggedCount = transactions.filter((item) => item.status === "active" && item.isExpenseImpact && item.tagIds.length === 0).length;
   const recurringSuggestionCount = getRecurringMerchantSuggestions(transactions, categories).length;
 
   const income = financialProfile?.monthlyNetIncome ?? 0;
@@ -230,6 +238,7 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
     reviewCount,
     internalTransferCount,
     uncategorizedCount,
+    untaggedCount,
     recurringSuggestionCount,
     isFinancialProfileReady: income > 0,
   };
