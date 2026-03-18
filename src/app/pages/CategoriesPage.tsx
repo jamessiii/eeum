@@ -43,6 +43,28 @@ export function CategoriesPage() {
     });
   }
   const usedTagIds = new Set(scope.transactions.flatMap((transaction) => transaction.tagIds));
+  const nextCategoryAction = recurringSuggestions.length
+    ? {
+        title: "지금 가장 먼저 할 일",
+        description: `${recurringSuggestions.length}개의 반복 지출 제안을 먼저 적용하면 뒤쪽 분류 작업이 훨씬 빨라집니다.`,
+        to: "#recurring-suggestions",
+        actionLabel: `반복 제안 ${recurringSuggestions.length}개 보기`,
+      }
+    : uncategorizedTransactions.length
+      ? {
+          title: "지금 가장 먼저 할 일",
+          description: `${uncategorizedTransactions.length}건의 미분류 거래를 먼저 줄이면 대시보드 해석이 더 빨리 살아납니다.`,
+          to: "/transactions?cleanup=uncategorized",
+          actionLabel: `미분류 ${uncategorizedTransactions.length}건 정리`,
+        }
+      : untaggedExpenseCount
+        ? {
+            title: "지금 가장 먼저 할 일",
+            description: `${untaggedExpenseCount}건의 무태그 거래를 묶으면 태그 기준 소비 흐름까지 더 선명해집니다.`,
+            to: "/transactions?cleanup=untagged",
+            actionLabel: `무태그 ${untaggedExpenseCount}건 정리`,
+          }
+        : null;
 
   return (
     <div className="page-stack">
@@ -82,6 +104,25 @@ export function CategoriesPage() {
             실지출 거래 {expenseTransactions.length}건 중 {categorizedCount}건이 분류되었습니다. 아직 정리할 작업은 약 {remainingWorkCount}건입니다.
           </div>
         </div>
+        {nextCategoryAction ? (
+          <div className="review-summary-panel mt-4">
+            <div className="review-summary-copy">
+              <strong>{nextCategoryAction.title}</strong>
+              <p className="mb-0 text-secondary">{nextCategoryAction.description}</p>
+            </div>
+            <div className="d-flex flex-wrap gap-2">
+              {nextCategoryAction.to.startsWith("#") ? (
+                <a href={nextCategoryAction.to} className="btn btn-outline-primary btn-sm">
+                  {nextCategoryAction.actionLabel}
+                </a>
+              ) : (
+                <Link to={nextCategoryAction.to} className="btn btn-outline-primary btn-sm">
+                  {nextCategoryAction.actionLabel}
+                </Link>
+              )}
+            </div>
+          </div>
+        ) : null}
         <div className="review-summary-panel mt-4">
           <div className="review-summary-copy">
             <strong>{uncategorizedTransactions.length ? "분류 뒤에 이어서 할 일" : "카테고리 분류는 거의 끝났습니다"}</strong>
@@ -169,7 +210,7 @@ export function CategoriesPage() {
       </section>
 
       <div className="page-grid">
-        <section className="card shadow-sm" style={getMotionStyle(2)}>
+        <section className="card shadow-sm" style={getMotionStyle(2)} id="recurring-suggestions">
           <div className="section-head">
             <div>
               <span className="section-kicker">자동 제안</span>
