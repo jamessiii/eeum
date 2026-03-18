@@ -16,10 +16,73 @@ interface DashboardAttentionItem {
   to: string;
 }
 
+interface DashboardJourneyStep {
+  key: string;
+  title: string;
+  description: string;
+  to: string;
+  actionLabel: string;
+  completed: boolean;
+}
+
 export function DashboardPage() {
   const { state } = useAppState();
   const workspaceId = state.activeWorkspaceId!;
   const insights = getWorkspaceInsights(state, workspaceId);
+  const journeySteps: DashboardJourneyStep[] = [
+    {
+      key: "import",
+      title: "거래 준비",
+      description: insights.expense > 0 || insights.income > 0 ? "거래 데이터가 들어와 있어 다음 정리 단계로 넘어갈 수 있습니다." : "엑셀 업로드나 수동 입력으로 첫 거래를 넣어야 진단이 시작됩니다.",
+      to: "/imports",
+      actionLabel: insights.expense > 0 || insights.income > 0 ? "업로드 이력 보기" : "거래 가져오기",
+      completed: insights.expense > 0 || insights.income > 0,
+    },
+    {
+      key: "reviews",
+      title: "검토함 정리",
+      description: insights.reviewCount > 0 ? `${insights.reviewCount}건의 검토 후보가 남아 있습니다.` : "열린 검토 항목이 없어 다음 단계로 넘어갈 수 있습니다.",
+      to: "/reviews",
+      actionLabel: "검토함 열기",
+      completed: insights.reviewCount === 0,
+    },
+    {
+      key: "categories",
+      title: "카테고리 정리",
+      description: insights.uncategorizedCount > 0 ? `${insights.uncategorizedCount}건의 미분류 거래가 남아 있습니다.` : "미분류 거래가 없어 소비 통계를 더 믿고 볼 수 있습니다.",
+      to: insights.uncategorizedCount > 0 ? "/transactions?cleanup=uncategorized" : "/categories",
+      actionLabel: insights.uncategorizedCount > 0 ? "미분류 정리" : "분류 화면 보기",
+      completed: insights.uncategorizedCount === 0,
+    },
+    {
+      key: "tags",
+      title: "태그 흐름 정리",
+      description: insights.untaggedCount > 0 ? `${insights.untaggedCount}건의 무태그 거래를 묶으면 같은 맥락의 소비 흐름을 더 빠르게 비교할 수 있습니다.` : "무태그 거래가 없어 태그 기준 흐름도 바로 확인할 수 있습니다.",
+      to: insights.untaggedCount > 0 ? "/transactions?cleanup=untagged" : "/transactions",
+      actionLabel: insights.untaggedCount > 0 ? "무태그 정리" : "거래 화면 보기",
+      completed: insights.untaggedCount === 0,
+    },
+    {
+      key: "profile",
+      title: "재무 기준선 설정",
+      description: insights.isFinancialProfileReady ? "월 수입과 목표 저축률이 설정돼 있어 경고 단계와 가이드가 활성화됩니다." : "월 수입과 목표 저축률을 넣어야 진단 톤과 가이드가 더 정확해집니다.",
+      to: "/settings",
+      actionLabel: insights.isFinancialProfileReady ? "기준선 다시 보기" : "기준선 설정",
+      completed: insights.isFinancialProfileReady,
+    },
+    {
+      key: "diagnosis",
+      title: "진단 확인",
+      description:
+        insights.reviewCount === 0 && insights.uncategorizedCount === 0 && insights.untaggedCount === 0 && insights.isFinancialProfileReady
+          ? "핵심 정리가 끝나 이번 달 진단과 저축 가이드를 비교적 안정적으로 볼 수 있습니다."
+          : "검토와 분류, 태그, 기준선 설정을 마치면 진단 해석이 더 정교해집니다.",
+      to: "/",
+      actionLabel: "지금 대시보드 읽기",
+      completed: insights.reviewCount === 0 && insights.uncategorizedCount === 0 && insights.untaggedCount === 0 && insights.isFinancialProfileReady,
+    },
+  ];
+  const journeyProgress = journeySteps.filter((step) => step.completed).length / journeySteps.length;
   const attentionItems = [
     insights.reviewCount > 0
       ? {
@@ -156,6 +219,40 @@ export function DashboardPage() {
             <article key={card.title} className="resource-card" style={getMotionStyle(index + 2)}>
               <h3>{card.title}</h3>
               <p className="mb-0 text-secondary">{card.description}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="card shadow-sm" style={getMotionStyle(2)}>
+        <div className="section-head">
+          <div>
+            <span className="section-kicker">전체 여정</span>
+            <h2 className="section-title">지금 어디까지 정리됐는지</h2>
+          </div>
+          <span className="badge text-bg-dark">{Math.round(journeyProgress * 100)}%</span>
+        </div>
+        <div className="guide-progress">
+          <div className="guide-progress-bar" aria-hidden="true">
+            <div className="guide-progress-fill" style={{ width: `${journeyProgress * 100}%` }} />
+          </div>
+          <div className="small text-secondary mt-3">
+            전체 여정 {journeySteps.length}단계 중 {journeySteps.filter((step) => step.completed).length}단계가 준비됐습니다.
+          </div>
+        </div>
+        <div className="resource-grid mt-4">
+          {journeySteps.map((step, index) => (
+            <article key={step.key} className="resource-card" style={getMotionStyle(index + 3)}>
+              <div className="d-flex justify-content-between align-items-start gap-3">
+                <div>
+                  <h3>{step.title}</h3>
+                  <p className="mb-0 text-secondary">{step.description}</p>
+                </div>
+                <span className={`badge ${step.completed ? "text-bg-success" : "text-bg-light"}`}>{step.completed ? "완료" : "진행 중"}</span>
+              </div>
+              <Link to={step.to} className={`btn btn-sm mt-3 ${step.completed ? "btn-outline-secondary" : "btn-outline-primary"}`}>
+                {step.actionLabel}
+              </Link>
             </article>
           ))}
         </div>
