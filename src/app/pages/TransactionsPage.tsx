@@ -802,9 +802,9 @@ export function TransactionsPage() {
                                   {tag.name}
                                 </span>
                               ))}
-                          </div>
-                        ) : null}
-                        {transaction.status === "active" && transaction.isExpenseImpact && transaction.tagIds.length === 0 ? (
+                            </div>
+                          ) : null}
+                        {transaction.status === "active" && transaction.isExpenseImpact ? (
                           <div className="d-flex flex-wrap gap-2 mt-2">
                             <select
                               className="form-select form-select-sm"
@@ -835,15 +835,15 @@ export function TransactionsPage() {
                                 setPendingTagByTransaction((current) => ({ ...current, [transaction.id]: "" }));
                               }}
                             >
-                              태그 추가
-                            </button>
-                          </div>
-                        ) : null}
-                      </td>
-                      <td>{peopleMap.get(transaction.ownerPersonId ?? "") ?? "-"}</td>
-                      <td>
-                        {transaction.categoryId ? categories.get(transaction.categoryId) : "미분류"}
-                        {transaction.status === "active" && transaction.isExpenseImpact && !transaction.categoryId ? (
+                                {transaction.tagIds.length ? "태그 더하기" : "태그 추가"}
+                              </button>
+                            </div>
+                          ) : null}
+                        </td>
+                        <td>{peopleMap.get(transaction.ownerPersonId ?? "") ?? "-"}</td>
+                        <td>
+                          {transaction.categoryId ? categories.get(transaction.categoryId) : "미분류"}
+                        {transaction.status === "active" && transaction.isExpenseImpact ? (
                           <div className="d-flex flex-wrap gap-2 mt-2">
                             <select
                               className="form-select form-select-sm"
@@ -874,11 +874,11 @@ export function TransactionsPage() {
                                 setPendingCategoryByTransaction((current) => ({ ...current, [transaction.id]: "" }));
                               }}
                             >
-                              분류 적용
-                            </button>
-                          </div>
-                        ) : null}
-                      </td>
+                                {transaction.categoryId ? "분류 변경" : "분류 적용"}
+                              </button>
+                            </div>
+                          ) : null}
+                        </td>
                       <td className="text-end transaction-amount-cell">
                         <strong>{formatCurrency(transaction.amount)}</strong>
                         {!transaction.isExpenseImpact ? <div className="small text-secondary">통계 제외 흐름</div> : null}
