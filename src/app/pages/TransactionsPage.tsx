@@ -142,8 +142,11 @@ export function TransactionsPage() {
   const selectedBulkCategory = scope.categories.find((category) => category.id === bulkCategoryId) ?? null;
   const activeCleanupMode = cleanupModeCopy[filters.nature as keyof typeof cleanupModeCopy] ?? cleanupModeCopy.all;
   const isFocusedCleanupMode = filters.nature === "uncategorized" || filters.nature === "untagged";
+  const isFlowAuditMode = filters.nature === "shared" || filters.nature === "internal_transfer";
   const currentCleanupRemaining =
     filters.nature === "uncategorized" ? uncategorizedCount : filters.nature === "untagged" ? untaggedCount : null;
+  const currentFlowAuditCount =
+    filters.nature === "shared" ? sharedExpenseCount : filters.nature === "internal_transfer" ? internalTransferCount : null;
 
   useEffect(() => {
     const cleanup = searchParams.get("cleanup");
@@ -412,6 +415,74 @@ export function TransactionsPage() {
               />
             ) : null}
 
+            {isFlowAuditMode ? (
+              <div className="review-summary-panel mb-3">
+                <div className="review-summary-copy">
+                  <strong>{filters.nature === "shared" ? "공동지출 점검 모드입니다" : "내부이체 점검 모드입니다"}</strong>
+                  <p className="mb-0 text-secondary">
+                    {filters.nature === "shared"
+                      ? "정산과 연결되는 공동지출만 모아 보고 있습니다. 실제로 함께 부담할 항목이 맞는지, 정산 화면으로 이어질 흐름인지 빠르게 확인해보세요."
+                      : "소비 통계에 바로 잡히지 않아야 하는 내부이체만 모아 보고 있습니다. 내 계좌 간 이동이나 생활비 이동이 지출로 잘못 보이지 않는지 먼저 점검하면 좋습니다."}
+                  </p>
+                </div>
+                <div className="d-flex flex-wrap gap-2">
+                  {filters.nature === "shared" && internalTransferCount ? (
+                    <button className="btn btn-outline-primary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, nature: "internal_transfer" }))}>
+                      내부이체 {internalTransferCount}건 보기
+                    </button>
+                  ) : null}
+                  {filters.nature === "internal_transfer" && sharedExpenseCount ? (
+                    <button className="btn btn-outline-primary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, nature: "shared" }))}>
+                      공동지출 {sharedExpenseCount}건 보기
+                    </button>
+                  ) : null}
+                  <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, nature: "all", tagId: "all", searchQuery: "" }))}>
+                    전체 거래로 돌아가기
+                  </button>
+                  {filters.nature === "shared" ? (
+                    <Link className="btn btn-outline-dark btn-sm" to="/settlements">
+                      정산 화면 보기
+                    </Link>
+                  ) : (
+                    <Link className="btn btn-outline-dark btn-sm" to="/">
+                      대시보드 보기
+                    </Link>
+                  )}
+                </div>
+              </div>
+            ) : null}
+
+            {isFlowAuditMode && currentFlowAuditCount === 0 ? (
+              <CompletionBanner
+                className="mb-3"
+                title={filters.nature === "shared" ? "공동지출 점검이 끝났습니다" : "내부이체 점검이 끝났습니다"}
+                description={
+                  filters.nature === "shared"
+                    ? "현재 보이는 조건에서는 정산 후보가 될 공동지출이 남아 있지 않습니다. 정산 화면이나 전체 거래 흐름으로 넘어가도 좋습니다."
+                    : "현재 보이는 조건에서는 따로 점검할 내부이체가 남아 있지 않습니다. 이제 소비 분석이나 공동지출 정산 흐름으로 넘어가도 좋습니다."
+                }
+                actions={
+                  <>
+                    {filters.nature === "shared" ? (
+                      <Link className="btn btn-outline-primary btn-sm" to="/settlements">
+                        정산 화면 보기
+                      </Link>
+                    ) : sharedExpenseCount ? (
+                      <button className="btn btn-outline-primary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, nature: "shared" }))}>
+                        공동지출 {sharedExpenseCount}건 보기
+                      </button>
+                    ) : null}
+                    <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, nature: "all", tagId: "all", searchQuery: "" }))}>
+                      전체 거래로 돌아가기
+                    </button>
+                    <Link className="btn btn-outline-dark btn-sm" to="/">
+                      대시보드 보기
+                    </Link>
+                  </>
+                }
+              />
+            ) : null}
+
             <div className="review-summary-panel mb-3">
               <div className="review-summary-copy">
                 <strong>{activeCleanupMode.title}</strong>
@@ -432,6 +503,12 @@ export function TransactionsPage() {
                 </button>
                 <button className="btn btn-outline-primary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, nature: "untagged" }))}>
                   무태그만 보기
+                </button>
+                <button className="btn btn-outline-primary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, nature: "shared" }))}>
+                  공동지출만 보기
+                </button>
+                <button className="btn btn-outline-primary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, nature: "internal_transfer" }))}>
+                  내부이체만 보기
                 </button>
                 <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, nature: "all", tagId: "all", searchQuery: "" }))}>
                   정리 필터 초기화
