@@ -670,6 +670,37 @@ a {
   gap: 0.75rem;
 }
 
+.flow-journey-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.flow-journey-card {
+  display: grid;
+  gap: 0.5rem;
+  padding: 1rem 1.05rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(23, 32, 51, 0.08);
+  background:
+    radial-gradient(circle at top right, rgba(13, 110, 253, 0.1), transparent 30%),
+    rgba(255, 255, 255, 0.88);
+}
+
+.flow-journey-card.completed {
+  border-color: rgba(25, 135, 84, 0.2);
+  background:
+    radial-gradient(circle at top right, rgba(25, 135, 84, 0.12), transparent 30%),
+    rgba(255, 255, 255, 0.9);
+}
+
+.flow-journey-step {
+  color: #7b8798;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
 .transaction-mode-grid {
   display: grid;
   gap: 0.75rem;
@@ -749,6 +780,7 @@ a {
   .stats-grid,
   .settings-grid,
   .resource-grid,
+  .flow-journey-grid,
   .transaction-mode-grid,
   .classification-flow-grid,
   .guide-step-list,
@@ -769,6 +801,7 @@ a {
   .stats-grid,
   .settings-grid,
   .resource-grid,
+  .flow-journey-grid,
   .transaction-mode-grid,
   .classification-flow-grid,
   .classification-action-row,

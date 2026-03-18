@@ -22,6 +22,38 @@ export function ImportsPage() {
     (item) => item.status === "active" && item.isExpenseImpact && !item.categoryId,
   ).length;
   const latestImport = imports[0] ?? null;
+  const postImportFlow = [
+    {
+      id: "reviews",
+      title: "검토함 정리",
+      description: openReviews.length
+        ? `${openReviews.length}건의 자동 검토 후보가 남아 있습니다.`
+        : "열려 있는 검토 항목이 없어 다음 단계로 넘어갈 수 있습니다.",
+      to: "/reviews",
+      actionLabel: "검토함 열기",
+      completed: openReviews.length === 0,
+    },
+    {
+      id: "categories",
+      title: "분류 마무리",
+      description: uncategorizedCount
+        ? `${uncategorizedCount}건의 미분류 거래를 정리하면 통계가 더 정확해집니다.`
+        : "미분류 거래가 없어 대시보드 해석을 더 믿고 볼 수 있습니다.",
+      to: "/categories",
+      actionLabel: "분류 화면 열기",
+      completed: uncategorizedCount === 0,
+    },
+    {
+      id: "dashboard",
+      title: "진단 확인",
+      description: openReviews.length === 0 && uncategorizedCount === 0
+        ? "이번 달 소비 진단과 저축률 가이드를 확인할 준비가 되었습니다."
+        : "검토와 분류를 먼저 끝내면 이번 달 진단을 더 정확히 볼 수 있습니다.",
+      to: "/",
+      actionLabel: "대시보드 보기",
+      completed: openReviews.length === 0 && uncategorizedCount === 0,
+    },
+  ];
   const reviewTypeSummary = Object.entries(
     openReviews.reduce<Record<string, number>>((accumulator, item) => {
       accumulator[item.reviewType] = (accumulator[item.reviewType] ?? 0) + 1;
@@ -210,6 +242,18 @@ export function ImportsPage() {
             <span className="section-kicker">업로드 결과 보기</span>
             <h2 className="section-title">방금 가져온 데이터에서 볼 것</h2>
           </div>
+        </div>
+        <div className="flow-journey-grid mb-4">
+          {postImportFlow.map((step, index) => (
+            <article key={step.id} className={`flow-journey-card${step.completed ? " completed" : ""}`} style={getMotionStyle(index + 1)}>
+              <span className="flow-journey-step">0{index + 1}</span>
+              <h3>{step.title}</h3>
+              <p className="mb-0 text-secondary">{step.description}</p>
+              <Link to={step.to} className={`btn btn-sm mt-3 ${step.completed ? "btn-outline-success" : "btn-outline-primary"}`}>
+                {step.actionLabel}
+              </Link>
+            </article>
+          ))}
         </div>
         <div className="classification-flow-grid">
           <article className="stat-card">
