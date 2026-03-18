@@ -4,16 +4,30 @@ import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
 
+const reviewTypeLabel: Record<string, string> = {
+  duplicate_candidate: "중복 후보",
+  refund_candidate: "환불 후보",
+  uncategorized_transaction: "미분류 거래",
+  internal_transfer_candidate: "내부이체 후보",
+  shared_expense_candidate: "공동지출 후보",
+};
+
 export function ImportsPage() {
   const { importWorkbook, state } = useAppState();
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const imports = [...scope.imports].sort((a, b) => b.importedAt.localeCompare(a.importedAt));
-  const openReviews = scope.reviews.filter((item) => item.status === "open").length;
+  const openReviews = scope.reviews.filter((item) => item.status === "open");
   const uncategorizedCount = scope.transactions.filter(
     (item) => item.status === "active" && item.isExpenseImpact && !item.categoryId,
   ).length;
   const latestImport = imports[0] ?? null;
+  const reviewTypeSummary = Object.entries(
+    openReviews.reduce<Record<string, number>>((accumulator, item) => {
+      accumulator[item.reviewType] = (accumulator[item.reviewType] ?? 0) + 1;
+      return accumulator;
+    }, {}),
+  ).sort((a, b) => b[1] - a[1]);
 
   return (
     <div className="page-stack">
@@ -57,7 +71,7 @@ export function ImportsPage() {
         <div className="classification-flow-grid">
           <article className="stat-card">
             <span className="stat-label">열린 검토</span>
-            <strong>{openReviews}건</strong>
+            <strong>{openReviews.length}건</strong>
             <div className="small text-secondary mt-2">중복, 환불, 내부이체 후보부터 정리하면 통계가 훨씬 정확해집니다.</div>
             <Link to="/reviews" className="btn btn-outline-secondary btn-sm mt-3">
               검토함 열기
@@ -83,6 +97,31 @@ export function ImportsPage() {
       </section>
 
       <section className="card shadow-sm" style={getMotionStyle(2)}>
+        <div className="section-head">
+          <div>
+            <span className="section-kicker">검토 유형 요약</span>
+            <h2 className="section-title">무슨 종류의 확인이 필요한지</h2>
+          </div>
+        </div>
+        {!reviewTypeSummary.length ? (
+          <EmptyStateCallout
+            kicker="검토 없음"
+            title="지금 열려 있는 검토 항목이 없습니다"
+            description="업로드 후 자동 검토 후보가 없거나 이미 모두 정리된 상태입니다."
+          />
+        ) : (
+          <div className="resource-grid">
+            {reviewTypeSummary.map(([reviewType, count], index) => (
+              <article key={reviewType} className="resource-card" style={getMotionStyle(index + 3)}>
+                <h3>{reviewTypeLabel[reviewType] ?? reviewType}</h3>
+                <p className="mb-0 text-secondary">{count}건</p>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="card shadow-sm" style={getMotionStyle(3)}>
         <div className="section-head">
           <div>
             <span className="section-kicker">최근 업로드</span>
@@ -111,7 +150,7 @@ export function ImportsPage() {
         )}
       </section>
 
-      <section className="card shadow-sm" style={getMotionStyle(3)}>
+      <section className="card shadow-sm" style={getMotionStyle(4)}>
         <div className="section-head">
           <div>
             <span className="section-kicker">업로드 이력</span>
@@ -128,7 +167,7 @@ export function ImportsPage() {
         ) : (
           <div className="review-list">
             {imports.map((item, index) => (
-              <article key={item.id} className="review-card" style={getMotionStyle(index + 4)}>
+              <article key={item.id} className="review-card" style={getMotionStyle(index + 5)}>
                 <div className="d-flex justify-content-between align-items-start gap-3">
                   <div>
                     <span className="review-type">{item.parserId}</span>

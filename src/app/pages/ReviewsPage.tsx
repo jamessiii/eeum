@@ -36,8 +36,8 @@ export function ReviewsPage() {
         <span className="badge text-bg-warning">{reviews.length}건</span>
       </div>
       <p className="text-secondary">
-        팝업으로 즉답을 강요하지 않고, 확인이 필요한 항목을 여기에 모아둡니다. 거래 흐름을 보고 한 번에 정리할 수 있게
-        만드는 화면입니다.
+        팝업으로 즉답을 강요하지 않고, 확인이 필요한 항목을 여기에 모아둡니다. 거래 흐름을 보고 한 번에 정리할 수 있게 만드는
+        화면입니다.
       </p>
 
       {!reviews.length ? (
