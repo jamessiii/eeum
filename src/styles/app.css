@@ -420,6 +420,23 @@ a {
   background: linear-gradient(135deg, rgba(13, 110, 253, 0.08), rgba(25, 135, 84, 0.08));
 }
 
+.settlement-summary-box {
+  display: grid;
+  gap: 0.5rem;
+  padding: 1rem 1.1rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(13, 110, 253, 0.12);
+  background:
+    radial-gradient(circle at top right, rgba(13, 110, 253, 0.12), transparent 34%),
+    rgba(248, 250, 252, 0.94);
+}
+
+.settlement-summary-title {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+
 .coach-box h3,
 .quick-add-card h3,
 .review-card h3 {
