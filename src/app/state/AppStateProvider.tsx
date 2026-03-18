@@ -8,8 +8,6 @@ import {
   createWorkspaceBase,
   mergeWorkspaceBundle,
 } from "../../domain/app/defaults";
-import { parseHouseholdWorkbook } from "../../domain/imports/householdWorkbook";
-import { createHouseholdV2DemoBundle } from "../../dev/seeds/householdV2Seed";
 import type { AppState, FinancialProfile, ReviewItem, Transaction, WorkspaceBundle } from "../../shared/types/models";
 import { createId } from "../../shared/utils/id";
 import { useToast } from "../toast/ToastProvider";
@@ -264,7 +262,7 @@ interface AppStateContextValue {
   state: AppState;
   isReady: boolean;
   createEmptyWorkspace: (name?: string) => void;
-  createDemoWorkspace: () => void;
+  createDemoWorkspace: () => Promise<void>;
   importWorkbook: (file: File) => Promise<void>;
   setActiveWorkspace: (workspaceId: string) => void;
   resetApp: () => Promise<void>;
@@ -326,11 +324,13 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         });
         showToast(`"${name}" 워크스페이스를 만들었습니다.`, "success");
       },
-      createDemoWorkspace() {
+      async createDemoWorkspace() {
+        const { createHouseholdV2DemoBundle } = await import("../../dev/seeds/householdV2Seed");
         dispatch({ type: "mergeBundle", payload: createHouseholdV2DemoBundle() });
         showToast("테스트 워크스페이스를 불러왔습니다.", "success");
       },
       async importWorkbook(file) {
+        const { parseHouseholdWorkbook } = await import("../../domain/imports/householdWorkbook");
         const bundle = await parseHouseholdWorkbook(file);
         dispatch({ type: "mergeBundle", payload: bundle });
         showToast(`${file.name} 업로드를 완료했습니다.`, "success");
