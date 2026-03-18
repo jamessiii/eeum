@@ -65,7 +65,40 @@ type Action =
   | { type: "assignCategoryBatch"; payload: { workspaceId: string; transactionIds: string[]; categoryId: string } }
   | { type: "assignTag"; payload: { workspaceId: string; transactionId: string; tagId: string } }
   | { type: "assignTagBatch"; payload: { workspaceId: string; transactionIds: string[]; tagId: string } }
-  | { type: "assignTagByMerchant"; payload: { workspaceId: string; merchantName: string; tagId: string } };
+  | { type: "assignTagByMerchant"; payload: { workspaceId: string; merchantName: string; tagId: string } }
+  | {
+      type: "updateTransactionFlags";
+      payload: {
+        workspaceId: string;
+        transactionId: string;
+        patch: {
+          isSharedExpense?: boolean;
+          isExpenseImpact?: boolean;
+        };
+      };
+    };
+
+function applyTransactionFlagPatch(
+  transaction: Transaction,
+  patch: {
+    isSharedExpense?: boolean;
+    isExpenseImpact?: boolean;
+  },
+) {
+  const nextExpenseImpact = patch.isExpenseImpact ?? transaction.isExpenseImpact;
+  const requestedSharedExpense = patch.isSharedExpense ?? transaction.isSharedExpense;
+  const nextSharedExpense =
+    transaction.transactionType === "expense" && transaction.status === "active" && nextExpenseImpact
+      ? requestedSharedExpense
+      : false;
+
+  return {
+    ...transaction,
+    isExpenseImpact: nextExpenseImpact,
+    isSharedExpense: nextSharedExpense,
+    isInternalTransfer: transaction.transactionType === "transfer" && !nextExpenseImpact,
+  };
+}
 
 function applyReviewSuggestionToTransactions(transactions: Transaction[], review: ReviewItem) {
   const relatedTransactionId = review.relatedTransactionIds[0] ?? null;
@@ -342,6 +375,15 @@ function reducer(state: AppState, action: Action): AppState {
             : transaction,
         ),
       };
+    case "updateTransactionFlags":
+      return {
+        ...state,
+        transactions: state.transactions.map((transaction) =>
+          transaction.workspaceId === action.payload.workspaceId && transaction.id === action.payload.transactionId
+            ? applyTransactionFlagPatch(transaction, action.payload.patch)
+            : transaction,
+        ),
+      };
     default:
       return state;
   }
@@ -375,6 +417,14 @@ interface AppStateContextValue {
   assignTag: (workspaceId: string, transactionId: string, tagId: string) => void;
   assignTagBatch: (workspaceId: string, transactionIds: string[], tagId: string) => void;
   assignTagByMerchant: (workspaceId: string, merchantName: string, tagId: string) => void;
+  updateTransactionFlags: (
+    workspaceId: string,
+    transactionId: string,
+    patch: {
+      isSharedExpense?: boolean;
+      isExpenseImpact?: boolean;
+    },
+  ) => void;
 }
 
 const AppStateContext = createContext<AppStateContextValue | null>(null);
@@ -552,6 +602,22 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         dispatch({ type: "assignTagByMerchant", payload: { workspaceId, merchantName, tagId } });
         const tag = state.tags.find((item) => item.id === tagId);
         showToast(`${merchantName} 반복 거래에 ${tag?.name ?? "태그"}를 반영했습니다.`, "success");
+      },
+      updateTransactionFlags(workspaceId, transactionId, patch) {
+        dispatch({ type: "updateTransactionFlags", payload: { workspaceId, transactionId, patch } });
+        if (typeof patch.isSharedExpense === "boolean") {
+          showToast(
+            patch.isSharedExpense ? "거래를 공동지출로 표시했습니다." : "거래의 공동지출 표시를 해제했습니다.",
+            "success",
+          );
+          return;
+        }
+        if (typeof patch.isExpenseImpact === "boolean") {
+          showToast(
+            patch.isExpenseImpact ? "거래를 다시 통계에 반영합니다." : "거래를 통계 제외 흐름으로 바꿨습니다.",
+            "success",
+          );
+        }
       },
     }),
     [isReady, showToast, state],

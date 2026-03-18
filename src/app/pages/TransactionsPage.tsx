@@ -76,7 +76,7 @@ const transactionDraftGuide = {
 } as const;
 
 export function TransactionsPage() {
-  const { addTransaction, assignCategoryBatch, assignTagBatch, state } = useAppState();
+  const { addTransaction, assignCategoryBatch, assignTagBatch, state, updateTransactionFlags } = useAppState();
   const [searchParams, setSearchParams] = useSearchParams();
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
@@ -756,6 +756,34 @@ export function TransactionsPage() {
                           {transaction.isInternalTransfer ? <span className="badge text-bg-info-subtle">내부이체</span> : null}
                           {transaction.isSharedExpense ? <span className="badge text-bg-warning-subtle">공동지출</span> : null}
                         </div>
+                        {transaction.status === "active" ? (
+                          <div className="d-flex flex-wrap gap-2 mt-2">
+                            {transaction.transactionType === "expense" ? (
+                              <button
+                                className="btn btn-outline-secondary btn-sm"
+                                type="button"
+                                onClick={() =>
+                                  updateTransactionFlags(workspaceId, transaction.id, {
+                                    isSharedExpense: !transaction.isSharedExpense,
+                                  })
+                                }
+                              >
+                                {transaction.isSharedExpense ? "공동 해제" : "공동지출"}
+                              </button>
+                            ) : null}
+                            <button
+                              className="btn btn-outline-secondary btn-sm"
+                              type="button"
+                              onClick={() =>
+                                updateTransactionFlags(workspaceId, transaction.id, {
+                                  isExpenseImpact: !transaction.isExpenseImpact,
+                                })
+                              }
+                            >
+                              {transaction.isExpenseImpact ? "통계 제외" : "통계 반영"}
+                            </button>
+                          </div>
+                        ) : null}
                       </td>
                       <td>
                         <strong>{transaction.merchantName}</strong>
