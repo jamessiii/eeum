@@ -486,6 +486,10 @@ a {
   grid-template-columns: repeat(2, minmax(0, 14rem));
 }
 
+.transaction-filter-row {
+  grid-template-columns: repeat(3, minmax(0, 14rem));
+}
+
 .toolbar-select {
   max-width: 14rem;
 }
@@ -610,7 +614,8 @@ a {
   .settings-grid,
   .resource-grid,
   .classification-flow-grid,
-  .guide-step-list {
+  .guide-step-list,
+  .transaction-filter-row {
     grid-template-columns: 1fr 1fr;
   }
 }
@@ -634,6 +639,10 @@ a {
   .profile-form,
   .simple-inline-form,
   .toolbar-row {
+    grid-template-columns: 1fr;
+  }
+
+  .transaction-filter-row {
     grid-template-columns: 1fr;
   }
 
