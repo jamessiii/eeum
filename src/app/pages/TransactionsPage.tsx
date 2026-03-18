@@ -105,8 +105,18 @@ const transactionDraftGuide = {
 } as const;
 
 export function TransactionsPage() {
-  const { addTransaction, assignCategory, assignCategoryBatch, assignTag, assignTagBatch, clearCategory, removeTag, state, updateTransactionFlags } =
-    useAppState();
+  const {
+    addTransaction,
+    assignCategory,
+    assignCategoryBatch,
+    assignTag,
+    assignTagBatch,
+    clearCategory,
+    removeTag,
+    state,
+    updateTransactionDetails,
+    updateTransactionFlags,
+  } = useAppState();
   const [searchParams, setSearchParams] = useSearchParams();
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
@@ -128,6 +138,12 @@ export function TransactionsPage() {
   const [draftType, setDraftType] = useState<"expense" | "income" | "transfer" | "adjustment">("expense");
   const [draftExpenseImpact, setDraftExpenseImpact] = useState(true);
   const [draftSharedExpense, setDraftSharedExpense] = useState(false);
+  const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState({
+    merchantName: "",
+    description: "",
+    amount: "",
+  });
   const [pendingCategoryByTransaction, setPendingCategoryByTransaction] = useState<Record<string, string>>({});
   const [pendingTagByTransaction, setPendingTagByTransaction] = useState<Record<string, string>>({});
   const [bulkCategoryId, setBulkCategoryId] = useState("");
@@ -204,6 +220,24 @@ export function TransactionsPage() {
       setSearchParams({}, { replace: true });
     }
   }, [people, searchParams, setSearchParams]);
+
+  const beginTransactionEdit = (transaction: (typeof transactions)[number]) => {
+    setEditingTransactionId(transaction.id);
+    setEditDraft({
+      merchantName: transaction.merchantName,
+      description: transaction.description,
+      amount: String(transaction.amount),
+    });
+  };
+
+  const cancelTransactionEdit = () => {
+    setEditingTransactionId(null);
+    setEditDraft({
+      merchantName: "",
+      description: "",
+      amount: "",
+    });
+  };
 
   return (
     <div className="page-stack">
@@ -832,10 +866,80 @@ export function TransactionsPage() {
                         ) : null}
                       </td>
                         <td>
-                          <strong>{transaction.merchantName}</strong>
-                          <div className="small text-secondary">
-                            {transaction.description || (transaction.isInternalTransfer ? "내부이체로 처리된 거래" : "설명 없음")}
+                          <div className="d-flex flex-wrap justify-content-between align-items-start gap-2">
+                            <div>
+                              <strong>{transaction.merchantName}</strong>
+                              <div className="small text-secondary">
+                                {transaction.description || (transaction.isInternalTransfer ? "내부이체로 처리된 거래" : "설명 없음")}
+                              </div>
+                            </div>
+                            {transaction.status === "active" ? (
+                              <button
+                                className="btn btn-outline-secondary btn-sm"
+                                type="button"
+                                onClick={() => {
+                                  if (editingTransactionId === transaction.id) {
+                                    cancelTransactionEdit();
+                                    return;
+                                  }
+                                  beginTransactionEdit(transaction);
+                                }}
+                              >
+                                {editingTransactionId === transaction.id ? "수정 닫기" : "기본 정보 수정"}
+                              </button>
+                            ) : null}
                           </div>
+                          {editingTransactionId === transaction.id ? (
+                            <div className="review-summary-panel mt-3">
+                              <div className="review-summary-copy">
+                                <strong>이 거래 기본 정보 수정</strong>
+                                <p className="mb-0 text-secondary">가맹점, 설명, 금액을 바로 수정할 수 있습니다.</p>
+                              </div>
+                              <div className="d-flex flex-column gap-2 w-100">
+                                <input
+                                  className="form-control form-control-sm"
+                                  value={editDraft.merchantName}
+                                  onChange={(event) => setEditDraft((current) => ({ ...current, merchantName: event.target.value }))}
+                                  placeholder="가맹점 또는 거래명"
+                                />
+                                <input
+                                  className="form-control form-control-sm"
+                                  value={editDraft.description}
+                                  onChange={(event) => setEditDraft((current) => ({ ...current, description: event.target.value }))}
+                                  placeholder="설명"
+                                />
+                                <input
+                                  className="form-control form-control-sm"
+                                  type="number"
+                                  min="0"
+                                  step="1"
+                                  value={editDraft.amount}
+                                  onChange={(event) => setEditDraft((current) => ({ ...current, amount: event.target.value }))}
+                                  placeholder="금액"
+                                />
+                                <div className="d-flex flex-wrap gap-2">
+                                  <button
+                                    className="btn btn-primary btn-sm"
+                                    type="button"
+                                    disabled={!editDraft.merchantName.trim() || !editDraft.amount || Number(editDraft.amount) <= 0}
+                                    onClick={() => {
+                                      updateTransactionDetails(workspaceId, transaction.id, {
+                                        merchantName: editDraft.merchantName.trim(),
+                                        description: editDraft.description.trim(),
+                                        amount: Number(editDraft.amount),
+                                      });
+                                      cancelTransactionEdit();
+                                    }}
+                                  >
+                                    기본 정보 저장
+                                  </button>
+                                  <button className="btn btn-outline-secondary btn-sm" type="button" onClick={cancelTransactionEdit}>
+                                    취소
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ) : null}
                           {transaction.tagIds.length ? (
                             <div className="transaction-tag-row">
                               {transaction.tagIds

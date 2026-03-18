@@ -60,6 +60,18 @@ type Action =
   | { type: "setFinancialProfile"; payload: { workspaceId: string; values: FinancialProfileInput } }
   | { type: "addSettlement"; payload: SettlementInput }
   | { type: "addTransaction"; payload: NewTransactionInput }
+  | {
+      type: "updateTransactionDetails";
+      payload: {
+        workspaceId: string;
+        transactionId: string;
+        patch: {
+          merchantName?: string;
+          description?: string;
+          amount?: number;
+        };
+      };
+    }
   | { type: "assignCategory"; payload: { workspaceId: string; transactionId: string; categoryId: string } }
   | { type: "clearCategory"; payload: { workspaceId: string; transactionId: string } }
   | { type: "assignCategoryByMerchant"; payload: { workspaceId: string; merchantName: string; categoryId: string } }
@@ -305,7 +317,21 @@ function reducer(state: AppState, action: Action): AppState {
             refundOfTransactionId: null,
             status: "active",
           },
-        ],
+          ],
+        };
+    case "updateTransactionDetails":
+      return {
+        ...state,
+        transactions: state.transactions.map((transaction) =>
+          transaction.workspaceId === action.payload.workspaceId && transaction.id === action.payload.transactionId
+            ? {
+                ...transaction,
+                merchantName: action.payload.patch.merchantName ?? transaction.merchantName,
+                description: action.payload.patch.description ?? transaction.description,
+                amount: typeof action.payload.patch.amount === "number" ? Math.abs(action.payload.patch.amount) : transaction.amount,
+              }
+            : transaction,
+        ),
       };
     case "assignCategory":
       return {
@@ -441,6 +467,15 @@ interface AppStateContextValue {
   setFinancialProfile: (workspaceId: string, values: FinancialProfileInput) => void;
   addSettlement: (input: SettlementInput) => void;
   addTransaction: (input: NewTransactionInput) => void;
+  updateTransactionDetails: (
+    workspaceId: string,
+    transactionId: string,
+    patch: {
+      merchantName?: string;
+      description?: string;
+      amount?: number;
+    },
+  ) => void;
   assignCategory: (workspaceId: string, transactionId: string, categoryId: string) => void;
   clearCategory: (workspaceId: string, transactionId: string) => void;
   assignCategoryByMerchant: (workspaceId: string, merchantName: string, categoryId: string) => void;
@@ -607,6 +642,10 @@ export function AppStateProvider({ children }: PropsWithChildren) {
       addTransaction(input) {
         dispatch({ type: "addTransaction", payload: input });
         showToast(`${input.merchantName} 거래를 추가했습니다.`, "success");
+      },
+      updateTransactionDetails(workspaceId, transactionId, patch) {
+        dispatch({ type: "updateTransactionDetails", payload: { workspaceId, transactionId, patch } });
+        showToast("거래 기본 정보를 수정했습니다.", "success");
       },
       assignCategory(workspaceId, transactionId, categoryId) {
         dispatch({ type: "assignCategory", payload: { workspaceId, transactionId, categoryId } });
