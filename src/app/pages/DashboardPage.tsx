@@ -3,6 +3,7 @@ import { getWorkspaceInsights } from "../../domain/insights/workspaceInsights";
 import { formatCurrency, formatPercent } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { useAppState } from "../state/AppStateProvider";
+import { CompletionBanner } from "../components/CompletionBanner";
 
 function toneClass(tone: "stable" | "caution" | "warning") {
   return tone === "warning" ? "warning" : tone === "caution" ? "caution" : "stable";
@@ -208,20 +209,21 @@ export function DashboardPage() {
         </div>
 
         {isJourneyReady ? (
-          <div className="completion-banner mt-4">
-            <strong>진단 준비를 마쳤습니다.</strong>
-            <p className="mb-0 text-secondary">
-              검토와 카테고리, 태그, 기준선 설정까지 끝나서 이번 달 진단과 저축 가이드를 비교적 안정적으로 볼 수 있습니다.
-            </p>
-            <div className="completion-actions">
-              <Link to="/transactions" className="btn btn-outline-primary btn-sm">
-                거래 화면 보기
-              </Link>
-              <Link to="/settlements" className="btn btn-outline-secondary btn-sm">
-                정산 화면 보기
-              </Link>
-            </div>
-          </div>
+          <CompletionBanner
+            className="mt-4"
+            title="진단 준비를 마쳤습니다."
+            description="검토와 카테고리, 태그, 기준선 설정까지 끝나서 이번 달 진단과 저축 가이드를 비교적 안정적으로 볼 수 있습니다."
+            actions={
+              <>
+                <Link to="/transactions" className="btn btn-outline-primary btn-sm">
+                  거래 화면 보기
+                </Link>
+                <Link to="/settlements" className="btn btn-outline-secondary btn-sm">
+                  정산 화면 보기
+                </Link>
+              </>
+            }
+          />
         ) : null}
       </section>
 

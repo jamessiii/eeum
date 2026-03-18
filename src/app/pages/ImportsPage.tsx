@@ -4,6 +4,7 @@ import { REVIEW_TYPE_LABELS } from "../../domain/reviews/meta";
 import type { WorkspaceBundle } from "../../shared/types/models";
 import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
+import { CompletionBanner } from "../components/CompletionBanner";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
@@ -281,20 +282,21 @@ export function ImportsPage() {
           ))}
         </div>
         {isPostImportReady ? (
-          <div className="completion-banner mb-4">
-            <strong>업로드 이후 정리를 마쳤습니다.</strong>
-            <p className="mb-0 text-secondary">
-              검토와 분류, 태그 정리까지 끝나서 이제 대시보드와 정산 화면에서 이번 달 흐름을 비교적 안정적으로 볼 수 있습니다.
-            </p>
-            <div className="completion-actions">
-              <Link to="/" className="btn btn-primary btn-sm">
-                대시보드 보기
-              </Link>
-              <Link to="/settlements" className="btn btn-outline-secondary btn-sm">
-                정산 화면 보기
-              </Link>
-            </div>
-          </div>
+          <CompletionBanner
+            className="mb-4"
+            title="업로드 이후 정리를 마쳤습니다."
+            description="검토와 분류, 태그 정리까지 끝나서 이제 대시보드와 정산 화면에서 이번 달 흐름을 비교적 안정적으로 볼 수 있습니다."
+            actions={
+              <>
+                <Link to="/" className="btn btn-primary btn-sm">
+                  대시보드 보기
+                </Link>
+                <Link to="/settlements" className="btn btn-outline-secondary btn-sm">
+                  정산 화면 보기
+                </Link>
+              </>
+            }
+          />
         ) : null}
         <div className="classification-flow-grid">
           <article className="stat-card">

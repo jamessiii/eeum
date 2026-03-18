@@ -1,4 +1,5 @@
 import { formatCurrency, formatPercent } from "../../shared/utils/format";
+import { CompletionBanner } from "../components/CompletionBanner";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
@@ -96,25 +97,24 @@ export function SettingsPage() {
           </button>
         </form>
         {hasBaseline ? (
-          <div className="review-summary-panel mt-4">
-            <div className="review-summary-copy">
-              <strong>재무 기준선 설정이 끝났습니다</strong>
-              <p className="mb-0 text-secondary">
-                이제 대시보드에서 지출률, 저축률, 고정지출 경고를 더 믿고 볼 수 있습니다. 거래 정리와 정산 화면까지 함께 보면 이번 달 흐름이 더 선명해집니다.
-              </p>
-            </div>
-            <div className="d-flex flex-wrap gap-2">
-              <Link to="/" className="btn btn-outline-dark btn-sm">
-                대시보드 보기
-              </Link>
-              <Link to="/transactions" className="btn btn-outline-secondary btn-sm">
-                거래 화면 보기
-              </Link>
-              <Link to="/settlements" className="btn btn-outline-primary btn-sm">
-                정산 화면 보기
-              </Link>
-            </div>
-          </div>
+          <CompletionBanner
+            className="mt-4"
+            title="재무 기준선 설정이 끝났습니다"
+            description="이제 대시보드에서 지출률, 저축률, 고정지출 경고를 더 믿고 볼 수 있습니다. 거래 정리와 정산 화면까지 함께 보면 이번 달 흐름이 더 선명해집니다."
+            actions={
+              <>
+                <Link to="/" className="btn btn-outline-dark btn-sm">
+                  대시보드 보기
+                </Link>
+                <Link to="/transactions" className="btn btn-outline-secondary btn-sm">
+                  거래 화면 보기
+                </Link>
+                <Link to="/settlements" className="btn btn-outline-primary btn-sm">
+                  정산 화면 보기
+                </Link>
+              </>
+            }
+          />
         ) : null}
       </section>
 
