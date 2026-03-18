@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { REVIEW_TYPE_LABELS } from "../../domain/reviews/meta";
 import type { WorkspaceBundle } from "../../shared/types/models";
 import { getMotionStyle } from "../../shared/utils/motion";
@@ -9,6 +9,7 @@ import { getWorkspaceScope } from "../state/selectors";
 
 export function ImportsPage() {
   const { commitImportedBundle, previewWorkbookImport, state } = useAppState();
+  const navigate = useNavigate();
   const [previewBundle, setPreviewBundle] = useState<WorkspaceBundle | null>(null);
   const [previewFileName, setPreviewFileName] = useState("");
   const [isPreparingPreview, setIsPreparingPreview] = useState(false);
@@ -132,6 +133,7 @@ export function ImportsPage() {
                 commitImportedBundle(previewBundle, previewFileName);
                 setPreviewBundle(null);
                 setPreviewFileName("");
+                void navigate("/transactions");
               }}
             >
               이 미리보기로 가져오기

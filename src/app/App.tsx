@@ -6,7 +6,7 @@ import { PageStepBanner } from "./components/PageStepBanner";
 import { EmptyWorkspaceScreen } from "./pages/EmptyWorkspaceScreen";
 import { LoadingScreen } from "./pages/LoadingScreen";
 import { AppStateProvider, useAppState } from "./state/AppStateProvider";
-import { getActiveWorkspace } from "./state/selectors";
+import { getActiveWorkspace, getWorkspaceScope } from "./state/selectors";
 import { ToastProvider, useToast } from "./toast/ToastProvider";
 
 const DashboardPage = lazy(() => import("./pages/DashboardPage").then((module) => ({ default: module.DashboardPage })));
@@ -238,6 +238,8 @@ function AppFrame() {
 
   const activeWorkspace = getActiveWorkspace(state);
   if (!activeWorkspace) return <EmptyWorkspaceScreen />;
+  const scope = getWorkspaceScope(state, activeWorkspace.id);
+  const latestImport = [...scope.imports].sort((a, b) => b.importedAt.localeCompare(a.importedAt))[0] ?? null;
 
   return (
     <div className="app-shell">
@@ -265,9 +267,14 @@ function AppFrame() {
 
       <div className="app-main">
         <header className="app-header">
-          <div>
+          <div className="app-header-copy">
             <span className="section-kicker">활성 워크스페이스</span>
             <h2 className="mb-0">{activeWorkspace.name}</h2>
+            <p className="app-header-meta">
+              거래 {scope.transactions.length}건 · 검토 {scope.reviews.filter((item) => item.status === "open").length}건 · 사람 {scope.people.length}
+              명
+              {latestImport ? ` · 최근 업로드 ${latestImport.importedAt.slice(0, 10)}` : ""}
+            </p>
           </div>
           <span
             className={`badge ${

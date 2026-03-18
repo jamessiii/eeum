@@ -1,9 +1,11 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import type { WorkspaceBundle } from "../../shared/types/models";
 import { useAppState } from "../state/AppStateProvider";
 
 export function EmptyWorkspaceScreen() {
   const { commitImportedBundle, createDemoWorkspace, createEmptyWorkspace, previewWorkbookImport } = useAppState();
+  const navigate = useNavigate();
   const [previewBundle, setPreviewBundle] = useState<WorkspaceBundle | null>(null);
   const [previewFileName, setPreviewFileName] = useState("");
   const [isPreparingPreview, setIsPreparingPreview] = useState(false);
@@ -68,6 +70,7 @@ export function EmptyWorkspaceScreen() {
                   commitImportedBundle(previewBundle, previewFileName);
                   setPreviewBundle(null);
                   setPreviewFileName("");
+                  void navigate("/transactions");
                 }}
               >
                 이 미리보기로 시작하기
