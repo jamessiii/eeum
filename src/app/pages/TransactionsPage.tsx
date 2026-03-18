@@ -25,6 +25,13 @@ const flowModeLabel = {
   non_expense: "비지출 흐름",
 } as const;
 
+const sourceTypeLabel = {
+  manual: "수동입력",
+  account: "계좌",
+  card: "카드",
+  import: "가져오기",
+} as const;
+
 function getTransactionFlowSummary(transaction: {
   transactionType: "expense" | "income" | "transfer" | "adjustment";
   isExpenseImpact: boolean;
@@ -142,6 +149,7 @@ export function TransactionsPage() {
   const [draftSharedExpense, setDraftSharedExpense] = useState(false);
   const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState({
+    sourceType: "manual" as "card" | "account" | "manual" | "import",
     ownerPersonId: "",
     accountId: "",
     cardId: "",
@@ -231,6 +239,7 @@ export function TransactionsPage() {
   const beginTransactionEdit = (transaction: (typeof transactions)[number]) => {
     setEditingTransactionId(transaction.id);
     setEditDraft({
+      sourceType: transaction.sourceType,
       ownerPersonId: transaction.ownerPersonId ?? "",
       accountId: transaction.accountId ?? "",
       cardId: transaction.cardId ?? "",
@@ -245,6 +254,7 @@ export function TransactionsPage() {
   const cancelTransactionEdit = () => {
     setEditingTransactionId(null);
     setEditDraft({
+      sourceType: "manual",
       ownerPersonId: "",
       accountId: "",
       cardId: "",
@@ -891,6 +901,7 @@ export function TransactionsPage() {
                               </div>
                               <div className="small text-secondary mt-1">
                                 {[
+                                  `수단 ${sourceTypeLabel[transaction.sourceType]}`,
                                   transaction.ownerPersonId ? `사용자 ${peopleMap.get(transaction.ownerPersonId) ?? "-"}` : null,
                                   transaction.accountId ? `계좌 ${accountMap.get(transaction.accountId) ?? "-"}` : null,
                                   transaction.cardId ? `카드 ${cardMap.get(transaction.cardId) ?? "-"}` : null,
@@ -919,10 +930,25 @@ export function TransactionsPage() {
                             <div className="review-summary-panel mt-3">
                                 <div className="review-summary-copy">
                                   <strong>이 거래 기본 정보 수정</strong>
-                                  <p className="mb-0 text-secondary">사용자, 계좌, 카드, 사용일, 결제일, 가맹점, 설명, 금액을 바로 수정할 수 있습니다.</p>
+                                  <p className="mb-0 text-secondary">수단, 사용자, 계좌, 카드, 사용일, 결제일, 가맹점, 설명, 금액을 바로 수정할 수 있습니다.</p>
                                 </div>
                                 <div className="d-flex flex-column gap-2 w-100">
                                   <div className="d-flex flex-wrap gap-2">
+                                    <select
+                                      className="form-select form-select-sm"
+                                      value={editDraft.sourceType}
+                                      onChange={(event) =>
+                                        setEditDraft((current) => ({
+                                          ...current,
+                                          sourceType: event.target.value as "card" | "account" | "manual" | "import",
+                                        }))
+                                      }
+                                    >
+                                      <option value="manual">수동입력</option>
+                                      <option value="account">계좌</option>
+                                      <option value="card">카드</option>
+                                      <option value="import">가져오기</option>
+                                    </select>
                                     <select
                                       className="form-select form-select-sm"
                                       value={editDraft.ownerPersonId}
@@ -1002,6 +1028,7 @@ export function TransactionsPage() {
                                       disabled={!editDraft.occurredAt || !editDraft.merchantName.trim() || !editDraft.amount || Number(editDraft.amount) <= 0}
                                       onClick={() => {
                                         updateTransactionDetails(workspaceId, transaction.id, {
+                                          sourceType: editDraft.sourceType,
                                           ownerPersonId: editDraft.ownerPersonId || null,
                                           accountId: editDraft.accountId || null,
                                           cardId: editDraft.cardId || null,

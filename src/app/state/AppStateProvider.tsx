@@ -62,13 +62,14 @@ type Action =
   | { type: "addTransaction"; payload: NewTransactionInput }
   | {
       type: "updateTransactionDetails";
-      payload: {
-        workspaceId: string;
-        transactionId: string;
-        patch: {
-          ownerPersonId?: string | null;
-          accountId?: string | null;
-          cardId?: string | null;
+        payload: {
+          workspaceId: string;
+          transactionId: string;
+          patch: {
+            sourceType?: Transaction["sourceType"];
+            ownerPersonId?: string | null;
+            accountId?: string | null;
+            cardId?: string | null;
           occurredAt?: string;
           settledAt?: string | null;
           merchantName?: string;
@@ -329,11 +330,12 @@ function reducer(state: AppState, action: Action): AppState {
         ...state,
         transactions: state.transactions.map((transaction) =>
           transaction.workspaceId === action.payload.workspaceId && transaction.id === action.payload.transactionId
-            ? {
-                ...transaction,
-                ownerPersonId:
-                  typeof action.payload.patch.ownerPersonId !== "undefined"
-                    ? action.payload.patch.ownerPersonId
+              ? {
+                  ...transaction,
+                  sourceType: action.payload.patch.sourceType ?? transaction.sourceType,
+                  ownerPersonId:
+                    typeof action.payload.patch.ownerPersonId !== "undefined"
+                      ? action.payload.patch.ownerPersonId
                     : transaction.ownerPersonId,
                 accountId: typeof action.payload.patch.accountId !== "undefined" ? action.payload.patch.accountId : transaction.accountId,
                 cardId: typeof action.payload.patch.cardId !== "undefined" ? action.payload.patch.cardId : transaction.cardId,
@@ -489,6 +491,7 @@ interface AppStateContextValue {
     workspaceId: string,
     transactionId: string,
     patch: {
+      sourceType?: Transaction["sourceType"];
       ownerPersonId?: string | null;
       accountId?: string | null;
       cardId?: string | null;
