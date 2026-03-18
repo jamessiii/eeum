@@ -61,9 +61,11 @@ type Action =
   | { type: "addSettlement"; payload: SettlementInput }
   | { type: "addTransaction"; payload: NewTransactionInput }
   | { type: "assignCategory"; payload: { workspaceId: string; transactionId: string; categoryId: string } }
+  | { type: "clearCategory"; payload: { workspaceId: string; transactionId: string } }
   | { type: "assignCategoryByMerchant"; payload: { workspaceId: string; merchantName: string; categoryId: string } }
   | { type: "assignCategoryBatch"; payload: { workspaceId: string; transactionIds: string[]; categoryId: string } }
   | { type: "assignTag"; payload: { workspaceId: string; transactionId: string; tagId: string } }
+  | { type: "removeTag"; payload: { workspaceId: string; transactionId: string; tagId: string } }
   | { type: "assignTagBatch"; payload: { workspaceId: string; transactionIds: string[]; tagId: string } }
   | { type: "assignTagByMerchant"; payload: { workspaceId: string; merchantName: string; tagId: string } }
   | {
@@ -314,6 +316,15 @@ function reducer(state: AppState, action: Action): AppState {
             : transaction,
         ),
       };
+    case "clearCategory":
+      return {
+        ...state,
+        transactions: state.transactions.map((transaction) =>
+          transaction.workspaceId === action.payload.workspaceId && transaction.id === action.payload.transactionId
+            ? { ...transaction, categoryId: null }
+            : transaction,
+        ),
+      };
     case "assignCategoryByMerchant":
       return {
         ...state,
@@ -346,6 +357,18 @@ function reducer(state: AppState, action: Action): AppState {
                 tagIds: transaction.tagIds.includes(action.payload.tagId)
                   ? transaction.tagIds
                   : [...transaction.tagIds, action.payload.tagId],
+              }
+              : transaction,
+          ),
+        };
+    case "removeTag":
+      return {
+        ...state,
+        transactions: state.transactions.map((transaction) =>
+          transaction.workspaceId === action.payload.workspaceId && transaction.id === action.payload.transactionId
+            ? {
+                ...transaction,
+                tagIds: transaction.tagIds.filter((tagId) => tagId !== action.payload.tagId),
               }
             : transaction,
         ),
@@ -419,9 +442,11 @@ interface AppStateContextValue {
   addSettlement: (input: SettlementInput) => void;
   addTransaction: (input: NewTransactionInput) => void;
   assignCategory: (workspaceId: string, transactionId: string, categoryId: string) => void;
+  clearCategory: (workspaceId: string, transactionId: string) => void;
   assignCategoryByMerchant: (workspaceId: string, merchantName: string, categoryId: string) => void;
   assignCategoryBatch: (workspaceId: string, transactionIds: string[], categoryId: string) => void;
   assignTag: (workspaceId: string, transactionId: string, tagId: string) => void;
+  removeTag: (workspaceId: string, transactionId: string, tagId: string) => void;
   assignTagBatch: (workspaceId: string, transactionIds: string[], tagId: string) => void;
   assignTagByMerchant: (workspaceId: string, merchantName: string, tagId: string) => void;
     updateTransactionFlags: (
@@ -587,6 +612,10 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         dispatch({ type: "assignCategory", payload: { workspaceId, transactionId, categoryId } });
         showToast("거래 카테고리를 지정했습니다.", "success");
       },
+      clearCategory(workspaceId, transactionId) {
+        dispatch({ type: "clearCategory", payload: { workspaceId, transactionId } });
+        showToast("거래 카테고리를 해제했습니다.", "success");
+      },
       assignCategoryByMerchant(workspaceId, merchantName, categoryId) {
         dispatch({ type: "assignCategoryByMerchant", payload: { workspaceId, merchantName, categoryId } });
         showToast(`${merchantName} 반복 거래에 카테고리를 반영했습니다.`, "success");
@@ -600,6 +629,11 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         dispatch({ type: "assignTag", payload: { workspaceId, transactionId, tagId } });
         const tag = state.tags.find((item) => item.id === tagId);
         showToast(`${tag?.name ?? "태그"} 태그를 거래에 추가했습니다.`, "success");
+      },
+      removeTag(workspaceId, transactionId, tagId) {
+        dispatch({ type: "removeTag", payload: { workspaceId, transactionId, tagId } });
+        const tag = state.tags.find((item) => item.id === tagId);
+        showToast(`${tag?.name ?? "태그"} 태그를 거래에서 제거했습니다.`, "success");
       },
       assignTagBatch(workspaceId, transactionIds, tagId) {
         dispatch({ type: "assignTagBatch", payload: { workspaceId, transactionIds, tagId } });

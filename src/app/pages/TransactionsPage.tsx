@@ -105,7 +105,8 @@ const transactionDraftGuide = {
 } as const;
 
 export function TransactionsPage() {
-  const { addTransaction, assignCategory, assignCategoryBatch, assignTag, assignTagBatch, state, updateTransactionFlags } = useAppState();
+  const { addTransaction, assignCategory, assignCategoryBatch, assignTag, assignTagBatch, clearCategory, removeTag, state, updateTransactionFlags } =
+    useAppState();
   const [searchParams, setSearchParams] = useSearchParams();
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
@@ -830,21 +831,31 @@ export function TransactionsPage() {
                           </div>
                         ) : null}
                       </td>
-                      <td>
-                        <strong>{transaction.merchantName}</strong>
-                        <div className="small text-secondary">
-                          {transaction.description || (transaction.isInternalTransfer ? "내부이체로 처리된 거래" : "설명 없음")}
-                        </div>
-                        {transaction.tagIds.length ? (
-                          <div className="transaction-tag-row">
-                            {transaction.tagIds
-                              .map((tagId) => tags.get(tagId))
-                              .filter((tag): tag is NonNullable<typeof tag> => Boolean(tag))
-                              .map((tag) => (
-                                <span key={tag.id} className="tag-pill" style={{ ["--tag-color" as string]: tag.color }}>
-                                  {tag.name}
-                                </span>
-                              ))}
+                        <td>
+                          <strong>{transaction.merchantName}</strong>
+                          <div className="small text-secondary">
+                            {transaction.description || (transaction.isInternalTransfer ? "내부이체로 처리된 거래" : "설명 없음")}
+                          </div>
+                          {transaction.tagIds.length ? (
+                            <div className="transaction-tag-row">
+                              {transaction.tagIds
+                                .map((tagId) => tags.get(tagId))
+                                .filter((tag): tag is NonNullable<typeof tag> => Boolean(tag))
+                                .map((tag) => (
+                                  <span key={tag.id} className="tag-pill" style={{ ["--tag-color" as string]: tag.color }}>
+                                    {tag.name}
+                                    {transaction.status === "active" && transaction.isExpenseImpact ? (
+                                      <button
+                                        className="btn btn-link btn-sm p-0 ms-1 text-reset text-decoration-none"
+                                        type="button"
+                                        aria-label={`${tag.name} 태그 제거`}
+                                        onClick={() => removeTag(workspaceId, transaction.id, tag.id)}
+                                      >
+                                        ×
+                                      </button>
+                                    ) : null}
+                                  </span>
+                                ))}
                             </div>
                           ) : null}
                         {transaction.status === "active" && transaction.isExpenseImpact ? (
@@ -895,6 +906,13 @@ export function TransactionsPage() {
                         <td>{peopleMap.get(transaction.ownerPersonId ?? "") ?? "-"}</td>
                         <td>
                           {transaction.categoryId ? categories.get(transaction.categoryId) : "미분류"}
+                          {transaction.status === "active" && transaction.isExpenseImpact && transaction.categoryId ? (
+                            <div className="mt-2">
+                              <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => clearCategory(workspaceId, transaction.id)}>
+                                카테고리 해제
+                              </button>
+                            </div>
+                          ) : null}
                         {transaction.status === "active" && transaction.isExpenseImpact ? (
                           <>
                             <div className="d-flex flex-wrap gap-2 mt-2">
