@@ -63,6 +63,7 @@ type Action =
   | { type: "assignCategory"; payload: { workspaceId: string; transactionId: string; categoryId: string } }
   | { type: "assignCategoryByMerchant"; payload: { workspaceId: string; merchantName: string; categoryId: string } }
   | { type: "assignTag"; payload: { workspaceId: string; transactionId: string; tagId: string } }
+  | { type: "assignTagBatch"; payload: { workspaceId: string; transactionIds: string[]; tagId: string } }
   | { type: "assignTagByMerchant"; payload: { workspaceId: string; merchantName: string; tagId: string } };
 
 function applyReviewSuggestionToTransactions(transactions: Transaction[], review: ReviewItem) {
@@ -297,6 +298,22 @@ function reducer(state: AppState, action: Action): AppState {
             : transaction,
         ),
       };
+    case "assignTagBatch": {
+      const transactionIdSet = new Set(action.payload.transactionIds);
+      return {
+        ...state,
+        transactions: state.transactions.map((transaction) =>
+          transaction.workspaceId === action.payload.workspaceId && transactionIdSet.has(transaction.id)
+            ? {
+                ...transaction,
+                tagIds: transaction.tagIds.includes(action.payload.tagId)
+                  ? transaction.tagIds
+                  : [...transaction.tagIds, action.payload.tagId],
+              }
+            : transaction,
+        ),
+      };
+    }
     case "assignTagByMerchant":
       return {
         ...state,
@@ -343,6 +360,7 @@ interface AppStateContextValue {
   assignCategory: (workspaceId: string, transactionId: string, categoryId: string) => void;
   assignCategoryByMerchant: (workspaceId: string, merchantName: string, categoryId: string) => void;
   assignTag: (workspaceId: string, transactionId: string, tagId: string) => void;
+  assignTagBatch: (workspaceId: string, transactionIds: string[], tagId: string) => void;
   assignTagByMerchant: (workspaceId: string, merchantName: string, tagId: string) => void;
 }
 
@@ -506,6 +524,11 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         dispatch({ type: "assignTag", payload: { workspaceId, transactionId, tagId } });
         const tag = state.tags.find((item) => item.id === tagId);
         showToast(`${tag?.name ?? "태그"} 태그를 거래에 추가했습니다.`, "success");
+      },
+      assignTagBatch(workspaceId, transactionIds, tagId) {
+        dispatch({ type: "assignTagBatch", payload: { workspaceId, transactionIds, tagId } });
+        const tag = state.tags.find((item) => item.id === tagId);
+        showToast(`${transactionIds.length}건 거래에 ${tag?.name ?? "태그"}를 일괄 반영했습니다.`, "success");
       },
       assignTagByMerchant(workspaceId, merchantName, tagId) {
         dispatch({ type: "assignTagByMerchant", payload: { workspaceId, merchantName, tagId } });

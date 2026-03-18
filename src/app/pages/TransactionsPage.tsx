@@ -47,7 +47,7 @@ const transactionDraftGuide = {
 } as const;
 
 export function TransactionsPage() {
-  const { addTransaction, state } = useAppState();
+  const { addTransaction, assignTagBatch, state } = useAppState();
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const categories = new Map(scope.categories.map((item) => [item.id, item.name]));
@@ -68,6 +68,7 @@ export function TransactionsPage() {
   const [draftType, setDraftType] = useState<"expense" | "income" | "transfer" | "adjustment">("expense");
   const [draftExpenseImpact, setDraftExpenseImpact] = useState(true);
   const [draftSharedExpense, setDraftSharedExpense] = useState(false);
+  const [bulkTagId, setBulkTagId] = useState("");
 
   const transactions = useMemo(
     () =>
@@ -96,6 +97,7 @@ export function TransactionsPage() {
   );
 
   const activeTransactions = transactions.filter((item) => item.status === "active");
+  const taggableTransactions = activeTransactions.filter((item) => item.isExpenseImpact);
   const activeExpenseCount = activeTransactions.filter((item) => item.isExpenseImpact).length;
   const internalTransferCount = activeTransactions.filter((item) => item.isInternalTransfer).length;
   const sharedExpenseCount = activeTransactions.filter((item) => item.isSharedExpense).length;
@@ -362,6 +364,41 @@ export function TransactionsPage() {
                 onChange={(event) => setFilters((current) => ({ ...current, searchQuery: event.target.value }))}
                 placeholder="가맹점 또는 설명 검색"
               />
+            </div>
+
+            <div className="review-summary-panel mb-3">
+              <div className="review-summary-copy">
+                <strong>현재 보이는 거래 정리</strong>
+                <p className="mb-0 text-secondary">
+                  현재 필터 결과에서 실지출로 잡히는 거래는 {taggableTransactions.length}건입니다. 같은 맥락의 거래가 모여 있다면 태그를 한 번에 붙여 이후 검색과 분석 흐름을 더 빠르게 만들 수 있습니다.
+                </p>
+              </div>
+              <form
+                className="classification-action-row"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (!bulkTagId || !taggableTransactions.length) return;
+                  assignTagBatch(
+                    workspaceId,
+                    taggableTransactions.map((item) => item.id),
+                    bulkTagId,
+                  );
+                  setBulkTagId("");
+                }}
+              >
+                <select className="form-select" value={bulkTagId} onChange={(event) => setBulkTagId(event.target.value)}>
+                  <option value="">일괄 적용할 태그 선택</option>
+                  {scope.tags.map((tag) => (
+                    <option key={tag.id} value={tag.id}>
+                      {tag.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="small text-secondary d-flex align-items-center">필터된 실지출 거래 전체에 같은 태그를 붙입니다.</div>
+                <button className="btn btn-outline-primary" type="submit" disabled={!bulkTagId || !taggableTransactions.length}>
+                  태그 일괄 적용
+                </button>
+              </form>
             </div>
 
             <div className="table-responsive">
