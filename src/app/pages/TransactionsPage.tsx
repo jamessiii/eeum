@@ -137,6 +137,8 @@ export function TransactionsPage() {
   const untaggedCount = activeTransactions.filter((item) => item.isExpenseImpact && item.tagIds.length === 0).length;
   const activeCleanupMode = cleanupModeCopy[filters.nature as keyof typeof cleanupModeCopy] ?? cleanupModeCopy.all;
   const isFocusedCleanupMode = filters.nature === "uncategorized" || filters.nature === "untagged";
+  const currentCleanupRemaining =
+    filters.nature === "uncategorized" ? uncategorizedCount : filters.nature === "untagged" ? untaggedCount : null;
 
   useEffect(() => {
     const cleanup = searchParams.get("cleanup");
@@ -373,6 +375,32 @@ export function TransactionsPage() {
                   </button>
                   <Link className="btn btn-outline-dark btn-sm" to="/">
                     대시보드 보기
+                  </Link>
+                </div>
+              </div>
+            ) : null}
+
+            {isFocusedCleanupMode && currentCleanupRemaining === 0 ? (
+              <div className="review-summary-panel mb-3">
+                <div className="review-summary-copy">
+                  <strong>{filters.nature === "uncategorized" ? "미분류 거래 정리가 끝났습니다" : "무태그 거래 정리가 끝났습니다"}</strong>
+                  <p className="mb-0 text-secondary">
+                    {filters.nature === "uncategorized"
+                      ? "이제 남은 무태그 거래를 묶거나 대시보드에서 이번 달 진단을 확인하면 됩니다."
+                      : "이제 카테고리와 태그 기준 정리가 끝난 흐름으로 대시보드와 정산 화면을 더 믿고 볼 수 있습니다."}
+                  </p>
+                </div>
+                <div className="d-flex flex-wrap gap-2">
+                  {filters.nature === "uncategorized" && untaggedCount ? (
+                    <button className="btn btn-outline-primary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, nature: "untagged" }))}>
+                      무태그 {untaggedCount}건 정리
+                    </button>
+                  ) : null}
+                  <Link className="btn btn-outline-dark btn-sm" to="/">
+                    대시보드 보기
+                  </Link>
+                  <Link className="btn btn-outline-secondary btn-sm" to="/settlements">
+                    정산 화면 보기
                   </Link>
                 </div>
               </div>
