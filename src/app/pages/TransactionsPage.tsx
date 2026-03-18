@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
+import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
 
@@ -36,6 +37,9 @@ export function TransactionsPage() {
             <h2 className="section-title">수동 거래 추가</h2>
           </div>
         </div>
+        <p className="text-secondary">
+          엑셀 업로드가 아직 없거나 누락된 거래가 있다면 이 화면에서 직접 추가할 수 있습니다. 사용일과 결제일을 분리해 넣어두면 카드 흐름과 실제 소비를 함께 볼 수 있습니다.
+        </p>
         <form
           className="manual-transaction-form"
           onSubmit={(event) => {
@@ -131,64 +135,74 @@ export function TransactionsPage() {
           </div>
           <span className="badge text-bg-dark">{transactions.length}건</span>
         </div>
-        <div className="toolbar-row mb-3">
-          <select
-            className="form-select toolbar-select"
-            value={filters.transactionType}
-            onChange={(event) => setFilters((current) => ({ ...current, transactionType: event.target.value }))}
-          >
-            <option value="all">전체 유형</option>
-            <option value="expense">지출</option>
-            <option value="income">수입</option>
-            <option value="transfer">이체</option>
-            <option value="adjustment">조정</option>
-          </select>
-          <select
-            className="form-select toolbar-select"
-            value={filters.ownerPersonId}
-            onChange={(event) => setFilters((current) => ({ ...current, ownerPersonId: event.target.value }))}
-          >
-            <option value="all">전체 사용자</option>
-            {people.map((person) => (
-              <option key={person.id} value={person.id}>
-                {person.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="table-responsive">
-          <table className="table align-middle">
-            <thead>
-              <tr>
-                <th>발생일</th>
-                <th>결제일</th>
-                <th>유형</th>
-                <th>가맹점/설명</th>
-                <th>카테고리</th>
-                <th className="text-end">금액</th>
-              </tr>
-            </thead>
-            <tbody>
-              {transactions.map((transaction, index) => (
-                <tr key={transaction.id} style={getMotionStyle(index)}>
-                  <td>{transaction.occurredAt.slice(0, 10)}</td>
-                  <td>{transaction.settledAt?.slice(0, 10) ?? "-"}</td>
-                  <td>
-                    <span className={`badge ${transaction.isExpenseImpact ? "text-bg-danger-subtle" : "text-bg-secondary"}`}>
-                      {transaction.transactionType}
-                    </span>
-                  </td>
-                  <td>
-                    <strong>{transaction.merchantName}</strong>
-                    {transaction.description ? <div className="small text-secondary">{transaction.description}</div> : null}
-                  </td>
-                  <td>{transaction.categoryId ? categories.get(transaction.categoryId) : "미분류"}</td>
-                  <td className="text-end">{formatCurrency(transaction.amount)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {!transactions.length ? (
+          <EmptyStateCallout
+            kicker="거래 없음"
+            title="아직 입력된 거래가 없습니다"
+            description="업로드 화면에서 엑셀을 먼저 가져오거나, 위의 수동 입력 폼으로 첫 거래를 넣으면 분류와 통계가 시작됩니다."
+          />
+        ) : (
+          <>
+            <div className="toolbar-row mb-3">
+              <select
+                className="form-select toolbar-select"
+                value={filters.transactionType}
+                onChange={(event) => setFilters((current) => ({ ...current, transactionType: event.target.value }))}
+              >
+                <option value="all">전체 유형</option>
+                <option value="expense">지출</option>
+                <option value="income">수입</option>
+                <option value="transfer">이체</option>
+                <option value="adjustment">조정</option>
+              </select>
+              <select
+                className="form-select toolbar-select"
+                value={filters.ownerPersonId}
+                onChange={(event) => setFilters((current) => ({ ...current, ownerPersonId: event.target.value }))}
+              >
+                <option value="all">전체 사용자</option>
+                {people.map((person) => (
+                  <option key={person.id} value={person.id}>
+                    {person.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="table-responsive">
+              <table className="table align-middle">
+                <thead>
+                  <tr>
+                    <th>발생일</th>
+                    <th>결제일</th>
+                    <th>유형</th>
+                    <th>가맹점/설명</th>
+                    <th>카테고리</th>
+                    <th className="text-end">금액</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transactions.map((transaction, index) => (
+                    <tr key={transaction.id} style={getMotionStyle(index)}>
+                      <td>{transaction.occurredAt.slice(0, 10)}</td>
+                      <td>{transaction.settledAt?.slice(0, 10) ?? "-"}</td>
+                      <td>
+                        <span className={`badge ${transaction.isExpenseImpact ? "text-bg-danger-subtle" : "text-bg-secondary"}`}>
+                          {transaction.transactionType}
+                        </span>
+                      </td>
+                      <td>
+                        <strong>{transaction.merchantName}</strong>
+                        {transaction.description ? <div className="small text-secondary">{transaction.description}</div> : null}
+                      </td>
+                      <td>{transaction.categoryId ? categories.get(transaction.categoryId) : "미분류"}</td>
+                      <td className="text-end">{formatCurrency(transaction.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </section>
     </div>
   );

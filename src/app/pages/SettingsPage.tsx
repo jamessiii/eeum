@@ -1,3 +1,4 @@
+import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
 
@@ -15,6 +16,9 @@ export function SettingsPage() {
             <h2 className="section-title">월 수입과 경고 기준</h2>
           </div>
         </div>
+        <p className="text-secondary">
+          이 값이 있어야 지출률, 저축률, 과소비 경고가 제대로 동작합니다. 아직 실제 금액이 정해지지 않았다면 대략적인 값부터 넣어두고 나중에 수정해도 괜찮습니다.
+        </p>
         <form
           className="profile-form"
           onSubmit={(event) => {
@@ -58,7 +62,7 @@ export function SettingsPage() {
           </div>
         </div>
         <p className="text-secondary">
-          이 앱은 로컬 우선 구조이므로 JSON 백업/복원 기능을 기본 제공합니다. 다른 기기에서도 같은 파일을 불러와 이어서 사용할 수 있습니다.
+          이 앱은 로컬 우선 구조이므로 백업 파일이 매우 중요합니다. 다른 기기에서 이어서 쓰고 싶다면 내보내기와 가져오기를 기본 루틴처럼 사용하면 됩니다.
         </p>
         <div className="d-flex flex-wrap gap-2">
           <button className="btn btn-primary" onClick={() => exportState()}>
@@ -87,8 +91,16 @@ export function SettingsPage() {
             <h2 className="section-title">개발 중 재시작</h2>
           </div>
         </div>
-        <p className="text-secondary">개발 중 테스트를 반복할 수 있도록 전체 저장소를 초기화합니다.</p>
-        <button className="btn btn-outline-danger" onClick={() => void resetApp()}>
+        {!profile?.monthlyNetIncome ? (
+          <EmptyStateCallout
+            kicker="기준선 필요"
+            title="먼저 월 수입을 입력하세요"
+            description="지금은 코칭과 통계의 기준선이 비어 있습니다. 위 폼에 월 순수입과 목표를 넣어야 지출이 큰지, 저축이 모자란지 판단할 수 있습니다."
+          />
+        ) : (
+          <p className="text-secondary">개발 중 테스트를 반복할 수 있도록 전체 저장소를 초기화합니다.</p>
+        )}
+        <button className="btn btn-outline-danger mt-3" onClick={() => void resetApp()}>
           전체 데이터 초기화
         </button>
       </section>

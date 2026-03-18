@@ -1,4 +1,5 @@
 import { formatCurrency } from "../../shared/utils/format";
+import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
 
@@ -33,37 +34,46 @@ export function SettlementsPage() {
             <h2 className="section-title">이번 달 정산 후보</h2>
           </div>
         </div>
-        <div className="stats-grid">
-          <article className="stat-card">
-            <span className="stat-label">공동지출 총액</span>
-            <strong>{formatCurrency(totalSharedExpense)}</strong>
-          </article>
-          <article className="stat-card">
-            <span className="stat-label">1인 기준 부담액</span>
-            <strong>{formatCurrency(splitTarget)}</strong>
-          </article>
-          <article className="stat-card">
-            <span className="stat-label">공동지출 건수</span>
-            <strong>{sharedTransactions.length}건</strong>
-          </article>
-        </div>
-        <div className="review-list mt-4">
-          {rows.map((row) => (
-            <article key={row.personId} className="review-card">
-              <div className="d-flex justify-content-between align-items-start gap-3">
-                <div>
-                  <span className="review-type">정산 요약</span>
-                  <h3>{row.name}</h3>
-                  <p className="mb-0 text-secondary">현재 부담액 {formatCurrency(row.amount)}</p>
-                </div>
-                <span className={`badge ${row.delta > 0 ? "text-bg-warning" : "text-bg-success"}`}>
-                  {row.delta > 0 ? `받을 가능성 ${formatCurrency(row.delta)}` : `보낼 가능성 ${formatCurrency(Math.abs(row.delta))}`}
-                </span>
-              </div>
-            </article>
-          ))}
-          {!rows.length ? <p className="text-secondary mb-0">아직 공동지출 데이터가 없습니다.</p> : null}
-        </div>
+        {!rows.length ? (
+          <EmptyStateCallout
+            kicker="정산 대기"
+            title="아직 공동지출 데이터가 없습니다"
+            description="거래 입력 또는 업로드 후 공동지출 여부를 체크하면 이 화면에서 사람별 부담과 정산 후보를 계산할 수 있습니다."
+          />
+        ) : (
+          <>
+            <div className="stats-grid">
+              <article className="stat-card">
+                <span className="stat-label">공동지출 총액</span>
+                <strong>{formatCurrency(totalSharedExpense)}</strong>
+              </article>
+              <article className="stat-card">
+                <span className="stat-label">1인 기준 부담액</span>
+                <strong>{formatCurrency(splitTarget)}</strong>
+              </article>
+              <article className="stat-card">
+                <span className="stat-label">공동지출 건수</span>
+                <strong>{sharedTransactions.length}건</strong>
+              </article>
+            </div>
+            <div className="review-list mt-4">
+              {rows.map((row) => (
+                <article key={row.personId} className="review-card">
+                  <div className="d-flex justify-content-between align-items-start gap-3">
+                    <div>
+                      <span className="review-type">정산 요약</span>
+                      <h3>{row.name}</h3>
+                      <p className="mb-0 text-secondary">현재 부담액 {formatCurrency(row.amount)}</p>
+                    </div>
+                    <span className={`badge ${row.delta > 0 ? "text-bg-warning" : "text-bg-success"}`}>
+                      {row.delta > 0 ? `받을 가능성 ${formatCurrency(row.delta)}` : `보낼 가능성 ${formatCurrency(Math.abs(row.delta))}`}
+                    </span>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </>
+        )}
       </section>
 
       <section className="card shadow-sm">
