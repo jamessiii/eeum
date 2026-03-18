@@ -281,6 +281,38 @@ a {
   background: rgba(25, 135, 84, 0.08);
 }
 
+.page-step-banner {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid rgba(25, 135, 84, 0.16);
+  border-radius: 1.2rem;
+  background:
+    radial-gradient(circle at top left, rgba(25, 135, 84, 0.14), transparent 28%),
+    rgba(255, 255, 255, 0.9);
+}
+
+.page-step-banner-title {
+  margin: 0.45rem 0 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.page-step-banner-copy,
+.page-step-banner-foot {
+  margin: 0;
+  color: #586172;
+}
+
+.page-step-banner-list {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.page-step-banner-list li + li {
+  margin-top: 0.45rem;
+}
+
 .page-stack {
   display: grid;
   gap: 1.25rem;

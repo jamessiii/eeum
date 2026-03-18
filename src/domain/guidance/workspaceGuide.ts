@@ -8,6 +8,7 @@ export interface GuideStep {
   description: string;
   targetPath: string;
   ctaLabel: string;
+  tips: string[];
   completed: boolean;
 }
 
@@ -33,6 +34,7 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
       description: "개인 지출과 공동 지출을 나누려면 먼저 구성원을 등록해야 합니다.",
       targetPath: "/people",
       ctaLabel: "사람 추가하러 가기",
+      tips: ["함께 쓰는 구성원을 먼저 등록하세요.", "구성원이 있어야 개인/공동 지출 분리가 쉬워집니다."],
       completed: scope.people.length > 0,
     },
     {
@@ -41,6 +43,7 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
       description: "내부이체와 카드 결제 흐름을 구분하려면 자산 등록이 먼저 필요합니다.",
       targetPath: "/accounts",
       ctaLabel: "자산 등록하러 가기",
+      tips: ["계좌를 먼저 등록한 뒤 카드 결제 계좌를 연결하세요.", "생활비용 공동 계좌가 있으면 함께 추가해두세요."],
       completed: scope.accounts.length > 0 && scope.cards.length > 0,
     },
     {
@@ -49,6 +52,7 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
       description: "분석과 진단은 거래가 있어야 시작됩니다. 엑셀 업로드나 수동 입력으로 데이터를 채워주세요.",
       targetPath: hasImportedData ? "/transactions" : "/imports",
       ctaLabel: hasImportedData ? "거래 보러 가기" : "업로드하러 가기",
+      tips: ["가계부 v2 엑셀을 업로드하거나 수동 거래를 추가하세요.", "거래가 쌓여야 분류와 통계가 시작됩니다."],
       completed: hasTransactions,
     },
     {
@@ -57,6 +61,7 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
       description: "반복적으로 나타나는 가맹점은 먼저 카테고리를 지정하면 이후 분류가 훨씬 빨라집니다.",
       targetPath: "/categories",
       ctaLabel: "반복 지출 분류하기",
+      tips: ["같은 가맹점이 여러 번 보이면 먼저 일괄 분류하세요.", "정기구독, 보험, 통신비 같은 항목을 우선 정리하세요."],
       completed: hasTransactions ? recurringSuggestions.length === 0 : false,
     },
     {
@@ -65,6 +70,7 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
       description: "반복 규칙에 걸리지 않은 거래는 직접 카테고리를 선택해야 통계가 정확해집니다.",
       targetPath: "/categories",
       ctaLabel: "미분류 거래 정리하기",
+      tips: ["반복 제안 아래의 미분류 거래를 하나씩 처리하세요.", "카테고리가 다 채워지면 대시보드 신뢰도가 올라갑니다."],
       completed: hasTransactions ? uncategorizedTransactions.length === 0 : false,
     },
     {
@@ -73,6 +79,7 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
       description: "중복, 환불, 내부이체, 공동지출 후보를 확인하면 데이터 신뢰도가 올라갑니다.",
       targetPath: "/reviews",
       ctaLabel: "검토함 열기",
+      tips: ["중복 후보는 바로 삭제하지 말고 먼저 확인하세요.", "내부이체와 환불 후보를 정리하면 통계 왜곡이 줄어듭니다."],
       completed: hasTransactions ? openReviews === 0 : false,
     },
     {
@@ -81,6 +88,7 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
       description: "지출률과 저축률 코칭은 재무 기준선을 입력해야 제대로 동작합니다.",
       targetPath: "/settings",
       ctaLabel: "기준선 설정하기",
+      tips: ["월 순수입과 목표 저축률을 먼저 설정하세요.", "기준선이 있어야 과소비 판단이 가능해집니다."],
       completed: monthlyIncome > 0,
     },
   ];
