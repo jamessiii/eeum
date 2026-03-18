@@ -17,6 +17,7 @@ import { TransactionCategoryEditor } from "../components/TransactionCategoryEdit
 import { TransactionInlineEditor, type TransactionEditDraft } from "../components/TransactionInlineEditor";
 import { TransactionNatureCell } from "../components/TransactionNatureCell";
 import { TransactionRowHeader } from "../components/TransactionRowHeader";
+import { TransactionSourceSummaryPanel } from "../components/TransactionSourceSummaryPanel";
 import { TransactionStatusBadge } from "../components/TransactionStatusBadge";
 import { TransactionTagEditor } from "../components/TransactionTagEditor";
 import { TransactionTypeBadge } from "../components/TransactionTypeBadge";
@@ -667,27 +668,11 @@ export function TransactionsPage() {
                 </div>
               </div>
 
-              <div className="review-summary-panel mb-3">
-                <div className="review-summary-copy">
-                  <strong>현재 보이는 거래 수단 구성</strong>
-                  <p className="mb-0 text-secondary">거래가 어떤 경로로 들어온 것인지 빠르게 보고, 필요한 수단만 바로 좁혀서 점검할 수 있습니다.</p>
-                </div>
-                <div className="d-flex flex-wrap gap-2">
-                  <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, sourceType: "all" }))}>
-                    전체 {transactions.length}건
-                  </button>
-                  {SOURCE_TYPE_OPTIONS.map((sourceType) => (
-                    <button
-                      key={sourceType}
-                      className="btn btn-outline-secondary btn-sm"
-                      type="button"
-                      onClick={() => setFilters((current) => ({ ...current, sourceType }))}
-                    >
-                      {getSourceTypeLabel(sourceType)} {sourceTypeCounts[sourceType]}건
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <TransactionSourceSummaryPanel
+                totalCount={transactions.length}
+                sourceTypeCounts={sourceTypeCounts}
+                onSelectSourceType={(sourceType) => setFilters((current) => ({ ...current, sourceType }))}
+              />
 
               <div className="toolbar-row transaction-filter-row mb-3">
                 <select
