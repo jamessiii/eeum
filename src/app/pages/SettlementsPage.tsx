@@ -5,6 +5,11 @@ import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
 
+interface SettlementHeadlineCard {
+  title: string;
+  description: string;
+}
+
 export function SettlementsPage() {
   const { addSettlement, state } = useAppState();
   const workspaceId = state.activeWorkspaceId!;
@@ -68,6 +73,30 @@ export function SettlementsPage() {
   const sender = rows.find((row) => row.remainingDelta < 0);
   const suggestedSettlementAmount =
     receiver && sender ? Math.min(receiver.remainingDelta, Math.abs(sender.remainingDelta)) : 0;
+  const settlementHeadlineCards = rows.length
+    ? [
+        receiver
+          ? {
+              title: "가장 많이 부담한 사람",
+              description: `${receiver.name}이(가) 현재 기준으로 ${formatCurrency(receiver.amount)}를 부담했고, 아직 ${formatCurrency(
+                receiver.remainingDelta,
+              )} 더 부담한 상태입니다.`,
+            }
+          : null,
+        sender
+          ? {
+              title: "정산이 가장 필요한 사람",
+              description: `${sender.name}은(는) 현재 ${formatCurrency(Math.abs(sender.remainingDelta))}만큼 덜 부담한 상태로 계산됩니다.`,
+            }
+          : null,
+        {
+          title: "정산 진행 상태",
+          description: settlementHistory.length
+            ? `이번 달 정산 ${settlementHistory.length}건이 이미 기록되어 있고, 완료 금액은 ${formatCurrency(completedSettlementAmount)}입니다.`
+            : "아직 기록된 정산이 없습니다. 추천 정산을 확인한 뒤 완료로 남겨보세요.",
+        },
+      ].filter((card): card is SettlementHeadlineCard => Boolean(card))
+    : [];
 
   return (
     <div className="page-stack">
@@ -84,8 +113,27 @@ export function SettlementsPage() {
         </p>
       </section>
 
-      <div className="page-grid">
+      {settlementHeadlineCards.length ? (
         <section className="card shadow-sm" style={getMotionStyle(1)}>
+          <div className="section-head">
+            <div>
+              <span className="section-kicker">핵심 해석</span>
+              <h2 className="section-title">정산에서 먼저 볼 포인트</h2>
+            </div>
+          </div>
+          <div className="resource-grid">
+            {settlementHeadlineCards.map((card, index) => (
+              <article key={card.title} className="resource-card" style={getMotionStyle(index + 2)}>
+                <h3>{card.title}</h3>
+                <p className="mb-0 text-secondary">{card.description}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <div className="page-grid">
+        <section className="card shadow-sm" style={getMotionStyle(settlementHeadlineCards.length ? 2 : 1)}>
           <div className="section-head">
             <div>
               <span className="section-kicker">정산 요약</span>
@@ -179,7 +227,7 @@ export function SettlementsPage() {
           )}
         </section>
 
-        <section className="card shadow-sm" style={getMotionStyle(2)}>
+        <section className="card shadow-sm" style={getMotionStyle(settlementHeadlineCards.length ? 3 : 2)}>
           <div className="section-head">
             <div>
               <span className="section-kicker">이번 달 정산 기록</span>
