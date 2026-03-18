@@ -8,6 +8,7 @@ import {
   isUntaggedExpenseTransaction,
 } from "../../domain/transactions/meta";
 import { getTransactionActivitySummary } from "../../domain/transactions/transactionActivitySummary";
+import { getTransactionFilterContext } from "../../domain/transactions/transactionFilterContext";
 import { getSourceTypeCounts } from "../../domain/transactions/sourceTypeCounts";
 import { getSourceTypeLabel, SOURCE_TYPE_OPTIONS } from "../../domain/transactions/sourceTypes";
 import { getTransactionViewMode } from "../../domain/transactions/transactionViewMode";
@@ -177,8 +178,11 @@ export function TransactionsPage() {
   const selectedBulkTag = scope.tags.find((tag) => tag.id === bulkTagId) ?? null;
   const selectedBulkCategory = scope.categories.find((category) => category.id === bulkCategoryId) ?? null;
   const activeCleanupMode = cleanupModeCopy[filters.nature as keyof typeof cleanupModeCopy] ?? cleanupModeCopy.all;
-  const activeOwnerName = filters.ownerPersonId !== "all" ? peopleMap.get(filters.ownerPersonId) ?? null : null;
-  const activeSourceTypeLabel = filters.sourceType !== "all" ? getSourceTypeLabel(filters.sourceType as (typeof SOURCE_TYPE_OPTIONS)[number]) : null;
+  const { activeOwnerName, activeSourceTypeLabel } = getTransactionFilterContext({
+    ownerPersonId: filters.ownerPersonId,
+    sourceType: filters.sourceType as "all" | "manual" | "account" | "card" | "import",
+    people,
+  });
   const {
     isFocusedCleanupMode,
     isFlowAuditMode,
