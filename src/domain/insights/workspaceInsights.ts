@@ -15,6 +15,7 @@ export interface WorkspaceInsights {
   fixedExpense: number;
   fixedExpenseRate: number;
   sharedExpense: number;
+  sharedExpenseCount: number;
   reviewCount: number;
   internalTransferCount: number;
   uncategorizedCount: number;
@@ -145,6 +146,12 @@ function buildNextSteps(context: WorkspaceContext, metrics: InsightMetrics): str
   if (metrics.untaggedCount > 0) {
     nextSteps.push(`무태그 거래 ${metrics.untaggedCount}건을 묶어두면 태그 기준 소비 흐름을 더 선명하게 볼 수 있습니다.`);
   }
+  if (metrics.sharedExpenseCount > 0) {
+    nextSteps.push(`공동지출 ${metrics.sharedExpenseCount}건이 있어 정산 흐름을 한 번 더 점검해두면 좋습니다.`);
+  }
+  if (metrics.internalTransferCount > 0) {
+    nextSteps.push(`내부이체 ${metrics.internalTransferCount}건을 점검하면 지출 통계가 더 깔끔해집니다.`);
+  }
   if (metrics.savingsRate < (context.financialProfile?.targetSavingsRate ?? 0.2)) {
     nextSteps.push("저축 목표에 못 미치고 있습니다. 상위 지출 카테고리와 공동지출부터 조정해보세요.");
   }
@@ -225,6 +232,9 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
   const sharedExpense = transactions
     .filter((item) => item.status === "active" && item.isExpenseImpact && item.isSharedExpense)
     .reduce((sum, item) => sum + Math.abs(item.amount), 0);
+  const sharedExpenseCount = transactions.filter(
+    (item) => item.status === "active" && item.isExpenseImpact && item.isSharedExpense,
+  ).length;
   const reviewCount = reviews.filter((item) => item.status === "open").length;
   const internalTransferCount = transactions.filter((item) => item.status === "active" && item.isInternalTransfer).length;
 
@@ -238,6 +248,7 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
     fixedExpense,
     fixedExpenseRate,
     sharedExpense,
+    sharedExpenseCount,
     reviewCount,
     internalTransferCount,
     uncategorizedCount,

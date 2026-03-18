@@ -124,6 +124,24 @@ export function DashboardPage() {
           to: "/transactions?cleanup=untagged",
         }
       : null,
+    insights.sharedExpenseCount > 0
+      ? {
+          key: "shared",
+          title: "공동지출 흐름을 한 번 더 점검해보세요",
+          description: `${insights.sharedExpenseCount}건의 공동지출이 있어 정산으로 이어지는 흐름을 한 번 더 확인해보면 좋습니다.`,
+          actionLabel: "공동지출 점검하기",
+          to: "/transactions?nature=shared",
+        }
+      : null,
+    insights.internalTransferCount > 0
+      ? {
+          key: "internal-transfer",
+          title: "내부이체 흐름을 모아서 점검해보세요",
+          description: `${insights.internalTransferCount}건의 내부이체가 있어 소비 통계에 과하게 잡히지 않는지 다시 보면 좋습니다.`,
+          actionLabel: "내부이체 점검하기",
+          to: "/transactions?nature=internal_transfer",
+        }
+      : null,
     !insights.isFinancialProfileReady
       ? {
           key: "profile",
