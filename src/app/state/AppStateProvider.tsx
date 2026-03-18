@@ -12,6 +12,7 @@ import { parseHouseholdWorkbook } from "../../domain/imports/householdWorkbook";
 import { createHouseholdV2DemoBundle } from "../../dev/seeds/householdV2Seed";
 import type { AppState, FinancialProfile, Transaction, WorkspaceBundle } from "../../shared/types/models";
 import { createId } from "../../shared/utils/id";
+import { useToast } from "../toast/ToastProvider";
 
 type NewTransactionInput = {
   workspaceId: string;
@@ -208,6 +209,7 @@ const AppStateContext = createContext<AppStateContextValue | null>(null);
 export function AppStateProvider({ children }: PropsWithChildren) {
   const [state, dispatch] = useReducer(reducer, createEmptyState());
   const [isReady, setIsReady] = useState(false);
+  const { showToast } = useToast();
 
   useEffect(() => {
     void loadAppState(createEmptyState()).then((stored) => {
@@ -242,20 +244,28 @@ export function AppStateProvider({ children }: PropsWithChildren) {
             imports: [],
           },
         });
+        showToast(`"${name}" 워크스페이스를 만들었습니다.`, "success");
       },
       createDemoWorkspace() {
         dispatch({ type: "mergeBundle", payload: createHouseholdV2DemoBundle() });
+        showToast("테스트 워크스페이스를 불러왔습니다.", "success");
       },
       async importWorkbook(file) {
         const bundle = await parseHouseholdWorkbook(file);
         dispatch({ type: "mergeBundle", payload: bundle });
+        showToast(`${file.name} 업로드를 완료했습니다.`, "success");
       },
       setActiveWorkspace(workspaceId) {
         dispatch({ type: "setActiveWorkspace", payload: workspaceId });
+        const workspace = state.workspaces.find((item) => item.id === workspaceId);
+        if (workspace) {
+          showToast(`${workspace.name}으로 전환했습니다.`, "info");
+        }
       },
       async resetApp() {
         await clearAppState();
         dispatch({ type: "reset" });
+        showToast("로컬 데이터를 초기화했습니다.", "success");
       },
       exportState() {
         const blob = new Blob(
@@ -279,44 +289,56 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         link.download = `household-backup-${new Date().toISOString().slice(0, 10)}.json`;
         link.click();
         URL.revokeObjectURL(url);
+        showToast("백업 파일을 다운로드했습니다.", "success");
       },
       async importState(file) {
         const text = await file.text();
         const parsed = JSON.parse(text) as { data?: AppState };
         if (!parsed.data) {
+          showToast("백업 파일 형식을 확인해주세요.", "error");
           throw new Error("backup-data-missing");
         }
         dispatch({ type: "replaceState", payload: parsed.data });
+        showToast(`${file.name} 백업을 불러왔습니다.`, "success");
       },
       resolveReview(reviewId) {
         dispatch({ type: "resolveReview", payload: { reviewId, status: "resolved" } });
+        showToast("검토 항목을 확인 완료로 처리했습니다.", "success");
       },
       dismissReview(reviewId) {
         dispatch({ type: "resolveReview", payload: { reviewId, status: "dismissed" } });
+        showToast("검토 항목을 나중에 보기로 옮겼습니다.", "info");
       },
       addPerson(workspaceId, name) {
         dispatch({ type: "addPerson", payload: { workspaceId, name } });
+        showToast(`${name} 구성원을 추가했습니다.`, "success");
       },
       addAccount(workspaceId, name, institutionName) {
         dispatch({ type: "addAccount", payload: { workspaceId, name, institutionName } });
+        showToast(`${name} 계좌를 추가했습니다.`, "success");
       },
       addCard(workspaceId, name, issuerName) {
         dispatch({ type: "addCard", payload: { workspaceId, name, issuerName } });
+        showToast(`${name} 카드를 추가했습니다.`, "success");
       },
       addCategory(workspaceId, name) {
         dispatch({ type: "addCategory", payload: { workspaceId, name } });
+        showToast(`${name} 카테고리를 추가했습니다.`, "success");
       },
       addTag(workspaceId, name) {
         dispatch({ type: "addTag", payload: { workspaceId, name } });
+        showToast(`${name} 태그를 추가했습니다.`, "success");
       },
       setFinancialProfile(workspaceId, values) {
         dispatch({ type: "setFinancialProfile", payload: { workspaceId, values } });
+        showToast("재무 기준선을 저장했습니다.", "success");
       },
       addTransaction(input) {
         dispatch({ type: "addTransaction", payload: input });
+        showToast(`${input.merchantName} 거래를 추가했습니다.`, "success");
       },
     }),
-    [isReady, state],
+    [isReady, showToast, state],
   );
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
