@@ -14,6 +14,7 @@ import { getMotionStyle } from "../../shared/utils/motion";
 import { CompletionBanner } from "../components/CompletionBanner";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { TransactionCategoryEditor } from "../components/TransactionCategoryEditor";
+import { TransactionCleanupQuickActions } from "../components/TransactionCleanupQuickActions";
 import { TransactionInlineEditor, type TransactionEditDraft } from "../components/TransactionInlineEditor";
 import { TransactionNatureCell } from "../components/TransactionNatureCell";
 import { TransactionRowHeader } from "../components/TransactionRowHeader";
@@ -644,29 +645,17 @@ export function TransactionsPage() {
                 현재 보이는 거래 {transactions.length}건 중 실지출 {activeExpenseCount}건, 미분류 {uncategorizedCount}건, 무태그 {untaggedCount}건입니다.
               </div>
             </div>
-              <div className="review-summary-panel mb-3">
-                <div className="review-summary-copy">
-                  <strong>빠르게 정리할 거래 고르기</strong>
-                  <p className="mb-0 text-secondary">남은 정리 작업이 많은 거래만 바로 좁혀 보고, 아래 일괄 정리 도구로 이어서 정리할 수 있습니다.</p>
-                </div>
-              <div className="d-flex flex-wrap gap-2">
-                <button className="btn btn-outline-primary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, nature: "uncategorized" }))}>
-                  미분류만 보기
-                </button>
-                <button className="btn btn-outline-primary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, nature: "untagged" }))}>
-                  무태그만 보기
-                </button>
-                <button className="btn btn-outline-primary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, nature: "shared" }))}>
-                  공동지출만 보기
-                </button>
-                <button className="btn btn-outline-primary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, nature: "internal_transfer" }))}>
-                  내부이체만 보기
-                </button>
-                <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, nature: "all", tagId: "all", searchQuery: "" }))}>
-                  정리 필터 초기화
-                  </button>
-                </div>
-              </div>
+              <TransactionCleanupQuickActions
+                transactionCount={transactions.length}
+                activeExpenseCount={activeExpenseCount}
+                uncategorizedCount={uncategorizedCount}
+                untaggedCount={untaggedCount}
+                onShowUncategorized={() => setFilters((current) => ({ ...current, nature: "uncategorized" }))}
+                onShowUntagged={() => setFilters((current) => ({ ...current, nature: "untagged" }))}
+                onShowShared={() => setFilters((current) => ({ ...current, nature: "shared" }))}
+                onShowInternalTransfer={() => setFilters((current) => ({ ...current, nature: "internal_transfer" }))}
+                onResetCleanupFilters={() => setFilters((current) => ({ ...current, nature: "all", tagId: "all", searchQuery: "" }))}
+              />
 
               <TransactionSourceSummaryPanel
                 totalCount={transactions.length}
