@@ -25,6 +25,7 @@ export interface WorkspaceInsights {
   isDiagnosisReady: boolean;
   topCategories: Array<{ categoryName: string; amount: number }>;
   topTags: Array<{ tagName: string; amount: number; color: string; count: number }>;
+  sourceBreakdown: Array<{ sourceType: Transaction["sourceType"]; count: number; expenseAmount: number }>;
   headlineCards: Array<{ title: string; description: string }>;
   nextSteps: string[];
   coaching: string;
@@ -46,7 +47,7 @@ interface WorkspaceContext {
 
 type InsightMetrics = Omit<
   WorkspaceInsights,
-  "month" | "topCategories" | "topTags" | "headlineCards" | "nextSteps" | "coaching" | "spendTone" | "savingsTone" | "fixedTone"
+  "month" | "topCategories" | "topTags" | "sourceBreakdown" | "headlineCards" | "nextSteps" | "coaching" | "spendTone" | "savingsTone" | "fixedTone"
 >;
 
 function summarizeCategories(transactions: Transaction[], categories: Category[]) {
@@ -86,6 +87,23 @@ function summarizeTags(transactions: Transaction[], tags: Tag[]) {
   }
 
   return [...totals.values()].sort((a, b) => b.amount - a.amount).slice(0, 4);
+}
+
+function summarizeSourceTypes(transactions: Transaction[]) {
+  const sourceTypes: Transaction["sourceType"][] = ["manual", "account", "card", "import"];
+
+  return sourceTypes
+    .map((sourceType) => {
+      const sourceTransactions = transactions.filter((transaction) => transaction.sourceType === sourceType);
+      return {
+        sourceType,
+        count: sourceTransactions.length,
+        expenseAmount: sourceTransactions
+          .filter((transaction) => transaction.status === "active" && transaction.isExpenseImpact)
+          .reduce((sum, transaction) => sum + transaction.amount, 0),
+      };
+    })
+    .filter((item) => item.count > 0);
 }
 
 function getSpendTone(profile: FinancialProfile | null, spendRate: number): InsightTone {
@@ -274,6 +292,7 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
     ...metrics,
     topCategories: summarizeCategories(transactions, categories),
     topTags: summarizeTags(transactions, tags),
+    sourceBreakdown: summarizeSourceTypes(transactions),
     headlineCards: buildHeadlineCards(summarizeCategories(transactions, categories), metrics),
     nextSteps: buildNextSteps(context, metrics),
     coaching: buildCoaching(context, metrics),

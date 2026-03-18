@@ -9,6 +9,13 @@ function toneClass(tone: "stable" | "caution" | "warning") {
   return tone === "warning" ? "warning" : tone === "caution" ? "caution" : "stable";
 }
 
+const sourceTypeLabel = {
+  manual: "수동입력",
+  account: "계좌",
+  card: "카드",
+  import: "가져오기",
+} as const;
+
 interface DashboardAttentionItem {
   key: string;
   title: string;
@@ -406,6 +413,22 @@ export function DashboardPage() {
               ))}
               {!insights.topTags.length ? (
                 <div className="text-secondary">아직 태그가 붙은 지출이 적어 태그 흐름을 보여드리기 어렵습니다.</div>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="guide-progress mt-4">
+            <span className="section-kicker">수단 기준 흐름</span>
+            <div className="resource-grid mt-3">
+              {insights.sourceBreakdown.map((item, index) => (
+                <article key={item.sourceType} className="resource-card" style={getMotionStyle(index + 9)}>
+                  <h3>{sourceTypeLabel[item.sourceType]}</h3>
+                  <p className="mb-1 text-secondary">이번 달 거래 {item.count}건</p>
+                  <p className="mb-0 text-secondary">이 경로에서 실지출로 반영된 금액은 {formatCurrency(item.expenseAmount)}입니다.</p>
+                </article>
+              ))}
+              {!insights.sourceBreakdown.length ? (
+                <div className="text-secondary">아직 수단 기준으로 볼 거래 데이터가 충분하지 않습니다.</div>
               ) : null}
             </div>
           </div>
