@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
@@ -75,6 +76,7 @@ const transactionDraftGuide = {
 
 export function TransactionsPage() {
   const { addTransaction, assignCategoryBatch, assignTagBatch, state } = useAppState();
+  const [searchParams, setSearchParams] = useSearchParams();
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const categories = new Map(scope.categories.map((item) => [item.id, item.name]));
@@ -134,6 +136,14 @@ export function TransactionsPage() {
   const uncategorizedCount = activeTransactions.filter((item) => item.isExpenseImpact && !item.categoryId).length;
   const untaggedCount = activeTransactions.filter((item) => item.isExpenseImpact && item.tagIds.length === 0).length;
   const activeCleanupMode = cleanupModeCopy[filters.nature as keyof typeof cleanupModeCopy] ?? cleanupModeCopy.all;
+
+  useEffect(() => {
+    const cleanup = searchParams.get("cleanup");
+    if (cleanup === "uncategorized" || cleanup === "untagged") {
+      setFilters((current) => ({ ...current, nature: cleanup }));
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   return (
     <div className="page-stack">

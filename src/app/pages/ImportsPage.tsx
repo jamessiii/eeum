@@ -21,6 +21,9 @@ export function ImportsPage() {
   const uncategorizedCount = scope.transactions.filter(
     (item) => item.status === "active" && item.isExpenseImpact && !item.categoryId,
   ).length;
+  const untaggedCount = scope.transactions.filter(
+    (item) => item.status === "active" && item.isExpenseImpact && item.tagIds.length === 0,
+  ).length;
   const latestImport = imports[0] ?? null;
   const postImportFlow = [
     {
@@ -39,7 +42,7 @@ export function ImportsPage() {
       description: uncategorizedCount
         ? `${uncategorizedCount}건의 미분류 거래를 정리하면 통계가 더 정확해집니다.`
         : "미분류 거래가 없어 대시보드 해석을 더 믿고 볼 수 있습니다.",
-      to: "/categories",
+      to: uncategorizedCount ? "/transactions?cleanup=uncategorized" : "/categories",
       actionLabel: "분류 화면 열기",
       completed: uncategorizedCount === 0,
     },
@@ -265,10 +268,18 @@ export function ImportsPage() {
             </Link>
           </article>
           <article className="stat-card">
+            <span className="stat-label">무태그 거래</span>
+            <strong>{untaggedCount}건</strong>
+            <div className="small text-secondary mt-2">태그가 비어 있는 소비만 바로 모아두고 거래 정리 모드에서 같은 맥락의 지출을 빠르게 묶을 수 있습니다.</div>
+            <Link to="/transactions?cleanup=untagged" className="btn btn-outline-secondary btn-sm mt-3">
+              무태그 정리 바로가기
+            </Link>
+          </article>
+          <article className="stat-card">
             <span className="stat-label">미분류 거래</span>
             <strong>{uncategorizedCount}건</strong>
             <div className="small text-secondary mt-2">반복 지출 제안과 함께 미분류 거래를 분류해야 대시보드 해석이 살아납니다.</div>
-            <Link to="/categories" className="btn btn-outline-primary btn-sm mt-3">
+            <Link to="/transactions?cleanup=uncategorized" className="btn btn-outline-primary btn-sm mt-3">
               분류 화면 열기
             </Link>
           </article>
