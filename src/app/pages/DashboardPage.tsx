@@ -30,7 +30,7 @@ export function DashboardPage() {
   const { state } = useAppState();
   const workspaceId = state.activeWorkspaceId!;
   const insights = getWorkspaceInsights(state, workspaceId);
-  const hasPreparedTransactions = insights.expense > 0 || insights.income > 0;
+  const hasPreparedTransactions = insights.transactionCount > 0;
   const isDiagnosisReady = insights.isDiagnosisReady;
   const journeySteps: DashboardJourneyStep[] = [
     {

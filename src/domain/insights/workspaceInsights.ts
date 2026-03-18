@@ -6,6 +6,7 @@ export type InsightTone = "stable" | "caution" | "warning";
 
 export interface WorkspaceInsights {
   month: string;
+  transactionCount: number;
   income: number;
   expense: number;
   savings: number;
@@ -228,6 +229,7 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
   const internalTransferCount = transactions.filter((item) => item.status === "active" && item.isInternalTransfer).length;
 
   const metrics = {
+    transactionCount: transactions.length,
     income,
     expense,
     savings,
