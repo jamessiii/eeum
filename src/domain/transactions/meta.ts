@@ -42,7 +42,9 @@ export function isUntaggedExpenseTransaction(transaction: Transaction) {
   return isActiveExpenseImpactTransaction(transaction) && transaction.tagIds.length === 0;
 }
 
-export function getTransactionFlowSummary(transaction: Pick<Transaction, "transactionType" | "isExpenseImpact" | "isInternalTransfer" | "isSharedExpense">) {
+export function getTransactionFlowSummary(
+  transaction: Pick<Transaction, "transactionType" | "isExpenseImpact" | "isInternalTransfer" | "isSharedExpense">,
+) {
   if (transaction.isInternalTransfer) {
     return "내부이체로 처리되어 소비 통계에서는 제외됩니다.";
   }

@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
+  FLOW_MODE_LABELS as SHARED_FLOW_MODE_LABELS,
+  getTransactionFlowSummary as getSharedTransactionFlowSummary,
   isActiveExpenseImpactTransaction,
   isActiveInternalTransferTransaction,
   isActiveSharedExpenseTransaction,
   isActiveTransaction,
   isUncategorizedExpenseTransaction,
   isUntaggedExpenseTransaction,
+  TRANSACTION_STATUS_LABELS as SHARED_TRANSACTION_STATUS_LABELS,
+  TRANSACTION_TYPE_LABELS as SHARED_TRANSACTION_TYPE_LABELS,
 } from "../../domain/transactions/meta";
 import { getSourceTypeLabel, SOURCE_TYPE_OPTIONS } from "../../domain/transactions/sourceTypes";
 import { formatCurrency } from "../../shared/utils/format";
@@ -62,6 +66,11 @@ function getTransactionFlowSummary(transaction: {
 
   return "비지출 흐름으로 기록되어 소비 통계에서는 제외됩니다.";
 }
+
+void transactionTypeLabel;
+void transactionStatusLabel;
+void flowModeLabel;
+void getTransactionFlowSummary;
 
 const cleanupModeCopy = {
   all: {
@@ -905,7 +914,7 @@ export function TransactionsPage() {
                       <td>{transaction.settledAt?.slice(0, 10) ?? "-"}</td>
                       <td>
                         <span className={`badge ${transaction.isExpenseImpact ? "text-bg-danger-subtle" : "text-bg-secondary"}`}>
-                          {transactionTypeLabel[transaction.transactionType]}
+                          {SHARED_TRANSACTION_TYPE_LABELS[transaction.transactionType]}
                         </span>
                       </td>
                       <td>
@@ -918,18 +927,18 @@ export function TransactionsPage() {
                                 : "text-bg-info"
                           }`}
                         >
-                          {transactionStatusLabel[transaction.status]}
+                          {SHARED_TRANSACTION_STATUS_LABELS[transaction.status]}
                         </span>
                       </td>
                         <td>
                           <div className="transaction-nature-stack">
                             <span className={`badge ${transaction.isExpenseImpact ? "text-bg-danger-subtle" : "text-bg-secondary-subtle"}`}>
-                              {transaction.isExpenseImpact ? flowModeLabel.expense : flowModeLabel.non_expense}
+                              {transaction.isExpenseImpact ? SHARED_FLOW_MODE_LABELS.expense : SHARED_FLOW_MODE_LABELS.nonExpense}
                           </span>
                             {transaction.isInternalTransfer ? <span className="badge text-bg-info-subtle">내부이체</span> : null}
                             {transaction.isSharedExpense ? <span className="badge text-bg-warning-subtle">공동지출</span> : null}
                           </div>
-                          <div className="small text-secondary mt-2">{getTransactionFlowSummary(transaction)}</div>
+                          <div className="small text-secondary mt-2">{getSharedTransactionFlowSummary(transaction)}</div>
                           {transaction.status === "active" ? (
                             <div className="d-flex flex-wrap gap-2 mt-2">
                               {transaction.transactionType === "expense" ? (
