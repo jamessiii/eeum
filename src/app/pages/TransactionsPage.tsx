@@ -83,6 +83,7 @@ export function TransactionsPage() {
           if (filters.nature === "shared") return item.isSharedExpense;
           if (filters.nature === "internal_transfer") return item.isInternalTransfer;
           if (filters.nature === "uncategorized") return item.isExpenseImpact && !item.categoryId;
+          if (filters.nature === "untagged") return item.isExpenseImpact && item.tagIds.length === 0;
           return true;
         })
         .filter((item) => (filters.tagId === "all" ? true : item.tagIds.includes(filters.tagId)))
@@ -104,6 +105,7 @@ export function TransactionsPage() {
   const internalTransferCount = activeTransactions.filter((item) => item.isInternalTransfer).length;
   const sharedExpenseCount = activeTransactions.filter((item) => item.isSharedExpense).length;
   const uncategorizedCount = activeTransactions.filter((item) => item.isExpenseImpact && !item.categoryId).length;
+  const untaggedCount = activeTransactions.filter((item) => item.isExpenseImpact && item.tagIds.length === 0).length;
 
   return (
     <div className="page-stack">
@@ -301,6 +303,28 @@ export function TransactionsPage() {
                 <span className="stat-label">공동지출</span>
                 <strong>{sharedExpenseCount}건</strong>
               </article>
+              <article className="stat-card">
+                <span className="stat-label">무태그 거래</span>
+                <strong>{untaggedCount}건</strong>
+              </article>
+            </div>
+
+            <div className="review-summary-panel mb-3">
+              <div className="review-summary-copy">
+                <strong>빠르게 정리할 거래 고르기</strong>
+                <p className="mb-0 text-secondary">남은 정리 작업이 많은 거래만 바로 좁혀 보고, 아래 일괄 정리 도구로 이어서 정리할 수 있습니다.</p>
+              </div>
+              <div className="d-flex flex-wrap gap-2">
+                <button className="btn btn-outline-primary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, nature: "uncategorized" }))}>
+                  미분류만 보기
+                </button>
+                <button className="btn btn-outline-primary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, nature: "untagged" }))}>
+                  무태그만 보기
+                </button>
+                <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, nature: "all", tagId: "all", searchQuery: "" }))}>
+                  정리 필터 초기화
+                </button>
+              </div>
             </div>
 
             <div className="toolbar-row transaction-filter-row mb-3">
