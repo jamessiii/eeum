@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { HashRouter, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { MotionProvider } from "./motion/MotionProvider";
+import { AppGuidePanel } from "./components/AppGuidePanel";
 import { AccountsPage } from "./pages/AccountsPage";
 import { CardsPage } from "./pages/CardsPage";
 import { CategoriesPage } from "./pages/CategoriesPage";
@@ -153,6 +154,7 @@ function AppFrame() {
         </header>
 
         <main className="app-content">
+          <AppGuidePanel />
           <div className="route-stage">
             <div className="route-page">
               <Routes>
