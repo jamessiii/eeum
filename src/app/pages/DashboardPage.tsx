@@ -30,14 +30,16 @@ export function DashboardPage() {
   const { state } = useAppState();
   const workspaceId = state.activeWorkspaceId!;
   const insights = getWorkspaceInsights(state, workspaceId);
+  const hasPreparedTransactions = insights.expense > 0 || insights.income > 0;
+  const isDiagnosisReady = insights.isDiagnosisReady;
   const journeySteps: DashboardJourneyStep[] = [
     {
       key: "import",
       title: "거래 준비",
-      description: insights.expense > 0 || insights.income > 0 ? "거래 데이터가 들어와 있어 다음 정리 단계로 넘어갈 수 있습니다." : "엑셀 업로드나 수동 입력으로 첫 거래를 넣어야 진단이 시작됩니다.",
+      description: hasPreparedTransactions ? "거래 데이터가 들어와 있어 다음 정리 단계로 넘어갈 수 있습니다." : "엑셀 업로드나 수동 입력으로 첫 거래를 넣어야 진단이 시작됩니다.",
       to: "/imports",
-      actionLabel: insights.expense > 0 || insights.income > 0 ? "업로드 이력 보기" : "거래 가져오기",
-      completed: insights.expense > 0 || insights.income > 0,
+      actionLabel: hasPreparedTransactions ? "업로드 이력 보기" : "거래 가져오기",
+      completed: hasPreparedTransactions,
     },
     {
       key: "reviews",
@@ -75,12 +77,12 @@ export function DashboardPage() {
       key: "diagnosis",
       title: "진단 확인",
       description:
-        insights.reviewCount === 0 && insights.uncategorizedCount === 0 && insights.untaggedCount === 0 && insights.isFinancialProfileReady
+        isDiagnosisReady
           ? "핵심 정리가 끝나 이번 달 진단과 저축 가이드를 비교적 안정적으로 볼 수 있습니다."
           : "검토와 분류, 태그, 기준선 설정을 마치면 진단 해석이 더 정교해집니다.",
       to: "/",
       actionLabel: "지금 대시보드 읽기",
-      completed: insights.reviewCount === 0 && insights.uncategorizedCount === 0 && insights.untaggedCount === 0 && insights.isFinancialProfileReady,
+      completed: isDiagnosisReady,
     },
   ];
   const journeyProgress = journeySteps.filter((step) => step.completed).length / journeySteps.length;

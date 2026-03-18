@@ -20,6 +20,7 @@ export interface WorkspaceInsights {
   untaggedCount: number;
   recurringSuggestionCount: number;
   isFinancialProfileReady: boolean;
+  isDiagnosisReady: boolean;
   topCategories: Array<{ categoryName: string; amount: number }>;
   topTags: Array<{ tagName: string; amount: number; color: string; count: number }>;
   headlineCards: Array<{ title: string; description: string }>;
@@ -241,6 +242,7 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
     untaggedCount,
     recurringSuggestionCount,
     isFinancialProfileReady: income > 0,
+    isDiagnosisReady: reviewCount === 0 && uncategorizedCount === 0 && untaggedCount === 0 && income > 0,
   };
 
   const context: WorkspaceContext = {
