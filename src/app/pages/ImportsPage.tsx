@@ -102,8 +102,8 @@ export function ImportsPage() {
     completedCount: completedPostImportSteps,
     progress: postImportProgress,
     isReady: isPostImportReady,
+    nextStep: nextPostImportStep,
   } = getJourneyProgress(postImportFlow);
-  const nextPostImportStep = postImportFlow.find((step) => !step.completed) ?? null;
   const reviewTypeSummary = Object.entries(
     openReviews.reduce<Record<string, number>>((accumulator, item) => {
       accumulator[item.reviewType] = (accumulator[item.reviewType] ?? 0) + 1;
