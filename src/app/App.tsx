@@ -1,5 +1,6 @@
 import { HashRouter, NavLink, Route, Routes } from "react-router-dom";
 import { AccountsPage } from "./pages/AccountsPage";
+import { MotionProvider } from "./motion/MotionProvider";
 import { CardsPage } from "./pages/CardsPage";
 import { CategoriesPage } from "./pages/CategoriesPage";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -104,19 +105,23 @@ function AppShell() {
           </header>
 
           <main className="app-content">
-            <Routes>
-              <Route path="/" element={<DashboardPage />} />
-              <Route path="/transactions" element={<TransactionsPage />} />
-              <Route path="/people" element={<PeoplePage />} />
-              <Route path="/accounts" element={<AccountsPage />} />
-              <Route path="/cards" element={<CardsPage />} />
-              <Route path="/categories" element={<CategoriesPage />} />
-              <Route path="/imports" element={<ImportsPage />} />
-              <Route path="/reviews" element={<ReviewsPage />} />
-              <Route path="/settlements" element={<SettlementsPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/dev" element={<DeveloperPage />} />
-            </Routes>
+            <div className="route-stage">
+              <div className="route-page">
+                <Routes>
+                  <Route path="/" element={<DashboardPage />} />
+                  <Route path="/transactions" element={<TransactionsPage />} />
+                  <Route path="/people" element={<PeoplePage />} />
+                  <Route path="/accounts" element={<AccountsPage />} />
+                  <Route path="/cards" element={<CardsPage />} />
+                  <Route path="/categories" element={<CategoriesPage />} />
+                  <Route path="/imports" element={<ImportsPage />} />
+                  <Route path="/reviews" element={<ReviewsPage />} />
+                  <Route path="/settlements" element={<SettlementsPage />} />
+                  <Route path="/settings" element={<SettingsPage />} />
+                  <Route path="/dev" element={<DeveloperPage />} />
+                </Routes>
+              </div>
+            </div>
           </main>
         </div>
       </div>
@@ -126,8 +131,10 @@ function AppShell() {
 
 export default function App() {
   return (
-    <AppStateProvider>
-      <AppShell />
-    </AppStateProvider>
+    <MotionProvider>
+      <AppStateProvider>
+        <AppShell />
+      </AppStateProvider>
+    </MotionProvider>
   );
 }

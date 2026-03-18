@@ -1,5 +1,6 @@
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
+import { getMotionStyle } from "../../shared/utils/motion";
 
 const reviewTypeLabel: Record<string, string> = {
   duplicate_candidate: "중복 후보",
@@ -29,14 +30,14 @@ export function ReviewsPage() {
         팝업으로 즉답을 강요하지 않고, 검토가 필요한 항목을 이곳에 모아둡니다. 사용자가 거래 맥락을 본 뒤 직접 처리할 수 있도록 설계했습니다.
       </p>
       <div className="review-list">
-        {reviews.map((review) => {
+        {reviews.map((review, index) => {
           const primaryTransaction = transactions.get(review.primaryTransactionId) ?? null;
           const relatedTransactions = review.relatedTransactionIds
             .map((id) => transactions.get(id))
             .filter((item): item is NonNullable<typeof item> => Boolean(item));
 
           return (
-            <article key={review.id} className="review-card">
+            <article key={review.id} className="review-card" style={getMotionStyle(index)}>
               <div className="d-flex justify-content-between align-items-start gap-3">
                 <div>
                   <span className="review-type">{reviewTypeLabel[review.reviewType] ?? review.reviewType}</span>

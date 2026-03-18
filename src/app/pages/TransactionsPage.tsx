@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { formatCurrency } from "../../shared/utils/format";
+import { getMotionStyle } from "../../shared/utils/motion";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
 
@@ -28,7 +29,7 @@ export function TransactionsPage() {
 
   return (
     <div className="page-stack">
-      <section className="card shadow-sm">
+      <section className="card shadow-sm" style={getMotionStyle(0)}>
         <div className="section-head">
           <div>
             <span className="section-kicker">거래 입력</span>
@@ -122,7 +123,7 @@ export function TransactionsPage() {
         </form>
       </section>
 
-      <section className="card shadow-sm">
+      <section className="card shadow-sm" style={getMotionStyle(1)}>
         <div className="section-head">
           <div>
             <span className="section-kicker">거래 목록</span>
@@ -168,8 +169,8 @@ export function TransactionsPage() {
               </tr>
             </thead>
             <tbody>
-              {transactions.map((transaction) => (
-                <tr key={transaction.id}>
+              {transactions.map((transaction, index) => (
+                <tr key={transaction.id} style={getMotionStyle(index)}>
                   <td>{transaction.occurredAt.slice(0, 10)}</td>
                   <td>{transaction.settledAt?.slice(0, 10) ?? "-"}</td>
                   <td>
