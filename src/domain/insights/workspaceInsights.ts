@@ -1,5 +1,5 @@
 import { monthKey } from "../../shared/utils/date";
-import type { AppState, Category, FinancialProfile, ReviewItem, Transaction } from "../../shared/types/models";
+import type { AppState, Category, FinancialProfile, ReviewItem, Tag, Transaction } from "../../shared/types/models";
 import { getRecurringMerchantSuggestions, getUncategorizedTransactions } from "../classification/suggestions";
 
 export type InsightTone = "stable" | "caution" | "warning";
@@ -20,6 +20,7 @@ export interface WorkspaceInsights {
   recurringSuggestionCount: number;
   isFinancialProfileReady: boolean;
   topCategories: Array<{ categoryName: string; amount: number }>;
+  topTags: Array<{ tagName: string; amount: number; color: string; count: number }>;
   headlineCards: Array<{ title: string; description: string }>;
   nextSteps: string[];
   coaching: string;
@@ -32,6 +33,7 @@ interface WorkspaceContext {
   transactions: Transaction[];
   reviews: ReviewItem[];
   categories: Category[];
+  tags: Tag[];
   financialProfile: FinancialProfile | null;
   peopleCount: number;
   accountCount: number;
@@ -40,7 +42,7 @@ interface WorkspaceContext {
 
 type InsightMetrics = Omit<
   WorkspaceInsights,
-  "month" | "topCategories" | "headlineCards" | "nextSteps" | "coaching" | "spendTone" | "savingsTone" | "fixedTone"
+  "month" | "topCategories" | "topTags" | "headlineCards" | "nextSteps" | "coaching" | "spendTone" | "savingsTone" | "fixedTone"
 >;
 
 function summarizeCategories(transactions: Transaction[], categories: Category[]) {
@@ -57,6 +59,29 @@ function summarizeCategories(transactions: Transaction[], categories: Category[]
     .map(([categoryName, amount]) => ({ categoryName, amount }))
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 4);
+}
+
+function summarizeTags(transactions: Transaction[], tags: Tag[]) {
+  const tagMap = new Map(tags.map((tag) => [tag.id, tag]));
+  const totals = new Map<string, { amount: number; count: number; color: string; tagName: string }>();
+
+  for (const transaction of transactions) {
+    if (transaction.status !== "active" || !transaction.isExpenseImpact || !transaction.tagIds.length) continue;
+
+    for (const tagId of transaction.tagIds) {
+      const tag = tagMap.get(tagId);
+      if (!tag) continue;
+      const current = totals.get(tagId) ?? { amount: 0, count: 0, color: tag.color, tagName: tag.name };
+      totals.set(tagId, {
+        amount: current.amount + transaction.amount,
+        count: current.count + 1,
+        color: tag.color,
+        tagName: tag.name,
+      });
+    }
+  }
+
+  return [...totals.values()].sort((a, b) => b.amount - a.amount).slice(0, 4);
 }
 
 function getSpendTone(profile: FinancialProfile | null, spendRate: number): InsightTone {
@@ -165,6 +190,7 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
   );
   const reviews = state.reviews.filter((item) => item.workspaceId === workspaceId);
   const categories = state.categories.filter((item) => item.workspaceId === workspaceId);
+  const tags = state.tags.filter((item) => item.workspaceId === workspaceId);
   const financialProfile = state.financialProfiles.find((item) => item.workspaceId === workspaceId) ?? null;
   const peopleCount = state.people.filter((item) => item.workspaceId === workspaceId).length;
   const accountCount = state.accounts.filter((item) => item.workspaceId === workspaceId).length;
@@ -212,6 +238,7 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
     transactions,
     reviews,
     categories,
+    tags,
     financialProfile,
     peopleCount,
     accountCount,
@@ -222,6 +249,7 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
     month: baseMonth,
     ...metrics,
     topCategories: summarizeCategories(transactions, categories),
+    topTags: summarizeTags(transactions, tags),
     headlineCards: buildHeadlineCards(summarizeCategories(transactions, categories), metrics),
     nextSteps: buildNextSteps(context, metrics),
     coaching: buildCoaching(context, metrics),

@@ -217,6 +217,25 @@ export function DashboardPage() {
               </article>
             </div>
           </div>
+          <div className="guide-progress mt-4">
+            <span className="section-kicker">태그 기준 흐름</span>
+            <div className="resource-grid mt-3">
+              {insights.topTags.map((item, index) => (
+                <article key={item.tagName} className="resource-card" style={getMotionStyle(index + 5)}>
+                  <div className="d-flex align-items-center gap-2">
+                    <span className="tag-pill" style={{ ["--tag-color" as string]: item.color }}>
+                      {item.tagName}
+                    </span>
+                    <span className="small text-secondary">{item.count}건</span>
+                  </div>
+                  <p className="mb-0 text-secondary">이 태그가 붙은 지출 합계는 {formatCurrency(item.amount)}입니다.</p>
+                </article>
+              ))}
+              {!insights.topTags.length ? (
+                <div className="text-secondary">아직 태그가 붙은 지출이 적어 태그 흐름을 보여드리기 어렵습니다.</div>
+              ) : null}
+            </div>
+          </div>
         </section>
       </div>
     </div>
