@@ -10,6 +10,7 @@ import {
 import { getTransactionActivitySummary } from "../../domain/transactions/transactionActivitySummary";
 import { getSourceTypeCounts } from "../../domain/transactions/sourceTypeCounts";
 import { getSourceTypeLabel, SOURCE_TYPE_OPTIONS } from "../../domain/transactions/sourceTypes";
+import { getTransactionViewMode } from "../../domain/transactions/transactionViewMode";
 import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { CompletionBanner } from "../components/CompletionBanner";
@@ -176,14 +177,20 @@ export function TransactionsPage() {
   const selectedBulkTag = scope.tags.find((tag) => tag.id === bulkTagId) ?? null;
   const selectedBulkCategory = scope.categories.find((category) => category.id === bulkCategoryId) ?? null;
   const activeCleanupMode = cleanupModeCopy[filters.nature as keyof typeof cleanupModeCopy] ?? cleanupModeCopy.all;
-  const isFocusedCleanupMode = filters.nature === "uncategorized" || filters.nature === "untagged";
-  const isFlowAuditMode = filters.nature === "shared" || filters.nature === "internal_transfer";
   const activeOwnerName = filters.ownerPersonId !== "all" ? peopleMap.get(filters.ownerPersonId) ?? null : null;
   const activeSourceTypeLabel = filters.sourceType !== "all" ? getSourceTypeLabel(filters.sourceType as (typeof SOURCE_TYPE_OPTIONS)[number]) : null;
-  const currentCleanupRemaining =
-    filters.nature === "uncategorized" ? uncategorizedCount : filters.nature === "untagged" ? untaggedCount : null;
-  const currentFlowAuditCount =
-    filters.nature === "shared" ? sharedExpenseCount : filters.nature === "internal_transfer" ? internalTransferCount : null;
+  const {
+    isFocusedCleanupMode,
+    isFlowAuditMode,
+    currentCleanupRemaining,
+    currentFlowAuditCount,
+  } = getTransactionViewMode({
+    nature: filters.nature as "all" | "expense" | "shared" | "internal_transfer" | "uncategorized" | "untagged",
+    uncategorizedCount,
+    untaggedCount,
+    sharedExpenseCount,
+    internalTransferCount,
+  });
 
   useEffect(() => {
     const cleanup = searchParams.get("cleanup");
