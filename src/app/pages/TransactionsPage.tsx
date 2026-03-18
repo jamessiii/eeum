@@ -23,6 +23,33 @@ const flowModeLabel = {
   non_expense: "비지출 흐름",
 } as const;
 
+const cleanupModeCopy = {
+  all: {
+    title: "전체 거래를 보고 있습니다",
+    description: "필터를 더 좁히면 미분류나 무태그처럼 정리가 많이 필요한 거래만 빠르게 모아볼 수 있습니다.",
+  },
+  expense: {
+    title: "실지출만 보고 있습니다",
+    description: "실제 소비에 잡히는 거래만 모아둔 상태라 카테고리와 태그를 정리하기 좋은 흐름입니다.",
+  },
+  shared: {
+    title: "공동지출만 보고 있습니다",
+    description: "정산과 공동생활비 흐름에 직접 연결되는 거래만 보고 있어 공동지출 정리에 집중하기 좋습니다.",
+  },
+  internal_transfer: {
+    title: "내부이체만 보고 있습니다",
+    description: "소비로 잡히면 안 되는 자금 이동 위주로 확인하는 상태입니다.",
+  },
+  uncategorized: {
+    title: "미분류 거래만 보고 있습니다",
+    description: "카테고리가 비어 있는 거래만 모아둔 상태라 카테고리 일괄 정리에 가장 적합합니다.",
+  },
+  untagged: {
+    title: "무태그 거래만 보고 있습니다",
+    description: "태그가 없는 거래만 모아둔 상태라 같은 맥락의 소비를 태그로 빠르게 묶기 좋습니다.",
+  },
+} as const;
+
 const transactionDraftGuide = {
   expense: {
     title: "지출 입력 중",
@@ -106,6 +133,7 @@ export function TransactionsPage() {
   const sharedExpenseCount = activeTransactions.filter((item) => item.isSharedExpense).length;
   const uncategorizedCount = activeTransactions.filter((item) => item.isExpenseImpact && !item.categoryId).length;
   const untaggedCount = activeTransactions.filter((item) => item.isExpenseImpact && item.tagIds.length === 0).length;
+  const activeCleanupMode = cleanupModeCopy[filters.nature as keyof typeof cleanupModeCopy] ?? cleanupModeCopy.all;
 
   return (
     <div className="page-stack">
@@ -309,6 +337,15 @@ export function TransactionsPage() {
               </article>
             </div>
 
+            <div className="review-summary-panel mb-3">
+              <div className="review-summary-copy">
+                <strong>{activeCleanupMode.title}</strong>
+                <p className="mb-0 text-secondary">{activeCleanupMode.description}</p>
+              </div>
+              <div className="small text-secondary">
+                현재 보이는 거래 {transactions.length}건 중 실지출 {activeExpenseCount}건, 미분류 {uncategorizedCount}건, 무태그 {untaggedCount}건입니다.
+              </div>
+            </div>
             <div className="review-summary-panel mb-3">
               <div className="review-summary-copy">
                 <strong>빠르게 정리할 거래 고르기</strong>
