@@ -541,7 +541,7 @@ a {
 }
 
 .transaction-filter-row {
-  grid-template-columns: repeat(4, minmax(0, 14rem));
+  grid-template-columns: repeat(5, minmax(0, 14rem));
 }
 
 .toolbar-select {

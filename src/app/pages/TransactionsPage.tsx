@@ -62,6 +62,7 @@ export function TransactionsPage() {
     ownerPersonId: "all",
     status: "all",
     nature: "all",
+    tagId: "all",
     searchQuery: "",
   });
   const [draftType, setDraftType] = useState<"expense" | "income" | "transfer" | "adjustment">("expense");
@@ -82,6 +83,7 @@ export function TransactionsPage() {
           if (filters.nature === "uncategorized") return item.isExpenseImpact && !item.categoryId;
           return true;
         })
+        .filter((item) => (filters.tagId === "all" ? true : item.tagIds.includes(filters.tagId)))
         .filter((item) => {
           const query = filters.searchQuery.trim().toLowerCase();
           if (!query) return true;
@@ -90,7 +92,7 @@ export function TransactionsPage() {
             .some((value) => value.toLowerCase().includes(query));
         })
         .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)),
-    [filters.nature, filters.ownerPersonId, filters.searchQuery, filters.status, filters.transactionType, scope.transactions],
+    [filters.nature, filters.ownerPersonId, filters.searchQuery, filters.status, filters.tagId, filters.transactionType, scope.transactions],
   );
 
   const activeTransactions = transactions.filter((item) => item.status === "active");
@@ -341,6 +343,18 @@ export function TransactionsPage() {
                 <option value="shared">공동지출만</option>
                 <option value="internal_transfer">내부이체만</option>
                 <option value="uncategorized">미분류만</option>
+              </select>
+              <select
+                className="form-select toolbar-select"
+                value={filters.tagId}
+                onChange={(event) => setFilters((current) => ({ ...current, tagId: event.target.value }))}
+              >
+                <option value="all">?꾩껜 ?쒓렇</option>
+                {scope.tags.map((tag) => (
+                  <option key={tag.id} value={tag.id}>
+                    {tag.name}
+                  </option>
+                ))}
               </select>
               <input
                 className="form-control toolbar-search"
