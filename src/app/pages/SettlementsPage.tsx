@@ -253,6 +253,38 @@ export function SettlementsPage() {
                 ) : null}
               </div>
 
+              <div className="review-summary-panel mt-4">
+                <div className="review-summary-copy">
+                  <strong>최근 공동지출 근거 거래</strong>
+                  <p className="mb-0 text-secondary">
+                    정산 계산에 들어간 최근 공동지출을 바로 확인할 수 있습니다. 흐름이 어색하면 먼저 공동지출 표기부터 다시 점검해보세요.
+                  </p>
+                </div>
+                <div className="d-flex flex-wrap gap-2">
+                  <Link to="/transactions?nature=shared" className="btn btn-outline-primary btn-sm">
+                    공동지출 전체 보기
+                  </Link>
+                </div>
+              </div>
+
+              <div className="review-list mt-4">
+                {sharedTransactions.slice(0, 8).map((transaction, index) => (
+                  <article key={transaction.id} className="review-card" style={getMotionStyle(index + 2)}>
+                    <div className="d-flex justify-content-between align-items-start gap-3">
+                      <div>
+                        <span className="review-type">공동지출 근거</span>
+                        <h3>{transaction.merchantName}</h3>
+                        <p className="mb-1 text-secondary">
+                          {transaction.occurredAt.slice(0, 10)} · {(transaction.ownerPersonId ? peopleMap.get(transaction.ownerPersonId) : "공동") ?? "공동"}
+                        </p>
+                        <p className="mb-0 text-secondary">{transaction.description || "설명 없음"}</p>
+                      </div>
+                      <strong>{formatCurrency(transaction.amount)}</strong>
+                    </div>
+                  </article>
+                ))}
+              </div>
+
               <div className="review-list mt-4">
                 {rows.map((row, index) => (
                   <article key={row.personId} className="review-card" style={getMotionStyle(index + 2)}>
