@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
-  FLOW_MODE_LABELS as SHARED_FLOW_MODE_LABELS,
-  getTransactionFlowSummary as getSharedTransactionFlowSummary,
   isActiveExpenseImpactTransaction,
   isActiveInternalTransferTransaction,
   isActiveSharedExpenseTransaction,
@@ -19,7 +17,7 @@ import { CompletionBanner } from "../components/CompletionBanner";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { TransactionCategoryEditor } from "../components/TransactionCategoryEditor";
 import { TransactionInlineEditor, type TransactionEditDraft } from "../components/TransactionInlineEditor";
-import { TransactionQuickActions } from "../components/TransactionQuickActions";
+import { TransactionNatureCell } from "../components/TransactionNatureCell";
 import { TransactionRowHeader } from "../components/TransactionRowHeader";
 import { TransactionTagEditor } from "../components/TransactionTagEditor";
 import { useAppState } from "../state/AppStateProvider";
@@ -889,15 +887,7 @@ export function TransactionsPage() {
                         </span>
                       </td>
                         <td>
-                          <div className="transaction-nature-stack">
-                            <span className={`badge ${transaction.isExpenseImpact ? "text-bg-danger-subtle" : "text-bg-secondary-subtle"}`}>
-                              {transaction.isExpenseImpact ? SHARED_FLOW_MODE_LABELS.expense : SHARED_FLOW_MODE_LABELS.nonExpense}
-                          </span>
-                            {transaction.isInternalTransfer ? <span className="badge text-bg-info-subtle">내부이체</span> : null}
-                            {transaction.isSharedExpense ? <span className="badge text-bg-warning-subtle">공동지출</span> : null}
-                          </div>
-                          <div className="small text-secondary mt-2">{getSharedTransactionFlowSummary(transaction)}</div>
-                          <TransactionQuickActions
+                          <TransactionNatureCell
                             transaction={transaction}
                             onToggleSharedExpense={() =>
                               updateTransactionFlags(workspaceId, transaction.id, {
@@ -915,7 +905,7 @@ export function TransactionsPage() {
                               })
                             }
                           />
-                      </td>
+                        </td>
                         <td>
                           <TransactionRowHeader
                             merchantName={transaction.merchantName}
