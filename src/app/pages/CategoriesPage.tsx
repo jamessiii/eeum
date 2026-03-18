@@ -7,6 +7,7 @@ import {
 import { formatCurrency, formatPercent } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { CompletionBanner } from "../components/CompletionBanner";
+import { NextStepCallout } from "../components/NextStepCallout";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
 
@@ -105,23 +106,13 @@ export function CategoriesPage() {
           </div>
         </div>
         {nextCategoryAction ? (
-          <div className="review-summary-panel mt-4">
-            <div className="review-summary-copy">
-              <strong>{nextCategoryAction.title}</strong>
-              <p className="mb-0 text-secondary">{nextCategoryAction.description}</p>
-            </div>
-            <div className="d-flex flex-wrap gap-2">
-              {nextCategoryAction.to.startsWith("#") ? (
-                <a href={nextCategoryAction.to} className="btn btn-outline-primary btn-sm">
-                  {nextCategoryAction.actionLabel}
-                </a>
-              ) : (
-                <Link to={nextCategoryAction.to} className="btn btn-outline-primary btn-sm">
-                  {nextCategoryAction.actionLabel}
-                </Link>
-              )}
-            </div>
-          </div>
+          <NextStepCallout
+            className="mt-4"
+            title={nextCategoryAction.title}
+            description={nextCategoryAction.description}
+            actionLabel={nextCategoryAction.actionLabel}
+            to={nextCategoryAction.to}
+          />
         ) : null}
         <div className="review-summary-panel mt-4">
           <div className="review-summary-copy">

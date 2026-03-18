@@ -7,6 +7,7 @@ import { getMotionStyle } from "../../shared/utils/motion";
 import { CompletionBanner } from "../components/CompletionBanner";
 import { ReviewTypeFilterBar } from "../components/ReviewTypeFilterBar";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
+import { NextStepCallout } from "../components/NextStepCallout";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
 
@@ -210,17 +211,13 @@ export function ReviewsPage() {
       ) : null}
 
       {nextReviewAction ? (
-        <div className="review-summary-panel mt-3">
-          <div className="review-summary-copy">
-            <strong>{nextReviewAction.title}</strong>
-            <p className="mb-0 text-secondary">{nextReviewAction.description}</p>
-          </div>
-          <div className="d-flex flex-wrap gap-2">
-            <Link className="btn btn-outline-primary btn-sm" to={nextReviewAction.to}>
-              {nextReviewAction.actionLabel}
-            </Link>
-          </div>
-        </div>
+        <NextStepCallout
+          className="mt-3"
+          title={nextReviewAction.title}
+          description={nextReviewAction.description}
+          actionLabel={nextReviewAction.actionLabel}
+          to={nextReviewAction.to}
+        />
       ) : null}
 
       <div className="review-summary-panel mt-3">

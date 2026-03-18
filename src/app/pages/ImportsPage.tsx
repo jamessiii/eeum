@@ -13,6 +13,7 @@ import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { CompletionBanner } from "../components/CompletionBanner";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
+import { NextStepCallout } from "../components/NextStepCallout";
 import { SourceBreakdownSection } from "../components/SourceBreakdownSection";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
@@ -299,17 +300,7 @@ export function ImportsPage() {
           </div>
         </div>
         {nextPostImportStep ? (
-          <div className="review-summary-panel mt-4">
-            <div className="review-summary-copy">
-              <strong>지금 가장 먼저 할 일</strong>
-              <p className="mb-0 text-secondary">{nextPostImportStep.description}</p>
-            </div>
-            <div className="d-flex flex-wrap gap-2">
-              <Link to={nextPostImportStep.to} className="btn btn-outline-primary btn-sm">
-                {nextPostImportStep.actionLabel}
-              </Link>
-            </div>
-          </div>
+          <NextStepCallout className="mt-4" description={nextPostImportStep.description} actionLabel={nextPostImportStep.actionLabel} to={nextPostImportStep.to} />
         ) : null}
         <div className="flow-journey-grid mb-4">
           {postImportFlow.map((step, index) => (
