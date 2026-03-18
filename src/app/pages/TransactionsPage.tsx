@@ -4,10 +4,10 @@ import {
   isActiveExpenseImpactTransaction,
   isActiveInternalTransferTransaction,
   isActiveSharedExpenseTransaction,
-  isActiveTransaction,
   isUncategorizedExpenseTransaction,
   isUntaggedExpenseTransaction,
 } from "../../domain/transactions/meta";
+import { getTransactionActivitySummary } from "../../domain/transactions/transactionActivitySummary";
 import { getSourceTypeCounts } from "../../domain/transactions/sourceTypeCounts";
 import { getSourceTypeLabel, SOURCE_TYPE_OPTIONS } from "../../domain/transactions/sourceTypes";
 import { formatCurrency } from "../../shared/utils/format";
@@ -159,17 +159,20 @@ export function TransactionsPage() {
       [filters.nature, filters.ownerPersonId, filters.searchQuery, filters.sourceType, filters.status, filters.tagId, filters.transactionType, scope.transactions],
     );
 
-  const activeTransactions = transactions.filter(isActiveTransaction);
   const sourceTypeCounts = getSourceTypeCounts(transactions);
-  const categorizableTransactions = activeTransactions.filter(isActiveExpenseImpactTransaction);
-  const taggableTransactions = activeTransactions.filter(isActiveExpenseImpactTransaction);
-  const activeExpenseCount = activeTransactions.filter(isActiveExpenseImpactTransaction).length;
-  const internalTransferCount = activeTransactions.filter(isActiveInternalTransferTransaction).length;
-  const sharedExpenseCount = activeTransactions.filter(isActiveSharedExpenseTransaction).length;
-  const uncategorizedCount = activeTransactions.filter(isUncategorizedExpenseTransaction).length;
-  const untaggedCount = activeTransactions.filter(isUntaggedExpenseTransaction).length;
-  const taggableAmount = taggableTransactions.reduce((sum, item) => sum + item.amount, 0);
-  const categorizableAmount = categorizableTransactions.reduce((sum, item) => sum + item.amount, 0);
+  const {
+    expenseImpactTransactions,
+    activeExpenseCount,
+    internalTransferCount,
+    sharedExpenseCount,
+    uncategorizedCount,
+    untaggedCount,
+    expenseImpactAmount,
+  } = getTransactionActivitySummary(transactions);
+  const categorizableTransactions = expenseImpactTransactions;
+  const taggableTransactions = expenseImpactTransactions;
+  const taggableAmount = expenseImpactAmount;
+  const categorizableAmount = expenseImpactAmount;
   const selectedBulkTag = scope.tags.find((tag) => tag.id === bulkTagId) ?? null;
   const selectedBulkCategory = scope.categories.find((category) => category.id === bulkCategoryId) ?? null;
   const activeCleanupMode = cleanupModeCopy[filters.nature as keyof typeof cleanupModeCopy] ?? cleanupModeCopy.all;
