@@ -4,6 +4,7 @@ import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { CompletionBanner } from "../components/CompletionBanner";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
+import { NextStepCallout } from "../components/NextStepCallout";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
 
@@ -134,17 +135,13 @@ export function SettlementsPage() {
           공동지출로 표시된 거래만 합산해서 각 사람이 얼마나 부담했는지 비교합니다. 이번 달 정산 후보를 보고 실제로 끝낸 정산은 아래
           기록으로 남길 수 있습니다.
         </p>
-        <div className="review-summary-panel mt-4">
-          <div className="review-summary-copy">
-            <strong>{nextSettlementAction.title}</strong>
-            <p className="mb-0 text-secondary">{nextSettlementAction.description}</p>
-          </div>
-          <div className="d-flex flex-wrap gap-2">
-            <Link to={nextSettlementAction.to} className="btn btn-outline-primary btn-sm">
-              {nextSettlementAction.actionLabel}
-            </Link>
-          </div>
-        </div>
+        <NextStepCallout
+          className="mt-4"
+          title={nextSettlementAction.title}
+          description={nextSettlementAction.description}
+          actionLabel={nextSettlementAction.actionLabel}
+          to={nextSettlementAction.to}
+        />
         {isSettlementBalanced ? (
           <CompletionBanner
             className="mt-3"
