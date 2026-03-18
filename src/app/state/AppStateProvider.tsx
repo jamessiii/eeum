@@ -290,7 +290,8 @@ interface AppStateContextValue {
   isReady: boolean;
   createEmptyWorkspace: (name?: string) => void;
   createDemoWorkspace: () => Promise<void>;
-  importWorkbook: (file: File) => Promise<void>;
+  previewWorkbookImport: (file: File) => Promise<WorkspaceBundle>;
+  commitImportedBundle: (bundle: WorkspaceBundle, fileName: string) => void;
   setActiveWorkspace: (workspaceId: string) => void;
   resetApp: () => Promise<void>;
   exportState: () => void;
@@ -358,11 +359,15 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         dispatch({ type: "mergeBundle", payload: createHouseholdV2DemoBundle() });
         showToast("테스트 워크스페이스를 불러왔습니다.", "success");
       },
-      async importWorkbook(file) {
+      async previewWorkbookImport(file) {
         const { parseHouseholdWorkbook } = await import("../../domain/imports/householdWorkbook");
         const bundle = await parseHouseholdWorkbook(file);
+        showToast(`${file.name} 미리보기를 준비했습니다.`, "info");
+        return bundle;
+      },
+      commitImportedBundle(bundle, fileName) {
         dispatch({ type: "mergeBundle", payload: bundle });
-        showToast(`${file.name} 업로드를 완료했습니다.`, "success");
+        showToast(`${fileName} 업로드를 완료했습니다.`, "success");
       },
       setActiveWorkspace(workspaceId) {
         dispatch({ type: "setActiveWorkspace", payload: workspaceId });

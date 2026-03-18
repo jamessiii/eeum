@@ -1,12 +1,17 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { REVIEW_TYPE_LABELS } from "../../domain/reviews/meta";
+import type { WorkspaceBundle } from "../../shared/types/models";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
 
 export function ImportsPage() {
-  const { importWorkbook, state } = useAppState();
+  const { commitImportedBundle, previewWorkbookImport, state } = useAppState();
+  const [previewBundle, setPreviewBundle] = useState<WorkspaceBundle | null>(null);
+  const [previewFileName, setPreviewFileName] = useState("");
+  const [isPreparingPreview, setIsPreparingPreview] = useState(false);
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const imports = [...scope.imports].sort((a, b) => b.importedAt.localeCompare(a.importedAt));
@@ -21,6 +26,14 @@ export function ImportsPage() {
       return accumulator;
     }, {}),
   ).sort((a, b) => b[1] - a[1]);
+  const previewReviewSummary = previewBundle
+    ? Object.entries(
+        previewBundle.reviews.reduce<Record<string, number>>((accumulator, item) => {
+          accumulator[item.reviewType] = (accumulator[item.reviewType] ?? 0) + 1;
+          return accumulator;
+        }, {}),
+      ).sort((a, b) => b[1] - a[1])
+    : [];
 
   return (
     <div className="page-stack">
@@ -39,22 +52,105 @@ export function ImportsPage() {
         <label className="upload-dropzone">
           <div>
             <strong>엑셀 워크북 업로드</strong>
-            <p className="mb-0 text-secondary">업로드한 파일로 새 워크스페이스를 만들고 거래와 검토 항목을 정규화합니다.</p>
+            <p className="mb-0 text-secondary">파일을 바로 저장하지 않고, 먼저 미리보기로 거래와 검토 항목 규모를 보여드립니다.</p>
           </div>
           <input
             hidden
             type="file"
             accept=".xlsx,.xls"
-            onChange={(event) => {
+            onChange={async (event) => {
               const file = event.target.files?.[0];
-              if (file) void importWorkbook(file);
+              if (file) {
+                setIsPreparingPreview(true);
+                try {
+                  const bundle = await previewWorkbookImport(file);
+                  setPreviewBundle(bundle);
+                  setPreviewFileName(file.name);
+                } finally {
+                  setIsPreparingPreview(false);
+                }
+              }
               event.currentTarget.value = "";
             }}
           />
         </label>
+        {isPreparingPreview ? <p className="small text-secondary mt-3 mb-0">엑셀 데이터를 분석해서 미리보기를 준비하고 있습니다.</p> : null}
       </section>
 
-      <section className="card shadow-sm" style={getMotionStyle(1)}>
+      {previewBundle ? (
+        <section className="card shadow-sm" style={getMotionStyle(1)}>
+          <div className="section-head">
+            <div>
+              <span className="section-kicker">업로드 미리보기</span>
+              <h2 className="section-title">저장 전에 가져올 내용을 확인하세요</h2>
+            </div>
+            <span className="badge text-bg-primary">{previewBundle.workspace.name}</span>
+          </div>
+          <p className="text-secondary">
+            <strong>{previewFileName}</strong> 파일을 새 워크스페이스로 가져올 준비가 되었습니다. 아래 요약을 보고 그대로 저장할지 먼저
+            판단할 수 있습니다.
+          </p>
+          <div className="classification-flow-grid">
+            <article className="stat-card">
+              <span className="stat-label">거래</span>
+              <strong>{previewBundle.transactions.length}건</strong>
+              <div className="small text-secondary mt-2">카드, 이체, 내부이체 후보를 포함한 전체 거래 수입니다.</div>
+            </article>
+            <article className="stat-card">
+              <span className="stat-label">검토 항목</span>
+              <strong>{previewBundle.reviews.length}건</strong>
+              <div className="small text-secondary mt-2">중복, 환불, 내부이체, 공동지출, 미분류 후보가 함께 생성됩니다.</div>
+            </article>
+            <article className="stat-card">
+              <span className="stat-label">구성 데이터</span>
+              <strong>
+                {previewBundle.people.length}명 · {previewBundle.accounts.length}계좌 · {previewBundle.cards.length}카드
+              </strong>
+              <div className="small text-secondary mt-2">업로드와 함께 사람, 계좌, 카드 정보도 워크스페이스에 정리됩니다.</div>
+            </article>
+          </div>
+          <div className="resource-grid mt-4">
+            {previewReviewSummary.length ? (
+              previewReviewSummary.map(([reviewType, count]) => (
+                <article key={reviewType} className="resource-card">
+                  <h3>{REVIEW_TYPE_LABELS[reviewType as keyof typeof REVIEW_TYPE_LABELS] ?? reviewType}</h3>
+                  <p className="mb-0 text-secondary">{count}건</p>
+                </article>
+              ))
+            ) : (
+              <article className="resource-card">
+                <h3>검토 항목 없음</h3>
+                <p className="mb-0 text-secondary">이 파일은 즉시 분류 흐름으로 이어갈 수 있는 상태입니다.</p>
+              </article>
+            )}
+          </div>
+          <div className="d-flex flex-wrap gap-2 mt-4">
+            <button
+              className="btn btn-primary"
+              type="button"
+              onClick={() => {
+                commitImportedBundle(previewBundle, previewFileName);
+                setPreviewBundle(null);
+                setPreviewFileName("");
+              }}
+            >
+              이 미리보기로 가져오기
+            </button>
+            <button
+              className="btn btn-outline-secondary"
+              type="button"
+              onClick={() => {
+                setPreviewBundle(null);
+                setPreviewFileName("");
+              }}
+            >
+              다시 선택하기
+            </button>
+          </div>
+        </section>
+      ) : null}
+
+      <section className="card shadow-sm" style={getMotionStyle(previewBundle ? 2 : 1)}>
         <div className="section-head">
           <div>
             <span className="section-kicker">업로드 결과 보기</span>
@@ -89,7 +185,7 @@ export function ImportsPage() {
         </div>
       </section>
 
-      <section className="card shadow-sm" style={getMotionStyle(2)}>
+      <section className="card shadow-sm" style={getMotionStyle(previewBundle ? 3 : 2)}>
         <div className="section-head">
           <div>
             <span className="section-kicker">검토 유형 요약</span>
@@ -114,7 +210,7 @@ export function ImportsPage() {
         )}
       </section>
 
-      <section className="card shadow-sm" style={getMotionStyle(3)}>
+      <section className="card shadow-sm" style={getMotionStyle(previewBundle ? 4 : 3)}>
         <div className="section-head">
           <div>
             <span className="section-kicker">최근 업로드</span>
@@ -143,7 +239,7 @@ export function ImportsPage() {
         )}
       </section>
 
-      <section className="card shadow-sm" style={getMotionStyle(4)}>
+      <section className="card shadow-sm" style={getMotionStyle(previewBundle ? 5 : 4)}>
         <div className="section-head">
           <div>
             <span className="section-kicker">업로드 이력</span>
