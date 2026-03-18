@@ -4,7 +4,7 @@ import {
   getUncategorizedTransactions,
   type RecurringMerchantSuggestion,
 } from "../../domain/classification/suggestions";
-import { formatCurrency } from "../../shared/utils/format";
+import { formatCurrency, formatPercent } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
@@ -24,7 +24,12 @@ export function CategoriesPage() {
   const scope = getWorkspaceScope(state, workspaceId);
   const uncategorizedTransactions = getUncategorizedTransactions(scope.transactions);
   const recurringSuggestions = getRecurringMerchantSuggestions(scope.transactions, scope.categories);
-  const categorizedCount = scope.transactions.filter((item) => item.status === "active" && item.isExpenseImpact && item.categoryId).length;
+  const expenseTransactions = scope.transactions.filter(
+    (item) => item.status === "active" && item.isExpenseImpact && item.transactionType === "expense",
+  );
+  const categorizedCount = expenseTransactions.filter((item) => item.categoryId).length;
+  const classificationProgress = expenseTransactions.length ? categorizedCount / expenseTransactions.length : 0;
+  const remainingWorkCount = recurringSuggestions.reduce((sum, suggestion) => sum + suggestion.transactionIds.length, 0) + uncategorizedTransactions.length;
 
   return (
     <div className="page-stack">
@@ -52,6 +57,18 @@ export function CategoriesPage() {
             <div className="small text-secondary mt-2">분류가 쌓일수록 통계와 문제 지출 진단 정확도가 올라갑니다.</div>
           </article>
         </div>
+        <div className="guide-progress mt-4">
+          <div className="d-flex justify-content-between align-items-center gap-3">
+            <span className="section-kicker">전체 분류 진행률</span>
+            <strong>{formatPercent(classificationProgress)}</strong>
+          </div>
+          <div className="guide-progress-bar mt-3" aria-hidden="true">
+            <div className="guide-progress-fill" style={{ width: `${classificationProgress * 100}%` }} />
+          </div>
+          <div className="small text-secondary mt-3">
+            실지출 거래 {expenseTransactions.length}건 중 {categorizedCount}건이 분류되었습니다. 아직 정리할 작업은 약 {remainingWorkCount}건입니다.
+          </div>
+        </div>
       </section>
 
       <section className="card shadow-sm" style={getMotionStyle(1)}>
@@ -65,17 +82,23 @@ export function CategoriesPage() {
           <article className="stat-card">
             <span className="stat-label">1단계</span>
             <strong>{recurringSuggestions.length ? "반복 지출 검토 필요" : "반복 지출 정리됨"}</strong>
-            <div className="small text-secondary mt-2">반복적으로 등장하는 가맹점부터 카테고리를 한 번에 적용해보세요.</div>
+            <div className="small text-secondary mt-2">
+              반복적으로 등장하는 가맹점부터 카테고리를 한 번에 적용해보세요. 현재 후보는 {recurringSuggestions.length}개입니다.
+            </div>
           </article>
           <article className="stat-card">
             <span className="stat-label">2단계</span>
             <strong>{uncategorizedTransactions.length ? "미분류 거래 남음" : "미분류 거래 없음"}</strong>
-            <div className="small text-secondary mt-2">반복 규칙에서 빠진 거래는 개별 분류로 마무리하면 됩니다.</div>
+            <div className="small text-secondary mt-2">
+              반복 규칙에서 빠진 거래는 개별 분류로 마무리하면 됩니다. 지금 남은 직접 분류 거래는 {uncategorizedTransactions.length}건입니다.
+            </div>
           </article>
           <article className="stat-card">
             <span className="stat-label">3단계</span>
             <strong>통계 확인</strong>
-            <div className="small text-secondary mt-2">분류를 정리한 뒤 대시보드에서 이번 달 문제 지출과 저축률을 확인해보세요.</div>
+            <div className="small text-secondary mt-2">
+              분류를 정리한 뒤 대시보드에서 이번 달 문제 지출과 저축률을 확인해보세요. 현재 진행률은 {formatPercent(classificationProgress)}입니다.
+            </div>
             <Link to="/" className="btn btn-outline-primary btn-sm mt-3">
               대시보드로 이동
             </Link>
