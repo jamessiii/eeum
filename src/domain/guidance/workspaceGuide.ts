@@ -1,6 +1,7 @@
-import { getRecurringMerchantSuggestions, getUncategorizedTransactions } from "../classification/suggestions";
+import { getRecurringMerchantSuggestions } from "../classification/suggestions";
 import type { AppState } from "../../shared/types/models";
 import { getWorkspaceScope } from "../../app/state/selectors";
+import { getWorkspaceHealthSummary } from "../workspace/health";
 
 export interface GuideStep {
   id: string;
@@ -20,24 +21,17 @@ export interface WorkspaceGuide {
 
 export function getWorkspaceGuide(state: AppState, workspaceId: string): WorkspaceGuide {
   const scope = getWorkspaceScope(state, workspaceId);
-  const uncategorizedTransactions = getUncategorizedTransactions(scope.transactions);
-  const untaggedTransactions = scope.transactions.filter(
-    (transaction) =>
-      transaction.status === "active" &&
-      transaction.isExpenseImpact &&
-      transaction.tagIds.length === 0,
-  );
+  const health = getWorkspaceHealthSummary(scope);
   const recurringSuggestions = getRecurringMerchantSuggestions(scope.transactions, scope.categories);
   const monthlyIncome = scope.financialProfile?.monthlyNetIncome ?? 0;
   const hasImportedData = scope.imports.length > 0;
   const hasTransactions = scope.transactions.length > 0;
-  const openReviews = scope.reviews.filter((review) => review.status === "open").length;
   const readyForInsights =
     hasTransactions &&
     recurringSuggestions.length === 0 &&
-    uncategorizedTransactions.length === 0 &&
-    untaggedTransactions.length === 0 &&
-    openReviews === 0;
+    health.uncategorizedCount === 0 &&
+    health.untaggedCount === 0 &&
+    health.openReviewCount === 0;
 
   const steps: GuideStep[] = [
     {
@@ -78,7 +72,7 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
       targetPath: "/reviews",
       ctaLabel: "검토함 열기",
       tips: ["즉답 팝업 대신 검토함에서 같은 유형끼리 모아서 처리해보세요.", "내부이체와 환불 후보를 먼저 정리하면 과소비 오판이 크게 줄어듭니다."],
-      completed: hasTransactions ? openReviews === 0 : false,
+      completed: hasTransactions ? health.openReviewCount === 0 : false,
     },
     {
       id: "recurring",
@@ -96,7 +90,7 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
       targetPath: "/categories",
       ctaLabel: "미분류 거래 정리하기",
       tips: ["반복 제안 아래쪽 미분류 거래를 하나씩 정리해보세요.", "카테고리가 채워질수록 대시보드의 해석 정확도가 올라갑니다."],
-      completed: hasTransactions ? uncategorizedTransactions.length === 0 : false,
+      completed: hasTransactions ? health.uncategorizedCount === 0 : false,
     },
     {
       id: "tags",
@@ -105,7 +99,7 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
       targetPath: "/transactions?cleanup=untagged",
       ctaLabel: "무태그 거래 정리하기",
       tips: ["사용 목적이나 사이클별로 태그를 묶으면 흐름과 비교가 빨라집니다.", "무태그가 0건이 되면 대시보드의 태그 분석도 바로 살아납니다."],
-      completed: hasTransactions ? untaggedTransactions.length === 0 : false,
+      completed: hasTransactions ? health.untaggedCount === 0 : false,
     },
     {
       id: "profile",

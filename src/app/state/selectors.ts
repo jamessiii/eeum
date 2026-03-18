@@ -18,3 +18,5 @@ export function getWorkspaceScope(state: AppState, workspaceId: string) {
     financialProfile: state.financialProfiles.find((item) => item.workspaceId === workspaceId) ?? null,
   };
 }
+
+export type WorkspaceScope = ReturnType<typeof getWorkspaceScope>;

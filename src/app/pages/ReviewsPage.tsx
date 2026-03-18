@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { REVIEW_ACTION_LABELS, REVIEW_TYPE_LABELS, REVIEW_TYPE_ORDER, type ReviewType } from "../../domain/reviews/meta";
+import { getWorkspaceHealthSummary } from "../../domain/workspace/health";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { CompletionBanner } from "../components/CompletionBanner";
 import { ReviewTypeFilterBar } from "../components/ReviewTypeFilterBar";
@@ -14,17 +15,14 @@ export function ReviewsPage() {
   const [activeTagId, setActiveTagId] = useState<string>("all");
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
+  const health = getWorkspaceHealthSummary(scope);
   const transactions = new Map(scope.transactions.map((item) => [item.id, item]));
   const tags = new Map(scope.tags.map((item) => [item.id, item]));
   const reviews = scope.reviews.filter((item) => item.status === "open");
   const resolvedReviews = scope.reviews.filter((item) => item.status === "resolved");
   const dismissedReviews = scope.reviews.filter((item) => item.status === "dismissed");
-  const uncategorizedCount = scope.transactions.filter(
-    (item) => item.status === "active" && item.isExpenseImpact && !item.categoryId,
-  ).length;
-  const untaggedCount = scope.transactions.filter(
-    (item) => item.status === "active" && item.isExpenseImpact && item.tagIds.length === 0,
-  ).length;
+  const uncategorizedCount = health.uncategorizedCount;
+  const untaggedCount = health.untaggedCount;
   const totalReviewCount = scope.reviews.length;
   const reviewProgress = totalReviewCount ? (resolvedReviews.length + dismissedReviews.length) / totalReviewCount : 1;
   const reviewCounts = reviews.reduce<Partial<Record<ReviewType, number>>>((accumulator, item) => {

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { REVIEW_TYPE_LABELS } from "../../domain/reviews/meta";
+import { getWorkspaceHealthSummary } from "../../domain/workspace/health";
 import type { WorkspaceBundle } from "../../shared/types/models";
 import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
@@ -17,14 +18,11 @@ export function ImportsPage() {
   const [isPreparingPreview, setIsPreparingPreview] = useState(false);
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
+  const health = getWorkspaceHealthSummary(scope);
   const imports = [...scope.imports].sort((a, b) => b.importedAt.localeCompare(a.importedAt));
-  const openReviews = scope.reviews.filter((item) => item.status === "open");
-  const uncategorizedCount = scope.transactions.filter(
-    (item) => item.status === "active" && item.isExpenseImpact && !item.categoryId,
-  ).length;
-  const untaggedCount = scope.transactions.filter(
-    (item) => item.status === "active" && item.isExpenseImpact && item.tagIds.length === 0,
-  ).length;
+  const openReviews = health.openReviews;
+  const uncategorizedCount = health.uncategorizedCount;
+  const untaggedCount = health.untaggedCount;
   const latestImport = imports[0] ?? null;
   const postImportFlow = [
     {
@@ -60,12 +58,12 @@ export function ImportsPage() {
     {
       id: "dashboard",
       title: "진단 확인",
-      description: openReviews.length === 0 && uncategorizedCount === 0 && untaggedCount === 0
+      description: health.postImportReady
         ? "이번 달 소비 진단과 저축률 가이드를 확인할 준비가 되었습니다."
         : "검토와 분류, 태그 정리를 먼저 끝내면 이번 달 진단을 더 정확히 볼 수 있습니다.",
       to: "/",
       actionLabel: "대시보드 보기",
-      completed: openReviews.length === 0 && uncategorizedCount === 0 && untaggedCount === 0,
+      completed: health.postImportReady,
     },
   ];
   const completedPostImportSteps = postImportFlow.filter((step) => step.completed).length;
