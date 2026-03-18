@@ -225,6 +225,7 @@ export function TransactionsPage() {
     const cleanup = searchParams.get("cleanup");
     const nature = searchParams.get("nature");
     const ownerPersonId = searchParams.get("ownerPersonId");
+    const sourceType = searchParams.get("sourceType");
     if (cleanup === "uncategorized" || cleanup === "untagged") {
       setFilters((current) => ({ ...current, nature: cleanup }));
       setSearchParams({}, { replace: true });
@@ -241,6 +242,11 @@ export function TransactionsPage() {
     }
     if (ownerPersonId && people.some((person) => person.id === ownerPersonId)) {
       setFilters((current) => ({ ...current, ownerPersonId }));
+      setSearchParams({}, { replace: true });
+      return;
+    }
+    if (sourceType === "manual" || sourceType === "account" || sourceType === "card" || sourceType === "import") {
+      setFilters((current) => ({ ...current, sourceType }));
       setSearchParams({}, { replace: true });
     }
   }, [people, searchParams, setSearchParams]);

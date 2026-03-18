@@ -425,6 +425,9 @@ export function DashboardPage() {
                   <h3>{sourceTypeLabel[item.sourceType]}</h3>
                   <p className="mb-1 text-secondary">이번 달 거래 {item.count}건</p>
                   <p className="mb-0 text-secondary">이 경로에서 실지출로 반영된 금액은 {formatCurrency(item.expenseAmount)}입니다.</p>
+                  <Link to={`/transactions?sourceType=${item.sourceType}`} className="btn btn-outline-primary btn-sm mt-3">
+                    {sourceTypeLabel[item.sourceType]} 거래 보기
+                  </Link>
                 </article>
               ))}
               {!insights.sourceBreakdown.length ? (
