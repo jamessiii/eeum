@@ -67,6 +67,8 @@ type Action =
         transactionId: string;
         patch: {
           ownerPersonId?: string | null;
+          accountId?: string | null;
+          cardId?: string | null;
           occurredAt?: string;
           settledAt?: string | null;
           merchantName?: string;
@@ -333,6 +335,12 @@ function reducer(state: AppState, action: Action): AppState {
                   typeof action.payload.patch.ownerPersonId !== "undefined"
                     ? action.payload.patch.ownerPersonId
                     : transaction.ownerPersonId,
+                accountId: typeof action.payload.patch.accountId !== "undefined" ? action.payload.patch.accountId : transaction.accountId,
+                cardId: typeof action.payload.patch.cardId !== "undefined" ? action.payload.patch.cardId : transaction.cardId,
+                fromAccountId:
+                  transaction.transactionType === "transfer" && typeof action.payload.patch.accountId !== "undefined"
+                    ? action.payload.patch.accountId
+                    : transaction.fromAccountId,
                 occurredAt: action.payload.patch.occurredAt ?? transaction.occurredAt,
                 settledAt:
                   typeof action.payload.patch.settledAt !== "undefined" ? action.payload.patch.settledAt : transaction.settledAt,
@@ -482,6 +490,8 @@ interface AppStateContextValue {
     transactionId: string,
     patch: {
       ownerPersonId?: string | null;
+      accountId?: string | null;
+      cardId?: string | null;
       occurredAt?: string;
       settledAt?: string | null;
       merchantName?: string;
