@@ -66,6 +66,8 @@ type Action =
         workspaceId: string;
         transactionId: string;
         patch: {
+          occurredAt?: string;
+          settledAt?: string | null;
           merchantName?: string;
           description?: string;
           amount?: number;
@@ -326,6 +328,9 @@ function reducer(state: AppState, action: Action): AppState {
           transaction.workspaceId === action.payload.workspaceId && transaction.id === action.payload.transactionId
             ? {
                 ...transaction,
+                occurredAt: action.payload.patch.occurredAt ?? transaction.occurredAt,
+                settledAt:
+                  typeof action.payload.patch.settledAt !== "undefined" ? action.payload.patch.settledAt : transaction.settledAt,
                 merchantName: action.payload.patch.merchantName ?? transaction.merchantName,
                 description: action.payload.patch.description ?? transaction.description,
                 amount: typeof action.payload.patch.amount === "number" ? Math.abs(action.payload.patch.amount) : transaction.amount,
@@ -471,6 +476,8 @@ interface AppStateContextValue {
     workspaceId: string,
     transactionId: string,
     patch: {
+      occurredAt?: string;
+      settledAt?: string | null;
       merchantName?: string;
       description?: string;
       amount?: number;

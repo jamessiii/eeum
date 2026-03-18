@@ -140,6 +140,8 @@ export function TransactionsPage() {
   const [draftSharedExpense, setDraftSharedExpense] = useState(false);
   const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState({
+    occurredAt: "",
+    settledAt: "",
     merchantName: "",
     description: "",
     amount: "",
@@ -224,6 +226,8 @@ export function TransactionsPage() {
   const beginTransactionEdit = (transaction: (typeof transactions)[number]) => {
     setEditingTransactionId(transaction.id);
     setEditDraft({
+      occurredAt: transaction.occurredAt.slice(0, 10),
+      settledAt: transaction.settledAt?.slice(0, 10) ?? "",
       merchantName: transaction.merchantName,
       description: transaction.description,
       amount: String(transaction.amount),
@@ -233,6 +237,8 @@ export function TransactionsPage() {
   const cancelTransactionEdit = () => {
     setEditingTransactionId(null);
     setEditDraft({
+      occurredAt: "",
+      settledAt: "",
       merchantName: "",
       description: "",
       amount: "",
@@ -891,14 +897,28 @@ export function TransactionsPage() {
                           </div>
                           {editingTransactionId === transaction.id ? (
                             <div className="review-summary-panel mt-3">
-                              <div className="review-summary-copy">
-                                <strong>이 거래 기본 정보 수정</strong>
-                                <p className="mb-0 text-secondary">가맹점, 설명, 금액을 바로 수정할 수 있습니다.</p>
-                              </div>
-                              <div className="d-flex flex-column gap-2 w-100">
-                                <input
-                                  className="form-control form-control-sm"
-                                  value={editDraft.merchantName}
+                                <div className="review-summary-copy">
+                                  <strong>이 거래 기본 정보 수정</strong>
+                                  <p className="mb-0 text-secondary">사용일, 결제일, 가맹점, 설명, 금액을 바로 수정할 수 있습니다.</p>
+                                </div>
+                                <div className="d-flex flex-column gap-2 w-100">
+                                  <div className="d-flex flex-wrap gap-2">
+                                    <input
+                                      className="form-control form-control-sm"
+                                      type="date"
+                                      value={editDraft.occurredAt}
+                                      onChange={(event) => setEditDraft((current) => ({ ...current, occurredAt: event.target.value }))}
+                                    />
+                                    <input
+                                      className="form-control form-control-sm"
+                                      type="date"
+                                      value={editDraft.settledAt}
+                                      onChange={(event) => setEditDraft((current) => ({ ...current, settledAt: event.target.value }))}
+                                    />
+                                  </div>
+                                  <input
+                                    className="form-control form-control-sm"
+                                    value={editDraft.merchantName}
                                   onChange={(event) => setEditDraft((current) => ({ ...current, merchantName: event.target.value }))}
                                   placeholder="가맹점 또는 거래명"
                                 />
@@ -918,15 +938,17 @@ export function TransactionsPage() {
                                   placeholder="금액"
                                 />
                                 <div className="d-flex flex-wrap gap-2">
-                                  <button
-                                    className="btn btn-primary btn-sm"
-                                    type="button"
-                                    disabled={!editDraft.merchantName.trim() || !editDraft.amount || Number(editDraft.amount) <= 0}
-                                    onClick={() => {
-                                      updateTransactionDetails(workspaceId, transaction.id, {
-                                        merchantName: editDraft.merchantName.trim(),
-                                        description: editDraft.description.trim(),
-                                        amount: Number(editDraft.amount),
+                                    <button
+                                      className="btn btn-primary btn-sm"
+                                      type="button"
+                                      disabled={!editDraft.occurredAt || !editDraft.merchantName.trim() || !editDraft.amount || Number(editDraft.amount) <= 0}
+                                      onClick={() => {
+                                        updateTransactionDetails(workspaceId, transaction.id, {
+                                          occurredAt: editDraft.occurredAt,
+                                          settledAt: editDraft.settledAt || null,
+                                          merchantName: editDraft.merchantName.trim(),
+                                          description: editDraft.description.trim(),
+                                          amount: Number(editDraft.amount),
                                       });
                                       cancelTransactionEdit();
                                     }}
