@@ -848,78 +848,96 @@ export function TransactionsPage() {
                             </div>
                           ) : null}
                         {transaction.status === "active" && transaction.isExpenseImpact ? (
-                          <div className="d-flex flex-wrap gap-2 mt-2">
-                            <select
-                              className="form-select form-select-sm"
-                              style={{ maxWidth: 180 }}
-                              value={pendingTagByTransaction[transaction.id] ?? ""}
-                              onChange={(event) =>
-                                setPendingTagByTransaction((current) => ({
-                                  ...current,
-                                  [transaction.id]: event.target.value,
-                                }))
-                              }
-                            >
-                              <option value="">태그 선택</option>
-                              {scope.tags.map((tag) => (
-                                <option key={tag.id} value={tag.id}>
-                                  {tag.name}
-                                </option>
-                              ))}
-                            </select>
-                            <button
-                              className="btn btn-outline-secondary btn-sm"
-                              type="button"
-                              disabled={!(pendingTagByTransaction[transaction.id] ?? "")}
-                              onClick={() => {
-                                const tagId = pendingTagByTransaction[transaction.id];
-                                if (!tagId) return;
-                                assignTag(workspaceId, transaction.id, tagId);
-                                setPendingTagByTransaction((current) => ({ ...current, [transaction.id]: "" }));
-                              }}
-                            >
+                          <>
+                            <div className="d-flex flex-wrap gap-2 mt-2">
+                              <select
+                                className="form-select form-select-sm"
+                                style={{ maxWidth: 180 }}
+                                value={pendingTagByTransaction[transaction.id] ?? ""}
+                                onChange={(event) =>
+                                  setPendingTagByTransaction((current) => ({
+                                    ...current,
+                                    [transaction.id]: event.target.value,
+                                  }))
+                                }
+                              >
+                                <option value="">태그 선택</option>
+                                {scope.tags.map((tag) => (
+                                  <option key={tag.id} value={tag.id}>
+                                    {tag.name}
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                className="btn btn-outline-secondary btn-sm"
+                                type="button"
+                                disabled={!(pendingTagByTransaction[transaction.id] ?? "")}
+                                onClick={() => {
+                                  const tagId = pendingTagByTransaction[transaction.id];
+                                  if (!tagId) return;
+                                  assignTag(workspaceId, transaction.id, tagId);
+                                  setPendingTagByTransaction((current) => ({ ...current, [transaction.id]: "" }));
+                                }}
+                              >
                                 {transaction.tagIds.length ? "태그 더하기" : "태그 추가"}
                               </button>
                             </div>
+                            {(pendingTagByTransaction[transaction.id] ?? "") ? (
+                              <div className="small text-secondary mt-2">
+                                이 거래에 태그{" "}
+                                <strong>{tags.get(pendingTagByTransaction[transaction.id] ?? "")?.name ?? "선택한 태그"}</strong>를
+                                {transaction.tagIds.length ? " 추가" : " 적용"}합니다.
+                              </div>
+                            ) : null}
+                          </>
                           ) : null}
                         </td>
                         <td>{peopleMap.get(transaction.ownerPersonId ?? "") ?? "-"}</td>
                         <td>
                           {transaction.categoryId ? categories.get(transaction.categoryId) : "미분류"}
                         {transaction.status === "active" && transaction.isExpenseImpact ? (
-                          <div className="d-flex flex-wrap gap-2 mt-2">
-                            <select
-                              className="form-select form-select-sm"
-                              style={{ maxWidth: 180 }}
-                              value={pendingCategoryByTransaction[transaction.id] ?? ""}
-                              onChange={(event) =>
-                                setPendingCategoryByTransaction((current) => ({
-                                  ...current,
-                                  [transaction.id]: event.target.value,
-                                }))
-                              }
-                            >
-                              <option value="">카테고리 선택</option>
-                              {scope.categories.map((category) => (
-                                <option key={category.id} value={category.id}>
-                                  {category.name}
-                                </option>
-                              ))}
-                            </select>
-                            <button
-                              className="btn btn-outline-primary btn-sm"
-                              type="button"
-                              disabled={!(pendingCategoryByTransaction[transaction.id] ?? "")}
-                              onClick={() => {
-                                const categoryId = pendingCategoryByTransaction[transaction.id];
-                                if (!categoryId) return;
-                                assignCategory(workspaceId, transaction.id, categoryId);
-                                setPendingCategoryByTransaction((current) => ({ ...current, [transaction.id]: "" }));
-                              }}
-                            >
+                          <>
+                            <div className="d-flex flex-wrap gap-2 mt-2">
+                              <select
+                                className="form-select form-select-sm"
+                                style={{ maxWidth: 180 }}
+                                value={pendingCategoryByTransaction[transaction.id] ?? ""}
+                                onChange={(event) =>
+                                  setPendingCategoryByTransaction((current) => ({
+                                    ...current,
+                                    [transaction.id]: event.target.value,
+                                  }))
+                                }
+                              >
+                                <option value="">카테고리 선택</option>
+                                {scope.categories.map((category) => (
+                                  <option key={category.id} value={category.id}>
+                                    {category.name}
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                className="btn btn-outline-primary btn-sm"
+                                type="button"
+                                disabled={!(pendingCategoryByTransaction[transaction.id] ?? "")}
+                                onClick={() => {
+                                  const categoryId = pendingCategoryByTransaction[transaction.id];
+                                  if (!categoryId) return;
+                                  assignCategory(workspaceId, transaction.id, categoryId);
+                                  setPendingCategoryByTransaction((current) => ({ ...current, [transaction.id]: "" }));
+                                }}
+                              >
                                 {transaction.categoryId ? "분류 변경" : "분류 적용"}
                               </button>
                             </div>
+                            {(pendingCategoryByTransaction[transaction.id] ?? "") ? (
+                              <div className="small text-secondary mt-2">
+                                이 거래의 카테고리를{" "}
+                                <strong>{categories.get(pendingCategoryByTransaction[transaction.id] ?? "") ?? "선택한 카테고리"}</strong>로
+                                {transaction.categoryId ? " 변경" : " 지정"}합니다.
+                              </div>
+                            ) : null}
+                          </>
                           ) : null}
                         </td>
                       <td className="text-end transaction-amount-cell">
