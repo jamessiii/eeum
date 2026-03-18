@@ -13,7 +13,15 @@ export function ReviewsPage() {
   const scope = getWorkspaceScope(state, workspaceId);
   const transactions = new Map(scope.transactions.map((item) => [item.id, item]));
   const reviews = scope.reviews.filter((item) => item.status === "open");
+  const resolvedReviews = scope.reviews.filter((item) => item.status === "resolved");
+  const dismissedReviews = scope.reviews.filter((item) => item.status === "dismissed");
+  const totalReviewCount = scope.reviews.length;
+  const reviewProgress = totalReviewCount ? (resolvedReviews.length + dismissedReviews.length) / totalReviewCount : 1;
   const reviewCounts = reviews.reduce<Partial<Record<ReviewType, number>>>((accumulator, item) => {
+    accumulator[item.reviewType] = (accumulator[item.reviewType] ?? 0) + 1;
+    return accumulator;
+  }, {});
+  const resolvedCounts = resolvedReviews.reduce<Partial<Record<ReviewType, number>>>((accumulator, item) => {
     accumulator[item.reviewType] = (accumulator[item.reviewType] ?? 0) + 1;
     return accumulator;
   }, {});
@@ -37,6 +45,20 @@ export function ReviewsPage() {
         팝업으로 즉답을 강요하지 않고, 확인이 필요한 항목을 여기에 모아둡니다. 거래 흐름을 보고 한 번에 정리할 수 있게 만드는
         화면입니다.
       </p>
+      <div className="review-progress-box">
+        <div className="d-flex justify-content-between align-items-center gap-3">
+          <div>
+            <span className="section-kicker">검토 진행률</span>
+            <div className="small text-secondary mt-1">
+              전체 {totalReviewCount}건 중 해결 {resolvedReviews.length}건 · 보류 {dismissedReviews.length}건 · 남음 {reviews.length}건
+            </div>
+          </div>
+          <strong>{Math.round(reviewProgress * 100)}%</strong>
+        </div>
+        <div className="guide-progress-bar mt-3" aria-hidden="true">
+          <div className="guide-progress-fill" style={{ width: `${reviewProgress * 100}%` }} />
+        </div>
+      </div>
       {reviews.length ? (
         <div className="review-summary-panel">
           <div className="review-summary-copy">
@@ -53,6 +75,16 @@ export function ReviewsPage() {
             totalCount={reviews.length}
             onChange={setActiveFilter}
           />
+          {resolvedReviews.length ? (
+            <div className="resource-grid">
+              {REVIEW_TYPE_ORDER.filter((type) => (resolvedCounts[type] ?? 0) > 0).map((type) => (
+                <article key={type} className="resource-card">
+                  <h3>{REVIEW_TYPE_LABELS[type]}</h3>
+                  <p className="mb-0 text-secondary">처리 완료 {resolvedCounts[type] ?? 0}건</p>
+                </article>
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : null}
 

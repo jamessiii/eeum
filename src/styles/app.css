@@ -580,6 +580,16 @@ a {
   background: rgba(255, 255, 255, 0.74);
 }
 
+.review-progress-box {
+  display: grid;
+  gap: 0.65rem;
+  margin-bottom: 1.25rem;
+  padding: 1rem 1.1rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(23, 32, 51, 0.08);
+  background: rgba(255, 255, 255, 0.82);
+}
+
 .review-summary-copy {
   display: grid;
   gap: 0.35rem;
