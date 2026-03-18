@@ -27,6 +27,7 @@ export function CategoriesPage() {
   const expenseTransactions = scope.transactions.filter(
     (item) => item.status === "active" && item.isExpenseImpact && item.transactionType === "expense",
   );
+  const untaggedExpenseCount = expenseTransactions.filter((item) => item.tagIds.length === 0).length;
   const categorizedCount = expenseTransactions.filter((item) => item.categoryId).length;
   const classificationProgress = expenseTransactions.length ? categorizedCount / expenseTransactions.length : 0;
   const remainingWorkCount = recurringSuggestions.reduce((sum, suggestion) => sum + suggestion.transactionIds.length, 0) + uncategorizedTransactions.length;
@@ -77,6 +78,33 @@ export function CategoriesPage() {
           </div>
           <div className="small text-secondary mt-3">
             실지출 거래 {expenseTransactions.length}건 중 {categorizedCount}건이 분류되었습니다. 아직 정리할 작업은 약 {remainingWorkCount}건입니다.
+          </div>
+        </div>
+        <div className="review-summary-panel mt-4">
+          <div className="review-summary-copy">
+            <strong>{uncategorizedTransactions.length ? "분류 뒤에 이어서 할 일" : "카테고리 분류는 거의 끝났습니다"}</strong>
+            <p className="mb-0 text-secondary">
+              {uncategorizedTransactions.length
+                ? "반복 지출 제안과 미분류 거래를 먼저 줄인 뒤, 무태그 거래를 묶고 대시보드에서 이번 달 진단을 확인하는 흐름이 가장 자연스럽습니다."
+                : untaggedExpenseCount
+                  ? "카테고리는 정리됐고, 이제 무태그 거래만 묶어두면 태그 기준 소비 흐름까지 더 선명하게 볼 수 있습니다."
+                  : "카테고리와 태그 정리가 모두 끝난 상태라 이제 대시보드 해석과 정산 화면을 더 믿고 볼 수 있습니다."}
+            </p>
+          </div>
+          <div className="d-flex flex-wrap gap-2">
+            {uncategorizedTransactions.length ? (
+              <Link to="/transactions?cleanup=uncategorized" className="btn btn-outline-primary btn-sm">
+                미분류 {uncategorizedTransactions.length}건 정리
+              </Link>
+            ) : null}
+            {untaggedExpenseCount ? (
+              <Link to="/transactions?cleanup=untagged" className="btn btn-outline-secondary btn-sm">
+                무태그 {untaggedExpenseCount}건 정리
+              </Link>
+            ) : null}
+            <Link to="/" className="btn btn-outline-dark btn-sm">
+              대시보드 보기
+            </Link>
           </div>
         </div>
       </section>
