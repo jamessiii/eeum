@@ -36,9 +36,9 @@ export function DashboardPage() {
     {
       key: "import",
       title: "거래 준비",
-      description: hasPreparedTransactions ? "거래 데이터가 들어와 있어 다음 정리 단계로 넘어갈 수 있습니다." : "엑셀 업로드나 수동 입력으로 첫 거래를 넣어야 진단이 시작됩니다.",
+      description: hasPreparedTransactions ? "거래 흐름이 이미 들어와 있어 검토와 분류 단계로 바로 이어갈 수 있습니다." : "엑셀 업로드나 수동 입력으로 첫 거래 흐름을 넣어야 진단이 시작됩니다.",
       to: "/imports",
-      actionLabel: hasPreparedTransactions ? "업로드 이력 보기" : "거래 가져오기",
+      actionLabel: hasPreparedTransactions ? "거래 흐름 확인하기" : "거래 가져오기",
       completed: hasPreparedTransactions,
     },
     {
