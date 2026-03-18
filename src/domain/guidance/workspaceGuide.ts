@@ -21,6 +21,12 @@ export interface WorkspaceGuide {
 export function getWorkspaceGuide(state: AppState, workspaceId: string): WorkspaceGuide {
   const scope = getWorkspaceScope(state, workspaceId);
   const uncategorizedTransactions = getUncategorizedTransactions(scope.transactions);
+  const untaggedTransactions = scope.transactions.filter(
+    (transaction) =>
+      transaction.status === "active" &&
+      transaction.isExpenseImpact &&
+      transaction.tagIds.length === 0,
+  );
   const recurringSuggestions = getRecurringMerchantSuggestions(scope.transactions, scope.categories);
   const monthlyIncome = scope.financialProfile?.monthlyNetIncome ?? 0;
   const hasImportedData = scope.imports.length > 0;
@@ -30,6 +36,7 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
     hasTransactions &&
     recurringSuggestions.length === 0 &&
     uncategorizedTransactions.length === 0 &&
+    untaggedTransactions.length === 0 &&
     openReviews === 0;
 
   const steps: GuideStep[] = [
@@ -92,6 +99,15 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
       completed: hasTransactions ? uncategorizedTransactions.length === 0 : false,
     },
     {
+      id: "tags",
+      title: "무태그 거래 정리",
+      description: "같은 맥락의 소비를 태그로 묶어야 태그 기준 흐름과 비교가 자연스럽게 이어집니다.",
+      targetPath: "/transactions?cleanup=untagged",
+      ctaLabel: "무태그 거래 정리하기",
+      tips: ["사용 목적이나 사이클별로 태그를 묶으면 흐름과 비교가 빨라집니다.", "무태그가 0건이 되면 대시보드의 태그 분석도 바로 살아납니다."],
+      completed: hasTransactions ? untaggedTransactions.length === 0 : false,
+    },
+    {
       id: "profile",
       title: "월 수입과 목표 설정",
       description: "지출률과 저축률 가이드는 재무 기준선을 입력해야 제대로 동작합니다.",
@@ -103,7 +119,7 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
     {
       id: "dashboard",
       title: "진단 결과 확인",
-      description: "검토와 분류, 기준선 설정이 끝났다면 이제 대시보드에서 이번 달 소비 문제와 저축 여력을 확인할 차례입니다.",
+      description: "검토와 분류, 태그 정리, 기준선 설정이 끝났다면 이제 대시보드에서 이번 달 소비 문제와 저축 여력을 확인할 차례입니다.",
       targetPath: "/",
       ctaLabel: "대시보드 보러 가기",
       tips: ["상위 지출과 재무 코치 메모를 먼저 확인해보세요.", "공동지출이 있다면 정산 화면까지 이어서 보는 흐름이 좋습니다."],
