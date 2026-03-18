@@ -21,6 +21,7 @@ export function AppGuidePanel() {
   const currentStep = guide.currentStep;
   const completedSteps = guide.steps.filter((step) => step.completed).length;
   const currentPath = location.pathname || "/";
+  const upcomingSteps = guide.steps.filter((step) => !step.completed).slice(0, 2);
 
   return (
     <section className="guide-panel" style={getMotionStyle(0)}>
@@ -57,6 +58,16 @@ export function AppGuidePanel() {
         <span>{completedSteps} / {guide.steps.length} 단계 완료</span>
         <strong>{formatPercent(guide.progress)}</strong>
       </div>
+
+      {currentStep ? (
+        <div className="guide-next-summary">
+          <strong>지금 이 단계에서 할 일</strong>
+          <p className="mb-0 text-secondary">{currentStep.tips[0]}</p>
+          {upcomingSteps.length > 1 ? (
+            <div className="small text-secondary mt-2">다음 단계: {upcomingSteps[1]?.title}</div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="guide-step-list">
         {guide.steps.map((step, index) => (
