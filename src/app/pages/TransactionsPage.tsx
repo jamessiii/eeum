@@ -51,6 +51,7 @@ export function TransactionsPage() {
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const categories = new Map(scope.categories.map((item) => [item.id, item.name]));
+  const tags = new Map(scope.tags.map((item) => [item.id, item]));
   const peopleMap = new Map(scope.people.map((person) => [person.id, person.name]));
   const people = scope.people;
   const cards = scope.cards;
@@ -151,6 +152,9 @@ export function TransactionsPage() {
               description: String(formData.get("description") || ""),
               amount: Number(formData.get("amount") || 0),
               categoryId: String(formData.get("categoryId") || "") || null,
+              tagIds: String(formData.get("tagId") || "")
+                ? [String(formData.get("tagId") || "")]
+                : [],
               isSharedExpense: String(formData.get("isSharedExpense") || "") === "on",
               isExpenseImpact: String(formData.get("isExpenseImpact") || "") === "on",
             });
@@ -216,6 +220,14 @@ export function TransactionsPage() {
             {scope.categories.map((category) => (
               <option key={category.id} value={category.id}>
                 {category.name}
+              </option>
+            ))}
+          </select>
+          <select name="tagId" className="form-select" defaultValue="">
+            <option value="">태그 선택 없음</option>
+            {scope.tags.map((tag) => (
+              <option key={tag.id} value={tag.id}>
+                {tag.name}
               </option>
             ))}
           </select>
@@ -390,6 +402,18 @@ export function TransactionsPage() {
                         <div className="small text-secondary">
                           {transaction.description || (transaction.isInternalTransfer ? "내부이체로 처리된 거래" : "설명 없음")}
                         </div>
+                        {transaction.tagIds.length ? (
+                          <div className="transaction-tag-row">
+                            {transaction.tagIds
+                              .map((tagId) => tags.get(tagId))
+                              .filter((tag): tag is NonNullable<typeof tag> => Boolean(tag))
+                              .map((tag) => (
+                                <span key={tag.id} className="tag-pill" style={{ ["--tag-color" as string]: tag.color }}>
+                                  {tag.name}
+                                </span>
+                              ))}
+                          </div>
+                        ) : null}
                       </td>
                       <td>{peopleMap.get(transaction.ownerPersonId ?? "") ?? "-"}</td>
                       <td>{transaction.categoryId ? categories.get(transaction.categoryId) : "미분류"}</td>

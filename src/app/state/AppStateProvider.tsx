@@ -25,6 +25,7 @@ type NewTransactionInput = {
   description: string;
   amount: number;
   categoryId: string | null;
+  tagIds: string[];
   isSharedExpense: boolean;
   isExpenseImpact: boolean;
 };
@@ -251,7 +252,7 @@ function reducer(state: AppState, action: Action): AppState {
             description: action.payload.description,
             amount: Math.abs(action.payload.amount),
             categoryId: action.payload.categoryId,
-            tagIds: [],
+            tagIds: action.payload.tagIds,
             isInternalTransfer: action.payload.transactionType === "transfer" && !action.payload.isExpenseImpact,
             isExpenseImpact: action.payload.isExpenseImpact,
             isSharedExpense: action.payload.isSharedExpense,

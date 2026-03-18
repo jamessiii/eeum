@@ -742,6 +742,25 @@ a {
   gap: 0.35rem;
 }
 
+.transaction-tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+}
+
+.tag-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--tag-color, #0d6efd) 70%, #1b2435);
+  background: color-mix(in srgb, var(--tag-color, #0d6efd) 18%, white);
+  border: 1px solid color-mix(in srgb, var(--tag-color, #0d6efd) 28%, transparent);
+}
+
 .resource-card h3 {
   margin: 0;
   font-size: 1rem;
