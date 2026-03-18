@@ -146,6 +146,35 @@ export function ReviewsPage() {
       </div>
 
       {!reviews.length ? (
+        <div className="review-summary-panel mt-3">
+          <div className="review-summary-copy">
+            <strong>검토함 정리가 끝났습니다</strong>
+            <p className="mb-0 text-secondary">
+              자동 검토 후보가 모두 처리됐습니다. 이제 미분류와 무태그 거래를 마무리하고 대시보드와 정산 화면의 흐름을 확인하면 됩니다.
+            </p>
+          </div>
+          <div className="d-flex flex-wrap gap-2">
+            {uncategorizedCount ? (
+              <Link className="btn btn-outline-primary btn-sm" to="/transactions?cleanup=uncategorized">
+                미분류 {uncategorizedCount}건 정리
+              </Link>
+            ) : null}
+            {untaggedCount ? (
+              <Link className="btn btn-outline-secondary btn-sm" to="/transactions?cleanup=untagged">
+                무태그 {untaggedCount}건 정리
+              </Link>
+            ) : null}
+            <Link className="btn btn-outline-dark btn-sm" to="/">
+              대시보드 보기
+            </Link>
+            <Link className="btn btn-outline-primary btn-sm" to="/settlements">
+              정산 화면 보기
+            </Link>
+          </div>
+        </div>
+      ) : null}
+
+      {!reviews.length ? (
         <EmptyStateCallout
           kicker="검토 완료"
           title="열려 있는 검토 항목이 없습니다"
