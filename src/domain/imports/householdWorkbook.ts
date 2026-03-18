@@ -332,5 +332,6 @@ export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundl
         reviewCount: reviews.length,
       },
     ],
+    settlements: [],
   };
 }

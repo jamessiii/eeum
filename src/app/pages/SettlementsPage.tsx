@@ -1,3 +1,4 @@
+import { monthKey } from "../../shared/utils/date";
 import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
@@ -5,13 +6,20 @@ import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
 
 export function SettlementsPage() {
-  const { state } = useAppState();
+  const { addSettlement, state } = useAppState();
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const peopleMap = new Map(scope.people.map((person) => [person.id, person.name]));
 
+  const currentMonth = monthKey(new Date());
   const sharedTransactions = scope.transactions
-    .filter((transaction) => transaction.status === "active" && transaction.isSharedExpense && transaction.isExpenseImpact)
+    .filter(
+      (transaction) =>
+        transaction.status === "active" &&
+        transaction.isSharedExpense &&
+        transaction.isExpenseImpact &&
+        monthKey(transaction.occurredAt) === currentMonth,
+    )
     .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
 
   const totalsByPerson = new Map<string, number>();
@@ -35,8 +43,11 @@ export function SettlementsPage() {
 
   const receiver = rows.find((row) => row.delta > 0);
   const sender = rows.find((row) => row.delta < 0);
-  const suggestedSettlementAmount =
-    receiver && sender ? Math.min(receiver.delta, Math.abs(sender.delta)) : 0;
+  const suggestedSettlementAmount = receiver && sender ? Math.min(receiver.delta, Math.abs(sender.delta)) : 0;
+
+  const settlementHistory = [...scope.settlements]
+    .filter((item) => item.month === currentMonth)
+    .sort((a, b) => b.completedAt.localeCompare(a.completedAt));
 
   return (
     <div className="page-stack">
@@ -48,8 +59,8 @@ export function SettlementsPage() {
           </div>
         </div>
         <p className="text-secondary mb-0">
-          공동지출로 표시된 거래만 합산해서 각 사람이 얼마나 부담했는지 비교합니다. 생활비 계좌처럼 공동 자금에서 결제한 거래도 이
-          화면에서 함께 점검할 수 있습니다.
+          공동지출로 표시된 거래만 합산해서 각 사람이 얼마나 부담했는지 비교합니다. 이번 달 정산 후보를 보고 실제로 끝낸 정산은 아래
+          기록으로 남길 수 있습니다.
         </p>
       </section>
 
@@ -93,9 +104,28 @@ export function SettlementsPage() {
                 </h3>
                 <p className="text-secondary mb-0">
                   {receiver && sender
-                    ? "가장 단순한 정산 흐름을 기준으로 보여줍니다. 이후 단계에서 정산 완료 처리와 비율 조정도 붙일 예정입니다."
+                    ? "가장 단순한 정산 흐름을 기준으로 보여줍니다. 실제로 정산이 끝났다면 아래 버튼으로 기록을 남겨둘 수 있습니다."
                     : "공동지출 참여자와 거래가 더 쌓이면 정산 방향을 자동으로 제안합니다."}
                 </p>
+                {receiver && sender ? (
+                  <div className="d-flex flex-wrap gap-2 mt-3">
+                    <button
+                      className="btn btn-primary btn-sm"
+                      onClick={() =>
+                        addSettlement({
+                          workspaceId,
+                          month: currentMonth,
+                          fromPersonId: sender.personId === "shared" ? null : sender.personId,
+                          toPersonId: receiver.personId === "shared" ? null : receiver.personId,
+                          amount: suggestedSettlementAmount,
+                          note: "자동 제안 기준 정산 완료",
+                        })
+                      }
+                    >
+                      추천 정산 완료로 기록
+                    </button>
+                  </div>
+                ) : null}
               </div>
 
               <div className="review-list mt-4">
@@ -108,9 +138,7 @@ export function SettlementsPage() {
                         <p className="mb-0 text-secondary">현재 부담액 {formatCurrency(row.amount)}</p>
                       </div>
                       <span className={`badge ${row.delta > 0 ? "text-bg-warning" : "text-bg-success"}`}>
-                        {row.delta > 0
-                          ? `${formatCurrency(row.delta)} 더 부담`
-                          : `${formatCurrency(Math.abs(row.delta))} 덜 부담`}
+                        {row.delta > 0 ? `${formatCurrency(row.delta)} 더 부담` : `${formatCurrency(Math.abs(row.delta))} 덜 부담`}
                       </span>
                     </div>
                   </article>
@@ -123,38 +151,44 @@ export function SettlementsPage() {
         <section className="card shadow-sm" style={getMotionStyle(2)}>
           <div className="section-head">
             <div>
-              <span className="section-kicker">최근 공동지출</span>
-              <h2 className="section-title">정산 근거 거래</h2>
+              <span className="section-kicker">이번 달 정산 기록</span>
+              <h2 className="section-title">완료된 정산 내역</h2>
             </div>
           </div>
-          {!sharedTransactions.length ? (
+          {!settlementHistory.length ? (
             <EmptyStateCallout
-              kicker="공동지출 없음"
-              title="공동지출 거래가 아직 잡히지 않았습니다"
-              description="거래 화면이나 검토함에서 공동지출 여부를 표시하면 이 목록에 쌓이고 정산 계산에도 반영됩니다."
+              kicker="기록 없음"
+              title="아직 완료로 남긴 정산이 없습니다"
+              description="추천 정산이 맞다면 완료로 기록해서 이번 달 정산 내역을 남겨보세요."
             />
           ) : (
-            <div className="mini-breakdown-list">
-              {sharedTransactions.slice(0, 8).map((transaction, index) => (
-                <div key={transaction.id} className="mini-breakdown-row" style={getMotionStyle(index + 3)}>
-                  <div>
-                    <strong>{transaction.merchantName}</strong>
-                    <div className="small text-secondary">
-                      {transaction.occurredAt.slice(0, 10)} · {peopleMap.get(transaction.ownerPersonId ?? "") ?? "공동"}
+            <div className="review-list">
+              {settlementHistory.map((item, index) => (
+                <article key={item.id} className="review-card" style={getMotionStyle(index + 3)}>
+                  <div className="d-flex justify-content-between align-items-start gap-3">
+                    <div>
+                      <span className="review-type">정산 완료</span>
+                      <h3>
+                        {(item.fromPersonId ? peopleMap.get(item.fromPersonId) : "공동") ?? "공동"} →{" "}
+                        {(item.toPersonId ? peopleMap.get(item.toPersonId) : "공동") ?? "공동"}
+                      </h3>
+                      <p className="mb-1 text-secondary">{formatCurrency(item.amount)}</p>
+                      <p className="mb-0 text-secondary">
+                        {item.completedAt.slice(0, 19).replace("T", " ")} · {item.note || "메모 없음"}
+                      </p>
                     </div>
                   </div>
-                  <strong>{formatCurrency(transaction.amount)}</strong>
-                </div>
+                </article>
               ))}
             </div>
           )}
 
-          <div className="guide-progress">
+          <div className="guide-progress mt-4">
             <span className="section-kicker">정산 가이드</span>
             <ul className="next-step-list mt-3">
               <li>공동지출이 맞는 거래만 표시해야 정산 금액이 과하게 잡히지 않습니다.</li>
               <li>생활비 계좌에서 나간 결제는 개인 부담인지 공동 부담인지 함께 확인해보세요.</li>
-              <li>다음 단계에서는 정산 완료 처리와 분담 비율 조정 기능을 붙일 예정입니다.</li>
+              <li>다음 단계에서는 분담 비율 조정과 정산 취소/수정 기능을 붙일 수 있습니다.</li>
             </ul>
           </div>
         </section>

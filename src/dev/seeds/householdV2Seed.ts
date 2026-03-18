@@ -217,5 +217,6 @@ export function createHouseholdV2DemoBundle(): WorkspaceBundle {
     transactions,
     reviews,
     imports: [],
+    settlements: [],
   };
 }

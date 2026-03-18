@@ -11,7 +11,7 @@ import { createId } from "../../shared/utils/id";
 
 export function createEmptyState(): AppState {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     activeWorkspaceId: null,
     workspaces: [],
     financialProfiles: [],
@@ -23,6 +23,7 @@ export function createEmptyState(): AppState {
     transactions: [],
     reviews: [],
     imports: [],
+    settlements: [],
   };
 }
 
@@ -95,5 +96,6 @@ export function mergeWorkspaceBundle(state: AppState, bundle: WorkspaceBundle): 
     transactions: [...state.transactions, ...bundle.transactions],
     reviews: [...state.reviews, ...bundle.reviews],
     imports: [...state.imports, ...bundle.imports],
+    settlements: [...state.settlements, ...bundle.settlements],
   };
 }

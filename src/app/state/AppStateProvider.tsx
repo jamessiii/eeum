@@ -34,6 +34,15 @@ type FinancialProfileInput = Pick<
   "monthlyNetIncome" | "targetSavingsRate" | "warningSpendRate" | "warningFixedCostRate"
 >;
 
+type SettlementInput = {
+  workspaceId: string;
+  month: string;
+  fromPersonId: string | null;
+  toPersonId: string | null;
+  amount: number;
+  note: string;
+};
+
 type Action =
   | { type: "hydrate"; payload: AppState }
   | { type: "setActiveWorkspace"; payload: string }
@@ -48,6 +57,7 @@ type Action =
   | { type: "addCategory"; payload: { workspaceId: string; name: string } }
   | { type: "addTag"; payload: { workspaceId: string; name: string } }
   | { type: "setFinancialProfile"; payload: { workspaceId: string; values: FinancialProfileInput } }
+  | { type: "addSettlement"; payload: SettlementInput }
   | { type: "addTransaction"; payload: NewTransactionInput }
   | { type: "assignCategory"; payload: { workspaceId: string; transactionId: string; categoryId: string } }
   | { type: "assignCategoryByMerchant"; payload: { workspaceId: string; merchantName: string; categoryId: string } };
@@ -203,6 +213,23 @@ function reducer(state: AppState, action: Action): AppState {
           profile.workspaceId === action.payload.workspaceId ? { ...profile, ...action.payload.values } : profile,
         ),
       };
+    case "addSettlement":
+      return {
+        ...state,
+        settlements: [
+          ...state.settlements,
+          {
+            id: createId("settlement"),
+            workspaceId: action.payload.workspaceId,
+            month: action.payload.month,
+            fromPersonId: action.payload.fromPersonId,
+            toPersonId: action.payload.toPersonId,
+            amount: Math.abs(action.payload.amount),
+            note: action.payload.note,
+            completedAt: new Date().toISOString(),
+          },
+        ],
+      };
     case "addTransaction":
       return {
         ...state,
@@ -277,6 +304,7 @@ interface AppStateContextValue {
   addCategory: (workspaceId: string, name: string) => void;
   addTag: (workspaceId: string, name: string) => void;
   setFinancialProfile: (workspaceId: string, values: FinancialProfileInput) => void;
+  addSettlement: (input: SettlementInput) => void;
   addTransaction: (input: NewTransactionInput) => void;
   assignCategory: (workspaceId: string, transactionId: string, categoryId: string) => void;
   assignCategoryByMerchant: (workspaceId: string, merchantName: string, categoryId: string) => void;
@@ -320,6 +348,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
             transactions: [],
             reviews: [],
             imports: [],
+            settlements: [],
           },
         });
         showToast(`"${name}" 워크스페이스를 만들었습니다.`, "success");
@@ -416,6 +445,10 @@ export function AppStateProvider({ children }: PropsWithChildren) {
       setFinancialProfile(workspaceId, values) {
         dispatch({ type: "setFinancialProfile", payload: { workspaceId, values } });
         showToast("재무 기준선을 저장했습니다.", "success");
+      },
+      addSettlement(input) {
+        dispatch({ type: "addSettlement", payload: input });
+        showToast("정산 완료 내역을 기록했습니다.", "success");
       },
       addTransaction(input) {
         dispatch({ type: "addTransaction", payload: input });

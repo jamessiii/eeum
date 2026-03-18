@@ -113,6 +113,17 @@ export interface ImportRecord {
   reviewCount: number;
 }
 
+export interface SettlementRecord {
+  id: ID;
+  workspaceId: ID;
+  month: string;
+  fromPersonId: ID | null;
+  toPersonId: ID | null;
+  amount: number;
+  note: string;
+  completedAt: string;
+}
+
 export interface WorkspaceBundle {
   workspace: Workspace;
   financialProfile: FinancialProfile;
@@ -124,6 +135,7 @@ export interface WorkspaceBundle {
   transactions: Transaction[];
   reviews: ReviewItem[];
   imports: ImportRecord[];
+  settlements: SettlementRecord[];
 }
 
 export interface AppState {
@@ -139,4 +151,5 @@ export interface AppState {
   transactions: Transaction[];
   reviews: ReviewItem[];
   imports: ImportRecord[];
+  settlements: SettlementRecord[];
 }
