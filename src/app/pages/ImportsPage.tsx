@@ -23,6 +23,10 @@ export function ImportsPage() {
   const openReviews = health.openReviews;
   const uncategorizedCount = health.uncategorizedCount;
   const untaggedCount = health.untaggedCount;
+  const sharedExpenseCount = scope.transactions.filter(
+    (item) => item.status === "active" && item.isExpenseImpact && item.isSharedExpense,
+  ).length;
+  const internalTransferCount = scope.transactions.filter((item) => item.status === "active" && item.isInternalTransfer).length;
   const latestImport = imports[0] ?? null;
   const postImportFlow = [
     {
@@ -54,6 +58,26 @@ export function ImportsPage() {
       to: untaggedCount ? "/transactions?cleanup=untagged" : "/transactions",
       actionLabel: "태그 정리 열기",
       completed: untaggedCount === 0,
+    },
+    {
+      id: "shared",
+      title: "공동지출 흐름 확인",
+      description: sharedExpenseCount
+        ? `${sharedExpenseCount}건의 공동지출을 정산으로 이어지는 흐름으로 한 번 더 확인해두면 좋습니다.`
+        : "공동지출로 따로 확인할 흐름이 없어 다음 단계로 넘어갈 수 있습니다.",
+      to: "/transactions?nature=shared",
+      actionLabel: "공동지출 점검하기",
+      completed: sharedExpenseCount === 0,
+    },
+    {
+      id: "internal-transfer",
+      title: "내부이체 흐름 확인",
+      description: internalTransferCount
+        ? `${internalTransferCount}건의 내부이체를 모아 보고 소비 통계에 과하게 잡히지 않는지 확인해보세요.`
+        : "내부이체로 따로 점검할 흐름이 없어 바로 진단 확인으로 넘어갈 수 있습니다.",
+      to: "/transactions?nature=internal_transfer",
+      actionLabel: "내부이체 점검하기",
+      completed: internalTransferCount === 0,
     },
     {
       id: "dashboard",
@@ -325,6 +349,22 @@ export function ImportsPage() {
             <div className="small text-secondary mt-2">태그가 비어 있는 소비만 바로 모아두고 거래 정리 모드에서 같은 맥락의 지출을 빠르게 묶을 수 있습니다.</div>
             <Link to="/transactions?cleanup=untagged" className="btn btn-outline-secondary btn-sm mt-3">
               무태그 정리 바로가기
+            </Link>
+          </article>
+          <article className="stat-card">
+            <span className="stat-label">공동지출 흐름</span>
+            <strong>{sharedExpenseCount}건</strong>
+            <div className="small text-secondary mt-2">정산으로 이어지는 공동지출만 모아서, 부담 분배와 연결이 자연스러운지 한 번 더 확인할 수 있습니다.</div>
+            <Link to="/transactions?nature=shared" className="btn btn-outline-secondary btn-sm mt-3">
+              공동지출 점검하기
+            </Link>
+          </article>
+          <article className="stat-card">
+            <span className="stat-label">내부이체 흐름</span>
+            <strong>{internalTransferCount}건</strong>
+            <div className="small text-secondary mt-2">내 계좌 간 이동이나 생활비 이체가 소비로 과하게 잡히지 않는지 거래 흐름으로 점검해보세요.</div>
+            <Link to="/transactions?nature=internal_transfer" className="btn btn-outline-secondary btn-sm mt-3">
+              내부이체 점검하기
             </Link>
           </article>
           <article className="stat-card">
