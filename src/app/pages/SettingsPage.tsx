@@ -17,7 +17,8 @@ export function SettingsPage() {
           </div>
         </div>
         <p className="text-secondary">
-          이 값이 있어야 지출률, 저축률, 과소비 경고가 제대로 동작합니다. 아직 실제 금액이 정해지지 않았다면 대략적인 값부터 넣어두고 나중에 수정해도 괜찮습니다.
+          기준값이 있어야 지출률, 저축률, 과소비 경고가 제대로 동작합니다. 아직 정확한 금액이 아니어도 대략적인 값부터 넣고 나중에
+          조정해도 괜찮습니다.
         </p>
         <form
           className="profile-form"
@@ -46,7 +47,12 @@ export function SettingsPage() {
           </label>
           <label>
             <span>고정지출 경고 기준 (%)</span>
-            <input name="warningFixedCostRate" type="number" className="form-control" defaultValue={Math.round((profile?.warningFixedCostRate ?? 0) * 100)} />
+            <input
+              name="warningFixedCostRate"
+              type="number"
+              className="form-control"
+              defaultValue={Math.round((profile?.warningFixedCostRate ?? 0) * 100)}
+            />
           </label>
           <button className="btn btn-primary" type="submit">
             기준 저장
@@ -62,7 +68,8 @@ export function SettingsPage() {
           </div>
         </div>
         <p className="text-secondary">
-          이 앱은 로컬 우선 구조이므로 백업 파일이 매우 중요합니다. 다른 기기에서 이어서 쓰고 싶다면 내보내기와 가져오기를 기본 루틴처럼 사용하면 됩니다.
+          이 앱은 로컬 저장 구조이므로 백업 파일이 중요합니다. 다른 기기에서 이어서 쓰고 싶다면 내보내기와 가져오기를 기본 루틴처럼
+          사용하면 됩니다.
         </p>
         <div className="d-flex flex-wrap gap-2">
           <button className="btn btn-primary" onClick={() => exportState()}>
@@ -88,17 +95,17 @@ export function SettingsPage() {
         <div className="section-head">
           <div>
             <span className="section-kicker">앱 관리</span>
-            <h2 className="section-title">개발 중 재시작</h2>
+            <h2 className="section-title">개발 중 테스트용</h2>
           </div>
         </div>
         {!profile?.monthlyNetIncome ? (
           <EmptyStateCallout
             kicker="기준선 필요"
-            title="먼저 월 수입을 입력하세요"
-            description="지금은 코칭과 통계의 기준선이 비어 있습니다. 위 폼에 월 순수입과 목표를 넣어야 지출이 큰지, 저축이 모자란지 판단할 수 있습니다."
+            title="먼저 월 수입을 입력해주세요"
+            description="지금은 기준선이 비어 있어서 저축률과 과소비 가이드가 약하게 동작합니다. 위 입력 폼부터 먼저 채워보세요."
           />
         ) : (
-          <p className="text-secondary">개발 중 테스트를 반복할 수 있도록 전체 저장소를 초기화합니다.</p>
+          <p className="text-secondary">개발 중 반복 테스트가 필요할 때 전체 로컬 데이터를 초기화할 수 있습니다.</p>
         )}
         <button className="btn btn-outline-danger mt-3" onClick={() => void resetApp()}>
           전체 데이터 초기화
