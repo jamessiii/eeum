@@ -2,9 +2,7 @@ import type { Transaction } from "../../shared/types/models";
 import {
   isActiveExpenseImpactTransaction,
   isActiveInternalTransferTransaction,
-  isActiveSharedExpenseTransaction,
   isUncategorizedExpenseTransaction,
-  isUntaggedExpenseTransaction,
 } from "./meta";
 
 export interface TransactionFilters {
@@ -12,8 +10,7 @@ export interface TransactionFilters {
   sourceType: "all" | Transaction["sourceType"];
   ownerPersonId: string;
   status: "all" | Transaction["status"];
-  nature: "all" | "expense" | "shared" | "internal_transfer" | "uncategorized" | "untagged";
-  tagId: string;
+  nature: "all" | "expense" | "internal_transfer" | "uncategorized";
   searchQuery: string;
 }
 
@@ -21,7 +18,6 @@ export function resetTransactionCleanupFilters(filters: TransactionFilters): Tra
   return {
     ...filters,
     nature: "all",
-    tagId: "all",
     searchQuery: "",
   };
 }
@@ -44,13 +40,10 @@ export function getFilteredTransactions(transactions: Transaction[], filters: Tr
     .filter((item) => {
       if (filters.nature === "all") return true;
       if (filters.nature === "expense") return isActiveExpenseImpactTransaction(item);
-      if (filters.nature === "shared") return isActiveSharedExpenseTransaction(item);
       if (filters.nature === "internal_transfer") return isActiveInternalTransferTransaction(item);
       if (filters.nature === "uncategorized") return isUncategorizedExpenseTransaction(item);
-      if (filters.nature === "untagged") return isUntaggedExpenseTransaction(item);
       return true;
     })
-    .filter((item) => (filters.tagId === "all" ? true : item.tagIds.includes(filters.tagId)))
     .filter((item) => {
       if (!query) return true;
       return [item.merchantName, item.description]

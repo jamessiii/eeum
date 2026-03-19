@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
   getCategoryCleanupSummary,
@@ -23,9 +23,8 @@ function getRecurringConfidenceLabel(confidence: RecurringMerchantSuggestion["co
 }
 
 export function CategoriesPage() {
-  const { addCategory, addTag, assignCategory, assignCategoryByMerchant, assignTag, assignTagByMerchant, state } = useAppState();
+  const { addCategory, assignCategory, assignCategoryByMerchant, state } = useAppState();
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
-  const [isTagModalOpen, setIsTagModalOpen] = useState(false);
   const [expandedSuggestionKey, setExpandedSuggestionKey] = useState<string | null>(null);
   const [expandedTransactionId, setExpandedTransactionId] = useState<string | null>(null);
   const workspaceId = state.activeWorkspaceId!;
@@ -43,7 +42,6 @@ export function CategoriesPage() {
   } = getCategoryCleanupSummary(scope.transactions, scope.categories);
   const expenseStats = getExpenseImpactStats(scope.transactions);
   const expenseTransactions = expenseStats.activeExpenseTransactions;
-  const untaggedExpenseCount = expenseStats.untaggedCount;
   const classificationProgress = expenseTransactions.length ? categorizedCount / expenseTransactions.length : 0;
   const categoryUsage = new Map<string, { count: number; amount: number }>();
   for (const transaction of expenseTransactions) {
@@ -54,7 +52,6 @@ export function CategoriesPage() {
       amount: current.amount + transaction.amount,
     });
   }
-  const usedTagIds = new Set(scope.transactions.flatMap((transaction) => transaction.tagIds));
   const getTransactionConnectionSummary = (transaction: { ownerPersonId: string | null; accountId: string | null; cardId: string | null }) => {
     const parts = [
       transaction.ownerPersonId ? `사용자 ${peopleMap.get(transaction.ownerPersonId) ?? "-"}` : null,
@@ -89,14 +86,7 @@ export function CategoriesPage() {
           to: "/transactions?cleanup=uncategorized",
           actionLabel: `미분류 ${uncategorizedTransactions.length}건 정리`,
         }
-      : untaggedExpenseCount
-        ? {
-            title: "지금 가장 먼저 할 일",
-            description: `${untaggedExpenseCount}건의 무태그 거래를 묶으면 태그 기준 소비 흐름까지 더 선명해집니다.`,
-            to: "/transactions?cleanup=untagged",
-            actionLabel: `무태그 ${untaggedExpenseCount}건 정리`,
-          }
-        : null;
+      : null;
 
   return (
     <div className="page-stack">
@@ -150,21 +140,14 @@ export function CategoriesPage() {
             <strong>{uncategorizedTransactions.length ? "지금 바로 이어서 할 작업" : "분류 정리가 거의 끝났습니다"}</strong>
             <p className="mb-0 text-secondary">
               {uncategorizedTransactions.length
-                ? "반복 제안과 미분류 거래를 먼저 줄인 뒤, 필요하면 무태그 거래만 마무리하면 됩니다."
-                : untaggedExpenseCount
-                  ? "카테고리는 끝났고 무태그 거래만 남았습니다."
-                  : "카테고리와 태그 정리가 모두 끝났습니다."}
+                ? "반복 제안과 미분류 거래를 먼저 줄이면 됩니다."
+                : "카테고리 정리가 모두 끝났습니다."}
             </p>
           </div>
           <div className="action-row">
             {uncategorizedTransactions.length ? (
               <Link to="/transactions?cleanup=uncategorized" className="btn btn-outline-primary btn-sm">
                 미분류 {uncategorizedTransactions.length}건 정리
-              </Link>
-            ) : null}
-            {untaggedExpenseCount ? (
-              <Link to="/transactions?cleanup=untagged" className="btn btn-outline-secondary btn-sm">
-                무태그 {untaggedExpenseCount}건 정리
               </Link>
             ) : null}
             <Link to="/" className="btn btn-outline-secondary btn-sm">
@@ -179,16 +162,8 @@ export function CategoriesPage() {
             description="반복 제안과 미분류 거래가 모두 정리됐습니다."
             actions={
               <>
-                {untaggedExpenseCount ? (
-                  <Link to="/transactions?cleanup=untagged" className="btn btn-outline-secondary btn-sm">
-                    무태그 {untaggedExpenseCount}건 정리
-                  </Link>
-                ) : null}
                 <Link to="/transactions" className="btn btn-outline-secondary btn-sm">
                   거래 화면 보기
-                </Link>
-                <Link to="/settlements" className="btn btn-outline-primary btn-sm">
-                  정산 화면 보기
                 </Link>
                 <Link to="/" className="btn btn-outline-secondary btn-sm">
                   대시보드 보기
@@ -262,14 +237,9 @@ export function CategoriesPage() {
                     event.preventDefault();
                     const form = event.currentTarget;
                     const select = form.elements.namedItem("categoryId") as HTMLSelectElement | null;
-                    const tagSelect = form.elements.namedItem("tagId") as HTMLSelectElement | null;
                     const categoryId = select?.value ?? "";
-                    const tagId = tagSelect?.value ?? "";
                     if (!categoryId) return;
                     assignCategoryByMerchant(workspaceId, suggestion.merchantName, categoryId);
-                    if (tagId) {
-                      assignTagByMerchant(workspaceId, suggestion.merchantName, tagId);
-                    }
                     form.reset();
                   }}
                 >
@@ -278,14 +248,6 @@ export function CategoriesPage() {
                     {scope.categories.map((category) => (
                       <option key={category.id} value={category.id}>
                         {category.name}
-                      </option>
-                    ))}
-                  </select>
-                  <select name="tagId" className="form-select" defaultValue="">
-                    <option value="">태그 선택 안 함</option>
-                    {scope.tags.map((tag) => (
-                      <option key={tag.id} value={tag.id}>
-                        {tag.name}
                       </option>
                     ))}
                   </select>
@@ -354,14 +316,9 @@ export function CategoriesPage() {
                     event.preventDefault();
                     const form = event.currentTarget;
                     const select = form.elements.namedItem("categoryId") as HTMLSelectElement | null;
-                    const tagSelect = form.elements.namedItem("tagId") as HTMLSelectElement | null;
                     const categoryId = select?.value ?? "";
-                    const tagId = tagSelect?.value ?? "";
                     if (!categoryId) return;
                     assignCategory(workspaceId, transaction.id, categoryId);
-                    if (tagId) {
-                      assignTag(workspaceId, transaction.id, tagId);
-                    }
                     form.reset();
                   }}
                 >
@@ -370,14 +327,6 @@ export function CategoriesPage() {
                     {scope.categories.map((category) => (
                       <option key={category.id} value={category.id}>
                         {category.name}
-                      </option>
-                    ))}
-                  </select>
-                  <select name="tagId" className="form-select" defaultValue="">
-                    <option value="">태그 선택 안 함</option>
-                    {scope.tags.map((tag) => (
-                      <option key={tag.id} value={tag.id}>
-                        {tag.name}
                       </option>
                     ))}
                   </select>
@@ -431,31 +380,6 @@ export function CategoriesPage() {
           </div>
         </section>
 
-        <section className="card shadow-sm" style={getMotionStyle(5)}>
-          <div className="section-head">
-            <div>
-              <span className="section-kicker">분류 관리</span>
-              <h2 className="section-title">태그</h2>
-            </div>
-            <button type="button" className="btn btn-primary btn-sm" onClick={() => setIsTagModalOpen(true)}>
-              태그 추가
-            </button>
-          </div>
-          <div className="resource-grid compact-resource-grid mt-2">
-            {scope.tags.map((tag) => (
-              <article key={tag.id} className="resource-card compact-resource-card">
-                <div className="compact-card-meta">
-                  <div className="tag-color-chip" style={{ backgroundColor: tag.color }} title={`태그 색상 ${tag.color}`} />
-                  <span className={`badge ${usedTagIds.has(tag.id) ? "text-bg-success" : "text-bg-secondary"}`}>
-                    {usedTagIds.has(tag.id) ? "사용 중" : "미사용"}
-                  </span>
-                </div>
-                <h3 title={tag.name}>{tag.name}</h3>
-                <p className="mb-0 text-secondary">{usedTagIds.has(tag.id) ? "거래에 연결됨" : "아직 연결 없음"}</p>
-              </article>
-            ))}
-          </div>
-        </section>
       </div>
 
       <AppModal
@@ -488,35 +412,6 @@ export function CategoriesPage() {
         </form>
       </AppModal>
 
-      <AppModal
-        open={isTagModalOpen}
-        title="태그 추가"
-        description="자주 보는 축만 태그로 두고, 나머지는 거래 흐름에서 필요할 때 붙이면 됩니다."
-        onClose={() => setIsTagModalOpen(false)}
-      >
-        <form
-          className="profile-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const input = event.currentTarget.elements.namedItem("name") as HTMLInputElement | null;
-            const value = input?.value.trim() ?? "";
-            if (!value) return;
-            addTag(workspaceId, value);
-            setIsTagModalOpen(false);
-            event.currentTarget.reset();
-          }}
-        >
-          <label style={{ gridColumn: "1 / -1" }}>
-            태그 이름
-            <input name="name" className="form-control" placeholder="예: 외식" />
-          </label>
-          <div className="d-flex justify-content-end" style={{ gridColumn: "1 / -1" }}>
-            <button className="btn btn-primary" type="submit">
-              저장
-            </button>
-          </div>
-        </form>
-      </AppModal>
     </div>
   );
 }

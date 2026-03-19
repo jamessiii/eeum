@@ -318,6 +318,26 @@ textarea:focus {
   color: var(--status-warning-fg) !important;
 }
 
+.table-responsive .btn.btn-sm,
+.table-responsive .form-select.form-select-sm,
+.table-responsive .form-control.form-control-sm {
+  font-size: 12px !important;
+}
+
+.table-responsive .btn.btn-sm {
+  min-height: 30px !important;
+  padding: 6px 10px !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+}
+
+.table-responsive .form-select.form-select-sm,
+.table-responsive .form-control.form-control-sm {
+  min-height: 30px !important;
+  padding: 5px 10px !important;
+  border-radius: 10px !important;
+}
+
 .badge.text-bg-primary,
 .badge.text-bg-primary-subtle,
 .text-bg-primary,

@@ -189,12 +189,9 @@ export function SettingsPage() {
           <CompletionBanner
             className="mt-4"
             title="기준값 저장이 끝났습니다"
-            description="이제 거래나 정산에서 바로 확인하면 됩니다."
+            description="이제 거래 화면과 대시보드에서 바로 확인하면 됩니다."
             actions={
               <>
-                <Link to="/settlements" className="btn btn-outline-primary btn-sm">
-                  정산 보기
-                </Link>
                 <Link to="/transactions" className="btn btn-outline-secondary btn-sm">
                   거래 보기
                 </Link>

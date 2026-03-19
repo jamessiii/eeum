@@ -15,9 +15,6 @@ const TransactionsPage = lazy(() =>
 );
 const ImportsPage = lazy(() => import("./pages/ImportsPage").then((module) => ({ default: module.ImportsPage })));
 const ReviewsPage = lazy(() => import("./pages/ReviewsPage").then((module) => ({ default: module.ReviewsPage })));
-const SettlementsPage = lazy(() =>
-  import("./pages/SettlementsPage").then((module) => ({ default: module.SettlementsPage })),
-);
 const SettingsPage = lazy(() => import("./pages/SettingsPage").then((module) => ({ default: module.SettingsPage })));
 const DeveloperPage = lazy(() => import("./pages/DeveloperPage").then((module) => ({ default: module.DeveloperPage })));
 
@@ -35,7 +32,6 @@ type NavItem = {
 const baseNavItems: NavItem[] = [
   { to: "/", label: "대시보드", end: true },
   { to: "/transactions", label: "거래" },
-  { to: "/settlements", label: "정산" },
   { to: "/imports", label: "업로드" },
   { to: "/reviews", label: "검토함" },
   { to: "/settings", label: "설정" },
@@ -196,7 +192,7 @@ function AppRoutes({
         <Route path="/categories" element={<Navigate to="/settings?tab=categories" replace />} />
         <Route path="/imports" element={<ImportsPage />} />
         <Route path="/reviews" element={<ReviewsPage />} />
-        <Route path="/settlements" element={<SettlementsPage />} />
+        <Route path="/settlements" element={<Navigate to="/" replace />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route
           path="/dev"

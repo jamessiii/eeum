@@ -78,6 +78,7 @@ type Action =
         workspaceId: string;
         transactionId: string;
         patch: {
+          transactionType?: Transaction["transactionType"];
           sourceType?: Transaction["sourceType"];
           ownerPersonId?: string | null;
           accountId?: string | null;
@@ -357,17 +358,18 @@ function applyTransactionFlagPatch(
     isInternalTransfer?: boolean;
   },
 ) {
+  const nextInternalTransfer =
+    typeof patch.isInternalTransfer === "boolean" ? patch.isInternalTransfer : transaction.isInternalTransfer;
   const nextExpenseImpact =
     typeof patch.isExpenseImpact === "boolean"
       ? patch.isExpenseImpact
-      : transaction.transactionType === "transfer" && typeof patch.isInternalTransfer === "boolean"
-        ? !patch.isInternalTransfer
-        : transaction.isExpenseImpact;
+      : transaction.isExpenseImpact;
 
   const requestedSharedExpense = patch.isSharedExpense ?? transaction.isSharedExpense;
   const nextSharedExpense = isActiveExpenseTransaction({
     ...transaction,
     isExpenseImpact: nextExpenseImpact,
+    isInternalTransfer: nextInternalTransfer,
   })
     ? requestedSharedExpense
     : false;
@@ -376,7 +378,7 @@ function applyTransactionFlagPatch(
     ...transaction,
     isExpenseImpact: nextExpenseImpact,
     isSharedExpense: nextSharedExpense,
-    isInternalTransfer: transaction.transactionType === "transfer" && !nextExpenseImpact,
+    isInternalTransfer: nextInternalTransfer,
   };
 }
 
@@ -639,6 +641,7 @@ function reducer(state: AppState, action: Action): AppState {
         transactions: state.transactions.map((transaction) =>
           transaction.workspaceId === action.payload.workspaceId && transaction.id === action.payload.transactionId
             ? (() => {
+                const nextTransactionType = action.payload.patch.transactionType ?? transaction.transactionType;
                 const nextSourceType = action.payload.patch.sourceType ?? transaction.sourceType;
                 const nextOwnerPersonId =
                   typeof action.payload.patch.ownerPersonId !== "undefined"
@@ -653,12 +656,13 @@ function reducer(state: AppState, action: Action): AppState {
 
                 return {
                   ...transaction,
+                  transactionType: nextTransactionType,
                   sourceType: nextSourceType,
                   ownerPersonId: nextOwnerPersonId,
                   accountId: nextAccountId,
                   cardId: nextCardId,
-                  fromAccountId: transaction.transactionType === "transfer" ? nextAccountId : null,
-                  toAccountId: transaction.transactionType === "transfer" ? transaction.toAccountId : null,
+                  fromAccountId: nextTransactionType === "transfer" ? nextAccountId : null,
+                  toAccountId: nextTransactionType === "transfer" ? transaction.toAccountId : null,
                   occurredAt: action.payload.patch.occurredAt ?? transaction.occurredAt,
                   settledAt:
                     typeof action.payload.patch.settledAt !== "undefined"
@@ -816,6 +820,7 @@ interface AppStateContextValue {
     workspaceId: string,
     transactionId: string,
     patch: {
+      transactionType?: Transaction["transactionType"];
       sourceType?: Transaction["sourceType"];
       ownerPersonId?: string | null;
       accountId?: string | null;

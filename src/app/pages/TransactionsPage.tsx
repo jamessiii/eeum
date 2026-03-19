@@ -1,8 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import {
-  isActiveTransaction,
-} from "../../domain/transactions/meta";
 import {
   clearTransactionSearchQuery,
   getFilteredTransactions,
@@ -18,17 +15,10 @@ import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { CompletionBanner } from "../components/CompletionBanner";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
-import { TransactionBatchCategoryPanel } from "../components/TransactionBatchCategoryPanel";
-import { TransactionBatchTagPanel } from "../components/TransactionBatchTagPanel";
 import { TransactionCategoryEditor } from "../components/TransactionCategoryEditor";
 import { TransactionCleanupQuickActions } from "../components/TransactionCleanupQuickActions";
-import { TransactionInlineEditor, type TransactionEditDraft } from "../components/TransactionInlineEditor";
-import { TransactionNatureCell } from "../components/TransactionNatureCell";
 import { TransactionRowHeader } from "../components/TransactionRowHeader";
 import { TransactionSourceSummaryPanel } from "../components/TransactionSourceSummaryPanel";
-import { TransactionStatusBadge } from "../components/TransactionStatusBadge";
-import { TransactionTagEditor } from "../components/TransactionTagEditor";
-import { TransactionTypeBadge } from "../components/TransactionTypeBadge";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
 
@@ -36,15 +26,11 @@ import { getWorkspaceScope } from "../state/selectors";
 const cleanupModeCopy = {
   all: {
     title: "전체 거래를 보고 있습니다",
-    description: "필터를 더 좁히면 미분류나 무태그처럼 정리가 많이 필요한 거래만 빠르게 모아볼 수 있습니다.",
+    description: "필터를 더 좁히면 미분류처럼 정리가 많이 필요한 거래만 빠르게 모아볼 수 있습니다.",
   },
   expense: {
     title: "실지출만 보고 있습니다",
-    description: "실제 소비에 잡히는 거래만 모아둔 상태라 카테고리와 태그를 정리하기 좋은 흐름입니다.",
-  },
-  shared: {
-    title: "공동지출만 보고 있습니다",
-    description: "정산과 공동생활비 흐름에 직접 연결되는 거래만 보고 있어 공동지출 정리에 집중하기 좋습니다.",
+    description: "실제 소비에 잡히는 거래만 모아둔 상태라 카테고리를 정리하기 좋은 흐름입니다.",
   },
   internal_transfer: {
     title: "내부이체만 보고 있습니다",
@@ -54,22 +40,18 @@ const cleanupModeCopy = {
     title: "미분류 거래만 보고 있습니다",
     description: "카테고리가 비어 있는 거래만 모아둔 상태라 카테고리 일괄 정리에 가장 적합합니다.",
   },
-  untagged: {
-    title: "무태그 거래만 보고 있습니다",
-    description: "태그가 없는 거래만 모아둔 상태라 같은 맥락의 소비를 태그로 빠르게 묶기 좋습니다.",
-  },
 } as const;
 
 const transactionDraftGuide = {
   expense: {
     title: "지출 입력 중",
     description: "실제 소비가 발생한 거래입니다. 생활비, 식비, 쇼핑처럼 소비 분석에 포함될 항목에 맞습니다.",
-    helper: "공동으로 부담한 지출이면 공동지출도 함께 체크해두세요.",
+    helper: "실제 소비가 맞다면 지출 반영을 켜두고 분류를 이어가면 됩니다.",
   },
   income: {
     title: "수입 입력 중",
     description: "월급, 용돈, 환급처럼 들어온 돈을 기록합니다. 일반적으로 지출 분석에는 포함하지 않습니다.",
-    helper: "수입은 공동지출이나 내부이체와 성격이 다르므로 지출 반영은 꺼두는 편이 자연스럽습니다.",
+    helper: "수입은 소비 통계와 성격이 다르므로 지출 반영은 꺼두는 편이 자연스럽습니다.",
   },
   transfer: {
     title: "이체 입력 중",
@@ -87,11 +69,7 @@ export function TransactionsPage() {
   const {
     addTransaction,
     assignCategory,
-    assignCategoryBatch,
-    assignTag,
-    assignTagBatch,
     clearCategory,
-    removeTag,
     state,
     updateTransactionDetails,
     updateTransactionFlags,
@@ -100,11 +78,8 @@ export function TransactionsPage() {
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const categories = new Map(scope.categories.map((item) => [item.id, item.name]));
-  const tags = new Map(scope.tags.map((item) => [item.id, item]));
   const peopleMap = new Map(scope.people.map((person) => [person.id, person.displayName || person.name]));
-  const accountMap = new Map(scope.accounts.map((account) => [account.id, account.alias || account.name]));
   const accountSharedMap = new Map(scope.accounts.map((account) => [account.id, account.isShared]));
-  const cardMap = new Map(scope.cards.map((card) => [card.id, card.name]));
   const getTransactionOwnerLabel = (transaction: (typeof transactions)[number]) =>
     transaction.ownerPersonId
       ? peopleMap.get(transaction.ownerPersonId) ?? "-"
@@ -123,29 +98,10 @@ export function TransactionsPage() {
     ownerPersonId: "all",
     status: "all",
     nature: "all",
-    tagId: "all",
     searchQuery: "",
   });
   const [draftType, setDraftType] = useState<"expense" | "income" | "transfer" | "adjustment">("expense");
   const [draftExpenseImpact, setDraftExpenseImpact] = useState(true);
-  const [draftSharedExpense, setDraftSharedExpense] = useState(false);
-  const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
-  const [editDraft, setEditDraft] = useState<TransactionEditDraft>({
-    sourceType: "manual",
-    ownerPersonId: "",
-    accountId: "",
-    cardId: "",
-    occurredAt: "",
-    settledAt: "",
-    merchantName: "",
-    description: "",
-    amount: "",
-  });
-  const [pendingCategoryByTransaction, setPendingCategoryByTransaction] = useState<Record<string, string>>({});
-  const [pendingTagByTransaction, setPendingTagByTransaction] = useState<Record<string, string>>({});
-  const [bulkCategoryId, setBulkCategoryId] = useState("");
-  const [bulkTagId, setBulkTagId] = useState("");
-
   const transactions = useMemo(
     () => getFilteredTransactions(scope.transactions, filters),
     [filters, scope.transactions],
@@ -153,20 +109,10 @@ export function TransactionsPage() {
 
   const sourceTypeCounts = getSourceTypeCounts(transactions);
   const {
-    expenseImpactTransactions,
     activeExpenseCount,
     internalTransferCount,
-    sharedExpenseCount,
     uncategorizedCount,
-    untaggedCount,
-    expenseImpactAmount,
   } = getTransactionActivitySummary(transactions);
-  const categorizableTransactions = expenseImpactTransactions;
-  const taggableTransactions = expenseImpactTransactions;
-  const taggableAmount = expenseImpactAmount;
-  const categorizableAmount = expenseImpactAmount;
-  const selectedBulkTagName = scope.tags.find((tag) => tag.id === bulkTagId)?.name ?? null;
-  const selectedBulkCategoryName = scope.categories.find((category) => category.id === bulkCategoryId)?.name ?? null;
   const activeCleanupMode = cleanupModeCopy[filters.nature as keyof typeof cleanupModeCopy] ?? cleanupModeCopy.all;
   const { activeOwnerName, activeSourceTypeLabel, activeSearchQuery } = getTransactionFilterContext({
     ownerPersonId: filters.ownerPersonId,
@@ -180,19 +126,10 @@ export function TransactionsPage() {
     currentCleanupRemaining,
     currentFlowAuditCount,
   } = getTransactionViewMode({
-    nature: filters.nature as "all" | "expense" | "shared" | "internal_transfer" | "uncategorized" | "untagged",
+    nature: filters.nature as "all" | "expense" | "internal_transfer" | "uncategorized",
     uncategorizedCount,
-    untaggedCount,
-    sharedExpenseCount,
     internalTransferCount,
   });
-  const bulkScopeSummary =
-    [
-      activeOwnerName ? `사용자 ${activeOwnerName}` : null,
-      activeSourceTypeLabel ? `수단 ${activeSourceTypeLabel}` : null,
-      activeSearchQuery ? `검색 ${activeSearchQuery}` : null,
-    ].filter(Boolean).join(" · ") || null;
-
   const activeFilterSummary =
     [
       filters.transactionType !== "all" ? `유형 ${filters.transactionType}` : null,
@@ -200,85 +137,61 @@ export function TransactionsPage() {
       activeOwnerName ? `사용자 ${activeOwnerName}` : null,
       filters.status !== "all" ? `상태 ${filters.status}` : null,
       filters.nature !== "all" ? `정리 ${filters.nature}` : null,
-      filters.tagId !== "all" ? `태그 ${scope.tags.find((tag) => tag.id === filters.tagId)?.name ?? "-"}` : null,
       activeSearchQuery ? `검색 ${activeSearchQuery}` : null,
     ].filter(Boolean).join(" · ") || null;
-  const getSettlementsLink = () => {
-    const nextSearchParams = new URLSearchParams();
-    if (filters.sourceType !== "all") nextSearchParams.set("sourceType", filters.sourceType);
-    if (filters.ownerPersonId !== "all") nextSearchParams.set("ownerPersonId", filters.ownerPersonId);
-    if (filters.tagId !== "all") nextSearchParams.set("tagId", filters.tagId);
-    const query = nextSearchParams.toString();
-    return query ? `/settlements?${query}` : "/settlements";
+
+
+  const getTransactionTypeValue = (transaction: (typeof transactions)[number]) =>
+    transaction.isInternalTransfer ? "internal_transfer" : transaction.transactionType;
+
+  const handleTransactionTypeChange = (
+    transaction: (typeof transactions)[number],
+    nextValue: "expense" | "income" | "transfer" | "adjustment" | "internal_transfer",
+  ) => {
+    if (nextValue === "internal_transfer") {
+      updateTransactionDetails(workspaceId, transaction.id, { transactionType: "transfer" });
+      updateTransactionFlags(workspaceId, transaction.id, {
+        isInternalTransfer: true,
+        isExpenseImpact: false,
+        isSharedExpense: false,
+      });
+      return;
+    }
+
+    updateTransactionDetails(workspaceId, transaction.id, { transactionType: nextValue });
+    updateTransactionFlags(workspaceId, transaction.id, {
+      isInternalTransfer: false,
+      isExpenseImpact: transaction.isExpenseImpact,
+      isSharedExpense: false,
+    });
   };
-  const settlementsActionLabel =
-    filters.sourceType !== "all" || filters.ownerPersonId !== "all" || filters.tagId !== "all"
-      ? "현재 맥락 정산 보기"
-      : "정산 화면 보기";
 
   useEffect(() => {
     const cleanup = searchParams.get("cleanup");
     const nature = searchParams.get("nature");
     const ownerPersonId = searchParams.get("ownerPersonId");
     const sourceType = searchParams.get("sourceType");
-    const tagId = searchParams.get("tagId");
-
     const matchedNature =
-      cleanup === "uncategorized" || cleanup === "untagged"
+      cleanup === "uncategorized"
         ? cleanup
-        : nature === "shared" || nature === "internal_transfer"
+
+        : nature === "internal_transfer"
+
           ? nature
           : null;
     const matchedOwnerPersonId =
       ownerPersonId === "all" ? "all" : ownerPersonId && people.some((person) => person.id === ownerPersonId) ? ownerPersonId : null;
     const matchedSourceType = SOURCE_TYPE_OPTIONS.find((item) => item === sourceType);
-    const matchedTagId = tagId && scope.tags.some((tag) => tag.id === tagId) ? tagId : null;
-
-    if (matchedNature || ownerPersonId === "all" || matchedOwnerPersonId || matchedSourceType || matchedTagId) {
+    if (matchedNature || ownerPersonId === "all" || matchedOwnerPersonId || matchedSourceType) {
       setFilters((current) => ({
         ...current,
         nature: matchedNature ?? current.nature,
         ownerPersonId: matchedOwnerPersonId ?? current.ownerPersonId,
         sourceType: matchedSourceType ?? current.sourceType,
-        tagId: matchedTagId ?? current.tagId,
       }));
       setSearchParams({}, { replace: true });
     }
-  }, [people, scope.tags, searchParams, setSearchParams]);
-
-  const beginTransactionEdit = (transaction: (typeof transactions)[number]) => {
-    setEditingTransactionId(transaction.id);
-    setEditDraft({
-      sourceType: transaction.sourceType,
-      ownerPersonId: transaction.ownerPersonId ?? "",
-      accountId: transaction.accountId ?? "",
-      cardId: transaction.cardId ?? "",
-      occurredAt: transaction.occurredAt.slice(0, 10),
-      settledAt: transaction.settledAt?.slice(0, 10) ?? "",
-      merchantName: transaction.merchantName,
-      description: transaction.description,
-      amount: String(transaction.amount),
-    });
-  };
-
-  const cancelTransactionEdit = () => {
-    setEditingTransactionId(null);
-    setEditDraft({
-      sourceType: "manual",
-      ownerPersonId: "",
-      accountId: "",
-      cardId: "",
-      occurredAt: "",
-      settledAt: "",
-      merchantName: "",
-      description: "",
-      amount: "",
-    });
-  };
-
-  const updateEditDraft = (patch: Partial<TransactionEditDraft>) => {
-    setEditDraft((current) => ({ ...current, ...patch }));
-  };
+  }, [people, searchParams, setSearchParams]);
 
   const normalizeTransactionConnectionFields = ({
     sourceType,
@@ -328,7 +241,7 @@ export function TransactionsPage() {
     };
   };
 
-  const syncFormWithSourceType = (form: HTMLFormElement, sourceType: TransactionEditDraft["sourceType"]) => {
+  const syncFormWithSourceType = (form: HTMLFormElement, sourceType: "card" | "account" | "manual" | "import") => {
     const accountField = form.elements.namedItem("accountId") as HTMLSelectElement | null;
     const cardField = form.elements.namedItem("cardId") as HTMLSelectElement | null;
     const ownerField = form.elements.namedItem("ownerPersonId") as HTMLSelectElement | null;
@@ -399,68 +312,6 @@ export function TransactionsPage() {
     if (accountField) accountField.value = selectedCard.linkedAccountId ?? "";
   };
 
-  const syncEditDraftWithSourceType = (sourceType: TransactionEditDraft["sourceType"]) => {
-    if (sourceType === "manual") {
-      updateEditDraft({ sourceType, accountId: "", cardId: "" });
-      return;
-    }
-
-    if (sourceType === "account") {
-      updateEditDraft({
-        sourceType,
-        cardId: "",
-        ownerPersonId: editDraft.accountId
-          ? (() => {
-              const selectedAccount = accounts.find((account) => account.id === editDraft.accountId);
-              return selectedAccount?.isShared ? "" : selectedAccount?.ownerPersonId ?? "";
-            })()
-          : "",
-      });
-      return;
-    }
-
-    updateEditDraft({ sourceType });
-  };
-
-  const syncEditDraftWithAccount = (accountId: string) => {
-    const selectedAccount = accounts.find((account) => account.id === accountId);
-    if (!selectedAccount) {
-      updateEditDraft({
-        accountId,
-        sourceType: editDraft.sourceType === "account" ? "manual" : editDraft.sourceType,
-        ownerPersonId: "",
-      });
-      return;
-    }
-
-    updateEditDraft({
-      sourceType: "account",
-      accountId,
-      cardId: "",
-      ownerPersonId: selectedAccount.isShared ? "" : selectedAccount.ownerPersonId ?? "",
-    });
-  };
-
-  const syncEditDraftWithCard = (cardId: string) => {
-    const selectedCard = cards.find((card) => card.id === cardId);
-    if (!selectedCard) {
-      const fallbackAccount = accounts.find((account) => account.id === editDraft.accountId);
-      updateEditDraft({
-        cardId,
-        sourceType: editDraft.accountId ? "account" : "manual",
-        ownerPersonId: fallbackAccount?.isShared ? "" : fallbackAccount?.ownerPersonId ?? "",
-      });
-      return;
-    }
-
-    updateEditDraft({
-      sourceType: "card",
-      cardId,
-      ownerPersonId: selectedCard.ownerPersonId ?? "",
-      accountId: selectedCard.linkedAccountId ?? "",
-    });
-  };
-
   return (
     <div className="page-stack">
       <section className="card shadow-sm" style={getMotionStyle(0)}>
@@ -478,10 +329,7 @@ export function TransactionsPage() {
             <h3>실지출로 넣을 때</h3>
             <p className="mb-0 text-secondary">생활비, 외식, 쇼핑처럼 실제 소비가 생긴 거래는 `지출 반영`을 켠 상태로 등록합니다.</p>
           </article>
-          <article className="resource-card">
-            <h3>공동지출일 때</h3>
-            <p className="mb-0 text-secondary">함께 부담할 거래라면 `공동지출`도 함께 켜두면 정산 화면에서 자동 계산됩니다.</p>
-          </article>
+
           <article className="resource-card">
             <h3>내부이체일 때</h3>
             <p className="mb-0 text-secondary">내 계좌끼리 옮긴 돈은 `이체`로 넣고 `지출 반영`을 꺼야 과소비로 잡히지 않습니다.</p>
@@ -522,16 +370,16 @@ export function TransactionsPage() {
               description: String(formData.get("description") || ""),
               amount: Number(formData.get("amount") || 0),
               categoryId: String(formData.get("categoryId") || "") || null,
-              tagIds: String(formData.get("tagId") || "")
-                ? [String(formData.get("tagId") || "")]
-                : [],
-              isSharedExpense: String(formData.get("isSharedExpense") || "") === "on",
+              tagIds: [],
+
+              isSharedExpense: false,
+
               isExpenseImpact: String(formData.get("isExpenseImpact") || "") === "on",
             });
             form.reset();
             setDraftType("expense");
             setDraftExpenseImpact(true);
-            setDraftSharedExpense(false);
+
           }}
         >
           <input name="occurredAt" type="date" className="form-control" required />
@@ -547,7 +395,7 @@ export function TransactionsPage() {
                 setDraftExpenseImpact(true);
               } else {
                 setDraftExpenseImpact(false);
-                setDraftSharedExpense(false);
+    
               }
             }}
           >
@@ -560,7 +408,7 @@ export function TransactionsPage() {
             name="sourceType"
             className="form-select"
             defaultValue="manual"
-            onChange={(event) => syncFormWithSourceType(event.currentTarget.form!, event.currentTarget.value as TransactionEditDraft["sourceType"])}
+            onChange={(event) => syncFormWithSourceType(event.currentTarget.form!, event.currentTarget.value as "card" | "account" | "manual" | "import")}
           >
             {SOURCE_TYPE_OPTIONS.filter((sourceType) => sourceType !== "import").map((sourceType) => (
               <option key={sourceType} value={sourceType}>
@@ -612,14 +460,6 @@ export function TransactionsPage() {
               </option>
             ))}
           </select>
-          <select name="tagId" className="form-select" defaultValue="">
-            <option value="">태그 선택 없음</option>
-            {scope.tags.map((tag) => (
-              <option key={tag.id} value={tag.id}>
-                {tag.name}
-              </option>
-            ))}
-          </select>
           <input name="merchantName" className="form-control" placeholder="가맹점 또는 거래명" required />
           <input name="description" className="form-control" placeholder="설명" />
           <input name="amount" type="number" min="0" step="1" className="form-control" placeholder="금액" required />
@@ -632,17 +472,6 @@ export function TransactionsPage() {
               onChange={(event) => setDraftExpenseImpact(event.target.checked)}
             />
             <span className="form-check-label">지출 반영</span>
-          </label>
-          <label className="form-check compact-check">
-            <input
-              checked={draftSharedExpense}
-              disabled={draftType !== "expense"}
-              name="isSharedExpense"
-              type="checkbox"
-              className="form-check-input"
-              onChange={(event) => setDraftSharedExpense(event.target.checked)}
-            />
-            <span className="form-check-label">공동지출</span>
           </label>
           <button className="btn btn-primary" type="submit">
             거래 추가
@@ -690,37 +519,19 @@ export function TransactionsPage() {
                 <span className="stat-label">내부이체</span>
                 <strong>{internalTransferCount}건</strong>
               </article>
-              <article className="stat-card">
-                <span className="stat-label">공동지출</span>
-                <strong>{sharedExpenseCount}건</strong>
-              </article>
-              <article className="stat-card">
-                <span className="stat-label">무태그 거래</span>
-                <strong>{untaggedCount}건</strong>
-              </article>
             </div>
 
             {isFocusedCleanupMode ? (
               <div className="review-summary-panel mb-3">
                 <div className="review-summary-copy">
                   <strong>업로드 후 정리 모드로 바로 들어왔습니다</strong>
-                  <p className="mb-0 text-secondary">지금은 {filters.nature === "uncategorized" ? "미분류 거래" : "무태그 거래"}만 보고 있습니다.</p>
+                  <p className="mb-0 text-secondary">지금은 미분류 거래만 보고 있습니다.</p>
                 </div>
                 <div className="action-row">
-                  {filters.nature === "uncategorized" && untaggedCount ? (
-                    <button className="btn btn-outline-primary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, nature: "untagged" }))}>
-                      무태그 정리로 이어가기
-                    </button>
-                  ) : null}
-                  {filters.nature === "untagged" && uncategorizedCount ? (
-                    <button className="btn btn-outline-primary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, nature: "uncategorized" }))}>
-                      미분류 정리로 이어가기
-                    </button>
-                  ) : null}
                   <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters(resetTransactionCleanupFilters)}>
                     전체 거래로 돌아가기
                   </button>
-                  {filters.sourceType === "all" && filters.ownerPersonId === "all" && filters.tagId === "all" ? (
+                  {filters.sourceType === "all" && filters.ownerPersonId === "all" ? (
                     <Link className="btn btn-outline-secondary btn-sm" to="/">
                       대시보드 보기
                     </Link>
@@ -732,27 +543,11 @@ export function TransactionsPage() {
             {isFocusedCleanupMode && currentCleanupRemaining === 0 ? (
               <CompletionBanner
                 className="mb-3"
-                title={filters.nature === "uncategorized" ? "미분류 거래 정리가 끝났습니다" : "무태그 거래 정리가 끝났습니다"}
-                description={
-                  filters.nature === "uncategorized"
-                    ? "이제 남은 무태그 거래를 묶거나 대시보드에서 이번 달 진단을 확인하면 됩니다."
-                    : filters.sourceType !== "all" || filters.ownerPersonId !== "all" || filters.tagId !== "all"
-                      ? "이제 카테고리와 태그 기준 정리가 끝난 흐름으로 대시보드와 현재 맥락 정산 흐름을 더 믿고 볼 수 있습니다."
-                      : "이제 카테고리와 태그 기준 정리가 끝난 흐름으로 대시보드와 정산 화면을 더 믿고 볼 수 있습니다."
-                }
+                title="미분류 거래 정리가 끝났습니다"
+                description="카테고리 기준으로 정리가 끝난 흐름이라 이제 대시보드 수치를 더 믿고 볼 수 있습니다."
                 actions={
                   <>
-                    {filters.nature === "uncategorized" && untaggedCount ? (
-                      <button className="btn btn-outline-primary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, nature: "untagged" }))}>
-                        무태그 {untaggedCount}건 정리
-                      </button>
-                    ) : null}
-                    {sharedExpenseCount ? (
-                      <Link className="btn btn-outline-primary btn-sm" to={getSettlementsLink()}>
-                        {settlementsActionLabel}
-                      </Link>
-                    ) : null}
-                    {filters.sourceType === "all" && filters.ownerPersonId === "all" && filters.tagId === "all" ? (
+                    {filters.sourceType === "all" && filters.ownerPersonId === "all" ? (
                       <Link className="btn btn-outline-secondary btn-sm" to="/">
                         대시보드 보기
                       </Link>
@@ -765,40 +560,18 @@ export function TransactionsPage() {
             {isFlowAuditMode ? (
               <div className="review-summary-panel mb-3">
                 <div className="review-summary-copy">
-                  <strong>{filters.nature === "shared" ? "공동지출 점검 모드입니다" : "내부이체 점검 모드입니다"}</strong>
-                  <p className="mb-0 text-secondary">
-                    {filters.nature === "shared"
-                      ? filters.sourceType !== "all" || filters.ownerPersonId !== "all" || filters.tagId !== "all"
-                        ? "현재 맥락의 공동지출만 보고 있습니다."
-                        : "정산과 연결되는 공동지출만 보고 있습니다."
-                      : "지출로 잡히면 안 되는 내부이체만 보고 있습니다."}
-                  </p>
+                  <strong>내부이체 점검 모드입니다</strong>
+                  <p className="mb-0 text-secondary">지출로 잡히면 안 되는 내부이체만 보고 있습니다.</p>
                 </div>
                 <div className="action-row">
-                  {filters.nature === "shared" && internalTransferCount ? (
-                    <button className="btn btn-outline-primary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, nature: "internal_transfer" }))}>
-                      내부이체 {internalTransferCount}건 보기
-                    </button>
-                  ) : null}
-                  {filters.nature === "internal_transfer" && sharedExpenseCount ? (
-                    <button className="btn btn-outline-primary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, nature: "shared" }))}>
-                      공동지출 {sharedExpenseCount}건 보기
-                    </button>
-                  ) : null}
                   <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters(resetTransactionCleanupFilters)}>
                     전체 거래로 돌아가기
                   </button>
-                  {filters.nature === "shared" ? (
-                    <Link className="btn btn-outline-primary btn-sm" to={getSettlementsLink()}>
-                      {settlementsActionLabel}
+                  {filters.sourceType === "all" && filters.ownerPersonId === "all" ? (
+                    <Link className="btn btn-outline-secondary btn-sm" to="/">
+                      대시보드 보기
                     </Link>
-                  ) : (
-                    filters.sourceType === "all" && filters.ownerPersonId === "all" && filters.tagId === "all" ? (
-                      <Link className="btn btn-outline-secondary btn-sm" to="/">
-                        대시보드 보기
-                      </Link>
-                    ) : null
-                  )}
+                  ) : null}
                 </div>
               </div>
             ) : null}
@@ -817,15 +590,6 @@ export function TransactionsPage() {
                   >
                     사용자 필터 해제
                   </button>
-                  {filters.nature !== "shared" ? (
-                    <button
-                      className="btn btn-outline-primary btn-sm"
-                      type="button"
-                      onClick={() => setFilters((current) => ({ ...current, nature: "shared" }))}
-                    >
-                      공동지출만 보기
-                    </button>
-                  ) : null}
                 </div>
               </div>
             ) : null}
@@ -871,27 +635,14 @@ export function TransactionsPage() {
             {isFlowAuditMode && currentFlowAuditCount === 0 ? (
               <CompletionBanner
                 className="mb-3"
-                title={filters.nature === "shared" ? "공동지출 점검이 끝났습니다" : "내부이체 점검이 끝났습니다"}
-                description={
-                  filters.nature === "shared"
-                    ? "현재 보이는 조건에서는 정산 후보가 될 공동지출이 남아 있지 않습니다. 정산 화면이나 전체 거래 흐름으로 넘어가도 좋습니다."
-                    : "현재 보이는 조건에서는 따로 점검할 내부이체가 남아 있지 않습니다. 이제 소비 분석이나 공동지출 정산 흐름으로 넘어가도 좋습니다."
-                }
+                title="내부이체 점검이 끝났습니다"
+                description="현재 보이는 조건에서는 따로 점검할 내부이체가 남아 있지 않습니다. 이제 소비 분석이나 전체 거래 흐름으로 넘어가도 좋습니다."
                 actions={
                   <>
-                    {filters.nature === "shared" ? (
-                      <Link className="btn btn-outline-primary btn-sm" to={getSettlementsLink()}>
-                        {settlementsActionLabel}
-                      </Link>
-                    ) : sharedExpenseCount ? (
-                      <button className="btn btn-outline-primary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, nature: "shared" }))}>
-                        공동지출 {sharedExpenseCount}건 보기
-                      </button>
-                    ) : null}
                     <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters(resetTransactionCleanupFilters)}>
                       전체 거래로 돌아가기
                     </button>
-                    {filters.sourceType === "all" && filters.ownerPersonId === "all" && filters.tagId === "all" ? (
+                    {filters.sourceType === "all" && filters.ownerPersonId === "all" ? (
                       <Link className="btn btn-outline-secondary btn-sm" to="/">
                         대시보드 보기
                       </Link>
@@ -904,7 +655,7 @@ export function TransactionsPage() {
             <div className="review-summary-panel mb-3">
               <div className="review-summary-copy">
                 <strong>{activeCleanupMode.title}</strong>
-                <p className="mb-0 text-secondary">실지출 {activeExpenseCount}건 · 미분류 {uncategorizedCount}건 · 무태그 {untaggedCount}건</p>
+                <p className="mb-0 text-secondary">실지출 {activeExpenseCount}건 · 미분류 {uncategorizedCount}건</p>
               </div>
               <div className="small text-secondary" title={activeCleanupMode.description}>
                 총 {transactions.length}건
@@ -925,10 +676,7 @@ export function TransactionsPage() {
               transactionCount={transactions.length}
               activeExpenseCount={activeExpenseCount}
               uncategorizedCount={uncategorizedCount}
-              untaggedCount={untaggedCount}
               onShowUncategorized={() => setFilters((current) => ({ ...current, nature: "uncategorized" }))}
-              onShowUntagged={() => setFilters((current) => ({ ...current, nature: "untagged" }))}
-              onShowShared={() => setFilters((current) => ({ ...current, nature: "shared" }))}
               onShowInternalTransfer={() => setFilters((current) => ({ ...current, nature: "internal_transfer" }))}
               onResetCleanupFilters={() => setFilters(resetTransactionCleanupFilters)}
             />
@@ -1011,22 +759,9 @@ export function TransactionsPage() {
                 >
                   <option value="all">전체 성격</option>
                   <option value="expense">실지출만</option>
-                  <option value="shared">공동지출만</option>
+
                   <option value="internal_transfer">내부이체만</option>
                   <option value="uncategorized">미분류만</option>
-                  <option value="untagged">무태그만</option>
-                </select>
-                <select
-                  className="form-select toolbar-select"
-                  value={filters.tagId}
-                  onChange={(event) => setFilters((current) => ({ ...current, tagId: event.target.value }))}
-                >
-                  <option value="all">전체 태그</option>
-                  {scope.tags.map((tag) => (
-                    <option key={tag.id} value={tag.id}>
-                      {tag.name}
-                    </option>
-                  ))}
                 </select>
                 <input
                   className="form-control toolbar-search"
@@ -1036,203 +771,87 @@ export function TransactionsPage() {
                 />
             </div>
 
-            <TransactionBatchTagPanel
-              tags={scope.tags}
-              selectedTagId={bulkTagId}
-              selectedTagName={selectedBulkTagName}
-              scopeSummary={bulkScopeSummary}
-              transactionCount={taggableTransactions.length}
-              amount={taggableAmount}
-              disabled={!bulkTagId || !taggableTransactions.length}
-              onChangeTag={setBulkTagId}
-              onSubmit={() => {
-                if (!bulkTagId || !taggableTransactions.length) return;
-                assignTagBatch(
-                  workspaceId,
-                  taggableTransactions.map((item) => item.id),
-                  bulkTagId,
-                );
-                setBulkTagId("");
-              }}
-            />
-
-            <TransactionBatchCategoryPanel
-              categories={scope.categories}
-              selectedCategoryId={bulkCategoryId}
-              selectedCategoryName={selectedBulkCategoryName}
-              scopeSummary={bulkScopeSummary}
-              transactionCount={categorizableTransactions.length}
-              amount={categorizableAmount}
-              disabled={!bulkCategoryId || !categorizableTransactions.length}
-              onChangeCategory={setBulkCategoryId}
-              onSubmit={() => {
-                if (!bulkCategoryId || !categorizableTransactions.length) return;
-                assignCategoryBatch(
-                  workspaceId,
-                  categorizableTransactions.map((item) => item.id),
-                  bulkCategoryId,
-                );
-                setBulkCategoryId("");
-              }}
-            />
-
             <div className="table-responsive">
               <table className="table align-middle">
                 <thead>
                   <tr>
                     <th>사용일</th>
-                    <th>결제일</th>
                     <th>유형</th>
-                    <th>상태</th>
-                    <th>성격</th>
-                    <th>가맹점/설명</th>
+                    <th>가맹점</th>
+                    <th className="text-end">원금</th>
+                    <th className="text-end">할인</th>
+                    <th className="text-end">결제금액</th>
                     <th>사용자</th>
                     <th>카테고리</th>
-                    <th className="text-end">금액</th>
+                    <th>비고</th>
                   </tr>
                 </thead>
                 <tbody>
                   {transactions.map((transaction, index) => (
                     <tr key={transaction.id} style={getMotionStyle(index)}>
                       <td>{transaction.occurredAt.slice(0, 10)}</td>
-                      <td>{transaction.settledAt?.slice(0, 10) ?? "-"}</td>
                       <td>
-                        <TransactionTypeBadge transaction={transaction} />
+                        <select
+                          className="form-select form-select-sm"
+                          style={{ maxWidth: 132 }}
+                          value={getTransactionTypeValue(transaction)}
+                          onChange={(event) =>
+                            handleTransactionTypeChange(
+                              transaction,
+                              event.target.value as "expense" | "income" | "transfer" | "adjustment" | "internal_transfer",
+                            )
+                          }
+                        >
+                          <option value="expense">지출</option>
+                          <option value="internal_transfer">내부이체</option>
+                          <option value="income">수입</option>
+                          <option value="transfer">이체</option>
+                          <option value="adjustment">조정</option>
+                        </select>
                       </td>
                       <td>
-                        <TransactionStatusBadge transaction={transaction} />
+                        <TransactionRowHeader
+                          merchantName={transaction.merchantName}
+                        />
                       </td>
-                        <td>
-                          <TransactionNatureCell
-                            transaction={transaction}
-                            onToggleSharedExpense={() =>
-                              updateTransactionFlags(workspaceId, transaction.id, {
-                                isSharedExpense: !transaction.isSharedExpense,
-                              })
-                            }
-                            onToggleInternalTransfer={() =>
-                              updateTransactionFlags(workspaceId, transaction.id, {
-                                isInternalTransfer: !transaction.isInternalTransfer,
-                              })
-                            }
-                            onToggleExpenseImpact={() =>
-                              updateTransactionFlags(workspaceId, transaction.id, {
-                                isExpenseImpact: !transaction.isExpenseImpact,
-                              })
-                            }
-                          />
-                        </td>
-                        <td>
-                          <TransactionRowHeader
-                            merchantName={transaction.merchantName}
-                            description={transaction.description || (transaction.isInternalTransfer ? "내부이체로 처리된 거래" : null)}
-                            connectionSummary={
-                              [
-                                `수단 ${getSourceTypeLabel(transaction.sourceType)}`,
-                                `사용자 ${getTransactionOwnerLabel(transaction)}`,
-                                transaction.accountId
-                                  ? `계좌 ${accountSharedMap.get(transaction.accountId) ? "공동 계좌 " : ""}${accountMap.get(transaction.accountId) ?? "-"}`
-                                  : null,
-                                transaction.cardId ? `카드 ${cardMap.get(transaction.cardId) ?? "-"}` : null,
-                              ]
-                                .filter(Boolean)
-                                .join(" · ") || "연결 정보 없음"
-                            }
-                            canEdit={isActiveTransaction(transaction)}
-                            isEditing={editingTransactionId === transaction.id}
-                            onToggleEdit={() => {
-                              if (editingTransactionId === transaction.id) {
-                                cancelTransactionEdit();
-                                return;
-                              }
-                              beginTransactionEdit(transaction);
-                            }}
-                          />
-                          {editingTransactionId === transaction.id ? (
-                            <TransactionInlineEditor
-                              draft={editDraft}
-                              people={people}
-                              accounts={accounts}
-                              cards={cards}
-                              ownerDisabled={
-                                editDraft.sourceType === "account" &&
-                                Boolean(editDraft.accountId && accounts.find((account) => account.id === editDraft.accountId)?.isShared)
-                              }
-                              saveDisabled={!editDraft.occurredAt || !editDraft.merchantName.trim() || !editDraft.amount || Number(editDraft.amount) <= 0}
-                              onDraftChange={updateEditDraft}
-                              onSourceTypeChange={syncEditDraftWithSourceType}
-                              onAccountSelect={syncEditDraftWithAccount}
-                              onCardSelect={syncEditDraftWithCard}
-                              onSave={() => {
-                                const normalizedConnections = normalizeTransactionConnectionFields({
-                                  sourceType: editDraft.sourceType,
-                                  ownerPersonId: editDraft.ownerPersonId || null,
-                                  accountId: editDraft.accountId || null,
-                                  cardId: editDraft.cardId || null,
-                                });
-                                updateTransactionDetails(workspaceId, transaction.id, {
-                                  sourceType: normalizedConnections.sourceType,
-                                  ownerPersonId: normalizedConnections.ownerPersonId,
-                                  accountId: normalizedConnections.accountId,
-                                  cardId: normalizedConnections.cardId,
-                                  occurredAt: editDraft.occurredAt,
-                                  settledAt: editDraft.settledAt || null,
-                                  merchantName: editDraft.merchantName.trim(),
-                                  description: editDraft.description.trim(),
-                                  amount: Number(editDraft.amount),
-                                });
-                                cancelTransactionEdit();
-                              }}
-                              onCancel={cancelTransactionEdit}
-                            />
-                          ) : null}
-                          <TransactionTagEditor
-                            transaction={transaction}
-                            tags={scope.tags}
-                            pendingTagId={pendingTagByTransaction[transaction.id] ?? ""}
-                            selectedTagName={tags.get(pendingTagByTransaction[transaction.id] ?? "")?.name ?? null}
-                            onPendingTagChange={(tagId) =>
-                              setPendingTagByTransaction((current) => ({
-                                ...current,
-                                [transaction.id]: tagId,
-                              }))
-                            }
-                            onApplyTag={() => {
-                              const tagId = pendingTagByTransaction[transaction.id];
-                              if (!tagId) return;
-                              assignTag(workspaceId, transaction.id, tagId);
-                              setPendingTagByTransaction((current) => ({ ...current, [transaction.id]: "" }));
-                            }}
-                            onRemoveTag={(tagId) => removeTag(workspaceId, transaction.id, tagId)}
-                          />
-                        </td>
+                      <td className="text-end transaction-amount-cell">
+                        <strong>{formatCurrency(transaction.originalAmount ?? transaction.amount)}</strong>
+                      </td>
+                      <td className="text-end transaction-amount-cell">
+                        <strong>{transaction.discountAmount ? formatCurrency(transaction.discountAmount) : "-"}</strong>
+                      </td>
+                      <td className="text-end transaction-amount-cell">
+                        <strong>{formatCurrency(transaction.amount)}</strong>
+                      </td>
                         <td>{getTransactionOwnerLabel(transaction)}</td>
                         <td>
                           <TransactionCategoryEditor
                             transaction={transaction}
                             categories={scope.categories}
                             categoryName={transaction.categoryId ? categories.get(transaction.categoryId) ?? null : null}
-                            pendingCategoryId={pendingCategoryByTransaction[transaction.id] ?? ""}
-                            selectedCategoryName={categories.get(pendingCategoryByTransaction[transaction.id] ?? "") ?? null}
-                            onPendingCategoryChange={(categoryId) =>
-                              setPendingCategoryByTransaction((current) => ({
-                                ...current,
-                                [transaction.id]: categoryId,
-                              }))
-                            }
-                            onApplyCategory={() => {
-                              const categoryId = pendingCategoryByTransaction[transaction.id];
-                              if (!categoryId) return;
+                            onCategoryChange={(categoryId) => {
+                              if (!categoryId) {
+                                clearCategory(workspaceId, transaction.id);
+                                return;
+                              }
                               assignCategory(workspaceId, transaction.id, categoryId);
-                              setPendingCategoryByTransaction((current) => ({ ...current, [transaction.id]: "" }));
                             }}
-                            onClearCategory={() => clearCategory(workspaceId, transaction.id)}
                           />
                         </td>
-                      <td className="text-end transaction-amount-cell">
-                        <strong>{formatCurrency(transaction.amount)}</strong>
-                        {!transaction.isExpenseImpact ? <div className="small text-secondary">통계 제외 흐름</div> : null}
-                      </td>
+                        <td>
+                          <input
+                            className="form-control form-control-sm"
+                            defaultValue={transaction.description}
+                            placeholder="비고"
+                            onBlur={(event) => {
+                              const nextDescription = event.target.value.trim();
+                              if (nextDescription === transaction.description) return;
+                              updateTransactionDetails(workspaceId, transaction.id, {
+                                description: nextDescription,
+                              });
+                            }}
+                          />
+                        </td>
                     </tr>
                   ))}
                 </tbody>
@@ -1244,4 +863,5 @@ export function TransactionsPage() {
     </div>
   );
 }
+
 

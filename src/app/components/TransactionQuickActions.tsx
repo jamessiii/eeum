@@ -4,14 +4,12 @@ interface TransactionQuickActionsProps {
   transaction: Transaction;
   onToggleSharedExpense: () => void;
   onToggleInternalTransfer: () => void;
-  onToggleExpenseImpact: () => void;
 }
 
 export function TransactionQuickActions({
   transaction,
   onToggleSharedExpense,
   onToggleInternalTransfer,
-  onToggleExpenseImpact,
 }: TransactionQuickActionsProps) {
   if (transaction.status !== "active") {
     return null;
@@ -29,9 +27,6 @@ export function TransactionQuickActions({
           {transaction.isInternalTransfer ? "내부이체 해제" : "내부이체"}
         </button>
       ) : null}
-      <button className="btn btn-outline-secondary btn-sm" type="button" onClick={onToggleExpenseImpact}>
-        {transaction.isExpenseImpact ? "통계 제외" : "통계 반영"}
-      </button>
     </div>
   );
 }

@@ -9,14 +9,12 @@ interface TransactionNatureCellProps {
   transaction: Transaction;
   onToggleSharedExpense: () => void;
   onToggleInternalTransfer: () => void;
-  onToggleExpenseImpact: () => void;
 }
 
 export function TransactionNatureCell({
   transaction,
   onToggleSharedExpense,
   onToggleInternalTransfer,
-  onToggleExpenseImpact,
 }: TransactionNatureCellProps) {
   return (
     <>
@@ -32,7 +30,6 @@ export function TransactionNatureCell({
         transaction={transaction}
         onToggleSharedExpense={onToggleSharedExpense}
         onToggleInternalTransfer={onToggleInternalTransfer}
-        onToggleExpenseImpact={onToggleExpenseImpact}
       />
     </>
   );

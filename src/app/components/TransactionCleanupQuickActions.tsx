@@ -2,10 +2,7 @@ interface TransactionCleanupQuickActionsProps {
   transactionCount: number;
   activeExpenseCount: number;
   uncategorizedCount: number;
-  untaggedCount: number;
   onShowUncategorized: () => void;
-  onShowUntagged: () => void;
-  onShowShared: () => void;
   onShowInternalTransfer: () => void;
   onResetCleanupFilters: () => void;
 }
@@ -14,10 +11,7 @@ export function TransactionCleanupQuickActions({
   transactionCount,
   activeExpenseCount,
   uncategorizedCount,
-  untaggedCount,
   onShowUncategorized,
-  onShowUntagged,
-  onShowShared,
   onShowInternalTransfer,
   onResetCleanupFilters,
 }: TransactionCleanupQuickActionsProps) {
@@ -25,20 +19,16 @@ export function TransactionCleanupQuickActions({
     <div className="review-summary-panel mb-3">
       <div className="review-summary-copy">
         <strong>빠르게 정리할 거래 고르기</strong>
-        <p className="mb-0 text-secondary">지금 정리 작업이 많은 거래만 바로 좁혀 보고, 아래 빠른 정리 도구로 이어서 정리할 수 있습니다.</p>
+        <p className="mb-0 text-secondary">
+          지금 정리가 많이 필요한 거래만 바로 좁혀 보고, 아래 빠른 정리 도구로 이어서 정리할 수 있습니다.
+        </p>
       </div>
       <div className="small text-secondary">
-        현재 보이는 거래 {transactionCount}건 중 실지출 {activeExpenseCount}건, 미분류 {uncategorizedCount}건, 무태그 {untaggedCount}건입니다.
+        현재 보이는 거래 {transactionCount}건 중 실지출 {activeExpenseCount}건, 미분류 {uncategorizedCount}건입니다.
       </div>
       <div className="d-flex flex-wrap gap-2">
         <button className="btn btn-outline-primary btn-sm" type="button" onClick={onShowUncategorized}>
           미분류만 보기
-        </button>
-        <button className="btn btn-outline-primary btn-sm" type="button" onClick={onShowUntagged}>
-          무태그만 보기
-        </button>
-        <button className="btn btn-outline-primary btn-sm" type="button" onClick={onShowShared}>
-          공동지출만 보기
         </button>
         <button className="btn btn-outline-primary btn-sm" type="button" onClick={onShowInternalTransfer}>
           내부이체만 보기

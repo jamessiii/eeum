@@ -86,6 +86,8 @@ export interface Transaction {
   merchantName: string;
   description: string;
   amount: number;
+  originalAmount?: number;
+  discountAmount?: number;
   categoryId: ID | null;
   tagIds: ID[];
   isInternalTransfer: boolean;

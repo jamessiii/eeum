@@ -31,7 +31,7 @@ export function getSortedReviewTypeSummary(reviews: ReviewItem[]) {
 }
 
 export function getOpenReviews(reviews: ReviewItem[]) {
-  return reviews.filter((review) => review.status === "open");
+  return reviews.filter((review) => review.status === "open" && review.reviewType !== "shared_expense_candidate");
 }
 
 export function getOpenReviewTypeSummary(reviews: ReviewItem[]) {
@@ -42,7 +42,8 @@ export function getReviewSummary(
   reviews: ReviewItem[],
   transactionMap: Map<string, Transaction>,
 ): ReviewSummary {
-  const openReviews = getOpenReviews(reviews);
+  const visibleReviews = reviews.filter((review) => review.reviewType !== "shared_expense_candidate");
+  const openReviews = getOpenReviews(visibleReviews);
   const openReviewCount = openReviews.length;
   const resolvedReviews: ReviewItem[] = [];
   const dismissedReviews: ReviewItem[] = [];
@@ -54,7 +55,7 @@ export function getReviewSummary(
     { manual: 0, account: 0, card: 0, import: 0 },
   );
 
-  for (const review of reviews) {
+  for (const review of visibleReviews) {
     if (review.status === "open") {
       const sourceType = transactionMap.get(review.primaryTransactionId)?.sourceType;
       if (sourceType) {
@@ -77,7 +78,7 @@ export function getReviewSummary(
   const resolvedCounts = getReviewTypeCounts(resolvedReviews);
   const resolvedReviewCount = resolvedReviews.length;
   const dismissedReviewCount = dismissedReviews.length;
-  const totalReviewCount = reviews.length;
+  const totalReviewCount = visibleReviews.length;
   const reviewProgress = totalReviewCount ? (resolvedReviewCount + dismissedReviewCount) / totalReviewCount : 1;
   const dominantType =
     REVIEW_TYPE_ORDER.map((type) => ({ type, count: reviewCounts[type] ?? 0 })).sort((a, b) => b.count - a.count)[0] ?? null;

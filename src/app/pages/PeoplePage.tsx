@@ -1,8 +1,7 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { getPersonUsageSummary } from "../../domain/assets/usageSummary";
 import { getActiveTransactions } from "../../domain/transactions/meta";
-import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { AppModal } from "../components/AppModal";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
@@ -232,9 +231,7 @@ export function PeoplePage() {
                       </div>
                       <h3 className="mb-1">{person.displayName || person.name}</h3>
                       <p className="mb-1 text-secondary">{person.name !== person.displayName ? `원본 이름 ${person.name}` : " "}</p>
-                      <p className="mb-0 text-secondary">
-                        거래 {usage.transactionCount}건 · 공동지출 {formatCurrency(usage.sharedExpenseAmount)}
-                      </p>
+                      <p className="mb-0 text-secondary">거래 {usage.transactionCount}건</p>
                     </div>
                     <div className="compact-card-actions">
                       <button
@@ -272,10 +269,6 @@ export function PeoplePage() {
                         <div>
                           <span className="section-kicker">거래 수</span>
                           <strong>{usage.transactionCount}건</strong>
-                        </div>
-                        <div>
-                          <span className="section-kicker">공동지출</span>
-                          <strong>{formatCurrency(usage.sharedExpenseAmount)}</strong>
                         </div>
                       </div>
                       <div className="compact-detail-grid">
@@ -543,3 +536,4 @@ export function PeoplePage() {
     </div>
   );
 }
+

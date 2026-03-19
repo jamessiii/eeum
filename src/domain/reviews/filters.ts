@@ -18,6 +18,7 @@ export function getFilteredReviews({
   activeSourceType,
 }: ReviewFilterInput) {
   return reviews
+    .filter((item) => item.reviewType !== "shared_expense_candidate")
     .filter((item) => (activeFilter === "all" ? true : item.reviewType === activeFilter))
     .filter((item) => {
       if (activeSourceType === "all") return true;

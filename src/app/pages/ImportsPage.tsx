@@ -1,25 +1,25 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { WorkspaceBundle } from "../../shared/types/models";
-import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
-import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
 
-const ACCOUNT_USAGE_LABELS: Record<
-  "daily" | "salary" | "shared" | "card_payment" | "savings" | "investment" | "loan" | "other",
-  string
-> = {
-  daily: "일반 생활비",
-  salary: "급여 수령",
-  shared: "공동 자금",
-  card_payment: "카드 결제",
-  savings: "저축",
-  investment: "투자",
-  loan: "대출 관리",
-  other: "기타",
-};
+function getPostImportPath(bundle: WorkspaceBundle) {
+  if (bundle.reviews.length > 0) return "/reviews";
+  if (bundle.transactions.some((transaction) => transaction.isExpenseImpact && !transaction.categoryId)) {
+    return "/transactions?cleanup=uncategorized";
+  }
+  return "/transactions";
+}
+
+function getPostImportLabel(bundle: WorkspaceBundle) {
+  if (bundle.reviews.length > 0) return `검토 ${bundle.reviews.length}건 확인`;
+  if (bundle.transactions.some((transaction) => transaction.isExpenseImpact && !transaction.categoryId)) {
+    return "미분류 거래 정리";
+  }
+  return "거래 화면 보기";
+}
 
 export function ImportsPage() {
   const { commitImportedBundle, previewWorkbookImport, state } = useAppState();
@@ -27,189 +27,17 @@ export function ImportsPage() {
   const [previewBundle, setPreviewBundle] = useState<WorkspaceBundle | null>(null);
   const [previewFileName, setPreviewFileName] = useState("");
   const [isPreparingPreview, setIsPreparingPreview] = useState(false);
-  const [previewAccountDraftById, setPreviewAccountDraftById] = useState<
-    Record<
-      string,
-      {
-        isShared?: boolean;
-        ownerPersonId?: string;
-        usageType?: "daily" | "salary" | "shared" | "card_payment" | "savings" | "investment" | "loan" | "other";
-      }
-    >
-  >({});
-  const [previewOwnerDraftByCard, setPreviewOwnerDraftByCard] = useState<Record<string, string>>({});
-  const [previewLinkedAccountDraftByCard, setPreviewLinkedAccountDraftByCard] = useState<Record<string, string>>({});
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
-  const activeWorkspace = state.workspaces.find((workspace) => workspace.id === workspaceId) ?? null;
   const recentImports = [...scope.imports].sort((a, b) => b.importedAt.localeCompare(a.importedAt));
-  const latestImport = recentImports[0] ?? null;
-  const latestImportAction = latestImport
-    ? latestImport.reviewCount > 0
-      ? { to: "/reviews", label: `리뷰 ${latestImport.reviewCount}건 확인` }
-      : { to: "/transactions", label: "거래 화면 보기" }
-    : { to: "/imports", label: "업로드 준비 보기" };
 
-  const applyPreviewPersonPatch = (
-    personId: string,
-    patch: Partial<WorkspaceBundle["people"][number]>,
-  ) => {
-    setPreviewBundle((current) =>
-      current
-        ? {
-            ...current,
-            people: current.people.map((person) => (person.id === personId ? { ...person, ...patch } : person)),
-          }
-        : current,
-    );
-  };
-
-  const applyPreviewAccountPatch = (
-    accountId: string,
-    patch: Partial<WorkspaceBundle["accounts"][number]>,
-  ) => {
-    setPreviewBundle((current) => {
-      if (!current) return current;
-      const currentAccount = current.accounts.find((account) => account.id === accountId);
-      if (!currentAccount) return current;
-      const isShared = patch.isShared ?? currentAccount.isShared;
-      const normalizedPatch = {
-        ...patch,
-        ownerPersonId: isShared ? null : patch.ownerPersonId ?? currentAccount.ownerPersonId ?? null,
-        usageType: isShared ? "shared" : patch.usageType ?? currentAccount.usageType,
-        isShared,
-      };
-      const nextAccounts = current.accounts.map((account) => (account.id === accountId ? { ...account, ...normalizedPatch } : account));
-      const nextTransactions = current.transactions.map((transaction) => {
-        if (transaction.accountId !== accountId && transaction.fromAccountId !== accountId && transaction.toAccountId !== accountId) {
-          return transaction;
-        }
-
-        if (normalizedPatch.ownerPersonId === undefined) return transaction;
-        return {
-          ...transaction,
-          ownerPersonId: transaction.sourceType === "account" ? normalizedPatch.ownerPersonId : transaction.ownerPersonId,
-        };
-      });
-
-      return {
-        ...current,
-        accounts: nextAccounts,
-        transactions: nextTransactions,
-      };
-    });
-  };
-  const applyPreviewCardPatch = (
-    cardId: string,
-    patch: Partial<WorkspaceBundle["cards"][number]>,
-  ) => {
-    setPreviewBundle((current) => {
-      if (!current) return current;
-      const nextCards = current.cards.map((card) => (card.id === cardId ? { ...card, ...patch } : card));
-      const nextTransactions = current.transactions.map((transaction) => {
-        if (transaction.cardId !== cardId) return transaction;
-
-        return {
-          ...transaction,
-          ownerPersonId: patch.ownerPersonId !== undefined ? patch.ownerPersonId : transaction.ownerPersonId,
-          accountId: patch.linkedAccountId !== undefined ? patch.linkedAccountId : transaction.accountId,
-        };
-      });
-
-      return {
-        ...current,
-        cards: nextCards,
-        transactions: nextTransactions,
-      };
-    });
-  };
-
-  const previewPeopleMap = new Map(previewBundle?.people.map((person) => [person.id, person.displayName || person.name]) ?? []);
-  const previewAccountsWithDraft =
-    previewBundle?.accounts.map((account) => {
-      const draft = previewAccountDraftById[account.id];
-      const isShared = draft?.isShared ?? account.isShared;
-      return {
-        ...account,
-        isShared,
-        ownerPersonId: isShared ? null : draft?.ownerPersonId ?? account.ownerPersonId ?? null,
-        usageType: isShared ? "shared" : draft?.usageType ?? (account.usageType === "shared" ? "daily" : account.usageType),
-      };
-    }) ?? [];
-  const previewAccountsMap = new Map(previewAccountsWithDraft.map((account) => [account.id, account.alias || account.name]));
-  const previewAccountSharedMap = new Map(previewAccountsWithDraft.map((account) => [account.id, account.isShared]));
-  const previewCardsWithDraft =
-    previewBundle?.cards.map((card) => ({
-      ...card,
-      ownerPersonId: previewOwnerDraftByCard[card.id] ?? card.ownerPersonId ?? null,
-      linkedAccountId: previewLinkedAccountDraftByCard[card.id] ?? card.linkedAccountId ?? null,
-    })) ?? [];
-  const linkedCardCount = previewCardsWithDraft.filter((card) => card.linkedAccountId).length;
-  const ownedCardCount = previewCardsWithDraft.filter((card) => card.ownerPersonId).length;
-  const ownedAccountCount = previewAccountsWithDraft.filter((account) => account.ownerPersonId || account.isShared).length;
-  const missingAccountOwnerCount = previewAccountsWithDraft.filter((account) => !account.ownerPersonId && !account.isShared).length;
-  const missingCardOwnerCount = previewCardsWithDraft.filter((card) => !card.ownerPersonId).length;
-  const missingCardLinkCount = previewCardsWithDraft.filter((card) => !card.linkedAccountId).length;
-  const previewExpenseAmount =
-    previewBundle?.transactions.filter((transaction) => transaction.isExpenseImpact).reduce((sum, transaction) => sum + transaction.amount, 0) ?? 0;
-  const previewRemainingMappingCount = missingAccountOwnerCount + missingCardOwnerCount + missingCardLinkCount;
-  const previewNextAction = previewBundle
-    ? previewRemainingMappingCount > 0
-      ? {
-          title: `아직 ${previewRemainingMappingCount}개의 연결 확인이 남아 있습니다`,
-          description: "소유자 없는 계좌, 소유자 없는 카드, 결제 계좌가 비어 있는 카드만 먼저 채우면 거래 연결 해석이 훨씬 자연스럽습니다.",
-        }
-      : {
-          title: "지금 바로 가져와도 되는 상태입니다",
-          description: "사용자, 계좌, 카드 연결이 모두 채워져 있어서 업로드 후 리뷰와 분류 화면으로 바로 이어가기 좋습니다.",
-        }
-    : null;
-  const previewPostImportPath = previewBundle
-    ? previewBundle.reviews.length > 0
-      ? "/reviews"
-      : previewBundle.transactions.some((transaction) => transaction.isExpenseImpact && !transaction.categoryId)
-        ? "/transactions?cleanup=uncategorized"
-        : previewBundle.transactions.some((transaction) => transaction.isExpenseImpact && transaction.tagIds.length === 0)
-          ? "/transactions?cleanup=untagged"
-          : "/transactions"
-    : "/transactions";
-
-  const latestImportWorkspaceAction = latestImport
-    ? scope.reviews.some((review) => review.status === "open")
-      ? { to: "/reviews", label: `리뷰 ${scope.reviews.filter((review) => review.status === "open").length}건 확인`, summaryLabel: "리뷰 화면 이어가기" }
-      : scope.transactions.some((transaction) => transaction.isExpenseImpact && !transaction.categoryId)
-        ? {
-            to: "/transactions?cleanup=uncategorized",
-            label: `미분류 ${scope.transactions.filter((transaction) => transaction.isExpenseImpact && !transaction.categoryId).length}건 정리`,
-            summaryLabel: "거래 정리 이어가기",
-          }
-        : scope.transactions.some((transaction) => transaction.isExpenseImpact && transaction.tagIds.length === 0)
-          ? {
-              to: "/transactions?cleanup=untagged",
-              label: `무태그 ${scope.transactions.filter((transaction) => transaction.isExpenseImpact && transaction.tagIds.length === 0).length}건 정리`,
-              summaryLabel: "거래 정리 이어가기",
-            }
-          : latestImportAction
-    : latestImportAction;
-  const previewPostImportLabel = previewBundle
-    ? previewBundle.reviews.length > 0
-      ? `리뷰 ${previewBundle.reviews.length}건 확인`
-      : previewBundle.transactions.some((transaction) => transaction.isExpenseImpact && !transaction.categoryId)
-        ? "미분류 거래 정리"
-        : previewBundle.transactions.some((transaction) => transaction.isExpenseImpact && transaction.tagIds.length === 0)
-          ? "무태그 거래 정리"
-          : "거래 화면 보기"
-    : "거래 화면 보기";
-
-  const commitPreviewAndMoveNext = () => {
+  const commitPreview = () => {
     if (!previewBundle) return;
+    const nextPath = getPostImportPath(previewBundle);
     commitImportedBundle(previewBundle, previewFileName);
     setPreviewBundle(null);
     setPreviewFileName("");
-    setPreviewAccountDraftById({});
-    setPreviewOwnerDraftByCard({});
-    setPreviewLinkedAccountDraftByCard({});
-    void navigate(previewPostImportPath);
+    void navigate(nextPath);
   };
 
   return (
@@ -218,9 +46,13 @@ export function ImportsPage() {
         <div className="section-head">
           <div>
             <span className="section-kicker">업로드 센터</span>
-            <h2 className="section-title">업로드와 매핑 확인</h2>
+            <h2 className="section-title">거래 파일 가져오기</h2>
           </div>
         </div>
+        <p className="text-secondary">
+          엑셀 파일을 올리면 바로 반영하지 않고 먼저 미리보기로 검토합니다. 확인 후 한 번에 가져오면 됩니다.
+        </p>
+
         <div className="d-flex flex-wrap gap-2 mb-4">
           <Link to="/people" className="btn btn-outline-secondary btn-sm">
             사용자 관리
@@ -232,28 +64,11 @@ export function ImportsPage() {
             카드 관리
           </Link>
         </div>
-        <div className="classification-flow-grid">
-          <article className="stat-card">
-            <span className="stat-label">현재 사용자</span>
-            <strong>{scope.people.length}명</strong>
-            <div className="small text-secondary mt-2">소유자 기준</div>
-          </article>
-          <article className="stat-card">
-            <span className="stat-label">현재 계좌</span>
-            <strong>{scope.accounts.length}개</strong>
-            <div className="small text-secondary mt-2">결제 흐름 기준</div>
-          </article>
-          <article className="stat-card">
-            <span className="stat-label">현재 카드</span>
-            <strong>{scope.cards.length}개</strong>
-            <div className="small text-secondary mt-2">카드 매핑 기준</div>
-          </article>
-        </div>
 
-        <label className="upload-dropzone mt-4">
+        <label className="upload-dropzone">
           <div>
-            <strong>가계부 워크북 업로드</strong>
-            <p className="mb-0 text-secondary">바로 반영하지 않고 미리보기에서 매핑만 먼저 확인합니다.</p>
+            <strong>가계부 파일 업로드</strong>
+            <p className="mb-0 text-secondary">미리보기에서 거래 수, 검토 수, 자산 정보를 먼저 확인합니다.</p>
           </div>
           <input
             hidden
@@ -262,15 +77,11 @@ export function ImportsPage() {
             onChange={async (event) => {
               const file = event.target.files?.[0];
               if (!file) return;
-
               setIsPreparingPreview(true);
               try {
                 const bundle = await previewWorkbookImport(file);
                 setPreviewBundle(bundle);
                 setPreviewFileName(file.name);
-                setPreviewAccountDraftById({});
-                setPreviewOwnerDraftByCard({});
-                setPreviewLinkedAccountDraftByCard({});
               } finally {
                 setIsPreparingPreview(false);
                 event.currentTarget.value = "";
@@ -278,467 +89,77 @@ export function ImportsPage() {
             }}
           />
         </label>
-        {isPreparingPreview ? <p className="small text-secondary mt-3 mb-0">업로드 미리보기와 매핑 데이터를 준비하고 있습니다.</p> : null}
-      </section>
+
+        {isPreparingPreview ? <p className="text-secondary mt-3 mb-0">업로드 미리보기를 준비하고 있습니다.</p> : null}
 
         {previewBundle ? (
-        <section className="card shadow-sm" style={getMotionStyle(1)}>
-          <div className="section-head">
-            <div>
-              <span className="section-kicker">업로드 미리보기</span>
-              <h2 className="section-title">{previewFileName} 연결 확인</h2>
-            </div>
-            <span className="badge text-bg-primary">{activeWorkspace?.name ?? previewBundle.workspace.name}</span>
-          </div>
-          <p className="text-secondary">사용자, 계좌, 카드 연결만 먼저 맞춘 뒤 현재 워크스페이스로 가져오면 됩니다.</p>
-
-          {previewNextAction ? (
-            <div className="review-summary-panel mt-4">
-              <div className="review-summary-copy">
-                <strong>{previewNextAction.title}</strong>
-                <p className="mb-0 text-secondary">{previewRemainingMappingCount > 0 ? "빈 연결만 먼저 채우면 됩니다." : "바로 가져와도 됩니다."}</p>
+          <div className="card shadow-sm mt-4">
+            <div className="section-head">
+              <div>
+                <span className="section-kicker">미리보기</span>
+                <h3 className="section-title">{previewFileName}</h3>
               </div>
-              <button className="btn btn-outline-secondary btn-sm" type="button" onClick={commitPreviewAndMoveNext}>
-                매핑 확인 후 {previewPostImportLabel}
+            </div>
+            <div className="stats-grid">
+              <article className="stat-card">
+                <span className="stat-label">거래</span>
+                <strong>{previewBundle.transactions.length}건</strong>
+              </article>
+              <article className="stat-card">
+                <span className="stat-label">검토</span>
+                <strong>{previewBundle.reviews.length}건</strong>
+              </article>
+              <article className="stat-card">
+                <span className="stat-label">사용자</span>
+                <strong>{previewBundle.people.length}명</strong>
+              </article>
+              <article className="stat-card">
+                <span className="stat-label">계좌/카드</span>
+                <strong>
+                  {previewBundle.accounts.length} / {previewBundle.cards.length}
+                </strong>
+              </article>
+            </div>
+            <div className="action-row mt-4">
+              <button className="btn btn-primary" type="button" onClick={commitPreview}>
+                {getPostImportLabel(previewBundle)}
+              </button>
+              <button className="btn btn-outline-secondary" type="button" onClick={() => setPreviewBundle(null)}>
+                미리보기 닫기
               </button>
             </div>
-          ) : null}
-          <div className="classification-flow-grid">
-            <article className="stat-card">
-              <span className="stat-label">거래</span>
-              <strong>{previewBundle.transactions.length}건</strong>
-              <div className="small text-secondary mt-2">지출 합계 {formatCurrency(previewExpenseAmount)}</div>
-            </article>
-            <article className="stat-card">
-              <span className="stat-label">계좌 소유자</span>
-              <strong>{ownedAccountCount}/{previewBundle.accounts.length}</strong>
-              <div className="small text-secondary mt-2">소유자 확인</div>
-            </article>
-            <article className="stat-card">
-              <span className="stat-label">카드 연결</span>
-              <strong>{linkedCardCount}/{previewBundle.cards.length}</strong>
-              <div className="small text-secondary mt-2">소유자 {ownedCardCount}개 · 결제 계좌 {linkedCardCount}개</div>
-            </article>
           </div>
+        ) : null}
+      </section>
 
-          {missingAccountOwnerCount || missingCardOwnerCount || missingCardLinkCount ? (
-            <div className="review-summary-panel mt-4">
-              <div className="review-summary-copy">
-                <strong>가져오기 전에 확인할 매핑이 남아 있습니다</strong>
-                <p className="mb-0 text-secondary">빈 연결만 먼저 채워주세요.</p>
-              </div>
-              <div className="action-row">
-                {missingAccountOwnerCount ? <span className="badge text-bg-warning">소유자 없는 계좌 {missingAccountOwnerCount}개</span> : null}
-                {missingCardOwnerCount ? <span className="badge text-bg-warning">소유자 없는 카드 {missingCardOwnerCount}개</span> : null}
-                {missingCardLinkCount ? <span className="badge text-bg-warning">결제 계좌 없는 카드 {missingCardLinkCount}개</span> : null}
-              </div>
-            </div>
-          ) : null}
-
-          <div className="section-head mt-4">
-            <div>
-              <span className="section-kicker">1단계</span>
-              <h3 className="section-title">사용자 매핑</h3>
-            </div>
-          </div>
-          <div className="resource-grid">
-            {previewBundle.people.map((person, index) => (
-              <article key={person.id} className="resource-card" style={getMotionStyle(index + 2)}>
-                <h3>{person.displayName || person.name}</h3>
-                <p className="mb-0 text-secondary">소유자 기준</p>
-                <form
-                  className="profile-form w-100"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    const formData = new FormData(event.currentTarget);
-                    applyPreviewPersonPatch(person.id, {
-                      name: String(formData.get("name") ?? "").trim(),
-                      displayName: String(formData.get("displayName") ?? "").trim() || String(formData.get("name") ?? "").trim(),
-                      role: String(formData.get("role") ?? "member") === "owner" ? "owner" : "member",
-                    });
-                  }}
-                >
-                  <label>
-                    원본 이름
-                    <input name="name" className="form-control" defaultValue={person.name} />
-                  </label>
-                  <label>
-                    표시 이름
-                    <input name="displayName" className="form-control" defaultValue={person.displayName} />
-                  </label>
-                  <label style={{ gridColumn: "1 / -1" }}>
-                    역할
-                    <select name="role" className="form-select" defaultValue={person.role}>
-                      <option value="owner">기본 사용자</option>
-                      <option value="member">구성원</option>
-                    </select>
-                  </label>
-                  <div className="d-flex justify-content-end" style={{ gridColumn: "1 / -1" }}>
-                    <button className="btn btn-outline-primary btn-sm" type="submit">
-                      적용
-                    </button>
-                  </div>
-                </form>
-              </article>
-            ))}
-          </div>
-
-          <div className="section-head mt-4">
-            <div>
-              <span className="section-kicker">2단계</span>
-              <h3 className="section-title">계좌 매핑</h3>
-            </div>
-          </div>
-          <div className="resource-grid">
-            {previewBundle.accounts.map((account, index) => {
-              const draft = previewAccountDraftById[account.id];
-              const selectedIsShared = draft?.isShared ?? account.isShared;
-              const selectedOwnerPersonId = selectedIsShared ? "" : draft?.ownerPersonId ?? account.ownerPersonId ?? "";
-              const selectedUsageType = selectedIsShared ? "shared" : draft?.usageType ?? (account.usageType === "shared" ? "daily" : account.usageType);
-
-              return (
-                <article key={account.id} className="resource-card" style={getMotionStyle(index + 4)}>
-                <h3>{account.alias || account.name}</h3>
-                <p className="mb-0 text-secondary">
-                  {account.institutionName} · {selectedIsShared ? "공동 계좌" : `소유자 ${previewPeopleMap.get(selectedOwnerPersonId) ?? "미지정"}`} ·{" "}
-                  {ACCOUNT_USAGE_LABELS[selectedUsageType]}
-                </p>
-                <form
-                  className="profile-form w-100"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    const formData = new FormData(event.currentTarget);
-                    const isShared = formData.get("isShared") === "on";
-                    applyPreviewAccountPatch(account.id, {
-                      name: String(formData.get("name") ?? "").trim(),
-                      alias: String(formData.get("alias") ?? "").trim(),
-                      ownerPersonId: isShared ? null : String(formData.get("ownerPersonId") ?? "") || null,
-                      usageType: String(formData.get("usageType") ?? "daily") as
-                        | "daily"
-                        | "salary"
-                        | "shared"
-                        | "card_payment"
-                        | "savings"
-                        | "investment"
-                        | "loan"
-                        | "other",
-                      isShared,
-                    });
-                    setPreviewAccountDraftById((current) => {
-                      const next = { ...current };
-                      delete next[account.id];
-                      return next;
-                    });
-                  }}
-                >
-                  <label>
-                    계좌 이름
-                    <input name="name" className="form-control" defaultValue={account.name} />
-                  </label>
-                  <label>
-                    표시명
-                    <input name="alias" className="form-control" defaultValue={account.alias} />
-                  </label>
-                  <label>
-                    소유자
-                    <select
-                      name="ownerPersonId"
-                      className="form-select"
-                      value={selectedOwnerPersonId}
-                      disabled={selectedIsShared}
-                      onChange={(event) =>
-                        setPreviewAccountDraftById((current) => ({
-                          ...current,
-                          [account.id]: {
-                            ...current[account.id],
-                            ownerPersonId: event.target.value,
-                          },
-                        }))
-                      }
-                    >
-                      <option value="">미지정</option>
-                      {previewBundle.people.map((person) => (
-                        <option key={person.id} value={person.id}>
-                          {person.displayName || person.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  {selectedIsShared ? (
-                    <div className="small text-secondary" style={{ gridColumn: "1 / -1" }}>
-                      공동 계좌는 소유자를 따로 저장하지 않습니다.
-                    </div>
-                  ) : null}
-                  <label>
-                    용도
-                    <select
-                      name="usageType"
-                      className="form-select"
-                      value={selectedUsageType}
-                      disabled={selectedIsShared}
-                      onChange={(event) =>
-                        setPreviewAccountDraftById((current) => ({
-                          ...current,
-                          [account.id]: {
-                            ...current[account.id],
-                            usageType: event.target.value as
-                              | "daily"
-                              | "salary"
-                              | "shared"
-                              | "card_payment"
-                              | "savings"
-                              | "investment"
-                              | "loan"
-                              | "other",
-                          },
-                        }))
-                      }
-                    >
-                      {Object.entries(ACCOUNT_USAGE_LABELS).map(([value, label]) => (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="compact-check" style={{ gridColumn: "1 / -1" }}>
-                    <span className="fw-semibold">공동 자금 계좌</span>
-                    <input
-                      name="isShared"
-                      type="checkbox"
-                      className="form-check-input mt-0"
-                      checked={selectedIsShared}
-                      onChange={(event) =>
-                        setPreviewAccountDraftById((current) => ({
-                          ...current,
-                          [account.id]: {
-                            ...current[account.id],
-                            isShared: event.target.checked,
-                            ownerPersonId: event.target.checked ? "" : current[account.id]?.ownerPersonId ?? account.ownerPersonId ?? "",
-                            usageType: event.target.checked ? "shared" : current[account.id]?.usageType ?? (account.usageType === "shared" ? "daily" : account.usageType),
-                          },
-                        }))
-                      }
-                    />
-                  </label>
-                  <div className="d-flex justify-content-end" style={{ gridColumn: "1 / -1" }}>
-                    <button className="btn btn-outline-primary btn-sm" type="submit">
-                      적용
-                    </button>
-                  </div>
-                </form>
-                </article>
-              );
-            })}
-          </div>
-
-          <div className="section-head mt-4">
-            <div>
-              <span className="section-kicker">3단계</span>
-              <h3 className="section-title">카드 매핑</h3>
-            </div>
-          </div>
-          <div className="resource-grid">
-            {previewBundle.cards.map((card, index) => {
-              const selectedOwnerPersonId = previewOwnerDraftByCard[card.id] ?? card.ownerPersonId ?? "";
-              const selectedLinkedAccountId = previewLinkedAccountDraftByCard[card.id] ?? card.linkedAccountId ?? "";
-
-              return (
-                <article key={card.id} className="resource-card" style={getMotionStyle(index + 6)}>
-                <h3>{card.name}</h3>
-                <p className="mb-0 text-secondary">
-                  {card.issuerName} · 소유자 {previewPeopleMap.get(selectedOwnerPersonId) ?? "미지정"} · 결제{" "}
-                  {selectedLinkedAccountId
-                    ? `${previewAccountSharedMap.get(selectedLinkedAccountId) ? "공동 계좌 " : ""}${previewAccountsMap.get(selectedLinkedAccountId) ?? "-"}`
-                    : "미연결"}
-                </p>
-                <form
-                  className="profile-form w-100"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    const formData = new FormData(event.currentTarget);
-                    applyPreviewCardPatch(card.id, {
-                      name: String(formData.get("name") ?? "").trim(),
-                      issuerName: String(formData.get("issuerName") ?? "").trim(),
-                      ownerPersonId: String(formData.get("ownerPersonId") ?? "") || null,
-                      linkedAccountId: String(formData.get("linkedAccountId") ?? "") || null,
-                      cardType: String(formData.get("cardType") ?? "credit") as "credit" | "check" | "debit" | "prepaid" | "other",
-                    });
-                    setPreviewOwnerDraftByCard((current) => {
-                      const next = { ...current };
-                      delete next[card.id];
-                      return next;
-                    });
-                    setPreviewLinkedAccountDraftByCard((current) => {
-                      const next = { ...current };
-                      delete next[card.id];
-                      return next;
-                    });
-                  }}
-                >
-                  <label>
-                    카드 이름
-                    <input name="name" className="form-control" defaultValue={card.name} />
-                  </label>
-                  <label>
-                    카드사
-                    <input name="issuerName" className="form-control" defaultValue={card.issuerName} />
-                  </label>
-                  <label>
-                    소유자
-<select
-                      name="ownerPersonId"
-                      className="form-select"
-                      value={selectedOwnerPersonId}
-                      onChange={(event) =>
-                        setPreviewOwnerDraftByCard((current) => ({
-                          ...current,
-                          [card.id]: event.target.value,
-                        }))
-                      }
-                    >
-                      <option value="">미지정</option>
-                      {previewBundle.people.map((person) => (
-                        <option key={person.id} value={person.id}>
-                          {person.displayName || person.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                    <label>
-                      결제 계좌
-                    <select
-                      name="linkedAccountId"
-                      className="form-select"
-                      value={selectedLinkedAccountId}
-                      onChange={(event) =>
-                        setPreviewLinkedAccountDraftByCard((current) => ({
-                          ...current,
-                          [card.id]: event.target.value,
-                        }))
-                      }
-                    >
-                      <option value="">연결 안 함</option>
-                      {previewBundle.accounts.map((account) => (
-                        <option key={account.id} value={account.id}>
-                          {account.alias || account.name}
-                          {account.isShared ? " (공동)" : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  {selectedLinkedAccountId && previewAccountSharedMap.get(selectedLinkedAccountId) ? (
-                    <div className="small text-secondary" style={{ gridColumn: "1 / -1" }}>
-                      공동 계좌 결제로 이어집니다.
-                    </div>
-                  ) : null}
-                  <label style={{ gridColumn: "1 / -1" }}>
-                    카드 종류
-                    <select name="cardType" className="form-select" defaultValue={card.cardType}>
-                      <option value="credit">신용카드</option>
-                      <option value="check">체크카드</option>
-                      <option value="debit">직불카드</option>
-                      <option value="prepaid">선불카드</option>
-                      <option value="other">기타</option>
-                    </select>
-                  </label>
-                  <div className="d-flex justify-content-end" style={{ gridColumn: "1 / -1" }}>
-                    <button className="btn btn-outline-primary btn-sm" type="submit">
-                      적용
-                    </button>
-                  </div>
-                </form>
-              </article>
-              );
-            })}
-          </div>
-
-          <div className="d-flex flex-wrap gap-2 mt-4">
-            <button className="btn btn-primary" type="button" onClick={commitPreviewAndMoveNext}>
-              매핑 확인 후 가져오기
-            </button>
-            <button
-              className="btn btn-outline-secondary"
-              type="button"
-              onClick={() => {
-                setPreviewBundle(null);
-                setPreviewFileName("");
-                setPreviewAccountDraftById({});
-                setPreviewOwnerDraftByCard({});
-                setPreviewLinkedAccountDraftByCard({});
-              }}
-            >
-              미리보기 닫기
-            </button>
-          </div>
-        </section>
-      ) : null}
-
-      <section className="card shadow-sm" style={getMotionStyle(previewBundle ? 2 : 1)}>
+      <section className="card shadow-sm" style={getMotionStyle(1)}>
         <div className="section-head">
           <div>
             <span className="section-kicker">최근 업로드</span>
-            <h2 className="section-title">가져온 파일 기록</h2>
+            <h2 className="section-title">가져온 기록</h2>
           </div>
-          <span className="badge text-bg-dark">{scope.imports.length}건</span>
         </div>
-        {!scope.imports.length ? (
-          <EmptyStateCallout
-            kicker="이력 없음"
-            title="아직 업로드한 파일이 없습니다"
-            description="업로드하면 이 화면에 최근 기록이 쌓입니다."
-            actions={
-              <>
-                <Link to="/people" className="btn btn-outline-primary btn-sm">
-                  사용자 관리 먼저 보기
-                </Link>
-                <Link to="/accounts" className="btn btn-outline-secondary btn-sm">
-                  계좌 관리 보기
-                </Link>
-              </>
-            }
-          />
+        {!recentImports.length ? (
+          <p className="text-secondary mb-0">아직 업로드한 기록이 없습니다.</p>
         ) : (
-          <>
-            <div className="review-summary-panel mb-4">
-              <div className="review-summary-copy">
-                <strong>최근 업로드 뒤 작업으로 바로 이어갈 수 있습니다</strong>
-                <p className="mb-0 text-secondary">현재 워크스페이스 기준 남은 작업으로 이동합니다.</p>
-              </div>
-              <Link to={latestImportWorkspaceAction.to} className="btn btn-outline-primary btn-sm">
-                {"summaryLabel" in latestImportWorkspaceAction ? latestImportWorkspaceAction.summaryLabel : latestImportWorkspaceAction.label}
-              </Link>
-            </div>
           <div className="review-list">
-            {recentImports.map((item, index) => (
-                <article key={item.id} className="review-card" style={getMotionStyle(index + 10)}>
-                  <div className="d-flex justify-content-between align-items-start gap-3">
-                    <div className="review-card-main">
-                      <span className="review-type">{item.parserId}</span>
-                      <h3>{item.fileName}</h3>
-                      <p className="mb-0 text-secondary">
-                        {item.importedAt.slice(0, 19).replace("T", " ")} · 거래 {item.rowCount}건 · 검토 {item.reviewCount}건
-                      </p>
-                    </div>
-                    <div className="action-row justify-content-end">
-                      {item.id === latestImport?.id ? (
-                        <Link to={latestImportWorkspaceAction.to} className="btn btn-sm btn-outline-primary">
-                          {latestImportWorkspaceAction.label}
-                        </Link>
-                      ) : item.reviewCount > 0 ? (
-                        <Link to="/reviews" className="btn btn-sm btn-outline-primary">
-                          리뷰 화면 보기
-                        </Link>
-                      ) : null}
-                      <Link to="/transactions" className="btn btn-sm btn-outline-secondary">
-                        거래 화면 보기
-                      </Link>
-                    </div>
+            {recentImports.slice(0, 8).map((item, index) => (
+              <article key={item.id} className="review-card" style={getMotionStyle(index + 2)}>
+                <div className="d-flex justify-content-between align-items-start gap-3">
+                  <div>
+                    <h3>{item.fileName}</h3>
+                    <p className="mb-1 text-secondary">{item.importedAt.slice(0, 16).replace("T", " ")}</p>
+                    <p className="mb-0 text-secondary">
+                      거래 {item.rowCount}건 · 검토 {item.reviewCount}건
+                    </p>
                   </div>
-                </article>
-              ))}
+                  <Link className="btn btn-outline-secondary btn-sm" to={item.reviewCount > 0 ? "/reviews" : "/transactions"}>
+                    {item.reviewCount > 0 ? "검토 보기" : "거래 보기"}
+                  </Link>
+                </div>
+              </article>
+            ))}
           </div>
-          </>
         )}
       </section>
     </div>
