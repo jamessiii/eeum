@@ -8,6 +8,7 @@ import {
   createWorkspaceBase,
   mergeWorkspaceBundle,
 } from "../../domain/app/defaults";
+import { isActiveExpenseTransaction } from "../../domain/transactions/meta";
 import type { AppState, FinancialProfile, ReviewItem, Transaction, WorkspaceBundle } from "../../shared/types/models";
 import { createId } from "../../shared/utils/id";
 import { useToast } from "../toast/ToastProvider";
@@ -114,8 +115,10 @@ function applyTransactionFlagPatch(
         ? !patch.isInternalTransfer
         : transaction.isExpenseImpact;
   const requestedSharedExpense = patch.isSharedExpense ?? transaction.isSharedExpense;
-  const nextSharedExpense =
-    transaction.transactionType === "expense" && transaction.status === "active" && nextExpenseImpact
+    const nextSharedExpense = isActiveExpenseTransaction({
+      ...transaction,
+      isExpenseImpact: nextExpenseImpact,
+    })
       ? requestedSharedExpense
       : false;
 

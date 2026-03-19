@@ -26,8 +26,12 @@ export function isActiveExpenseImpactTransaction(transaction: Transaction) {
   return isActiveTransaction(transaction) && transaction.isExpenseImpact;
 }
 
+export function isActiveExpenseTransaction(transaction: Transaction) {
+  return isActiveExpenseImpactTransaction(transaction) && transaction.transactionType === "expense";
+}
+
 export function isActiveSharedExpenseTransaction(transaction: Transaction) {
-  return isActiveExpenseImpactTransaction(transaction) && transaction.isSharedExpense;
+  return isActiveExpenseTransaction(transaction) && transaction.isSharedExpense;
 }
 
 export function isActiveInternalTransferTransaction(transaction: Transaction) {

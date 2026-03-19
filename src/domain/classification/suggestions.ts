@@ -1,5 +1,5 @@
 import type { Category, Transaction } from "../../shared/types/models";
-import { isUncategorizedExpenseTransaction } from "../transactions/meta";
+import { isActiveExpenseTransaction, isUncategorizedExpenseTransaction } from "../transactions/meta";
 
 export interface RecurringMerchantSuggestion {
   merchantName: string;
@@ -24,7 +24,7 @@ interface RecurringMerchantAccumulator {
 }
 
 function isRecurringSuggestionCandidate(transaction: Transaction) {
-  return isUncategorizedExpenseTransaction(transaction) && transaction.transactionType === "expense";
+  return isActiveExpenseTransaction(transaction) && !transaction.categoryId;
 }
 
 export function getUncategorizedTransactions(transactions: Transaction[]) {
