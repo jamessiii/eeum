@@ -7,13 +7,14 @@ export function PageStepBanner() {
   const { state } = useAppState();
   const location = useLocation();
   const workspaceId = state.activeWorkspaceId;
+  const currentPath = `${location.pathname || "/"}${location.search || ""}`;
 
   const currentStep = useMemo(() => {
     if (!workspaceId) return null;
     return getWorkspaceGuide(state, workspaceId).currentStep;
   }, [state, workspaceId]);
 
-  if (!currentStep || currentStep.targetPath !== location.pathname) return null;
+  if (!currentStep || currentStep.targetPath !== currentPath) return null;
 
   return (
     <section className="page-step-banner">
