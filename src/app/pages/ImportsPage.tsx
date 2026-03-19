@@ -30,6 +30,7 @@ export function ImportsPage() {
   const expenseStats = getExpenseImpactStats(scope.transactions);
   const imports = [...scope.imports].sort((a, b) => b.importedAt.localeCompare(a.importedAt));
   const openReviews = health.openReviews;
+  const openReviewCount = health.openReviewCount;
   const uncategorizedCount = expenseStats.uncategorizedCount;
   const untaggedCount = expenseStats.untaggedCount;
   const sharedExpenseCount = expenseStats.sharedExpenseCount;
@@ -40,12 +41,12 @@ export function ImportsPage() {
     {
       id: "reviews",
       title: "검토함 정리",
-      description: openReviews.length
+      description: openReviewCount
         ? `${openReviews.length}건의 자동 검토 후보가 남아 있습니다.`
         : "열려 있는 검토 항목이 없어 다음 단계로 넘어갈 수 있습니다.",
       to: "/reviews",
       actionLabel: "검토함 열기",
-      completed: openReviews.length === 0,
+      completed: openReviewCount === 0,
     },
     {
       id: "categories",
@@ -302,7 +303,7 @@ export function ImportsPage() {
         <div className="classification-flow-grid">
           <article className="stat-card">
             <span className="stat-label">열린 검토</span>
-            <strong>{openReviews.length}건</strong>
+            <strong>{openReviewCount}건</strong>
             <div className="small text-secondary mt-2">중복, 환불, 내부이체 후보부터 정리하면 통계가 훨씬 정확해집니다.</div>
             <Link to="/reviews" className="btn btn-outline-secondary btn-sm mt-3">
               검토함 열기
