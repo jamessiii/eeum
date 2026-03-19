@@ -9,9 +9,16 @@ import {
   mergeWorkspaceBundle,
 } from "../../domain/app/defaults";
 import { isActiveExpenseTransaction } from "../../domain/transactions/meta";
-import type { AppState, FinancialProfile, ReviewItem, Transaction, WorkspaceBundle } from "../../shared/types/models";
+import type { Account, AppState, Card, FinancialProfile, Person, ReviewItem, Transaction, WorkspaceBundle } from "../../shared/types/models";
 import { createId } from "../../shared/utils/id";
 import { useToast } from "../toast/ToastProvider";
+
+type PersonDraft = Pick<Person, "name" | "displayName" | "role" | "memo" | "isActive">;
+type AccountDraft = Pick<
+  Account,
+  "ownerPersonId" | "name" | "alias" | "institutionName" | "accountNumberMasked" | "accountType" | "usageType" | "isShared" | "memo"
+>;
+type CardDraft = Pick<Card, "ownerPersonId" | "name" | "issuerName" | "cardNumberMasked" | "linkedAccountId" | "cardType" | "memo">;
 
 type NewTransactionInput = {
   workspaceId: string;
@@ -53,9 +60,12 @@ type Action =
   | { type: "replaceState"; payload: AppState }
   | { type: "resolveReview"; payload: { reviewId: string; status: "resolved" | "dismissed" } }
   | { type: "applyReviewSuggestion"; payload: { reviewId: string } }
-  | { type: "addPerson"; payload: { workspaceId: string; name: string } }
-  | { type: "addAccount"; payload: { workspaceId: string; name: string; institutionName: string } }
-  | { type: "addCard"; payload: { workspaceId: string; name: string; issuerName: string } }
+  | { type: "addPerson"; payload: { workspaceId: string; values: PersonDraft } }
+  | { type: "updatePerson"; payload: { workspaceId: string; personId: string; values: PersonDraft } }
+  | { type: "addAccount"; payload: { workspaceId: string; values: AccountDraft } }
+  | { type: "updateAccount"; payload: { workspaceId: string; accountId: string; values: AccountDraft } }
+  | { type: "addCard"; payload: { workspaceId: string; values: CardDraft } }
+  | { type: "updateCard"; payload: { workspaceId: string; cardId: string; values: CardDraft } }
   | { type: "addCategory"; payload: { workspaceId: string; name: string } }
   | { type: "addTag"; payload: { workspaceId: string; name: string } }
   | { type: "setFinancialProfile"; payload: { workspaceId: string; values: FinancialProfileInput } }
@@ -63,14 +73,14 @@ type Action =
   | { type: "addTransaction"; payload: NewTransactionInput }
   | {
       type: "updateTransactionDetails";
-        payload: {
-          workspaceId: string;
-          transactionId: string;
-          patch: {
-            sourceType?: Transaction["sourceType"];
-            ownerPersonId?: string | null;
-            accountId?: string | null;
-            cardId?: string | null;
+      payload: {
+        workspaceId: string;
+        transactionId: string;
+        patch: {
+          sourceType?: Transaction["sourceType"];
+          ownerPersonId?: string | null;
+          accountId?: string | null;
+          cardId?: string | null;
           occurredAt?: string;
           settledAt?: string | null;
           merchantName?: string;
@@ -89,16 +99,116 @@ type Action =
   | { type: "assignTagByMerchant"; payload: { workspaceId: string; merchantName: string; tagId: string } }
   | {
       type: "updateTransactionFlags";
-        payload: {
-          workspaceId: string;
-          transactionId: string;
-          patch: {
-            isSharedExpense?: boolean;
-            isExpenseImpact?: boolean;
-            isInternalTransfer?: boolean;
-          };
+      payload: {
+        workspaceId: string;
+        transactionId: string;
+        patch: {
+          isSharedExpense?: boolean;
+          isExpenseImpact?: boolean;
+          isInternalTransfer?: boolean;
         };
       };
+    };
+
+function createPersonDraft(input: string | Partial<PersonDraft>): PersonDraft {
+  if (typeof input === "string") {
+    const trimmed = input.trim();
+    return {
+      name: trimmed,
+      displayName: trimmed,
+      role: "member",
+      memo: "",
+      isActive: true,
+    };
+  }
+
+  const name = String(input.name ?? "").trim();
+  const displayName = String(input.displayName ?? input.name ?? "").trim();
+
+  return {
+    name,
+    displayName: displayName || name,
+    role: input.role === "owner" ? "owner" : "member",
+    memo: String(input.memo ?? "").trim(),
+    isActive: input.isActive ?? true,
+  };
+}
+
+function createAccountDraft(input: string | Partial<AccountDraft>, institutionName?: string): AccountDraft {
+  if (typeof input === "string") {
+    return {
+      ownerPersonId: null,
+      name: input.trim(),
+      alias: "",
+      institutionName: institutionName?.trim() || "직접입력",
+      accountNumberMasked: "",
+      accountType: "checking",
+      usageType: "daily",
+      isShared: false,
+      memo: "",
+    };
+  }
+
+  return {
+    ownerPersonId: input.ownerPersonId ?? null,
+    name: String(input.name ?? "").trim(),
+    alias: String(input.alias ?? "").trim(),
+    institutionName: String(input.institutionName ?? "").trim() || "직접입력",
+    accountNumberMasked: String(input.accountNumberMasked ?? "").trim(),
+    accountType: input.accountType ?? "checking",
+    usageType: input.usageType ?? (input.isShared ? "shared" : "daily"),
+    isShared: input.isShared ?? false,
+    memo: String(input.memo ?? "").trim(),
+  };
+}
+
+function createCardDraft(input: string | Partial<CardDraft>, issuerName?: string): CardDraft {
+  if (typeof input === "string") {
+    return {
+      ownerPersonId: null,
+      name: input.trim(),
+      issuerName: issuerName?.trim() || "직접입력",
+      cardNumberMasked: "",
+      linkedAccountId: null,
+      cardType: "credit",
+      memo: "",
+    };
+  }
+
+  return {
+    ownerPersonId: input.ownerPersonId ?? null,
+    name: String(input.name ?? "").trim(),
+    issuerName: String(input.issuerName ?? "").trim() || "직접입력",
+    cardNumberMasked: String(input.cardNumberMasked ?? "").trim(),
+    linkedAccountId: input.linkedAccountId ?? null,
+    cardType: input.cardType ?? "credit",
+    memo: String(input.memo ?? "").trim(),
+  };
+}
+
+function normalizeAppState(rawState: AppState): AppState {
+  return {
+    ...rawState,
+    schemaVersion: Math.max(rawState.schemaVersion ?? 0, 3),
+    people: rawState.people.map((person) => ({
+      ...person,
+      displayName: person.displayName ?? person.name,
+      memo: person.memo ?? "",
+      isActive: person.isActive ?? true,
+    })),
+    accounts: rawState.accounts.map((account) => ({
+      ...account,
+      alias: account.alias ?? "",
+      usageType: account.usageType ?? (account.isShared ? "shared" : "daily"),
+      memo: account.memo ?? "",
+    })),
+    cards: rawState.cards.map((card) => ({
+      ...card,
+      cardType: card.cardType ?? "credit",
+      memo: card.memo ?? "",
+    })),
+  };
+}
 
 function applyTransactionFlagPatch(
   transaction: Transaction,
@@ -114,13 +224,14 @@ function applyTransactionFlagPatch(
       : transaction.transactionType === "transfer" && typeof patch.isInternalTransfer === "boolean"
         ? !patch.isInternalTransfer
         : transaction.isExpenseImpact;
+
   const requestedSharedExpense = patch.isSharedExpense ?? transaction.isSharedExpense;
-    const nextSharedExpense = isActiveExpenseTransaction({
-      ...transaction,
-      isExpenseImpact: nextExpenseImpact,
-    })
-      ? requestedSharedExpense
-      : false;
+  const nextSharedExpense = isActiveExpenseTransaction({
+    ...transaction,
+    isExpenseImpact: nextExpenseImpact,
+  })
+    ? requestedSharedExpense
+    : false;
 
   return {
     ...transaction,
@@ -208,8 +319,21 @@ function reducer(state: AppState, action: Action): AppState {
         ...state,
         people: [
           ...state.people,
-          { id: createId("person"), workspaceId: action.payload.workspaceId, name: action.payload.name, role: "member" },
+          {
+            id: createId("person"),
+            workspaceId: action.payload.workspaceId,
+            ...action.payload.values,
+          },
         ],
+      };
+    case "updatePerson":
+      return {
+        ...state,
+        people: state.people.map((person) =>
+          person.workspaceId === action.payload.workspaceId && person.id === action.payload.personId
+            ? { ...person, ...action.payload.values }
+            : person,
+        ),
       };
     case "addAccount":
       return {
@@ -219,14 +343,18 @@ function reducer(state: AppState, action: Action): AppState {
           {
             id: createId("account"),
             workspaceId: action.payload.workspaceId,
-            ownerPersonId: null,
-            name: action.payload.name,
-            institutionName: action.payload.institutionName,
-            accountNumberMasked: "",
-            accountType: "checking",
-            isShared: false,
+            ...action.payload.values,
           },
         ],
+      };
+    case "updateAccount":
+      return {
+        ...state,
+        accounts: state.accounts.map((account) =>
+          account.workspaceId === action.payload.workspaceId && account.id === action.payload.accountId
+            ? { ...account, ...action.payload.values }
+            : account,
+        ),
       };
     case "addCard":
       return {
@@ -236,13 +364,18 @@ function reducer(state: AppState, action: Action): AppState {
           {
             id: createId("card"),
             workspaceId: action.payload.workspaceId,
-            ownerPersonId: null,
-            name: action.payload.name,
-            issuerName: action.payload.issuerName,
-            cardNumberMasked: "",
-            linkedAccountId: null,
+            ...action.payload.values,
           },
         ],
+      };
+    case "updateCard":
+      return {
+        ...state,
+        cards: state.cards.map((card) =>
+          card.workspaceId === action.payload.workspaceId && card.id === action.payload.cardId
+            ? { ...card, ...action.payload.values }
+            : card,
+        ),
       };
     case "addCategory":
       return {
@@ -326,32 +459,41 @@ function reducer(state: AppState, action: Action): AppState {
             refundOfTransactionId: null,
             status: "active",
           },
-          ],
-        };
+        ],
+      };
     case "updateTransactionDetails":
       return {
         ...state,
         transactions: state.transactions.map((transaction) =>
           transaction.workspaceId === action.payload.workspaceId && transaction.id === action.payload.transactionId
-              ? {
-                  ...transaction,
-                  sourceType: action.payload.patch.sourceType ?? transaction.sourceType,
-                  ownerPersonId:
-                    typeof action.payload.patch.ownerPersonId !== "undefined"
-                      ? action.payload.patch.ownerPersonId
+            ? {
+                ...transaction,
+                sourceType: action.payload.patch.sourceType ?? transaction.sourceType,
+                ownerPersonId:
+                  typeof action.payload.patch.ownerPersonId !== "undefined"
+                    ? action.payload.patch.ownerPersonId
                     : transaction.ownerPersonId,
-                accountId: typeof action.payload.patch.accountId !== "undefined" ? action.payload.patch.accountId : transaction.accountId,
-                cardId: typeof action.payload.patch.cardId !== "undefined" ? action.payload.patch.cardId : transaction.cardId,
+                accountId:
+                  typeof action.payload.patch.accountId !== "undefined"
+                    ? action.payload.patch.accountId
+                    : transaction.accountId,
+                cardId:
+                  typeof action.payload.patch.cardId !== "undefined" ? action.payload.patch.cardId : transaction.cardId,
                 fromAccountId:
                   transaction.transactionType === "transfer" && typeof action.payload.patch.accountId !== "undefined"
                     ? action.payload.patch.accountId
                     : transaction.fromAccountId,
                 occurredAt: action.payload.patch.occurredAt ?? transaction.occurredAt,
                 settledAt:
-                  typeof action.payload.patch.settledAt !== "undefined" ? action.payload.patch.settledAt : transaction.settledAt,
+                  typeof action.payload.patch.settledAt !== "undefined"
+                    ? action.payload.patch.settledAt
+                    : transaction.settledAt,
                 merchantName: action.payload.patch.merchantName ?? transaction.merchantName,
                 description: action.payload.patch.description ?? transaction.description,
-                amount: typeof action.payload.patch.amount === "number" ? Math.abs(action.payload.patch.amount) : transaction.amount,
+                amount:
+                  typeof action.payload.patch.amount === "number"
+                    ? Math.abs(action.payload.patch.amount)
+                    : transaction.amount,
               }
             : transaction,
         ),
@@ -381,8 +523,8 @@ function reducer(state: AppState, action: Action): AppState {
           transaction.workspaceId === action.payload.workspaceId &&
           transaction.merchantName === action.payload.merchantName &&
           transaction.isExpenseImpact
-             ? { ...transaction, categoryId: action.payload.categoryId }
-             : transaction,
+            ? { ...transaction, categoryId: action.payload.categoryId }
+            : transaction,
         ),
       };
     case "assignCategoryBatch": {
@@ -407,9 +549,9 @@ function reducer(state: AppState, action: Action): AppState {
                   ? transaction.tagIds
                   : [...transaction.tagIds, action.payload.tagId],
               }
-              : transaction,
-          ),
-        };
+            : transaction,
+        ),
+      };
     case "removeTag":
       return {
         ...state,
@@ -482,9 +624,12 @@ interface AppStateContextValue {
   resolveReview: (reviewId: string) => void;
   dismissReview: (reviewId: string) => void;
   applyReviewSuggestion: (reviewId: string) => void;
-  addPerson: (workspaceId: string, name: string) => void;
-  addAccount: (workspaceId: string, name: string, institutionName: string) => void;
-  addCard: (workspaceId: string, name: string, issuerName: string) => void;
+  addPerson: (workspaceId: string, input: string | Partial<PersonDraft>) => void;
+  updatePerson: (workspaceId: string, personId: string, input: Partial<PersonDraft>) => void;
+  addAccount: (workspaceId: string, input: string | Partial<AccountDraft>, institutionName?: string) => void;
+  updateAccount: (workspaceId: string, accountId: string, input: Partial<AccountDraft>) => void;
+  addCard: (workspaceId: string, input: string | Partial<CardDraft>, issuerName?: string) => void;
+  updateCard: (workspaceId: string, cardId: string, input: Partial<CardDraft>) => void;
   addCategory: (workspaceId: string, name: string) => void;
   addTag: (workspaceId: string, name: string) => void;
   setFinancialProfile: (workspaceId: string, values: FinancialProfileInput) => void;
@@ -513,16 +658,16 @@ interface AppStateContextValue {
   removeTag: (workspaceId: string, transactionId: string, tagId: string) => void;
   assignTagBatch: (workspaceId: string, transactionIds: string[], tagId: string) => void;
   assignTagByMerchant: (workspaceId: string, merchantName: string, tagId: string) => void;
-    updateTransactionFlags: (
-      workspaceId: string,
-      transactionId: string,
-      patch: {
-        isSharedExpense?: boolean;
-        isExpenseImpact?: boolean;
-        isInternalTransfer?: boolean;
-      },
-    ) => void;
-  }
+  updateTransactionFlags: (
+    workspaceId: string,
+    transactionId: string,
+    patch: {
+      isSharedExpense?: boolean;
+      isExpenseImpact?: boolean;
+      isInternalTransfer?: boolean;
+    },
+  ) => void;
+}
 
 const AppStateContext = createContext<AppStateContextValue | null>(null);
 
@@ -533,7 +678,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     void loadAppState(createEmptyState()).then((stored) => {
-      dispatch({ type: "hydrate", payload: stored });
+      dispatch({ type: "hydrate", payload: normalizeAppState(stored) });
       setIsReady(true);
     });
   }, []);
@@ -625,7 +770,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
           showToast("백업 파일 형식을 확인해주세요.", "error");
           throw new Error("backup-data-missing");
         }
-        dispatch({ type: "replaceState", payload: parsed.data });
+        dispatch({ type: "replaceState", payload: normalizeAppState(parsed.data) });
         showToast(`${file.name} 백업을 불러왔습니다.`, "success");
       },
       resolveReview(reviewId) {
@@ -634,23 +779,47 @@ export function AppStateProvider({ children }: PropsWithChildren) {
       },
       dismissReview(reviewId) {
         dispatch({ type: "resolveReview", payload: { reviewId, status: "dismissed" } });
-        showToast("검토 항목을 나중에 보기로 넘겼습니다.", "info");
+        showToast("검토 항목을 보류 처리했습니다.", "info");
       },
       applyReviewSuggestion(reviewId) {
         dispatch({ type: "applyReviewSuggestion", payload: { reviewId } });
         showToast("검토 제안을 거래 데이터에 반영했습니다.", "success");
       },
-      addPerson(workspaceId, name) {
-        dispatch({ type: "addPerson", payload: { workspaceId, name } });
-        showToast(`${name} 구성원을 추가했습니다.`, "success");
+      addPerson(workspaceId, input) {
+        const values = createPersonDraft(input);
+        dispatch({ type: "addPerson", payload: { workspaceId, values } });
+        showToast(`${values.displayName || values.name} 사람을 추가했습니다.`, "success");
       },
-      addAccount(workspaceId, name, institutionName) {
-        dispatch({ type: "addAccount", payload: { workspaceId, name, institutionName } });
-        showToast(`${name} 계좌를 추가했습니다.`, "success");
+      updatePerson(workspaceId, personId, input) {
+        const current = state.people.find((item) => item.workspaceId === workspaceId && item.id === personId);
+        if (!current) return;
+        const values = createPersonDraft({ ...current, ...input });
+        dispatch({ type: "updatePerson", payload: { workspaceId, personId, values } });
+        showToast(`${values.displayName || values.name} 정보를 저장했습니다.`, "success");
       },
-      addCard(workspaceId, name, issuerName) {
-        dispatch({ type: "addCard", payload: { workspaceId, name, issuerName } });
-        showToast(`${name} 카드를 추가했습니다.`, "success");
+      addAccount(workspaceId, input, institutionName) {
+        const values = createAccountDraft(input, institutionName);
+        dispatch({ type: "addAccount", payload: { workspaceId, values } });
+        showToast(`${values.alias || values.name} 계좌를 추가했습니다.`, "success");
+      },
+      updateAccount(workspaceId, accountId, input) {
+        const current = state.accounts.find((item) => item.workspaceId === workspaceId && item.id === accountId);
+        if (!current) return;
+        const values = createAccountDraft({ ...current, ...input });
+        dispatch({ type: "updateAccount", payload: { workspaceId, accountId, values } });
+        showToast(`${values.alias || values.name} 계좌 정보를 저장했습니다.`, "success");
+      },
+      addCard(workspaceId, input, issuerName) {
+        const values = createCardDraft(input, issuerName);
+        dispatch({ type: "addCard", payload: { workspaceId, values } });
+        showToast(`${values.name} 카드를 추가했습니다.`, "success");
+      },
+      updateCard(workspaceId, cardId, input) {
+        const current = state.cards.find((item) => item.workspaceId === workspaceId && item.id === cardId);
+        if (!current) return;
+        const values = createCardDraft({ ...current, ...input });
+        dispatch({ type: "updateCard", payload: { workspaceId, cardId, values } });
+        showToast(`${values.name} 카드 정보를 저장했습니다.`, "success");
       },
       addCategory(workspaceId, name) {
         dispatch({ type: "addCategory", payload: { workspaceId, name } });
@@ -662,7 +831,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
       },
       setFinancialProfile(workspaceId, values) {
         dispatch({ type: "setFinancialProfile", payload: { workspaceId, values } });
-        showToast("재무 기준선을 저장했습니다.", "success");
+        showToast("재무 기준값을 저장했습니다.", "success");
       },
       addSettlement(input) {
         dispatch({ type: "addSettlement", payload: input });
@@ -724,14 +893,14 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         }
         if (typeof patch.isInternalTransfer === "boolean") {
           showToast(
-            patch.isInternalTransfer ? "거래를 내부이체 흐름으로 표시했습니다." : "거래의 내부이체 표시를 해제했습니다.",
+            patch.isInternalTransfer ? "거래를 내부이체로 표시했습니다." : "거래의 내부이체 표시를 해제했습니다.",
             "success",
           );
           return;
         }
         if (typeof patch.isExpenseImpact === "boolean") {
           showToast(
-            patch.isExpenseImpact ? "거래를 다시 통계에 반영합니다." : "거래를 통계 제외 흐름으로 바꿨습니다.",
+            patch.isExpenseImpact ? "거래를 다시 통계에 반영합니다." : "거래를 통계 제외 흐름으로 변경했습니다.",
             "success",
           );
         }

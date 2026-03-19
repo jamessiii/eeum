@@ -21,7 +21,10 @@ export interface Person {
   id: ID;
   workspaceId: ID;
   name: string;
+  displayName: string;
   role: "owner" | "member";
+  memo: string;
+  isActive: boolean;
 }
 
 export interface Account {
@@ -29,10 +32,13 @@ export interface Account {
   workspaceId: ID;
   ownerPersonId: ID | null;
   name: string;
+  alias: string;
   institutionName: string;
   accountNumberMasked: string;
   accountType: "checking" | "savings" | "loan" | "cash" | "other";
+  usageType: "daily" | "salary" | "shared" | "card_payment" | "savings" | "investment" | "loan" | "other";
   isShared: boolean;
+  memo: string;
 }
 
 export interface Card {
@@ -43,6 +49,8 @@ export interface Card {
   issuerName: string;
   cardNumberMasked: string;
   linkedAccountId: ID | null;
+  cardType: "credit" | "check" | "debit" | "prepaid" | "other";
+  memo: string;
 }
 
 export interface Category {

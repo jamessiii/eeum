@@ -73,7 +73,10 @@ export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundl
       id: createId("person"),
       workspaceId: workspace.id,
       name: normalized,
+      displayName: normalized,
       role: peopleByName.size === 0 ? "owner" : "member",
+      memo: "",
+      isActive: true,
     };
     peopleByName.set(normalized, next);
     return next;
@@ -85,15 +88,25 @@ export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundl
     if (existing) return existing;
 
     const owner = ownerName ? ensurePerson(ownerName) : null;
+    const isShared = normalized.includes("생활비") || normalized.includes("공동");
+    const usageType: Account["usageType"] = normalized.includes("카드값")
+      ? "card_payment"
+      : isShared
+        ? "shared"
+        : "daily";
+
     const next: Account = {
       id: createId("account"),
       workspaceId: workspace.id,
       ownerPersonId: owner?.id ?? null,
       name: normalized,
+      alias: normalized,
       institutionName: normalizeText(institution) || "미정 금융기관",
       accountNumberMasked: maskText(number),
       accountType: normalized.includes("대출") ? "loan" : "checking",
-      isShared: normalized.includes("생활비") || normalized.includes("공동"),
+      usageType,
+      isShared,
+      memo: "",
     };
     accountsByName.set(normalized, next);
     return next;
@@ -121,6 +134,8 @@ export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundl
       issuerName: guessIssuer(normalized),
       cardNumberMasked: maskText(normalized),
       linkedAccountId: linkedAccount?.id ?? null,
+      cardType: "credit",
+      memo: "",
     };
     cardsByName.set(normalized, next);
     return next;
@@ -149,7 +164,7 @@ export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundl
       const toName = normalizeText(row["입금통장"]);
       const toAccount = accountsByName.get(toName) ?? null;
       const categoryName = normalizeText(row["카테고리"]) || "기타";
-      const flowType = normalizeText(row["지출/안지출"]);
+      const flowType = normalizeText(row["지출/이체"]);
       const transactionType = flowType.includes("지출") ? "expense" : "transfer";
       const occurredAt = excelSerialToIso(Number(row["이체일"] ?? 0));
 
@@ -167,12 +182,12 @@ export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundl
         toAccountId: toAccount?.id ?? null,
         merchantName: toName || "계좌이체",
         description: normalizeText(row["비고"]),
-        amount: Number(row["이체금액"] ?? 0),
+        amount: Math.abs(Number(row["이체금액"] ?? 0)),
         categoryId: findCategoryId(categories, categoryName),
         tagIds: [],
         isInternalTransfer: transactionType === "transfer" && Boolean(toAccount),
         isExpenseImpact: transactionType === "expense",
-        isSharedExpense: categoryName === "생활비" || categoryName === "가족활동",
+        isSharedExpense: categoryName === "생활비" || categoryName === "가족생활",
         refundOfTransactionId: null,
         status: "active",
       };
@@ -232,12 +247,12 @@ export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundl
         toAccountId: null,
         merchantName: merchant,
         description: card.name,
-        amount,
+        amount: Math.abs(amount),
         categoryId: findCategoryId(categories, categoryName || "기타"),
         tagIds: [],
         isInternalTransfer: false,
         isExpenseImpact: true,
-        isSharedExpense: categoryName === "생활비" || categoryName === "가족활동",
+        isSharedExpense: categoryName === "생활비" || categoryName === "가족생활",
         refundOfTransactionId: null,
         status: "active",
       };
@@ -250,7 +265,7 @@ export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundl
             workspace.id,
             transaction.id,
             "uncategorized_transaction",
-            `${merchant} 거래는 카테고리가 비어 있어 검토가 필요합니다.`,
+            `${merchant} 거래의 카테고리가 비어 있어 검토가 필요합니다.`,
             0.41,
           ),
         );
@@ -271,6 +286,7 @@ export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundl
       transaction.merchantName.replace(/\s+/g, ""),
       transaction.ownerPersonId ?? "",
     ].join("|");
+
     const existing = seen.get(key);
     if (existing) {
       reviews.push(

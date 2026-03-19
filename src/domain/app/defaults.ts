@@ -11,7 +11,7 @@ import { createId } from "../../shared/utils/id";
 
 export function createEmptyState(): AppState {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     activeWorkspaceId: null,
     workspaces: [],
     financialProfiles: [],

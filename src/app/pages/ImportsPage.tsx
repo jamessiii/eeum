@@ -1,22 +1,25 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { getImportPreviewReviewSummary, getImportPreviewTransactionSummary } from "../../domain/imports/previewSummary";
-import { REVIEW_TYPE_LABELS } from "../../domain/reviews/meta";
-import { getOpenReviewTypeSummary } from "../../domain/reviews/summary";
-import { getJourneyProgress } from "../../domain/journey/progress";
-import { getExpenseImpactStats } from "../../domain/transactions/expenseImpactStats";
-import { getSourceBreakdown } from "../../domain/transactions/sourceBreakdown";
-import { getWorkspaceHealthSummary } from "../../domain/workspace/health";
-import { getLatestImportRecord, getSortedImportRecords } from "../../domain/workspace/summary";
 import type { WorkspaceBundle } from "../../shared/types/models";
 import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
-import { CompletionBanner } from "../components/CompletionBanner";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
-import { NextStepCallout } from "../components/NextStepCallout";
-import { SourceBreakdownSection } from "../components/SourceBreakdownSection";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
+
+const ACCOUNT_USAGE_LABELS: Record<
+  "daily" | "salary" | "shared" | "card_payment" | "savings" | "investment" | "loan" | "other",
+  string
+> = {
+  daily: "일반 생활비",
+  salary: "급여 수령",
+  shared: "공동 자금",
+  card_payment: "카드 결제",
+  savings: "저축",
+  investment: "투자",
+  loan: "대출 관리",
+  other: "기타",
+};
 
 export function ImportsPage() {
   const { commitImportedBundle, previewWorkbookImport, state } = useAppState();
@@ -26,89 +29,80 @@ export function ImportsPage() {
   const [isPreparingPreview, setIsPreparingPreview] = useState(false);
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
-  const health = getWorkspaceHealthSummary(scope);
-  const expenseStats = getExpenseImpactStats(scope.transactions);
-  const imports = getSortedImportRecords(scope.imports);
-  const openReviewCount = health.openReviewCount;
-  const uncategorizedCount = expenseStats.uncategorizedCount;
-  const untaggedCount = expenseStats.untaggedCount;
-  const sharedExpenseCount = expenseStats.sharedExpenseCount;
-  const internalTransferCount = expenseStats.internalTransferCount;
-  const sourceBreakdown = getSourceBreakdown(scope.transactions);
-  const latestImport = getLatestImportRecord(scope.imports);
-  const postImportFlow = [
-    {
-      id: "reviews",
-      title: "검토함 정리",
-      description: openReviewCount
-        ? `${openReviewCount}건의 자동 검토 후보가 남아 있습니다.`
-        : "열려 있는 검토 항목이 없어 다음 단계로 넘어갈 수 있습니다.",
-      to: "/reviews",
-      actionLabel: "검토함 열기",
-      completed: openReviewCount === 0,
-    },
-    {
-      id: "categories",
-      title: "분류 마무리",
-      description: uncategorizedCount
-        ? `${uncategorizedCount}건의 미분류 거래를 정리하면 통계가 더 정확해집니다.`
-        : "미분류 거래가 없어 대시보드 해석을 더 믿고 볼 수 있습니다.",
-      to: uncategorizedCount ? "/transactions?cleanup=uncategorized" : "/categories",
-      actionLabel: "분류 화면 열기",
-      completed: uncategorizedCount === 0,
-    },
-    {
-      id: "tags",
-      title: "태그 흐름 정리",
-      description: untaggedCount
-        ? `${untaggedCount}건의 무태그 거래를 묶으면 같은 맥락의 소비를 더 빠르게 비교할 수 있습니다.`
-        : "무태그 거래가 없어 태그 기준 흐름도 바로 확인할 수 있습니다.",
-      to: untaggedCount ? "/transactions?cleanup=untagged" : "/transactions",
-      actionLabel: "태그 정리 열기",
-      completed: untaggedCount === 0,
-    },
-    {
-      id: "shared",
-      title: "공동지출 흐름 확인",
-      description: sharedExpenseCount
-        ? `${sharedExpenseCount}건의 공동지출을 정산으로 이어지는 흐름으로 한 번 더 확인해두면 좋습니다.`
-        : "공동지출로 따로 확인할 흐름이 없어 다음 단계로 넘어갈 수 있습니다.",
-      to: "/transactions?nature=shared",
-      actionLabel: "공동지출 점검하기",
-      completed: sharedExpenseCount === 0,
-    },
-    {
-      id: "internal-transfer",
-      title: "내부이체 흐름 확인",
-      description: internalTransferCount
-        ? `${internalTransferCount}건의 내부이체를 모아 보고 소비 통계에 과하게 잡히지 않는지 확인해보세요.`
-        : "내부이체로 따로 점검할 흐름이 없어 바로 진단 확인으로 넘어갈 수 있습니다.",
-      to: "/transactions?nature=internal_transfer",
-      actionLabel: "내부이체 점검하기",
-      completed: internalTransferCount === 0,
-    },
-    {
-      id: "dashboard",
-      title: "진단 확인",
-      description: health.postImportReady
-        ? "이번 달 소비 진단과 저축률 가이드를 확인할 준비가 되었습니다."
-        : "검토와 분류, 태그 정리를 먼저 끝내면 이번 달 진단을 더 정확히 볼 수 있습니다.",
-      to: "/",
-      actionLabel: "대시보드 보기",
-      completed: health.postImportReady,
-    },
-  ];
-  const {
-    completedCount: completedPostImportSteps,
-    progress: postImportProgress,
-    isReady: isPostImportReady,
-    nextStep: nextPostImportStep,
-  } = getJourneyProgress(postImportFlow);
-  const reviewTypeSummary = getOpenReviewTypeSummary(scope.reviews);
-  const previewReviewSummary = previewBundle ? getImportPreviewReviewSummary(previewBundle.reviews) : [];
-  const previewTransactionSummary = previewBundle
-    ? getImportPreviewTransactionSummary(previewBundle.transactions)
-    : null;
+
+  const applyPreviewPersonPatch = (
+    personId: string,
+    patch: Partial<WorkspaceBundle["people"][number]>,
+  ) => {
+    setPreviewBundle((current) =>
+      current
+        ? {
+            ...current,
+            people: current.people.map((person) => (person.id === personId ? { ...person, ...patch } : person)),
+          }
+        : current,
+    );
+  };
+
+  const applyPreviewAccountPatch = (
+    accountId: string,
+    patch: Partial<WorkspaceBundle["accounts"][number]>,
+  ) => {
+    setPreviewBundle((current) => {
+      if (!current) return current;
+      const nextAccounts = current.accounts.map((account) => (account.id === accountId ? { ...account, ...patch } : account));
+      const nextTransactions = current.transactions.map((transaction) => {
+        if (transaction.accountId !== accountId && transaction.fromAccountId !== accountId && transaction.toAccountId !== accountId) {
+          return transaction;
+        }
+
+        if (patch.ownerPersonId === undefined) return transaction;
+        return {
+          ...transaction,
+          ownerPersonId: transaction.sourceType === "account" ? patch.ownerPersonId : transaction.ownerPersonId,
+        };
+      });
+
+      return {
+        ...current,
+        accounts: nextAccounts,
+        transactions: nextTransactions,
+      };
+    });
+  };
+
+  const applyPreviewCardPatch = (
+    cardId: string,
+    patch: Partial<WorkspaceBundle["cards"][number]>,
+  ) => {
+    setPreviewBundle((current) => {
+      if (!current) return current;
+      const nextCards = current.cards.map((card) => (card.id === cardId ? { ...card, ...patch } : card));
+      const nextTransactions = current.transactions.map((transaction) => {
+        if (transaction.cardId !== cardId) return transaction;
+
+        return {
+          ...transaction,
+          ownerPersonId: patch.ownerPersonId ?? transaction.ownerPersonId,
+          accountId: patch.linkedAccountId ?? transaction.accountId,
+        };
+      });
+
+      return {
+        ...current,
+        cards: nextCards,
+        transactions: nextTransactions,
+      };
+    });
+  };
+
+  const previewPeopleMap = new Map(previewBundle?.people.map((person) => [person.id, person.displayName || person.name]) ?? []);
+  const previewAccountsMap = new Map(previewBundle?.accounts.map((account) => [account.id, account.alias || account.name]) ?? []);
+  const linkedCardCount = previewBundle?.cards.filter((card) => card.linkedAccountId).length ?? 0;
+  const ownedCardCount = previewBundle?.cards.filter((card) => card.ownerPersonId).length ?? 0;
+  const ownedAccountCount = previewBundle?.accounts.filter((account) => account.ownerPersonId || account.isShared).length ?? 0;
+  const previewExpenseAmount =
+    previewBundle?.transactions.filter((transaction) => transaction.isExpenseImpact).reduce((sum, transaction) => sum + transaction.amount, 0) ?? 0;
 
   return (
     <div className="page-stack">
@@ -116,18 +110,35 @@ export function ImportsPage() {
         <div className="section-head">
           <div>
             <span className="section-kicker">업로드 센터</span>
-            <h2 className="section-title">워크북 가져오기</h2>
+            <h2 className="section-title">업로드 전에 연결 정보 먼저 잡기</h2>
           </div>
         </div>
         <p className="text-secondary">
-          현재는 <strong>가계부 v2 워크북</strong> 업로드를 지원합니다. 현대카드, 우리카드, 삼성카드 명세서와 일반화된 규칙 기반
-          파서는 2차 작업으로 남겨두고 있습니다.
+          사람, 계좌, 카드 관리 화면에서 만든 구조를 기준으로 업로드 데이터를 정리하는 흐름입니다. 업로드 직후 바로 가져오지 않고, 누가
+          쓴 데이터인지와 어떤 카드 또는 계좌에 연결할지를 먼저 확인합니다.
         </p>
+        <div className="classification-flow-grid">
+          <article className="stat-card">
+            <span className="stat-label">현재 사람</span>
+            <strong>{scope.people.length}명</strong>
+            <div className="small text-secondary mt-2">활성 구성원을 먼저 정리해두면 업로드 미리보기에서도 소유자 기준을 맞추기 쉽습니다.</div>
+          </article>
+          <article className="stat-card">
+            <span className="stat-label">현재 계좌</span>
+            <strong>{scope.accounts.length}개</strong>
+            <div className="small text-secondary mt-2">카드 결제 계좌와 공동 계좌를 구분해두면 매핑 실수가 줄어듭니다.</div>
+          </article>
+          <article className="stat-card">
+            <span className="stat-label">현재 카드</span>
+            <strong>{scope.cards.length}개</strong>
+            <div className="small text-secondary mt-2">카드 이름과 카드사가 정리돼 있으면 업로드 후 검토량이 줄어듭니다.</div>
+          </article>
+        </div>
 
-        <label className="upload-dropzone">
+        <label className="upload-dropzone mt-4">
           <div>
-            <strong>엑셀 워크북 업로드</strong>
-            <p className="mb-0 text-secondary">파일을 바로 저장하지 않고, 먼저 미리보기로 거래와 검토 항목 규모를 보여드립니다.</p>
+            <strong>가계부 워크북 업로드</strong>
+            <p className="mb-0 text-secondary">파일을 바로 반영하지 않고, 먼저 사람·계좌·카드 매핑까지 점검할 수 있는 미리보기를 준비합니다.</p>
           </div>
           <input
             hidden
@@ -135,21 +146,21 @@ export function ImportsPage() {
             accept=".xlsx,.xls"
             onChange={async (event) => {
               const file = event.target.files?.[0];
-              if (file) {
-                setIsPreparingPreview(true);
-                try {
-                  const bundle = await previewWorkbookImport(file);
-                  setPreviewBundle(bundle);
-                  setPreviewFileName(file.name);
-                } finally {
-                  setIsPreparingPreview(false);
-                }
+              if (!file) return;
+
+              setIsPreparingPreview(true);
+              try {
+                const bundle = await previewWorkbookImport(file);
+                setPreviewBundle(bundle);
+                setPreviewFileName(file.name);
+              } finally {
+                setIsPreparingPreview(false);
+                event.currentTarget.value = "";
               }
-              event.currentTarget.value = "";
             }}
           />
         </label>
-        {isPreparingPreview ? <p className="small text-secondary mt-3 mb-0">엑셀 데이터를 분석해서 미리보기를 준비하고 있습니다.</p> : null}
+        {isPreparingPreview ? <p className="small text-secondary mt-3 mb-0">업로드 미리보기와 매핑 데이터를 준비하고 있습니다.</p> : null}
       </section>
 
       {previewBundle ? (
@@ -157,73 +168,235 @@ export function ImportsPage() {
           <div className="section-head">
             <div>
               <span className="section-kicker">업로드 미리보기</span>
-              <h2 className="section-title">저장 전에 가져올 내용을 확인하세요</h2>
+              <h2 className="section-title">{previewFileName} 연결 확인</h2>
             </div>
             <span className="badge text-bg-primary">{previewBundle.workspace.name}</span>
           </div>
           <p className="text-secondary">
-            <strong>{previewFileName}</strong> 파일을 새 워크스페이스로 가져올 준비가 되었습니다. 아래 요약을 보고 그대로 저장할지 먼저
-            판단할 수 있습니다.
+            아래에서 업로드 데이터의 사람, 계좌, 카드 연결을 먼저 맞춘 뒤 가져오세요. 여기서 정리된 연결 정보가 거래 소유자와 카드 결제
+            계좌에도 같이 반영됩니다.
           </p>
+
           <div className="classification-flow-grid">
             <article className="stat-card">
               <span className="stat-label">거래</span>
               <strong>{previewBundle.transactions.length}건</strong>
-              <div className="small text-secondary mt-2">카드, 이체, 내부이체 후보를 포함한 전체 거래 수입니다.</div>
+              <div className="small text-secondary mt-2">지출 합계 {formatCurrency(previewExpenseAmount)}</div>
             </article>
             <article className="stat-card">
-              <span className="stat-label">검토 항목</span>
-              <strong>{previewBundle.reviews.length}건</strong>
-              <div className="small text-secondary mt-2">중복, 환불, 내부이체, 공동지출, 미분류 후보가 함께 생성됩니다.</div>
+              <span className="stat-label">계좌 소유자</span>
+              <strong>{ownedAccountCount}/{previewBundle.accounts.length}</strong>
+              <div className="small text-secondary mt-2">공동 계좌 또는 개인 소유자까지 잡힌 계좌 수입니다.</div>
             </article>
             <article className="stat-card">
-              <span className="stat-label">구성 데이터</span>
-              <strong>
-                {previewBundle.people.length}명 · {previewBundle.accounts.length}계좌 · {previewBundle.cards.length}카드
-              </strong>
-              <div className="small text-secondary mt-2">업로드와 함께 사람, 계좌, 카드 정보도 워크스페이스에 정리됩니다.</div>
+              <span className="stat-label">카드 연결</span>
+              <strong>{linkedCardCount}/{previewBundle.cards.length}</strong>
+              <div className="small text-secondary mt-2">소유자 {ownedCardCount}개 · 결제 계좌 {linkedCardCount}개 연결</div>
             </article>
           </div>
-          <div className="resource-grid mt-4">
-            {previewReviewSummary.length ? (
-              previewReviewSummary.map(([reviewType, count]) => (
-                <article key={reviewType} className="resource-card">
-                  <h3>{REVIEW_TYPE_LABELS[reviewType as keyof typeof REVIEW_TYPE_LABELS] ?? reviewType}</h3>
-                  <p className="mb-0 text-secondary">{count}건</p>
-                </article>
-              ))
-            ) : (
-              <article className="resource-card">
-                <h3>검토 항목 없음</h3>
-                <p className="mb-0 text-secondary">이 파일은 즉시 분류 흐름으로 이어갈 수 있는 상태입니다.</p>
-              </article>
-            )}
-          </div>
-          {previewTransactionSummary ? (
-            <div className="resource-grid mt-4">
-              <article className="resource-card">
-                <h3>실지출로 반영될 거래</h3>
-                <p className="mb-0 text-secondary">
-                  {previewTransactionSummary.expenseCount}건 · {formatCurrency(previewTransactionSummary.expenseAmount)}
-                </p>
-              </article>
-              <article className="resource-card">
-                <h3>거래 유형 구성</h3>
-                <p className="mb-0 text-secondary">
-                  지출 {previewTransactionSummary.byType.expense}건 · 수입 {previewTransactionSummary.byType.income}건 · 이체{" "}
-                  {previewTransactionSummary.byType.transfer}건
-                </p>
-              </article>
-              <article className="resource-card">
-                <h3>내부이체 후보</h3>
-                <p className="mb-0 text-secondary">{previewTransactionSummary.internalTransferCount}건</p>
-              </article>
-              <article className="resource-card">
-                <h3>공동지출 후보</h3>
-                <p className="mb-0 text-secondary">{previewTransactionSummary.sharedExpenseCount}건</p>
-              </article>
+
+          <div className="section-head mt-4">
+            <div>
+              <span className="section-kicker">1단계</span>
+              <h3 className="section-title">사람 이름 정리</h3>
             </div>
-          ) : null}
+          </div>
+          <div className="resource-grid">
+            {previewBundle.people.map((person, index) => (
+              <article key={person.id} className="resource-card" style={getMotionStyle(index + 2)}>
+                <h3>{person.displayName || person.name}</h3>
+                <p className="mb-0 text-secondary">이 사람이 계좌/카드/거래의 소유자 기준으로 사용됩니다.</p>
+                <form
+                  className="profile-form w-100"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    const formData = new FormData(event.currentTarget);
+                    applyPreviewPersonPatch(person.id, {
+                      name: String(formData.get("name") ?? "").trim(),
+                      displayName: String(formData.get("displayName") ?? "").trim() || String(formData.get("name") ?? "").trim(),
+                      role: String(formData.get("role") ?? "member") === "owner" ? "owner" : "member",
+                    });
+                  }}
+                >
+                  <label>
+                    원본 이름
+                    <input name="name" className="form-control" defaultValue={person.name} />
+                  </label>
+                  <label>
+                    표시 이름
+                    <input name="displayName" className="form-control" defaultValue={person.displayName} />
+                  </label>
+                  <label style={{ gridColumn: "1 / -1" }}>
+                    역할
+                    <select name="role" className="form-select" defaultValue={person.role}>
+                      <option value="owner">기본 사용자</option>
+                      <option value="member">구성원</option>
+                    </select>
+                  </label>
+                  <div className="d-flex justify-content-end" style={{ gridColumn: "1 / -1" }}>
+                    <button className="btn btn-outline-primary btn-sm" type="submit">
+                      적용
+                    </button>
+                  </div>
+                </form>
+              </article>
+            ))}
+          </div>
+
+          <div className="section-head mt-4">
+            <div>
+              <span className="section-kicker">2단계</span>
+              <h3 className="section-title">계좌 소유자와 용도 매핑</h3>
+            </div>
+          </div>
+          <div className="resource-grid">
+            {previewBundle.accounts.map((account, index) => (
+              <article key={account.id} className="resource-card" style={getMotionStyle(index + 4)}>
+                <h3>{account.alias || account.name}</h3>
+                <p className="mb-0 text-secondary">{account.institutionName} · {ACCOUNT_USAGE_LABELS[account.usageType]}</p>
+                <form
+                  className="profile-form w-100"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    const formData = new FormData(event.currentTarget);
+                    applyPreviewAccountPatch(account.id, {
+                      name: String(formData.get("name") ?? "").trim(),
+                      alias: String(formData.get("alias") ?? "").trim(),
+                      ownerPersonId: String(formData.get("ownerPersonId") ?? "") || null,
+                      usageType: String(formData.get("usageType") ?? "daily") as
+                        | "daily"
+                        | "salary"
+                        | "shared"
+                        | "card_payment"
+                        | "savings"
+                        | "investment"
+                        | "loan"
+                        | "other",
+                      isShared: formData.get("isShared") === "on",
+                    });
+                  }}
+                >
+                  <label>
+                    계좌 이름
+                    <input name="name" className="form-control" defaultValue={account.name} />
+                  </label>
+                  <label>
+                    표시명
+                    <input name="alias" className="form-control" defaultValue={account.alias} />
+                  </label>
+                  <label>
+                    소유자
+                    <select name="ownerPersonId" className="form-select" defaultValue={account.ownerPersonId ?? ""}>
+                      <option value="">미지정</option>
+                      {previewBundle.people.map((person) => (
+                        <option key={person.id} value={person.id}>
+                          {person.displayName || person.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    용도
+                    <select name="usageType" className="form-select" defaultValue={account.usageType}>
+                      {Object.entries(ACCOUNT_USAGE_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="compact-check" style={{ gridColumn: "1 / -1" }}>
+                    <span className="fw-semibold">공동 자금 계좌</span>
+                    <input name="isShared" type="checkbox" className="form-check-input mt-0" defaultChecked={account.isShared} />
+                  </label>
+                  <div className="d-flex justify-content-end" style={{ gridColumn: "1 / -1" }}>
+                    <button className="btn btn-outline-primary btn-sm" type="submit">
+                      적용
+                    </button>
+                  </div>
+                </form>
+              </article>
+            ))}
+          </div>
+
+          <div className="section-head mt-4">
+            <div>
+              <span className="section-kicker">3단계</span>
+              <h3 className="section-title">카드 소유자와 결제 계좌 매핑</h3>
+            </div>
+          </div>
+          <div className="resource-grid">
+            {previewBundle.cards.map((card, index) => (
+              <article key={card.id} className="resource-card" style={getMotionStyle(index + 6)}>
+                <h3>{card.name}</h3>
+                <p className="mb-0 text-secondary">
+                  {card.issuerName} · 소유자 {previewPeopleMap.get(card.ownerPersonId ?? "") ?? "미지정"} · 결제{" "}
+                  {previewAccountsMap.get(card.linkedAccountId ?? "") ?? "미연결"}
+                </p>
+                <form
+                  className="profile-form w-100"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    const formData = new FormData(event.currentTarget);
+                    applyPreviewCardPatch(card.id, {
+                      name: String(formData.get("name") ?? "").trim(),
+                      issuerName: String(formData.get("issuerName") ?? "").trim(),
+                      ownerPersonId: String(formData.get("ownerPersonId") ?? "") || null,
+                      linkedAccountId: String(formData.get("linkedAccountId") ?? "") || null,
+                      cardType: String(formData.get("cardType") ?? "credit") as "credit" | "check" | "debit" | "prepaid" | "other",
+                    });
+                  }}
+                >
+                  <label>
+                    카드 이름
+                    <input name="name" className="form-control" defaultValue={card.name} />
+                  </label>
+                  <label>
+                    카드사
+                    <input name="issuerName" className="form-control" defaultValue={card.issuerName} />
+                  </label>
+                  <label>
+                    소유자
+                    <select name="ownerPersonId" className="form-select" defaultValue={card.ownerPersonId ?? ""}>
+                      <option value="">미지정</option>
+                      {previewBundle.people.map((person) => (
+                        <option key={person.id} value={person.id}>
+                          {person.displayName || person.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    결제 계좌
+                    <select name="linkedAccountId" className="form-select" defaultValue={card.linkedAccountId ?? ""}>
+                      <option value="">연결 안 함</option>
+                      {previewBundle.accounts.map((account) => (
+                        <option key={account.id} value={account.id}>
+                          {account.alias || account.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label style={{ gridColumn: "1 / -1" }}>
+                    카드 종류
+                    <select name="cardType" className="form-select" defaultValue={card.cardType}>
+                      <option value="credit">신용카드</option>
+                      <option value="check">체크카드</option>
+                      <option value="debit">직불카드</option>
+                      <option value="prepaid">선불카드</option>
+                      <option value="other">기타</option>
+                    </select>
+                  </label>
+                  <div className="d-flex justify-content-end" style={{ gridColumn: "1 / -1" }}>
+                    <button className="btn btn-outline-primary btn-sm" type="submit">
+                      적용
+                    </button>
+                  </div>
+                </form>
+              </article>
+            ))}
+          </div>
+
           <div className="d-flex flex-wrap gap-2 mt-4">
             <button
               className="btn btn-primary"
@@ -235,7 +408,7 @@ export function ImportsPage() {
                 void navigate("/transactions");
               }}
             >
-              이 미리보기로 가져오기
+              매핑 확인 후 가져오기
             </button>
             <button
               className="btn btn-outline-secondary"
@@ -245,7 +418,7 @@ export function ImportsPage() {
                 setPreviewFileName("");
               }}
             >
-              다시 선택하기
+              미리보기 닫기
             </button>
           </div>
         </section>
@@ -254,196 +427,42 @@ export function ImportsPage() {
       <section className="card shadow-sm" style={getMotionStyle(previewBundle ? 2 : 1)}>
         <div className="section-head">
           <div>
-            <span className="section-kicker">업로드 결과 보기</span>
-            <h2 className="section-title">방금 가져온 데이터에서 볼 것</h2>
-          </div>
-          <span className="badge text-bg-dark">{Math.round(postImportProgress * 100)}%</span>
-        </div>
-        <div className="guide-progress">
-          <div className="guide-progress-bar" aria-hidden="true">
-            <div className="guide-progress-fill" style={{ width: `${postImportProgress * 100}%` }} />
-          </div>
-          <div className="small text-secondary mt-3">
-            업로드 이후 흐름 {postImportFlow.length}단계 중 {completedPostImportSteps}단계가 정리됐습니다.
-          </div>
-        </div>
-        {nextPostImportStep ? (
-          <NextStepCallout className="mt-4" description={nextPostImportStep.description} actionLabel={nextPostImportStep.actionLabel} to={nextPostImportStep.to} />
-        ) : null}
-        <div className="flow-journey-grid mb-4">
-          {postImportFlow.map((step, index) => (
-            <article key={step.id} className={`flow-journey-card${step.completed ? " completed" : ""}`} style={getMotionStyle(index + 1)}>
-              <span className="flow-journey-step">0{index + 1}</span>
-              <h3>{step.title}</h3>
-              <p className="mb-0 text-secondary">{step.description}</p>
-              <Link to={step.to} className={`btn btn-sm mt-3 ${step.completed ? "btn-outline-success" : "btn-outline-primary"}`}>
-                {step.actionLabel}
-              </Link>
-            </article>
-          ))}
-        </div>
-        {isPostImportReady ? (
-          <CompletionBanner
-            className="mb-4"
-            title="업로드 이후 정리를 마쳤습니다."
-            description="검토와 분류, 태그 정리까지 끝나서 이제 대시보드와 정산 화면에서 이번 달 흐름을 비교적 안정적으로 볼 수 있습니다."
-            actions={
-              <>
-                <Link to="/" className="btn btn-primary btn-sm">
-                  대시보드 보기
-                </Link>
-                <Link to="/settlements" className="btn btn-outline-secondary btn-sm">
-                  정산 화면 보기
-                </Link>
-              </>
-            }
-          />
-        ) : null}
-        <div className="classification-flow-grid">
-          <article className="stat-card">
-            <span className="stat-label">열린 검토</span>
-            <strong>{openReviewCount}건</strong>
-            <div className="small text-secondary mt-2">중복, 환불, 내부이체 후보부터 정리하면 통계가 훨씬 정확해집니다.</div>
-            <Link to="/reviews" className="btn btn-outline-secondary btn-sm mt-3">
-              검토함 열기
-            </Link>
-          </article>
-          <article className="stat-card">
-            <span className="stat-label">무태그 거래</span>
-            <strong>{untaggedCount}건</strong>
-            <div className="small text-secondary mt-2">태그가 비어 있는 소비만 바로 모아두고 거래 정리 모드에서 같은 맥락의 지출을 빠르게 묶을 수 있습니다.</div>
-            <Link to="/transactions?cleanup=untagged" className="btn btn-outline-secondary btn-sm mt-3">
-              무태그 정리 바로가기
-            </Link>
-          </article>
-          <article className="stat-card">
-            <span className="stat-label">공동지출 흐름</span>
-            <strong>{sharedExpenseCount}건</strong>
-            <div className="small text-secondary mt-2">정산으로 이어지는 공동지출만 모아서, 부담 분배와 연결이 자연스러운지 한 번 더 확인할 수 있습니다.</div>
-            <Link to="/transactions?nature=shared" className="btn btn-outline-secondary btn-sm mt-3">
-              공동지출 점검하기
-            </Link>
-          </article>
-          <article className="stat-card">
-            <span className="stat-label">내부이체 흐름</span>
-            <strong>{internalTransferCount}건</strong>
-            <div className="small text-secondary mt-2">내 계좌 간 이동이나 생활비 이체가 소비로 과하게 잡히지 않는지 거래 흐름으로 점검해보세요.</div>
-            <Link to="/transactions?nature=internal_transfer" className="btn btn-outline-secondary btn-sm mt-3">
-              내부이체 점검하기
-            </Link>
-          </article>
-          <article className="stat-card">
-            <span className="stat-label">미분류 거래</span>
-            <strong>{uncategorizedCount}건</strong>
-            <div className="small text-secondary mt-2">반복 지출 제안과 함께 미분류 거래를 분류해야 대시보드 해석이 살아납니다.</div>
-            <Link to="/transactions?cleanup=uncategorized" className="btn btn-outline-primary btn-sm mt-3">
-              분류 화면 열기
-            </Link>
-          </article>
-          <article className="stat-card">
-            <span className="stat-label">최종 확인</span>
-            <strong>대시보드</strong>
-            <div className="small text-secondary mt-2">검토와 분류가 끝나면 이번 달 소비 진단과 저축률 가이드를 확인해보세요.</div>
-            <Link to="/" className="btn btn-primary btn-sm mt-3">
-              대시보드 보기
-            </Link>
-          </article>
-        </div>
-        <SourceBreakdownSection
-          items={sourceBreakdown}
-          kicker="수단 기준 흐름"
-          emptyMessage="아직 수단 기준으로 볼 거래 데이터가 충분하지 않습니다."
-          buttonVariant="secondary"
-          motionStartIndex={6}
-        />
-      </section>
-
-      <section className="card shadow-sm" style={getMotionStyle(previewBundle ? 3 : 2)}>
-        <div className="section-head">
-          <div>
-            <span className="section-kicker">검토 유형 요약</span>
-            <h2 className="section-title">무슨 종류의 확인이 필요한지</h2>
-          </div>
-        </div>
-        {!reviewTypeSummary.length ? (
-          <EmptyStateCallout
-            kicker="검토 없음"
-            title="지금 열려 있는 검토 항목이 없습니다"
-            description="업로드 후 자동 검토 후보가 없거나 이미 모두 정리된 상태입니다."
-          />
-        ) : (
-          <div className="resource-grid">
-            {reviewTypeSummary.map(([reviewType, count], index) => (
-                <article key={reviewType} className="resource-card" style={getMotionStyle(index + 3)}>
-                <h3>{REVIEW_TYPE_LABELS[reviewType as keyof typeof REVIEW_TYPE_LABELS] ?? reviewType}</h3>
-                <p className="mb-0 text-secondary">{count}건</p>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="card shadow-sm" style={getMotionStyle(previewBundle ? 4 : 3)}>
-        <div className="section-head">
-          <div>
             <span className="section-kicker">최근 업로드</span>
-            <h2 className="section-title">가장 최근 가져온 파일</h2>
-          </div>
-        </div>
-        {!latestImport ? (
-          <EmptyStateCallout
-            kicker="첫 데이터 입력"
-            title="아직 업로드 이력이 없습니다"
-            description="가계부 v2 엑셀 파일을 올리면 새 워크스페이스가 생성되고, 이후 분류와 통계까지 이어서 처리할 수 있습니다."
-          />
-        ) : (
-          <div className="resource-grid">
-            <article className="resource-card">
-              <h3>{latestImport.fileName}</h3>
-              <p className="mb-1 text-secondary">{latestImport.importedAt.slice(0, 19).replace("T", " ")}</p>
-              <p className="mb-0 text-secondary">총 {latestImport.rowCount}개 거래 · 검토 {latestImport.reviewCount}건</p>
-            </article>
-            <article className="resource-card">
-              <h3>{latestImport.parserId}</h3>
-              <p className="mb-1 text-secondary">현재 적용된 파서</p>
-              <p className="mb-0 text-secondary">업로드 후에는 검토함과 분류 화면으로 바로 이어지는 흐름을 권장합니다.</p>
-            </article>
-          </div>
-        )}
-      </section>
-
-      <section className="card shadow-sm" style={getMotionStyle(previewBundle ? 5 : 4)}>
-        <div className="section-head">
-          <div>
-            <span className="section-kicker">업로드 이력</span>
             <h2 className="section-title">가져온 파일 기록</h2>
           </div>
-          <span className="badge text-bg-dark">{imports.length}건</span>
+          <span className="badge text-bg-dark">{scope.imports.length}건</span>
         </div>
-        {!imports.length ? (
+        {!scope.imports.length ? (
           <EmptyStateCallout
             kicker="이력 없음"
-            title="업로드한 파일이 아직 없습니다"
-            description="가계부 v2 엑셀을 올리면 이곳에서 어떤 파일을 언제 불러왔는지 계속 확인할 수 있습니다."
+            title="아직 업로드한 파일이 없습니다"
+            description="워크북을 업로드하면 이 화면에서 어떤 파일을 언제 가져왔는지 계속 확인할 수 있습니다."
+            actions={
+              <Link to="/people" className="btn btn-outline-secondary btn-sm">
+                사람 관리 먼저 보기
+              </Link>
+            }
           />
         ) : (
           <div className="review-list">
-            {imports.map((item, index) => (
-              <article key={item.id} className="review-card" style={getMotionStyle(index + 5)}>
-                <div className="d-flex justify-content-between align-items-start gap-3">
-                  <div>
-                    <span className="review-type">{item.parserId}</span>
-                    <h3>{item.fileName}</h3>
-                    <p className="mb-2 text-secondary">
-                      {item.importedAt.slice(0, 19).replace("T", " ")} · 총 {item.rowCount}개 거래 · 검토 {item.reviewCount}건
-                    </p>
+            {[...scope.imports]
+              .sort((a, b) => b.importedAt.localeCompare(a.importedAt))
+              .map((item, index) => (
+                <article key={item.id} className="review-card" style={getMotionStyle(index + 10)}>
+                  <div className="d-flex justify-content-between align-items-start gap-3">
+                    <div>
+                      <span className="review-type">{item.parserId}</span>
+                      <h3>{item.fileName}</h3>
+                      <p className="mb-0 text-secondary">
+                        {item.importedAt.slice(0, 19).replace("T", " ")} · 거래 {item.rowCount}건 · 검토 {item.reviewCount}건
+                      </p>
+                    </div>
+                    <Link to="/transactions" className="btn btn-sm btn-outline-primary">
+                      거래 보기
+                    </Link>
                   </div>
-                  <Link to="/categories" className="btn btn-sm btn-outline-primary">
-                    분류 이어서 하기
-                  </Link>
-                </div>
-              </article>
-            ))}
+                </article>
+              ))}
           </div>
         )}
       </section>
