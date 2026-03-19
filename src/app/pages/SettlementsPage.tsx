@@ -22,6 +22,14 @@ export function SettlementsPage() {
   const peopleMap = new Map(scope.people.map((person) => [person.id, person.displayName || person.name]));
   const accountMap = new Map(scope.accounts.map((account) => [account.id, account.alias || account.name]));
   const cardMap = new Map(scope.cards.map((card) => [card.id, card.name]));
+  const getTransactionListLink = (params: { nature?: "shared" | "internal_transfer"; sourceType?: "card" | "account"; ownerPersonId?: string | null }) => {
+    const searchParams = new URLSearchParams();
+    if (params.nature) searchParams.set("nature", params.nature);
+    if (params.sourceType) searchParams.set("sourceType", params.sourceType);
+    if (params.ownerPersonId) searchParams.set("ownerPersonId", params.ownerPersonId);
+    const query = searchParams.toString();
+    return query ? `/transactions?${query}` : "/transactions";
+  };
   const getTransactionConnectionSummary = (transaction: { ownerPersonId: string | null; accountId: string | null; cardId: string | null }) =>
     [
       `사용자 ${(transaction.ownerPersonId ? peopleMap.get(transaction.ownerPersonId) : null) ?? "공동"}`,
@@ -318,18 +326,18 @@ export function SettlementsPage() {
                       <div className="review-card-side">
                         <strong>{formatCurrency(transaction.amount)}</strong>
                         {transaction.cardId ? (
-                          <Link to={`/transactions?sourceType=card&ownerPersonId=${transaction.ownerPersonId ?? ""}`} className="btn btn-outline-secondary btn-sm">
+                          <Link to={getTransactionListLink({ sourceType: "card", ownerPersonId: transaction.ownerPersonId })} className="btn btn-outline-secondary btn-sm">
                             카드 거래 보기
                           </Link>
                         ) : null}
                         {transaction.accountId ? (
-                          <Link to={`/transactions?sourceType=account&ownerPersonId=${transaction.ownerPersonId ?? ""}`} className="btn btn-outline-secondary btn-sm">
+                          <Link to={getTransactionListLink({ sourceType: "account", ownerPersonId: transaction.ownerPersonId })} className="btn btn-outline-secondary btn-sm">
                             계좌 거래 보기
                           </Link>
                         ) : null}
                         {transaction.ownerPersonId ? (
                           <Link
-                            to={`/transactions?nature=shared&ownerPersonId=${transaction.ownerPersonId}`}
+                            to={getTransactionListLink({ nature: "shared", ownerPersonId: transaction.ownerPersonId })}
                             className="btn btn-outline-secondary btn-sm"
                           >
                             이 사람 거래 보기
@@ -361,7 +369,7 @@ export function SettlementsPage() {
                         </span>
                         {row.personId !== "shared" ? (
                           <Link
-                            to={`/transactions?nature=shared&ownerPersonId=${row.personId}`}
+                            to={getTransactionListLink({ nature: "shared", ownerPersonId: row.personId })}
                             className="btn btn-outline-secondary btn-sm"
                           >
                             이 사람 공동지출 보기
