@@ -268,12 +268,19 @@ export function SettlementsPage() {
             }
             actions={
               <>
-              <Link to={appendCurrentTransactionFilters("/transactions?nature=shared")} className="btn btn-outline-primary btn-sm">
+                {hasScopedSettlementContext ? (
+                  <Link to="/settlements" className="btn btn-outline-secondary btn-sm">
+                    전체 정산으로 돌아가기
+                  </Link>
+                ) : null}
+                <Link to={appendCurrentTransactionFilters("/transactions?nature=shared")} className="btn btn-outline-primary btn-sm">
                   {hasScopedSettlementContext ? "현재 맥락 공동지출 보기" : "공동지출 거래 보기"}
                 </Link>
-                <Link to="/" className="btn btn-outline-secondary btn-sm">
-                  대시보드 보기
-                </Link>
+                {!hasScopedSettlementContext ? (
+                  <Link to="/" className="btn btn-outline-secondary btn-sm">
+                    대시보드 보기
+                  </Link>
+                ) : null}
               </>
             }
           />
@@ -326,15 +333,22 @@ export function SettlementsPage() {
                 <Link to={appendCurrentTransactionFilters("/transactions")} className="btn btn-outline-primary btn-sm">
                   {hasScopedSettlementContext ? "현재 맥락 거래 보기" : "거래 화면 보기"}
                 </Link>
+                {hasScopedSettlementContext ? (
+                  <Link to="/settlements" className="btn btn-outline-secondary btn-sm">
+                    전체 정산으로 돌아가기
+                  </Link>
+                ) : null}
                 <Link to="/people" className="btn btn-outline-secondary btn-sm">
                   사람 관리 보기
                 </Link>
                 <Link to="/imports" className="btn btn-outline-secondary btn-sm">
                   업로드 화면 보기
                 </Link>
-                <Link to="/" className="btn btn-outline-secondary btn-sm">
-                  대시보드 보기
-                </Link>
+                {!hasScopedSettlementContext ? (
+                  <Link to="/" className="btn btn-outline-secondary btn-sm">
+                    대시보드 보기
+                  </Link>
+                ) : null}
               </div>
             </div>
             <EmptyStateCallout
@@ -478,7 +492,7 @@ export function SettlementsPage() {
                   actions={
                     <>
                       <Link className="btn btn-outline-primary btn-sm" to="/settlements">
-                        ?꾩껜 ?뺤궛 蹂닿린
+                        전체 정산으로 돌아가기
                       </Link>
                       <Link className="btn btn-outline-secondary btn-sm" to={appendCurrentTransactionFilters("/transactions?nature=shared")}>
                         {hasScopedSettlementContext ? "현재 맥락 공동지출 보기" : "공동지출 거래 보기"}
@@ -540,9 +554,16 @@ export function SettlementsPage() {
                   : "추천 정산이 맞다면 완료로 기록해서 이번 달 정산 내역을 남겨보세요."
               }
               actions={
-                <Link to={appendCurrentTransactionFilters("/transactions?nature=shared")} className="btn btn-outline-primary btn-sm">
-                  {hasScopedSettlementContext ? "현재 맥락 공동지출 보기" : "공동지출 거래 보기"}
-                </Link>
+                <>
+                  {hasScopedSettlementContext ? (
+                    <Link to="/settlements" className="btn btn-outline-secondary btn-sm">
+                      전체 정산으로 돌아가기
+                    </Link>
+                  ) : null}
+                  <Link to={appendCurrentTransactionFilters("/transactions?nature=shared")} className="btn btn-outline-primary btn-sm">
+                    {hasScopedSettlementContext ? "현재 맥락 공동지출 보기" : "공동지출 거래 보기"}
+                  </Link>
+                </>
               }
             />
           ) : (
