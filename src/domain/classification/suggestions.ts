@@ -18,6 +18,7 @@ export interface CategoryCleanupSummary {
   recurringSuggestionTransactionCount: number;
   uncategorizedTransactions: Transaction[];
   uncategorizedCount: number;
+  categorizedCount: number;
   remainingWorkCount: number;
   isCategoryCleanupComplete: boolean;
 }
@@ -118,6 +119,7 @@ export function getCategoryCleanupSummary(transactions: Transaction[], categorie
     0,
   );
   const uncategorizedCount = uncategorizedTransactions.length;
+  const categorizedCount = transactions.filter(isActiveExpenseTransaction).length - uncategorizedCount;
 
   return {
     recurringSuggestions,
@@ -125,6 +127,7 @@ export function getCategoryCleanupSummary(transactions: Transaction[], categorie
     recurringSuggestionTransactionCount,
     uncategorizedTransactions,
     uncategorizedCount,
+    categorizedCount,
     remainingWorkCount: recurringSuggestionTransactionCount + uncategorizedCount,
     isCategoryCleanupComplete: recurringSuggestions.length === 0 && uncategorizedCount === 0,
   };

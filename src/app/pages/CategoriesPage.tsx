@@ -27,13 +27,13 @@ export function CategoriesPage() {
   const {
     recurringSuggestions,
     uncategorizedTransactions,
+    categorizedCount,
     remainingWorkCount,
     isCategoryCleanupComplete,
   } = getCategoryCleanupSummary(scope.transactions, scope.categories);
   const expenseStats = getExpenseImpactStats(scope.transactions);
   const expenseTransactions = expenseStats.activeExpenseTransactions;
   const untaggedExpenseCount = expenseStats.untaggedCount;
-  const categorizedCount = expenseTransactions.filter((item) => item.categoryId).length;
   const classificationProgress = expenseTransactions.length ? categorizedCount / expenseTransactions.length : 0;
   const categoryUsage = new Map<string, { count: number; amount: number }>();
   for (const transaction of expenseTransactions) {
