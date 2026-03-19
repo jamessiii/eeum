@@ -119,9 +119,12 @@ function getFixedTone(profile: FinancialProfile | null, fixedExpenseRate: number
   return "stable";
 }
 
-function buildCoaching(context: WorkspaceContext, metrics: InsightMetrics): string {
+function buildCoaching(
+  context: WorkspaceContext,
+  metrics: InsightMetrics,
+  sourceBreakdown: WorkspaceInsights["sourceBreakdown"],
+): string {
   const profile = context.financialProfile;
-  const sourceBreakdown = getSourceBreakdown(context.transactions);
   const topSource = sourceBreakdown[0] ?? null;
   if (!profile) {
     return "월 순수입이 아직 설정되지 않았습니다. 설정 화면에서 재무 기준선을 먼저 입력해주세요.";
@@ -150,9 +153,12 @@ function buildCoaching(context: WorkspaceContext, metrics: InsightMetrics): stri
   return "현재 소비 구조는 비교적 안정적입니다. 검토함과 카테고리 분류를 계속 정리하면 진단 정확도가 더 올라갑니다.";
 }
 
-function buildNextSteps(context: WorkspaceContext, metrics: InsightMetrics): string[] {
+function buildNextSteps(
+  context: WorkspaceContext,
+  metrics: InsightMetrics,
+  sourceBreakdown: WorkspaceInsights["sourceBreakdown"],
+): string[] {
   const nextSteps: string[] = [];
-  const sourceBreakdown = getSourceBreakdown(context.transactions);
   const topSource = sourceBreakdown[0] ?? null;
 
   if (context.peopleCount === 0) nextSteps.push("사람을 추가해서 개인지출과 공동지출을 나눠보세요.");
@@ -321,8 +327,8 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
     sourceBreakdown,
     dominantSource,
     headlineCards: buildHeadlineCards(topCategories, sourceBreakdown, metrics),
-    nextSteps: buildNextSteps(context, metrics),
-    coaching: buildCoaching(context, metrics),
+    nextSteps: buildNextSteps(context, metrics, sourceBreakdown),
+    coaching: buildCoaching(context, metrics, sourceBreakdown),
     spendTone: getSpendTone(financialProfile, spendRate),
     savingsTone: getSavingsTone(financialProfile, savingsRate),
     fixedTone: getFixedTone(financialProfile, fixedExpenseRate),
