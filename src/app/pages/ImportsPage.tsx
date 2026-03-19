@@ -433,10 +433,18 @@ export function ImportsPage() {
               className="btn btn-primary"
               type="button"
               onClick={() => {
+                const nextPath =
+                  previewBundle.reviews.length > 0
+                    ? "/reviews"
+                    : previewBundle.transactions.some((transaction) => transaction.isExpenseImpact && !transaction.categoryId)
+                      ? "/transactions?cleanup=uncategorized"
+                      : previewBundle.transactions.some((transaction) => transaction.isExpenseImpact && transaction.tagIds.length === 0)
+                        ? "/transactions?cleanup=untagged"
+                        : "/transactions";
                 commitImportedBundle(previewBundle, previewFileName);
                 setPreviewBundle(null);
                 setPreviewFileName("");
-                void navigate("/transactions");
+                void navigate(nextPath);
               }}
             >
               매핑 확인 후 가져오기

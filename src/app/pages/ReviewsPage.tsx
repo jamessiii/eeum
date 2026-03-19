@@ -22,6 +22,9 @@ export function ReviewsPage() {
   const scope = getWorkspaceScope(state, workspaceId);
   const health = getWorkspaceHealthSummary(scope);
   const transactions = new Map(scope.transactions.map((item) => [item.id, item]));
+  const peopleMap = new Map(scope.people.map((person) => [person.id, person.displayName || person.name]));
+  const accountMap = new Map(scope.accounts.map((account) => [account.id, account.alias || account.name]));
+  const cardMap = new Map(scope.cards.map((card) => [card.id, card.name]));
   const tags = new Map(scope.tags.map((item) => [item.id, item]));
   const {
     openReviews: reviews,
@@ -77,6 +80,32 @@ export function ReviewsPage() {
               actionLabel: `내부이체 ${openInternalTransferReviewCount}건 점검`,
             }
       : null;
+
+  const getReviewTransactionLink = (reviewType: ReviewType) => {
+    switch (reviewType) {
+      case "uncategorized_transaction":
+        return "/transactions?cleanup=uncategorized";
+      case "shared_expense_candidate":
+        return "/transactions?nature=shared";
+      case "internal_transfer_candidate":
+        return "/transactions?nature=internal_transfer";
+      default:
+        return "/transactions";
+    }
+  };
+
+  const getReviewTransactionLinkLabel = (reviewType: ReviewType) => {
+    switch (reviewType) {
+      case "uncategorized_transaction":
+        return "미분류 거래 보기";
+      case "shared_expense_candidate":
+        return "공동지출 흐름 보기";
+      case "internal_transfer_candidate":
+        return "내부이체 흐름 보기";
+      default:
+        return "거래 화면 보기";
+    }
+  };
 
   return (
     <section className="card shadow-sm">
@@ -204,6 +233,29 @@ export function ReviewsPage() {
         />
       ) : null}
 
+      {openReviewCount ? (
+        <div className="review-summary-panel mt-3">
+          <div className="review-summary-copy">
+            <strong>업로드 다음 순서</strong>
+            <p className="mb-0 text-secondary">
+              검토 항목을 먼저 정리한 뒤 미분류와 무태그 거래를 마무리하면, 대시보드와 정산 화면에서 이번 달 흐름을 훨씬 안정적으로 볼 수
+              있습니다.
+            </p>
+          </div>
+          <div className="d-flex flex-wrap gap-2">
+            <Link className="btn btn-outline-primary btn-sm" to="/transactions?cleanup=uncategorized">
+              미분류 정리
+            </Link>
+            <Link className="btn btn-outline-secondary btn-sm" to="/transactions?cleanup=untagged">
+              태그 정리
+            </Link>
+            <Link className="btn btn-outline-dark btn-sm" to="/settlements">
+              정산 화면 보기
+            </Link>
+          </div>
+        </div>
+      ) : null}
+
       <div className="review-summary-panel mt-3">
         <div className="review-summary-copy">
           <strong>{openReviewCount ? "검토 후 바로 이어서 할 일" : "검토는 끝났고 다음 단계만 남았습니다"}</strong>
@@ -299,9 +351,16 @@ export function ReviewsPage() {
                     <span className="review-type">{REVIEW_TYPE_LABELS[review.reviewType] ?? review.reviewType}</span>
                     <h3>{review.summary}</h3>
                     {primaryTransaction ? (
-                      <p className="mb-2 text-secondary">
+                      <p className="mb-1 text-secondary">
                         기준 거래: {primaryTransaction.occurredAt.slice(0, 10)} · {primaryTransaction.merchantName} ·{" "}
                         {primaryTransaction.amount.toLocaleString("ko-KR")}원
+                      </p>
+                    ) : null}
+                    {primaryTransaction ? (
+                      <p className="mb-2 text-secondary">
+                        {primaryTransaction.ownerPersonId ? `사용자 ${peopleMap.get(primaryTransaction.ownerPersonId) ?? "-"}` : "사용자 미지정"} ·{" "}
+                        {primaryTransaction.accountId ? `계좌 ${accountMap.get(primaryTransaction.accountId) ?? "-"}` : "계좌 미연결"} ·{" "}
+                        {primaryTransaction.cardId ? `카드 ${cardMap.get(primaryTransaction.cardId) ?? "-"}` : "카드 미연결"}
                       </p>
                     ) : null}
                     {relatedTransactions.length ? (
@@ -340,6 +399,9 @@ export function ReviewsPage() {
                   >
                     {REVIEW_ACTION_LABELS[review.reviewType] ?? "적용"}
                   </button>
+                  <Link className="btn btn-sm btn-outline-primary" to={getReviewTransactionLink(review.reviewType)}>
+                    {getReviewTransactionLinkLabel(review.reviewType)}
+                  </Link>
                   <button className="btn btn-sm btn-outline-secondary" onClick={() => dismissReview(review.id)}>
                     나중에 보기
                   </button>

@@ -604,6 +604,11 @@ a {
   gap: 0.35rem;
 }
 
+.review-summary-panel .btn,
+.review-card .btn {
+  white-space: nowrap;
+}
+
 .review-filter-bar {
   display: flex;
   gap: 0.65rem;
@@ -869,6 +874,11 @@ a {
   .section-head {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .review-summary-panel .btn,
+  .review-card .btn {
+    white-space: normal;
   }
 
   .resource-card {
