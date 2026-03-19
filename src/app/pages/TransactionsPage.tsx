@@ -200,28 +200,23 @@ export function TransactionsPage() {
     const nature = searchParams.get("nature");
     const ownerPersonId = searchParams.get("ownerPersonId");
     const sourceType = searchParams.get("sourceType");
-    if (cleanup === "uncategorized" || cleanup === "untagged") {
-      setFilters((current) => ({ ...current, nature: cleanup }));
-      setSearchParams({}, { replace: true });
-      return;
-    }
-    if (nature === "shared" || nature === "internal_transfer") {
+
+    const matchedNature =
+      cleanup === "uncategorized" || cleanup === "untagged"
+        ? cleanup
+        : nature === "shared" || nature === "internal_transfer"
+          ? nature
+          : null;
+    const matchedOwnerPersonId = ownerPersonId && people.some((person) => person.id === ownerPersonId) ? ownerPersonId : null;
+    const matchedSourceType = SOURCE_TYPE_OPTIONS.find((item) => item === sourceType);
+
+    if (matchedNature || matchedOwnerPersonId || matchedSourceType) {
       setFilters((current) => ({
         ...current,
-        nature,
-        ownerPersonId: ownerPersonId && people.some((person) => person.id === ownerPersonId) ? ownerPersonId : current.ownerPersonId,
+        nature: matchedNature ?? current.nature,
+        ownerPersonId: matchedOwnerPersonId ?? current.ownerPersonId,
+        sourceType: matchedSourceType ?? current.sourceType,
       }));
-      setSearchParams({}, { replace: true });
-      return;
-    }
-    if (ownerPersonId && people.some((person) => person.id === ownerPersonId)) {
-      setFilters((current) => ({ ...current, ownerPersonId }));
-      setSearchParams({}, { replace: true });
-      return;
-    }
-    const matchedSourceType = SOURCE_TYPE_OPTIONS.find((item) => item === sourceType);
-    if (matchedSourceType) {
-      setFilters((current) => ({ ...current, sourceType: matchedSourceType }));
       setSearchParams({}, { replace: true });
     }
   }, [people, searchParams, setSearchParams]);
