@@ -1,7 +1,9 @@
 import { getRecurringMerchantSuggestions } from "../classification/suggestions";
 import type { AppState } from "../../shared/types/models";
 import { getWorkspaceScope } from "../../app/state/selectors";
-import { getSourceTypeLabel, SOURCE_TYPE_OPTIONS } from "../transactions/sourceTypes";
+import { getJourneyProgress } from "../journey/progress";
+import { getSourceBreakdown } from "../transactions/sourceBreakdown";
+import { getSourceTypeLabel } from "../transactions/sourceTypes";
 import { getWorkspaceHealthSummary } from "../workspace/health";
 
 export interface GuideStep {
@@ -27,12 +29,7 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
   const monthlyIncome = scope.financialProfile?.monthlyNetIncome ?? 0;
   const hasImportedData = scope.imports.length > 0;
   const hasTransactions = scope.transactions.length > 0;
-  const sourceBreakdown = SOURCE_TYPE_OPTIONS
-    .map((sourceType) => ({
-      sourceType,
-      count: scope.transactions.filter((transaction) => transaction.sourceType === sourceType).length,
-    }))
-    .sort((a, b) => b.count - a.count);
+  const sourceBreakdown = getSourceBreakdown(scope.transactions).sort((a, b) => b.count - a.count);
   const dominantSource = sourceBreakdown[0] ?? null;
   const dominantSourceShare = dominantSource ? dominantSource.count / Math.max(1, scope.transactions.length) : 0;
   const dominantSourceLabel = dominantSource ? getSourceTypeLabel(dominantSource.sourceType) : null;
@@ -146,11 +143,11 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
     },
   ];
 
-  const completedCount = steps.filter((step) => step.completed).length;
+  const progressSummary = getJourneyProgress(steps);
 
   return {
-    progress: steps.length ? completedCount / steps.length : 0,
-    currentStep: steps.find((step) => !step.completed) ?? null,
+    progress: progressSummary.progress,
+    currentStep: progressSummary.nextStep,
     steps,
   };
 }
