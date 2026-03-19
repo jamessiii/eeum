@@ -1,4 +1,5 @@
 import type { Category, Transaction } from "../../shared/types/models";
+import { isUncategorizedExpenseTransaction } from "../transactions/meta";
 
 export interface RecurringMerchantSuggestion {
   merchantName: string;
@@ -22,33 +23,22 @@ interface RecurringMerchantAccumulator {
   monthKeys: Set<string>;
 }
 
-function isUncategorizedExpenseCandidate(transaction: Transaction) {
-  return (
-    transaction.status === "active" &&
-    transaction.isExpenseImpact &&
-    transaction.transactionType === "expense" &&
-    !transaction.categoryId
-  );
-}
-
-function isRecurringSuggestionCandidate(transaction: Transaction, categoryIds: Set<string>) {
-  if (!isUncategorizedExpenseCandidate(transaction)) return false;
-  if (transaction.categoryId && categoryIds.has(transaction.categoryId)) return false;
-  return true;
+function isRecurringSuggestionCandidate(transaction: Transaction) {
+  return isUncategorizedExpenseTransaction(transaction) && transaction.transactionType === "expense";
 }
 
 export function getUncategorizedTransactions(transactions: Transaction[]) {
   return transactions
-    .filter(isUncategorizedExpenseCandidate)
+    .filter(isUncategorizedExpenseTransaction)
     .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
 }
 
 export function getRecurringMerchantSuggestions(transactions: Transaction[], categories: Category[]) {
-  const categoryIds = new Set(categories.map((category) => category.id));
+  void categories;
   const merchantMap = new Map<string, RecurringMerchantAccumulator>();
 
   for (const transaction of transactions) {
-    if (!isRecurringSuggestionCandidate(transaction, categoryIds)) continue;
+    if (!isRecurringSuggestionCandidate(transaction)) continue;
     const key = transaction.merchantName.trim();
     if (!key) continue;
     const current = merchantMap.get(key);
