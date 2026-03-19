@@ -421,7 +421,7 @@ export function ImportsPage() {
                   ) : null}
                   <label>
                     용도
-                    <select name="usageType" className="form-select" defaultValue={account.usageType}>
+                    <select name="usageType" className="form-select" defaultValue={account.usageType} disabled={account.isShared}>
                       {Object.entries(ACCOUNT_USAGE_LABELS).map(([value, label]) => (
                         <option key={value} value={value}>
                           {label}
@@ -504,6 +504,11 @@ export function ImportsPage() {
                       ))}
                     </select>
                   </label>
+                  {card.linkedAccountId && previewAccountSharedMap.get(card.linkedAccountId) ? (
+                    <div className="small text-secondary" style={{ gridColumn: "1 / -1" }}>
+                      공동 계좌에 연결된 카드라서 가져온 뒤에도 결제 흐름이 공동 자금 기준으로 이어집니다.
+                    </div>
+                  ) : null}
                   <label style={{ gridColumn: "1 / -1" }}>
                     카드 종류
                     <select name="cardType" className="form-select" defaultValue={card.cardType}>

@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useState } from "react";
 import { getAccountUsageSummary } from "../../domain/assets/usageSummary";
 import { getActiveTransactions } from "../../domain/transactions/meta";
 import { formatCurrency } from "../../shared/utils/format";
@@ -28,6 +29,7 @@ const ACCOUNT_USAGE_OPTIONS = [
 
 export function AccountsPage() {
   const { addAccount, state, updateAccount } = useAppState();
+  const [isCreatingSharedAccount, setIsCreatingSharedAccount] = useState(false);
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const accounts = scope.accounts;
@@ -83,6 +85,7 @@ export function AccountsPage() {
             addAccount(workspaceId, values);
 
             event.currentTarget.reset();
+            setIsCreatingSharedAccount(false);
           }}
         >
           <label>
@@ -103,7 +106,7 @@ export function AccountsPage() {
           </label>
           <label>
             소유자
-            <select name="ownerPersonId" className="form-select" defaultValue="">
+            <select name="ownerPersonId" className="form-select" defaultValue="" disabled={isCreatingSharedAccount}>
               <option value="">공동 또는 미지정</option>
               {people.map((person) => (
                 <option key={person.id} value={person.id}>
@@ -112,6 +115,11 @@ export function AccountsPage() {
               ))}
             </select>
           </label>
+          {isCreatingSharedAccount ? (
+            <div className="small text-secondary" style={{ gridColumn: "1 / -1" }}>
+              공동 자금 계좌로 추가하는 동안에는 소유자를 따로 저장하지 않습니다.
+            </div>
+          ) : null}
           <label>
             계좌 유형
             <select name="accountType" className="form-select" defaultValue="checking">
@@ -134,7 +142,13 @@ export function AccountsPage() {
           </label>
           <label className="compact-check">
             <span className="fw-semibold">공동 자금 계좌</span>
-            <input name="isShared" type="checkbox" className="form-check-input mt-0" />
+            <input
+              name="isShared"
+              type="checkbox"
+              className="form-check-input mt-0"
+              checked={isCreatingSharedAccount}
+              onChange={(event) => setIsCreatingSharedAccount(event.target.checked)}
+            />
           </label>
           <label style={{ gridColumn: "1 / -1" }}>
             메모
@@ -250,7 +264,7 @@ export function AccountsPage() {
                     </label>
                     <label>
                       용도
-                      <select name="usageType" className="form-select" defaultValue={account.usageType}>
+                      <select name="usageType" className="form-select" defaultValue={account.usageType} disabled={account.isShared}>
                         {ACCOUNT_USAGE_OPTIONS.map((option) => (
                           <option key={option.value} value={option.value}>
                             {option.label}
