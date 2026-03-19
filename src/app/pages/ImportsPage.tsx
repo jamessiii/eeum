@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { getImportPreviewTransactionSummary } from "../../domain/imports/previewSummary";
 import { REVIEW_TYPE_LABELS } from "../../domain/reviews/meta";
 import { getSortedReviewTypeSummary } from "../../domain/reviews/summary";
 import { getJourneyProgress } from "../../domain/journey/progress";
 import { getExpenseImpactStats } from "../../domain/transactions/expenseImpactStats";
-import { getTransactionTypeCounts } from "../../domain/transactions/transactionTypeCounts";
 import { getSourceBreakdown } from "../../domain/transactions/sourceBreakdown";
 import { getWorkspaceHealthSummary } from "../../domain/workspace/health";
 import { getLatestImportRecord } from "../../domain/workspace/summary";
@@ -107,16 +107,7 @@ export function ImportsPage() {
   const reviewTypeSummary = getSortedReviewTypeSummary(openReviews);
   const previewReviewSummary = previewBundle ? getSortedReviewTypeSummary(previewBundle.reviews) : [];
   const previewTransactionSummary = previewBundle
-    ? (() => {
-        const previewStats = getExpenseImpactStats(previewBundle.transactions);
-        return {
-          byType: getTransactionTypeCounts(previewBundle.transactions),
-          expenseCount: previewStats.activeExpenseCount,
-          expenseAmount: previewStats.expenseImpactAmount,
-          internalTransferCount: previewStats.internalTransferCount,
-          sharedExpenseCount: previewStats.sharedExpenseCount,
-        };
-      })()
+    ? getImportPreviewTransactionSummary(previewBundle.transactions)
     : null;
 
   return (
