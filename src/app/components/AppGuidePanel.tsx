@@ -22,6 +22,7 @@ export function AppGuidePanel() {
   const currentStep = guide.currentStep;
   const journeyProgress = getJourneyProgress(guide.steps);
   const completedSteps = journeyProgress.completedCount;
+  const totalSteps = journeyProgress.totalCount;
   const currentPath = `${location.pathname || "/"}${location.search || ""}`;
   const upcomingSteps = getUpcomingJourneySteps(guide.steps, 2);
 
@@ -57,7 +58,7 @@ export function AppGuidePanel() {
       </div>
 
       <div className="guide-panel-meta">
-        <span>{completedSteps} / {guide.steps.length} 단계 완료</span>
+        <span>{completedSteps} / {totalSteps} 단계 완료</span>
         <strong>{formatPercent(journeyProgress.progress)}</strong>
       </div>
 
