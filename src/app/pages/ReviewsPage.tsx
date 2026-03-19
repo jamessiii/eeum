@@ -89,6 +89,19 @@ export function ReviewsPage() {
             }
       : null;
 
+  const withActiveSourceType = (path: string) => {
+    if (activeSourceType === "all") return path;
+    const [pathname, queryString = ""] = path.split("?");
+    const searchParams = new URLSearchParams(queryString);
+    searchParams.set("sourceType", activeSourceType);
+    const query = searchParams.toString();
+    return query ? `${pathname}?${query}` : pathname;
+  };
+
+  const resolvedNextReviewAction = nextReviewAction
+    ? { ...nextReviewAction, to: withActiveSourceType(nextReviewAction.to) }
+    : null;
+
   const getReviewTransactionLink = (reviewType: ReviewType) => {
     const searchParams = new URLSearchParams();
     switch (reviewType) {
@@ -105,12 +118,8 @@ export function ReviewsPage() {
         break;
     }
 
-    if (activeSourceType !== "all") {
-      searchParams.set("sourceType", activeSourceType);
-    }
-
     const query = searchParams.toString();
-    return query ? `/transactions?${query}` : "/transactions";
+    return withActiveSourceType(query ? `/transactions?${query}` : "/transactions");
   };
 
   const getReviewTransactionLinkLabel = (reviewType: ReviewType) => {
@@ -274,13 +283,13 @@ export function ReviewsPage() {
         </div>
       ) : null}
 
-      {nextReviewAction ? (
+      {resolvedNextReviewAction ? (
         <NextStepCallout
           className="mt-3"
-          title={nextReviewAction.title}
-          description={nextReviewAction.description}
-          actionLabel={nextReviewAction.actionLabel}
-          to={nextReviewAction.to}
+          title={resolvedNextReviewAction.title}
+          description={resolvedNextReviewAction.description}
+          actionLabel={resolvedNextReviewAction.actionLabel}
+          to={resolvedNextReviewAction.to}
         />
       ) : null}
 
@@ -293,10 +302,10 @@ export function ReviewsPage() {
             </p>
           </div>
           <div className="action-row">
-            <Link className="btn btn-outline-primary btn-sm" to="/transactions?cleanup=uncategorized">
+            <Link className="btn btn-outline-primary btn-sm" to={withActiveSourceType("/transactions?cleanup=uncategorized")}>
               미분류 정리
             </Link>
-            <Link className="btn btn-outline-secondary btn-sm" to="/transactions?cleanup=untagged">
+            <Link className="btn btn-outline-secondary btn-sm" to={withActiveSourceType("/transactions?cleanup=untagged")}>
               태그 정리
             </Link>
             <Link className="btn btn-outline-secondary btn-sm" to="/settlements">
@@ -317,22 +326,22 @@ export function ReviewsPage() {
         </div>
         <div className="action-row">
           {uncategorizedCount ? (
-            <Link className="btn btn-outline-primary btn-sm" to="/transactions?cleanup=uncategorized">
+            <Link className="btn btn-outline-primary btn-sm" to={withActiveSourceType("/transactions?cleanup=uncategorized")}>
               미분류 {uncategorizedCount}건 정리
             </Link>
           ) : null}
           {untaggedCount ? (
-            <Link className="btn btn-outline-secondary btn-sm" to="/transactions?cleanup=untagged">
+            <Link className="btn btn-outline-secondary btn-sm" to={withActiveSourceType("/transactions?cleanup=untagged")}>
               무태그 {untaggedCount}건 정리
             </Link>
           ) : null}
           {!uncategorizedCount && !untaggedCount && openSharedReviewCount ? (
-            <Link className="btn btn-outline-primary btn-sm" to="/transactions?nature=shared">
+            <Link className="btn btn-outline-primary btn-sm" to={withActiveSourceType("/transactions?nature=shared")}>
               공동지출 {openSharedReviewCount}건 점검
             </Link>
           ) : null}
           {!uncategorizedCount && !untaggedCount && !openSharedReviewCount && openInternalTransferReviewCount ? (
-            <Link className="btn btn-outline-secondary btn-sm" to="/transactions?nature=internal_transfer">
+            <Link className="btn btn-outline-secondary btn-sm" to={withActiveSourceType("/transactions?nature=internal_transfer")}>
               내부이체 {openInternalTransferReviewCount}건 점검
             </Link>
           ) : null}
@@ -350,22 +359,22 @@ export function ReviewsPage() {
           actions={
             <>
               {uncategorizedCount ? (
-                <Link className="btn btn-outline-primary btn-sm" to="/transactions?cleanup=uncategorized">
+                <Link className="btn btn-outline-primary btn-sm" to={withActiveSourceType("/transactions?cleanup=uncategorized")}>
                   미분류 {uncategorizedCount}건 정리
                 </Link>
               ) : null}
               {untaggedCount ? (
-                <Link className="btn btn-outline-secondary btn-sm" to="/transactions?cleanup=untagged">
+                <Link className="btn btn-outline-secondary btn-sm" to={withActiveSourceType("/transactions?cleanup=untagged")}>
                   무태그 {untaggedCount}건 정리
                 </Link>
               ) : null}
               {!uncategorizedCount && !untaggedCount && openSharedReviewCount ? (
-                <Link className="btn btn-outline-primary btn-sm" to="/transactions?nature=shared">
+                <Link className="btn btn-outline-primary btn-sm" to={withActiveSourceType("/transactions?nature=shared")}>
                   공동지출 {openSharedReviewCount}건 점검
                 </Link>
               ) : null}
               {!uncategorizedCount && !untaggedCount && !openSharedReviewCount && openInternalTransferReviewCount ? (
-                <Link className="btn btn-outline-secondary btn-sm" to="/transactions?nature=internal_transfer">
+                <Link className="btn btn-outline-secondary btn-sm" to={withActiveSourceType("/transactions?nature=internal_transfer")}>
                   내부이체 {openInternalTransferReviewCount}건 점검
                 </Link>
               ) : null}
