@@ -16,8 +16,13 @@ export interface WorkspaceHealthSummary {
   postImportReady: boolean;
 }
 
+export function getOpenReviewCount(reviews: Pick<WorkspaceScope, "reviews">["reviews"]) {
+  return reviews.reduce((count, review) => count + Number(review.status === "open"), 0);
+}
+
 export function getWorkspaceHealthSummary(scope: Pick<WorkspaceScope, "transactions" | "reviews">): WorkspaceHealthSummary {
   const openReviews = scope.reviews.filter((item) => item.status === "open");
+  const openReviewCount = getOpenReviewCount(scope.reviews);
   const activeExpenseTransactions: WorkspaceScope["transactions"] = [];
   const uncategorizedExpenseTransactions: WorkspaceScope["transactions"] = [];
   const untaggedExpenseTransactions: WorkspaceScope["transactions"] = [];
@@ -39,11 +44,11 @@ export function getWorkspaceHealthSummary(scope: Pick<WorkspaceScope, "transacti
     activeExpenseTransactions,
     uncategorizedExpenseTransactions,
     untaggedExpenseTransactions,
-    openReviewCount: openReviews.length,
+    openReviewCount,
     uncategorizedCount: uncategorizedExpenseTransactions.length,
     untaggedCount: untaggedExpenseTransactions.length,
     postImportReady:
-      openReviews.length === 0 &&
+      openReviewCount === 0 &&
       uncategorizedExpenseTransactions.length === 0 &&
       untaggedExpenseTransactions.length === 0,
   };
