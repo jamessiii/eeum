@@ -53,12 +53,12 @@ export function AppGuidePanel() {
       </div>
 
       <div className="guide-progress-bar" aria-hidden="true">
-        <div className="guide-progress-fill" style={{ width: `${guide.progress * 100}%` }} />
+        <div className="guide-progress-fill" style={{ width: `${journeyProgress.progress * 100}%` }} />
       </div>
 
       <div className="guide-panel-meta">
         <span>{completedSteps} / {guide.steps.length} 단계 완료</span>
-        <strong>{formatPercent(guide.progress)}</strong>
+        <strong>{formatPercent(journeyProgress.progress)}</strong>
       </div>
 
       {currentStep ? (
