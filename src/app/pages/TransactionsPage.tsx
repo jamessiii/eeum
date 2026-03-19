@@ -740,7 +740,7 @@ export function TransactionsPage() {
                     가맹점명이나 설명에 검색어가 들어간 거래만 보고 있습니다. 비슷한 거래를 한 번에 찾거나 빠른 정리 대상을 모아보기 좋은 흐름입니다.
                   </p>
                 </div>
-                <div className="d-flex flex-wrap gap-2">
+                <div className="action-row">
                   <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters(clearTransactionSearchQuery)}>
                     검색 해제
                   </button>
@@ -788,36 +788,36 @@ export function TransactionsPage() {
                 현재 보이는 거래 {transactions.length}건 중 실지출 {activeExpenseCount}건, 미분류 {uncategorizedCount}건, 무태그 {untaggedCount}건입니다.
               </div>
             </div>
-              {activeFilterSummary ? (
-                <div className="review-summary-panel compact-summary-panel mb-3">
-                  <div className="review-summary-copy">
-                    <strong>현재 적용된 필터</strong>
-                    <p className="mb-0 text-secondary">{activeFilterSummary}</p>
-                  </div>
-                  <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters(resetTransactionCleanupFilters)}>
-                    필터 초기화
-                  </button>
+            {activeFilterSummary ? (
+              <div className="review-summary-panel compact-summary-panel mb-3">
+                <div className="review-summary-copy">
+                  <strong>현재 적용된 필터</strong>
+                  <p className="mb-0 text-secondary">{activeFilterSummary}</p>
                 </div>
-              ) : null}
-              <TransactionCleanupQuickActions
-                transactionCount={transactions.length}
-                activeExpenseCount={activeExpenseCount}
-                uncategorizedCount={uncategorizedCount}
-                untaggedCount={untaggedCount}
-                onShowUncategorized={() => setFilters((current) => ({ ...current, nature: "uncategorized" }))}
-                onShowUntagged={() => setFilters((current) => ({ ...current, nature: "untagged" }))}
-                onShowShared={() => setFilters((current) => ({ ...current, nature: "shared" }))}
-                onShowInternalTransfer={() => setFilters((current) => ({ ...current, nature: "internal_transfer" }))}
-                onResetCleanupFilters={() => setFilters(resetTransactionCleanupFilters)}
-              />
+                <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters(resetTransactionCleanupFilters)}>
+                  현재 필터 초기화
+                </button>
+              </div>
+            ) : null}
+            <TransactionCleanupQuickActions
+              transactionCount={transactions.length}
+              activeExpenseCount={activeExpenseCount}
+              uncategorizedCount={uncategorizedCount}
+              untaggedCount={untaggedCount}
+              onShowUncategorized={() => setFilters((current) => ({ ...current, nature: "uncategorized" }))}
+              onShowUntagged={() => setFilters((current) => ({ ...current, nature: "untagged" }))}
+              onShowShared={() => setFilters((current) => ({ ...current, nature: "shared" }))}
+              onShowInternalTransfer={() => setFilters((current) => ({ ...current, nature: "internal_transfer" }))}
+              onResetCleanupFilters={() => setFilters(resetTransactionCleanupFilters)}
+            />
 
-              <TransactionSourceSummaryPanel
-                totalCount={transactions.length}
-                sourceTypeCounts={sourceTypeCounts}
-                onSelectSourceType={(sourceType) => setFilters((current) => ({ ...current, sourceType }))}
-              />
+            <TransactionSourceSummaryPanel
+              totalCount={transactions.length}
+              sourceTypeCounts={sourceTypeCounts}
+              onSelectSourceType={(sourceType) => setFilters((current) => ({ ...current, sourceType }))}
+            />
 
-              <div className="toolbar-row transaction-filter-row mb-3">
+            <div className="toolbar-row transaction-filter-row mb-3">
                 <select
                   className="form-select toolbar-select"
                   value={filters.transactionType}

@@ -553,11 +553,11 @@ export function ImportsPage() {
                     </div>
                     <div className="action-row justify-content-end">
                       {item.reviewCount > 0 ? (
-                        <Link to="/reviews" className="btn btn-sm btn-outline-secondary">
+                        <Link to="/reviews" className="btn btn-sm btn-outline-primary">
                           리뷰 {item.reviewCount}건 보기
                         </Link>
                       ) : null}
-                      <Link to="/transactions" className="btn btn-sm btn-outline-primary">
+                      <Link to="/transactions" className="btn btn-sm btn-outline-secondary">
                         가져온 거래 보기
                       </Link>
                     </div>

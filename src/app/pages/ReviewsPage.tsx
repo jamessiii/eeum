@@ -185,7 +185,11 @@ export function ReviewsPage() {
             </select>
           </div>
           <div className="action-row mt-2">
-            <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setActiveSourceType("all")}>
+            <button
+              className={`btn btn-sm ${activeSourceType === "all" ? "btn-outline-primary" : "btn-outline-secondary"}`}
+              type="button"
+              onClick={() => setActiveSourceType("all")}
+            >
               전체 {openReviewCount}건
             </button>
             {SOURCE_TYPE_OPTIONS.map((sourceType) => (
