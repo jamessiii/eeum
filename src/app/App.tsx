@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { HashRouter, Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
+import { getWorkspaceHeaderSummary } from "../domain/workspace/summary";
 import { MotionProvider } from "./motion/MotionProvider";
 import { AppGuidePanel } from "./components/AppGuidePanel";
 import { PageStepBanner } from "./components/PageStepBanner";
@@ -239,7 +240,13 @@ function AppFrame() {
   const activeWorkspace = getActiveWorkspace(state);
   if (!activeWorkspace) return <EmptyWorkspaceScreen />;
   const scope = getWorkspaceScope(state, activeWorkspace.id);
-  const latestImport = [...scope.imports].sort((a, b) => b.importedAt.localeCompare(a.importedAt))[0] ?? null;
+  const headerSummary = getWorkspaceHeaderSummary({
+    imports: scope.imports,
+    reviews: scope.reviews,
+    transactionsCount: scope.transactions.length,
+    peopleCount: scope.people.length,
+  });
+  const latestImport = headerSummary.latestImport;
 
   return (
     <div className="app-shell">
@@ -271,7 +278,7 @@ function AppFrame() {
             <span className="section-kicker">활성 워크스페이스</span>
             <h2 className="mb-0">{activeWorkspace.name}</h2>
             <p className="app-header-meta">
-              거래 {scope.transactions.length}건 · 검토 {scope.reviews.filter((item) => item.status === "open").length}건 · 사람 {scope.people.length}
+              거래 {headerSummary.transactionsCount}건 · 검토 {headerSummary.openReviewCount}건 · 사람 {headerSummary.peopleCount}
               명
               {latestImport ? ` · 최근 업로드 ${latestImport.importedAt.slice(0, 10)}` : ""}
             </p>
