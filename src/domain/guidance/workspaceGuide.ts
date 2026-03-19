@@ -42,6 +42,14 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
   const dominantSource = getDominantSourceBreakdown(sourceBreakdown, activeTransactions.length);
   const hasDominantSourceConcentration = isDominantSourceConcentrated(dominantSource);
   const dominantSourceLabel = dominantSource ? getSourceTypeLabel(dominantSource.sourceType) : null;
+  const postImportFollowUp =
+    health.openReviewCount > 0
+      ? { targetPath: "/reviews", ctaLabel: `검토함 ${health.openReviewCount}건 열기` }
+      : uncategorizedCount > 0
+        ? { targetPath: "/transactions?cleanup=uncategorized", ctaLabel: `미분류 ${uncategorizedCount}건 정리하기` }
+        : health.untaggedCount > 0
+          ? { targetPath: "/transactions?cleanup=untagged", ctaLabel: `무태그 ${health.untaggedCount}건 정리하기` }
+          : { targetPath: "/transactions", ctaLabel: "거래 흐름 보러 가기" };
   const readyForInsights =
     recurringSuggestionCount === 0 &&
     isDiagnosisReady({
@@ -75,8 +83,8 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
       description: hasImportedData
         ? "업로드된 거래가 들어왔습니다. 이제 검토와 분류를 거치면 통계에 쓸 수 있는 상태가 됩니다."
         : "분석과 진단은 거래가 있어야 시작됩니다. 엑셀 업로드나 수동 입력으로 데이터를 채워주세요.",
-      targetPath: hasImportedData ? "/transactions" : "/imports",
-      ctaLabel: hasImportedData ? "거래 흐름 보러 가기" : "업로드하러 가기",
+      targetPath: hasImportedData ? postImportFollowUp.targetPath : "/imports",
+      ctaLabel: hasImportedData ? postImportFollowUp.ctaLabel : "업로드하러 가기",
       tips: hasImportedData
         ? ["실지출, 공동지출, 내부이체 구분이 맞는지 먼저 확인해보세요.", "거래가 들어왔다면 다음은 검토함과 분류 화면입니다."]
         : ["가계부 v2 엑셀을 올리거나 수동 거래를 추가해보세요.", "거래가 쌓이면 분류와 통계가 바로 시작됩니다."],
@@ -96,8 +104,8 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
       title: dominantSourceLabel ? `${dominantSourceLabel} 흐름 점검` : "거래 흐름 점검",
       description:
         dominantSourceLabel && hasDominantSourceConcentration
-          ? `${dominantSourceLabel} 경로가 거래 대부분을 차지하고 있습니다. 이 수단의 연결값과 흐름을 먼저 점검하면 전체 데이터 정확도를 빠르게 높일 수 있습니다.`
-          : "거래 수단이 과하게 한쪽에 몰려 있지 않아 바로 분류 단계로 넘어가도 좋습니다.",
+          ? `${dominantSourceLabel} 경로가 거래 대부분을 차지하고 있습니다. 이 수단의 연결값과 흐름을 먼저 점검하면 전체 데이터 정확도를 빠르게 올릴 수 있습니다.`
+          : "거래 수단은 비교적 고르게 들어와 있습니다. 바로 분류 단계로 넘어가도 좋습니다.",
       targetPath: dominantSourceLabel && dominantSource ? `/transactions?sourceType=${dominantSource.sourceType}` : "/transactions",
       ctaLabel: dominantSourceLabel && dominantSource ? `${dominantSourceLabel} 거래 보러 가기` : "거래 흐름 보러 가기",
       tips:
@@ -109,25 +117,25 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
     {
       id: "recurring",
       title: "반복 지출 카테고리 지정",
-      description: "여러 달에 걸쳐 반복되는 가맹점은 먼저 카테고리를 묶어두면 이후 분류가 훨씬 빨라집니다.",
+      description: "여러 달에 걸쳐 반복되는 가맹점을 먼저 묶어두면 이후 분류가 훨씬 빨라집니다.",
       targetPath: "/categories",
       ctaLabel: "반복 지출 분류하기",
-      tips: ["구독, 보험, 통신비처럼 반복되는 거래부터 분류해보세요.", "여러 달 반복되고 금액 편차가 작은 후보부터 먼저 적용하면 좋습니다."],
+      tips: ["구독, 보험, 통신비처럼 반복되는 거래부터 분류해보세요.", "여러 번 반복하고 금액 편차가 작은 후보부터 먼저 적용하면 좋습니다."],
       completed: hasTransactions ? recurringSuggestionCount === 0 : false,
     },
     {
       id: "categorize",
       title: "미분류 거래 정리",
-      description: "반복 규칙에 걸리지 않은 거래는 직접 카테고리를 선택해야 통계가 정확해집니다.",
+      description: "반복 규칙만으로 처리되지 않는 거래는 직접 카테고리를 선택해야 통계가 정확해집니다.",
       targetPath: "/categories",
       ctaLabel: "미분류 거래 정리하기",
-      tips: ["반복 제안 아래쪽 미분류 거래를 하나씩 정리해보세요.", "카테고리가 채워질수록 대시보드의 해석 정확도가 올라갑니다."],
+      tips: ["반복 제안 아래쪽 미분류 거래를 하나씩 정리해보세요.", "카테고리가 채워질수록 대시보드 해석 정확도가 올라갑니다."],
       completed: hasTransactions ? uncategorizedCount === 0 : false,
     },
     {
       id: "tags",
       title: "무태그 거래 정리",
-      description: "같은 맥락의 소비를 태그로 묶어야 태그 기준 흐름과 비교가 자연스럽게 이어집니다.",
+      description: "같은 맥락의 소비를 태그로 묶어두면 흐름 기준 비교가 자연스럽게 이어집니다.",
       targetPath: "/transactions?cleanup=untagged",
       ctaLabel: "무태그 거래 정리하기",
       tips: ["사용 목적이나 사이클별로 태그를 묶으면 흐름과 비교가 빨라집니다.", "무태그가 0건이 되면 대시보드의 태그 분석도 바로 살아납니다."],
@@ -135,11 +143,11 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
     },
     {
       id: "profile",
-      title: "월 수입과 목표 설정",
-      description: "지출률과 저축률 가이드는 재무 기준선을 입력해야 제대로 동작합니다.",
+      title: "월수입과 목표 설정",
+      description: "지출 경고와 저축 가이드는 재무 기준선을 입력해야 제대로 동작합니다.",
       targetPath: "/settings",
       ctaLabel: "기준선 설정하기",
-      tips: ["월 순수입과 목표 저축률부터 입력해보세요.", "기준선이 있어야 과소비 판단이 가능해집니다."],
+      tips: ["월 순수입과 목표 저축률부터 입력해보세요.", "기준선이 있어야 과소비 진단도 가능해집니다."],
       completed: monthlyIncome > 0,
     },
     {
