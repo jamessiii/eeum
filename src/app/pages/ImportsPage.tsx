@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { REVIEW_TYPE_LABELS } from "../../domain/reviews/meta";
 import { getJourneyProgress } from "../../domain/journey/progress";
+import { getExpenseImpactStats } from "../../domain/transactions/expenseImpactStats";
 import {
   isActiveExpenseImpactTransaction,
   isActiveInternalTransferTransaction,
@@ -28,12 +29,13 @@ export function ImportsPage() {
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const health = getWorkspaceHealthSummary(scope);
+  const expenseStats = getExpenseImpactStats(scope.transactions);
   const imports = [...scope.imports].sort((a, b) => b.importedAt.localeCompare(a.importedAt));
   const openReviews = health.openReviews;
-  const uncategorizedCount = health.uncategorizedCount;
-  const untaggedCount = health.untaggedCount;
-  const sharedExpenseCount = scope.transactions.filter(isActiveSharedExpenseTransaction).length;
-  const internalTransferCount = scope.transactions.filter(isActiveInternalTransferTransaction).length;
+  const uncategorizedCount = expenseStats.uncategorizedCount;
+  const untaggedCount = expenseStats.untaggedCount;
+  const sharedExpenseCount = expenseStats.sharedExpenseCount;
+  const internalTransferCount = expenseStats.internalTransferCount;
   const sourceBreakdown = getSourceBreakdown(scope.transactions);
   const latestImport = imports[0] ?? null;
   const postImportFlow = [
