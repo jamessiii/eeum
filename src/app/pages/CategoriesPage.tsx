@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
   getCategoryCleanupSummary,
@@ -6,6 +7,7 @@ import {
 import { getExpenseImpactStats } from "../../domain/transactions/expenseImpactStats";
 import { formatCurrency, formatPercent } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
+import { AppModal } from "../components/AppModal";
 import { CompletionBanner } from "../components/CompletionBanner";
 import { NextStepCallout } from "../components/NextStepCallout";
 import { useAppState } from "../state/AppStateProvider";
@@ -22,6 +24,10 @@ function getRecurringConfidenceLabel(confidence: RecurringMerchantSuggestion["co
 
 export function CategoriesPage() {
   const { addCategory, addTag, assignCategory, assignCategoryByMerchant, assignTag, assignTagByMerchant, state } = useAppState();
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [isTagModalOpen, setIsTagModalOpen] = useState(false);
+  const [expandedSuggestionKey, setExpandedSuggestionKey] = useState<string | null>(null);
+  const [expandedTransactionId, setExpandedTransactionId] = useState<string | null>(null);
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const peopleMap = new Map(scope.people.map((person) => [person.id, person.displayName || person.name]));
@@ -98,24 +104,24 @@ export function CategoriesPage() {
         <div className="section-head">
           <div>
             <span className="section-kicker">분류 흐름</span>
-            <h2 className="section-title">업로드 후 분류 우선 처리</h2>
+            <h2 className="section-title">분류 정리</h2>
           </div>
         </div>
         <div className="classification-flow-grid">
           <article className="stat-card" style={getMotionStyle(1)}>
             <span className="stat-label">반복 지출 자동 제안</span>
             <strong>{recurringSuggestions.length}개</strong>
-            <div className="small text-secondary mt-2">여러 달에 걸쳐 반복되고 금액 편차가 작은 거래를 우선적으로 보여줍니다.</div>
+            <div className="small text-secondary mt-2">먼저 처리할 후보</div>
           </article>
           <article className="stat-card" style={getMotionStyle(2)}>
             <span className="stat-label">미분류 거래</span>
             <strong>{uncategorizedTransactions.length}건</strong>
-            <div className="small text-secondary mt-2">반복 규칙에 안 걸린 거래는 사용자가 직접 분류합니다.</div>
+            <div className="small text-secondary mt-2">직접 분류 필요</div>
           </article>
           <article className="stat-card" style={getMotionStyle(3)}>
-            <span className="stat-label">분류 완료 거래</span>
-            <strong>{categorizedCount}건</strong>
-            <div className="small text-secondary mt-2">분류가 쌓일수록 통계와 문제 지출 진단 정확도가 올라갑니다.</div>
+            <span className="stat-label">남은 작업</span>
+            <strong>{remainingWorkCount}건</strong>
+            <div className="small text-secondary mt-2">현재 정리 대상</div>
           </article>
         </div>
         <div className="guide-progress mt-4">
@@ -141,13 +147,13 @@ export function CategoriesPage() {
         ) : null}
         <div className="review-summary-panel mt-4">
           <div className="review-summary-copy">
-            <strong>{uncategorizedTransactions.length ? "분류 뒤에 이어서 할 일" : "카테고리 분류는 거의 끝났습니다"}</strong>
+            <strong>{uncategorizedTransactions.length ? "지금 바로 이어서 할 작업" : "분류 정리가 거의 끝났습니다"}</strong>
             <p className="mb-0 text-secondary">
               {uncategorizedTransactions.length
-                ? "반복 지출 제안과 미분류 거래를 먼저 줄인 뒤, 무태그 거래를 묶고 대시보드에서 이번 달 진단을 확인하는 흐름이 가장 자연스럽습니다."
+                ? "반복 제안과 미분류 거래를 먼저 줄인 뒤, 필요하면 무태그 거래만 마무리하면 됩니다."
                 : untaggedExpenseCount
-                  ? "카테고리는 정리됐고, 이제 무태그 거래만 묶어두면 태그 기준 소비 흐름까지 더 선명하게 볼 수 있습니다."
-                  : "카테고리와 태그 정리가 모두 끝난 상태라 이제 대시보드 해석과 정산 화면을 더 믿고 볼 수 있습니다."}
+                  ? "카테고리는 끝났고 무태그 거래만 남았습니다."
+                  : "카테고리와 태그 정리가 모두 끝났습니다."}
             </p>
           </div>
           <div className="action-row">
@@ -170,7 +176,7 @@ export function CategoriesPage() {
           <CompletionBanner
             className="mt-3"
             title="카테고리 분류 정리가 끝났습니다"
-            description="반복 지출 제안과 미분류 거래가 모두 정리됐습니다. 이제 무태그 거래를 묶거나 대시보드와 정산 화면에서 이번 달 흐름을 확인하면 됩니다."
+            description="반복 제안과 미분류 거래가 모두 정리됐습니다."
             actions={
               <>
                 {untaggedExpenseCount ? (
@@ -191,41 +197,6 @@ export function CategoriesPage() {
             }
           />
         ) : null}
-      </section>
-
-      <section className="card shadow-sm" style={getMotionStyle(1)}>
-        <div className="section-head">
-          <div>
-            <span className="section-kicker">분류 진행도</span>
-            <h2 className="section-title">지금 어디까지 끝났는지 보기</h2>
-          </div>
-        </div>
-        <div className="classification-flow-grid">
-          <article className="stat-card">
-            <span className="stat-label">1단계</span>
-            <strong>{recurringSuggestions.length ? "반복 지출 검토 필요" : "반복 지출 정리됨"}</strong>
-            <div className="small text-secondary mt-2">
-              반복적으로 등장하는 가맹점부터 카테고리를 한 번에 적용해보세요. 현재 후보는 {recurringSuggestions.length}개입니다.
-            </div>
-          </article>
-          <article className="stat-card">
-            <span className="stat-label">2단계</span>
-            <strong>{uncategorizedTransactions.length ? "미분류 거래 남음" : "미분류 거래 없음"}</strong>
-            <div className="small text-secondary mt-2">
-              반복 규칙에서 빠진 거래는 개별 분류로 마무리하면 됩니다. 지금 남은 직접 분류 거래는 {uncategorizedTransactions.length}건입니다.
-            </div>
-          </article>
-          <article className="stat-card">
-            <span className="stat-label">3단계</span>
-            <strong>통계 확인</strong>
-            <div className="small text-secondary mt-2">
-              분류를 정리한 뒤 대시보드에서 이번 달 문제 지출과 저축률을 확인해보세요. 현재 진행률은 {formatPercent(classificationProgress)}입니다.
-            </div>
-            <Link to="/" className="btn btn-outline-primary btn-sm mt-3">
-              대시보드로 이동
-            </Link>
-          </article>
-        </div>
       </section>
 
       <div className="page-grid">
@@ -249,15 +220,42 @@ export function CategoriesPage() {
                     <p className="mb-1 text-secondary">
                       반복 {suggestion.count}건 · {suggestion.monthCount}개월 · 평균 {formatCurrency(suggestion.amountAverage)}
                     </p>
-                    <p className="mb-0 text-secondary">
-                      {getRecurringConfidenceLabel(suggestion.confidence)} · 최근 {suggestion.lastOccurredAt.slice(0, 10)} · 금액 편차{" "}
-                      {Math.round(suggestion.amountSpreadRate * 100)}%
-                    </p>
+                    <p className="mb-0 text-secondary">{suggestion.lastOccurredAt.slice(0, 10)} · 금액 편차 {Math.round(suggestion.amountSpreadRate * 100)}%</p>
                   </div>
-                  <span className={`badge ${suggestion.confidence === "high" ? "text-bg-primary" : "text-bg-light"}`}>
-                    {getRecurringConfidenceLabel(suggestion.confidence)}
-                  </span>
+                  <div className="compact-card-actions">
+                    <span className={`badge ${suggestion.confidence === "high" ? "text-bg-primary" : "text-bg-light"}`}>
+                      {getRecurringConfidenceLabel(suggestion.confidence)}
+                    </span>
+                    <button
+                      type="button"
+                      className="expand-toggle-button"
+                      onClick={() =>
+                        setExpandedSuggestionKey((current) => (current === suggestion.merchantName ? null : suggestion.merchantName))
+                      }
+                      aria-expanded={expandedSuggestionKey === suggestion.merchantName}
+                      aria-label={expandedSuggestionKey === suggestion.merchantName ? "상세 접기" : "상세 펼치기"}
+                    >
+                      {expandedSuggestionKey === suggestion.merchantName ? "▴" : "▾"}
+                    </button>
+                  </div>
                 </div>
+                {expandedSuggestionKey === suggestion.merchantName ? (
+                  <div className="compact-card-details mt-3">
+                    <div className="compact-detail-grid">
+                      <div>
+                        <span className="section-kicker">신뢰도</span>
+                        <strong>{getRecurringConfidenceLabel(suggestion.confidence)}</strong>
+                      </div>
+                      <div>
+                        <span className="section-kicker">연결 정보</span>
+                        <strong>
+                          {recurringConnectionSummary.find((item) => item?.startsWith(`${suggestion.merchantName}:`))?.replace(`${suggestion.merchantName}: `, "") ??
+                            "연결 정보 없음"}
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
                 <form
                   className="classification-action-row compact-action-row mt-3"
                   onSubmit={(event) => {
@@ -322,10 +320,34 @@ export function CategoriesPage() {
                     <p className="mb-1 text-secondary">
                       {transaction.occurredAt.slice(0, 10)} · {formatCurrency(transaction.amount)}
                     </p>
-                    <p className="mb-1 text-secondary">{getTransactionConnectionSummary(transaction)}</p>
-                    {transaction.description ? <p className="mb-0 text-secondary">{transaction.description}</p> : null}
+                    <p className="mb-0 text-secondary">{transaction.description || "세부 정보는 펼쳐서 확인"}</p>
                   </div>
+                  <button
+                    type="button"
+                    className="expand-toggle-button"
+                    onClick={() => setExpandedTransactionId((current) => (current === transaction.id ? null : transaction.id))}
+                    aria-expanded={expandedTransactionId === transaction.id}
+                    aria-label={expandedTransactionId === transaction.id ? "상세 접기" : "상세 펼치기"}
+                  >
+                    {expandedTransactionId === transaction.id ? "▴" : "▾"}
+                  </button>
                 </div>
+                {expandedTransactionId === transaction.id ? (
+                  <div className="compact-card-details mt-3">
+                    <div className="compact-detail-grid">
+                      <div>
+                        <span className="section-kicker">연결 정보</span>
+                        <strong>{getTransactionConnectionSummary(transaction)}</strong>
+                      </div>
+                      {transaction.description ? (
+                        <div>
+                          <span className="section-kicker">메모</span>
+                          <strong>{transaction.description}</strong>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
                 <form
                   className="classification-action-row compact-action-row mt-3"
                   onSubmit={(event) => {
@@ -379,31 +401,28 @@ export function CategoriesPage() {
               <span className="section-kicker">분류 관리</span>
               <h2 className="section-title">카테고리</h2>
             </div>
-          </div>
-          <form
-            className="simple-inline-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const input = event.currentTarget.elements.namedItem("name") as HTMLInputElement | null;
-              const value = input?.value.trim() ?? "";
-              if (!value) return;
-              addCategory(workspaceId, value);
-              event.currentTarget.reset();
-            }}
-          >
-            <input name="name" className="form-control" placeholder="카테고리 이름" />
-            <button className="btn btn-primary" type="submit">
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => setIsCategoryModalOpen(true)}>
               카테고리 추가
             </button>
-          </form>
-          <div className="resource-grid mt-4">
+          </div>
+          <div className="resource-grid compact-resource-grid mt-2">
             {scope.categories.map((category) => (
-              <article key={category.id} className="resource-card">
-                <h3>{category.name}</h3>
-                <p className="mb-1 text-secondary">
-                  {category.direction} · {category.fixedOrVariable}
+              <article key={category.id} className="resource-card compact-resource-card">
+                <div className="compact-card-meta">
+                  <span className="badge text-bg-secondary" title={`방향: ${category.direction}`}>
+                    {category.direction}
+                  </span>
+                  <span
+                    className="compact-card-caption"
+                    title={`성격: ${category.fixedOrVariable} / 필요도: ${category.necessity}`}
+                  >
+                    {category.fixedOrVariable}
+                  </span>
+                </div>
+                <h3 title={`${category.name} · ${category.necessity}`}>{category.name}</h3>
+                <p className="mb-1 text-secondary" title={`필요도: ${category.necessity}`}>
+                  {category.necessity}
                 </p>
-                <p className="mb-1 text-secondary">{category.necessity}</p>
                 <p className="mb-0 text-secondary">
                   사용 {categoryUsage.get(category.id)?.count ?? 0}건 · {formatCurrency(categoryUsage.get(category.id)?.amount ?? 0)}
                 </p>
@@ -418,34 +437,86 @@ export function CategoriesPage() {
               <span className="section-kicker">분류 관리</span>
               <h2 className="section-title">태그</h2>
             </div>
-          </div>
-          <form
-            className="simple-inline-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const input = event.currentTarget.elements.namedItem("name") as HTMLInputElement | null;
-              const value = input?.value.trim() ?? "";
-              if (!value) return;
-              addTag(workspaceId, value);
-              event.currentTarget.reset();
-            }}
-          >
-            <input name="name" className="form-control" placeholder="태그 이름" />
-            <button className="btn btn-primary" type="submit">
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => setIsTagModalOpen(true)}>
               태그 추가
             </button>
-          </form>
-          <div className="resource-grid mt-4">
+          </div>
+          <div className="resource-grid compact-resource-grid mt-2">
             {scope.tags.map((tag) => (
-              <article key={tag.id} className="resource-card">
-                <h3>{tag.name}</h3>
-                <div className="tag-color-chip" style={{ backgroundColor: tag.color }} />
-                <p className="mb-0 text-secondary">{usedTagIds.has(tag.id) ? "거래에 사용 중" : "아직 미사용"}</p>
+              <article key={tag.id} className="resource-card compact-resource-card">
+                <div className="compact-card-meta">
+                  <div className="tag-color-chip" style={{ backgroundColor: tag.color }} title={`태그 색상 ${tag.color}`} />
+                  <span className={`badge ${usedTagIds.has(tag.id) ? "text-bg-success" : "text-bg-secondary"}`}>
+                    {usedTagIds.has(tag.id) ? "사용 중" : "미사용"}
+                  </span>
+                </div>
+                <h3 title={tag.name}>{tag.name}</h3>
+                <p className="mb-0 text-secondary">{usedTagIds.has(tag.id) ? "거래에 연결됨" : "아직 연결 없음"}</p>
               </article>
             ))}
           </div>
         </section>
       </div>
+
+      <AppModal
+        open={isCategoryModalOpen}
+        title="카테고리 추가"
+        description="간단히 이름만 추가하고, 실제 사용은 바로 분류 화면에서 시작할 수 있습니다."
+        onClose={() => setIsCategoryModalOpen(false)}
+      >
+        <form
+          className="profile-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const input = event.currentTarget.elements.namedItem("name") as HTMLInputElement | null;
+            const value = input?.value.trim() ?? "";
+            if (!value) return;
+            addCategory(workspaceId, value);
+            setIsCategoryModalOpen(false);
+            event.currentTarget.reset();
+          }}
+        >
+          <label style={{ gridColumn: "1 / -1" }}>
+            카테고리 이름
+            <input name="name" className="form-control" placeholder="예: 식비" />
+          </label>
+          <div className="d-flex justify-content-end" style={{ gridColumn: "1 / -1" }}>
+            <button className="btn btn-primary" type="submit">
+              저장
+            </button>
+          </div>
+        </form>
+      </AppModal>
+
+      <AppModal
+        open={isTagModalOpen}
+        title="태그 추가"
+        description="자주 보는 축만 태그로 두고, 나머지는 거래 흐름에서 필요할 때 붙이면 됩니다."
+        onClose={() => setIsTagModalOpen(false)}
+      >
+        <form
+          className="profile-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const input = event.currentTarget.elements.namedItem("name") as HTMLInputElement | null;
+            const value = input?.value.trim() ?? "";
+            if (!value) return;
+            addTag(workspaceId, value);
+            setIsTagModalOpen(false);
+            event.currentTarget.reset();
+          }}
+        >
+          <label style={{ gridColumn: "1 / -1" }}>
+            태그 이름
+            <input name="name" className="form-control" placeholder="예: 외식" />
+          </label>
+          <div className="d-flex justify-content-end" style={{ gridColumn: "1 / -1" }}>
+            <button className="btn btn-primary" type="submit">
+              저장
+            </button>
+          </div>
+        </form>
+      </AppModal>
     </div>
   );
 }
