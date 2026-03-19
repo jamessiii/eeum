@@ -20,6 +20,7 @@ interface TransactionInlineEditorProps {
   cards: Card[];
   saveDisabled: boolean;
   onDraftChange: (patch: Partial<TransactionEditDraft>) => void;
+  onSourceTypeChange: (sourceType: Transaction["sourceType"]) => void;
   onAccountSelect: (accountId: string) => void;
   onCardSelect: (cardId: string) => void;
   onSave: () => void;
@@ -33,6 +34,7 @@ export function TransactionInlineEditor({
   cards,
   saveDisabled,
   onDraftChange,
+  onSourceTypeChange,
   onAccountSelect,
   onCardSelect,
   onSave,
@@ -46,7 +48,7 @@ export function TransactionInlineEditor({
       </div>
       <div className="d-flex flex-column gap-2 w-100">
         <div className="d-flex flex-wrap gap-2">
-          <select className="form-select form-select-sm" value={draft.sourceType} onChange={(event) => onDraftChange({ sourceType: event.target.value as Transaction["sourceType"] })}>
+          <select className="form-select form-select-sm" value={draft.sourceType} onChange={(event) => onSourceTypeChange(event.target.value as Transaction["sourceType"])}>
             {SOURCE_TYPE_OPTIONS.map((sourceType) => (
               <option key={sourceType} value={sourceType}>
                 {getSourceTypeLabel(sourceType)}

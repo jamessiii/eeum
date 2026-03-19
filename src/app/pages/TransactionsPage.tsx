@@ -249,38 +249,79 @@ export function TransactionsPage() {
     setEditDraft((current) => ({ ...current, ...patch }));
   };
 
+  const syncFormWithSourceType = (form: HTMLFormElement, sourceType: TransactionEditDraft["sourceType"]) => {
+    const accountField = form.elements.namedItem("accountId") as HTMLSelectElement | null;
+    const cardField = form.elements.namedItem("cardId") as HTMLSelectElement | null;
+
+    if (sourceType === "manual") {
+      if (accountField) accountField.value = "";
+      if (cardField) cardField.value = "";
+      return;
+    }
+
+    if (sourceType === "account" && cardField) {
+      cardField.value = "";
+    }
+  };
+
   const syncFormWithAccount = (form: HTMLFormElement, accountId: string) => {
     const selectedAccount = accounts.find((account) => account.id === accountId);
-    if (!selectedAccount) return;
-
     const sourceTypeField = form.elements.namedItem("sourceType") as HTMLSelectElement | null;
+    const cardField = form.elements.namedItem("cardId") as HTMLSelectElement | null;
+    if (!selectedAccount) {
+      if (sourceTypeField?.value === "account") sourceTypeField.value = "manual";
+      return;
+    }
+
     const ownerField = form.elements.namedItem("ownerPersonId") as HTMLSelectElement | null;
     if (sourceTypeField) sourceTypeField.value = "account";
     if (ownerField && selectedAccount.ownerPersonId) ownerField.value = selectedAccount.ownerPersonId;
+    if (cardField) cardField.value = "";
   };
 
   const syncFormWithCard = (form: HTMLFormElement, cardId: string) => {
     const selectedCard = cards.find((card) => card.id === cardId);
-    if (!selectedCard) return;
-
     const sourceTypeField = form.elements.namedItem("sourceType") as HTMLSelectElement | null;
     const ownerField = form.elements.namedItem("ownerPersonId") as HTMLSelectElement | null;
     const accountField = form.elements.namedItem("accountId") as HTMLSelectElement | null;
+    if (!selectedCard) {
+      if (sourceTypeField?.value === "card") sourceTypeField.value = accountField?.value ? "account" : "manual";
+      return;
+    }
+
     if (sourceTypeField) sourceTypeField.value = "card";
     if (ownerField && selectedCard.ownerPersonId) ownerField.value = selectedCard.ownerPersonId;
     if (accountField && selectedCard.linkedAccountId) accountField.value = selectedCard.linkedAccountId;
   };
 
+  const syncEditDraftWithSourceType = (sourceType: TransactionEditDraft["sourceType"]) => {
+    if (sourceType === "manual") {
+      updateEditDraft({ sourceType, accountId: "", cardId: "" });
+      return;
+    }
+
+    if (sourceType === "account") {
+      updateEditDraft({ sourceType, cardId: "" });
+      return;
+    }
+
+    updateEditDraft({ sourceType });
+  };
+
   const syncEditDraftWithAccount = (accountId: string) => {
     const selectedAccount = accounts.find((account) => account.id === accountId);
     if (!selectedAccount) {
-      updateEditDraft({ accountId });
+      updateEditDraft({
+        accountId,
+        sourceType: editDraft.sourceType === "account" ? "manual" : editDraft.sourceType,
+      });
       return;
     }
 
     updateEditDraft({
       sourceType: "account",
       accountId,
+      cardId: "",
       ownerPersonId: selectedAccount.ownerPersonId ?? "",
     });
   };
@@ -288,7 +329,10 @@ export function TransactionsPage() {
   const syncEditDraftWithCard = (cardId: string) => {
     const selectedCard = cards.find((card) => card.id === cardId);
     if (!selectedCard) {
-      updateEditDraft({ cardId });
+      updateEditDraft({
+        cardId,
+        sourceType: editDraft.accountId ? "account" : "manual",
+      });
       return;
     }
 
@@ -387,7 +431,12 @@ export function TransactionsPage() {
             <option value="transfer">이체</option>
             <option value="adjustment">조정</option>
           </select>
-          <select name="sourceType" className="form-select" defaultValue="manual">
+          <select
+            name="sourceType"
+            className="form-select"
+            defaultValue="manual"
+            onChange={(event) => syncFormWithSourceType(event.currentTarget.form!, event.currentTarget.value as TransactionEditDraft["sourceType"])}
+          >
             {SOURCE_TYPE_OPTIONS.filter((sourceType) => sourceType !== "import").map((sourceType) => (
               <option key={sourceType} value={sourceType}>
                 {getSourceTypeLabel(sourceType)}
@@ -952,6 +1001,7 @@ export function TransactionsPage() {
                               cards={cards}
                               saveDisabled={!editDraft.occurredAt || !editDraft.merchantName.trim() || !editDraft.amount || Number(editDraft.amount) <= 0}
                               onDraftChange={updateEditDraft}
+                              onSourceTypeChange={syncEditDraftWithSourceType}
                               onAccountSelect={syncEditDraftWithAccount}
                               onCardSelect={syncEditDraftWithCard}
                               onSave={() => {

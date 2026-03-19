@@ -22,6 +22,14 @@ export function SettlementsPage() {
   const peopleMap = new Map(scope.people.map((person) => [person.id, person.displayName || person.name]));
   const accountMap = new Map(scope.accounts.map((account) => [account.id, account.alias || account.name]));
   const cardMap = new Map(scope.cards.map((card) => [card.id, card.name]));
+  const getTransactionConnectionSummary = (transaction: { ownerPersonId: string | null; accountId: string | null; cardId: string | null }) =>
+    [
+      `사용자 ${(transaction.ownerPersonId ? peopleMap.get(transaction.ownerPersonId) : null) ?? "공동"}`,
+      transaction.cardId ? `카드 ${cardMap.get(transaction.cardId) ?? "-"}` : null,
+      transaction.accountId ? `계좌 ${accountMap.get(transaction.accountId) ?? "-"}` : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
 
   const currentMonth = monthKey(new Date());
   const settlementSummary = getMonthlySharedSettlementSummary(scope.transactions, activePeople.length, currentMonth);
@@ -248,14 +256,21 @@ export function SettlementsPage() {
                         <p className="mb-1 text-secondary">
                           {transaction.occurredAt.slice(0, 10)} · {(transaction.ownerPersonId ? peopleMap.get(transaction.ownerPersonId) : "공동") ?? "공동"}
                         </p>
+                        <p className="mb-1 text-secondary">{getTransactionConnectionSummary(transaction)}</p>
                         <p className="mb-0 text-secondary">{transaction.description || "설명 없음"}</p>
                       </div>
-                      <p className="mb-1 text-secondary">
-                        {transaction.cardId ? `카드 ${cardMap.get(transaction.cardId) ?? "-"}` : "카드 미연결"} ·{" "}
-                        {transaction.accountId ? `계좌 ${accountMap.get(transaction.accountId) ?? "-"}` : "계좌 미연결"}
-                      </p>
                       <div className="d-flex flex-column align-items-end gap-2">
                         <strong>{formatCurrency(transaction.amount)}</strong>
+                        {transaction.cardId ? (
+                          <Link to={`/transactions?sourceType=card&ownerPersonId=${transaction.ownerPersonId ?? ""}`} className="btn btn-outline-secondary btn-sm">
+                            카드 거래 보기
+                          </Link>
+                        ) : null}
+                        {transaction.accountId ? (
+                          <Link to={`/transactions?sourceType=account&ownerPersonId=${transaction.ownerPersonId ?? ""}`} className="btn btn-outline-secondary btn-sm">
+                            계좌 거래 보기
+                          </Link>
+                        ) : null}
                         {transaction.ownerPersonId ? (
                           <Link
                             to={`/transactions?nature=shared&ownerPersonId=${transaction.ownerPersonId}`}

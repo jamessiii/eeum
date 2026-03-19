@@ -40,6 +40,8 @@ export function DashboardPage() {
   const linkedCardCount = scope.cards.filter((card) => card.ownerPersonId && card.linkedAccountId).length;
   const unmappedAccountCount = scope.accounts.length - ownedAccountCount;
   const unmappedCardCount = scope.cards.length - linkedCardCount;
+  const peopleSetupRemaining = activePeopleCount > 0 ? 0 : 1;
+  const foundationRemainingCount = peopleSetupRemaining + unmappedAccountCount + unmappedCardCount;
   const hasPreparedTransactions = insights.transactionCount > 0;
   const isDiagnosisReady = insights.isDiagnosisReady;
   const journeySteps: DashboardJourneyStep[] = [
@@ -203,6 +205,14 @@ export function DashboardPage() {
         }
       : null,
   ].filter((item): item is DashboardAttentionItem => Boolean(item));
+  const nextFoundationAction =
+    peopleSetupRemaining > 0
+      ? { to: "/people", label: "사람 등록하기" }
+      : unmappedAccountCount > 0
+        ? { to: "/accounts", label: "계좌 연결 정리" }
+        : unmappedCardCount > 0
+          ? { to: "/cards", label: "카드 연결 정리" }
+          : null;
 
   return (
     <div className="page-stack">
@@ -305,10 +315,39 @@ export function DashboardPage() {
             <h2 className="section-title">사람·계좌·카드 준비 상태</h2>
           </div>
         </div>
+        <div className="review-summary-panel mb-4">
+          <div className="review-summary-copy">
+            <strong>
+              {foundationRemainingCount
+                ? `아직 ${foundationRemainingCount}개의 연결 설정이 남아 있습니다`
+                : "사람·계좌·카드 기본 연결이 모두 준비되었습니다"}
+            </strong>
+            <p className="mb-0 text-secondary">
+              {foundationRemainingCount
+                ? "사람 활성화, 계좌 소유자, 카드 결제 계좌 연결만 먼저 맞춰두면 업로드와 거래 해석이 훨씬 자연스럽게 이어집니다."
+                : "이제 업로드 데이터 연결과 거래 분류, 정산 화면에서 같은 기준으로 사람과 결제 수단을 해석할 수 있습니다."}
+            </p>
+          </div>
+          {nextFoundationAction ? (
+            <Link to={nextFoundationAction.to} className="btn btn-outline-primary btn-sm">
+              {nextFoundationAction.label}
+            </Link>
+          ) : (
+            <Link to="/imports" className="btn btn-outline-secondary btn-sm">
+              업로드 이어서 보기
+            </Link>
+          )}
+        </div>
         <div className="resource-grid">
           <article className="resource-card" style={getMotionStyle(2)}>
             <h3>사람</h3>
             <p className="mb-0 text-secondary">활성 {activePeopleCount}명 / 전체 {scope.people.length}명</p>
+            <span className={`badge ${peopleSetupRemaining ? "text-bg-warning" : "text-bg-success"}`}>
+              {peopleSetupRemaining ? "설정 필요" : "준비 완료"}
+            </span>
+            <p className="mb-0 text-secondary">
+              {peopleSetupRemaining ? "정산과 업로드 매핑 전에 사용할 사람을 먼저 활성화해 주세요." : "업로드와 거래 화면에서 사람 표시명을 바로 사용할 수 있습니다."}
+            </p>
             <Link to="/people" className="btn btn-outline-primary btn-sm mt-3">
               사람 관리
             </Link>
@@ -316,6 +355,12 @@ export function DashboardPage() {
           <article className="resource-card" style={getMotionStyle(3)}>
             <h3>계좌</h3>
             <p className="mb-0 text-secondary">소유자 또는 공동 설정 {ownedAccountCount}개 / 전체 {scope.accounts.length}개</p>
+            <span className={`badge ${unmappedAccountCount ? "text-bg-warning" : "text-bg-success"}`}>
+              {unmappedAccountCount ? `${unmappedAccountCount}개 미연결` : "준비 완료"}
+            </span>
+            <p className="mb-0 text-secondary">
+              {unmappedAccountCount ? "소유자나 공동 사용 여부를 채우면 업로드 연결과 거래 해석이 덜 흔들립니다." : "계좌 소유자 연결이 끝나서 거래 필터와 업로드 매핑에 바로 쓸 수 있습니다."}
+            </p>
             <Link to="/accounts" className="btn btn-outline-primary btn-sm mt-3">
               계좌 관리
             </Link>
@@ -323,6 +368,12 @@ export function DashboardPage() {
           <article className="resource-card" style={getMotionStyle(4)}>
             <h3>카드</h3>
             <p className="mb-0 text-secondary">소유자+결제계좌 연결 {linkedCardCount}개 / 전체 {scope.cards.length}개</p>
+            <span className={`badge ${unmappedCardCount ? "text-bg-warning" : "text-bg-success"}`}>
+              {unmappedCardCount ? `${unmappedCardCount}개 미연결` : "준비 완료"}
+            </span>
+            <p className="mb-0 text-secondary">
+              {unmappedCardCount ? "카드 소유자와 결제 계좌를 함께 연결해야 업로드와 정산에서 같은 수단으로 이어집니다." : "카드 소유자와 결제 계좌 연결이 끝나서 거래 연결 흐름이 자연스럽습니다."}
+            </p>
             <Link to="/cards" className="btn btn-outline-primary btn-sm mt-3">
               카드 관리
             </Link>
