@@ -35,7 +35,7 @@ export function ImportsPage() {
   const latestImportAction = latestImport
     ? latestImport.reviewCount > 0
       ? { to: "/reviews", label: `리뷰 ${latestImport.reviewCount}건 확인` }
-      : { to: "/transactions", label: "최근 가져온 거래 보기" }
+      : { to: "/transactions", label: "거래 화면 보기" }
     : { to: "/imports", label: "업로드 준비 보기" };
 
   const applyPreviewPersonPatch = (
@@ -404,7 +404,7 @@ export function ImportsPage() {
                   </label>
                   <label>
                     소유자
-                    <select name="ownerPersonId" className="form-select" defaultValue={account.ownerPersonId ?? ""}>
+                    <select name="ownerPersonId" className="form-select" defaultValue={account.ownerPersonId ?? ""} disabled={account.isShared}>
                       <option value="">미지정</option>
                       {previewBundle.people.map((person) => (
                         <option key={person.id} value={person.id}>
@@ -413,6 +413,11 @@ export function ImportsPage() {
                       ))}
                     </select>
                   </label>
+                  {account.isShared ? (
+                    <div className="small text-secondary" style={{ gridColumn: "1 / -1" }}>
+                      공동 자금 계좌로 체크된 동안에는 소유자를 따로 저장하지 않습니다.
+                    </div>
+                  ) : null}
                   <label>
                     용도
                     <select name="usageType" className="form-select" defaultValue={account.usageType}>
