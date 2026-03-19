@@ -406,6 +406,19 @@ export function DashboardPage() {
           </div>
           <span className="badge text-bg-dark">{Math.round(journeyProgress * 100)}%</span>
         </div>
+        <div className="review-summary-panel mb-4">
+          <div className="review-summary-copy">
+            <strong>{isJourneyReady ? "지금은 숫자 해석과 정산 확인에 집중하면 됩니다" : "아직 남은 준비 항목부터 순서대로 정리하면 됩니다"}</strong>
+            <p className="mb-0 text-secondary">
+              {isJourneyReady
+                ? "기반 정보와 분류 정리가 끝난 상태라서, 이제 대시보드 해석과 공동지출 정산 흐름을 믿고 따라가기 좋습니다."
+                : `전체 ${journeyTotalCount}단계 중 ${journeyCompletedCount}단계가 준비되었습니다. 아래 단계 카드에서 막히는 항목만 먼저 채우면 됩니다.`}
+            </p>
+          </div>
+          <Link to={isJourneyReady ? "/settlements" : journeySteps.find((step) => !step.completed)?.to ?? "/transactions"} className="btn btn-outline-secondary btn-sm">
+            {isJourneyReady ? "정산 화면 보기" : "다음 단계로 이동"}
+          </Link>
+        </div>
         <div className="guide-progress">
           <div className="guide-progress-bar" aria-hidden="true">
             <div className="guide-progress-fill" style={{ width: `${journeyProgress * 100}%` }} />

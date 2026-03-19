@@ -511,6 +511,11 @@ a {
   margin-bottom: 0.55rem;
 }
 
+.next-step-list li:last-child,
+.quick-add-list li:last-child {
+  margin-bottom: 0;
+}
+
 .manual-transaction-form,
 .profile-form,
 .simple-inline-form,
@@ -602,6 +607,7 @@ a {
 .review-summary-copy {
   display: grid;
   gap: 0.35rem;
+  min-width: 0;
 }
 
 .review-summary-panel .btn,

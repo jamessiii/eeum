@@ -10,6 +10,14 @@ export function SettingsPage() {
   const workspaceId = state.activeWorkspaceId!;
   const profile = getWorkspaceScope(state, workspaceId).financialProfile;
   const hasBaseline = Boolean(profile?.monthlyNetIncome);
+  const settingsNextAction = hasBaseline
+    ? { title: "기준값 설정이 끝났습니다", description: "이제 대시보드와 정산 화면에서 이번 달 해석을 바로 확인하면 됩니다.", to: "/", actionLabel: "대시보드 보기" }
+    : {
+        title: "먼저 월수입과 목표 저축률만 채워 주세요",
+        description: "나머지 경고 기준은 나중에 조정해도 되니, 우선 진단이 돌아가게 최소 기준부터 넣는 편이 좋습니다.",
+        to: "/transactions",
+        actionLabel: "거래 화면 보기",
+      };
 
   return (
     <div className="page-grid">
@@ -24,6 +32,15 @@ export function SettingsPage() {
           기준값이 있어야 지출률, 저축률, 과소비 경고가 제대로 동작합니다. 아직 정확한 금액이 아니어도 대략적인 값부터 넣고 나중에
           조정해도 괜찮습니다.
         </p>
+        <div className="review-summary-panel mb-4">
+          <div className="review-summary-copy">
+            <strong>{settingsNextAction.title}</strong>
+            <p className="mb-0 text-secondary">{settingsNextAction.description}</p>
+          </div>
+          <Link to={settingsNextAction.to} className="btn btn-outline-secondary btn-sm">
+            {settingsNextAction.actionLabel}
+          </Link>
+        </div>
         <div className="resource-grid mb-4">
           <article className="resource-card">
             <h3>월 순수입</h3>
@@ -129,6 +146,12 @@ export function SettingsPage() {
           이 앱은 로컬 저장 구조이므로 백업 파일이 중요합니다. 다른 기기에서 이어서 쓰고 싶다면 내보내기와 가져오기를 기본 루틴처럼
           사용하면 됩니다.
         </p>
+        <div className="review-summary-panel mb-3">
+          <div className="review-summary-copy">
+            <strong>기기 이동 전에는 백업 파일을 먼저 받아 두는 편이 안전합니다</strong>
+            <p className="mb-0 text-secondary">현재 상태를 JSON으로 내려받아 두면 테스트용 초기화나 다른 기기 복원 전에 되돌아오기 쉬워집니다.</p>
+          </div>
+        </div>
         <div className="d-flex flex-wrap gap-2">
           <button className="btn btn-primary" onClick={() => exportState()}>
             전체 데이터 내보내기

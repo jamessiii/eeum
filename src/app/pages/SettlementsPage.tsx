@@ -103,6 +103,21 @@ export function SettlementsPage() {
         actionLabel: "공동지출 거래 보기",
       };
   const isSettlementBalanced = sharedTransactions.length > 0 && !receiver && !sender;
+  const settlementQuickStatus =
+    !sharedTransactions.length
+      ? {
+          title: "아직 이번 달 공동지출이 없습니다",
+          description: "거래 화면에서 공동지출로 표시한 거래가 생기면 여기서 바로 분담과 정산 흐름을 이어서 볼 수 있습니다.",
+        }
+      : receiver && sender && suggestedSettlementAmount > 0
+        ? {
+            title: "추천 정산 금액이 바로 계산되었습니다",
+            description: `${sender.name}에서 ${receiver.name} 쪽으로 ${formatCurrency(suggestedSettlementAmount)} 정산하면 현재 차이를 가장 빠르게 줄일 수 있습니다.`,
+          }
+        : {
+            title: "공동지출은 있지만 추가 정산은 거의 남지 않았습니다",
+            description: "이미 기록된 정산이 반영되었거나, 현재 잔여 차이가 작아서 거래 확인만 해도 충분한 상태입니다.",
+          };
 
   return (
     <div className="page-stack">
@@ -117,6 +132,15 @@ export function SettlementsPage() {
           공동지출로 표시된 거래만 합산해서 각 사람이 얼마나 부담했는지 비교합니다. 이번 달 정산 후보를 보고 실제로 끝낸 정산은 아래
           기록으로 남길 수 있습니다.
         </p>
+        <div className="review-summary-panel mt-4">
+          <div className="review-summary-copy">
+            <strong>{settlementQuickStatus.title}</strong>
+            <p className="mb-0 text-secondary">{settlementQuickStatus.description}</p>
+          </div>
+          <Link to={sharedTransactions.length ? "/transactions?nature=shared" : "/transactions"} className="btn btn-outline-secondary btn-sm">
+            {sharedTransactions.length ? "공동지출 거래 보기" : "거래 화면 보기"}
+          </Link>
+        </div>
         <NextStepCallout
           className="mt-4"
           title={nextSettlementAction.title}
