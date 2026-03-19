@@ -514,7 +514,7 @@ export function ReviewsPage() {
                   필터 전체 초기화
                 </button>
                 <Link className="btn btn-outline-primary btn-sm" to={withActiveTransactionFilters("/transactions")}>
-                  거래 화면 보기
+                  현재 맥락 거래 보기
                 </Link>
               </>
             ) : undefined

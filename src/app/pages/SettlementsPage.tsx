@@ -303,7 +303,7 @@ export function SettlementsPage() {
               </div>
               <div className="action-row">
                 <Link to={appendCurrentTransactionFilters("/transactions")} className="btn btn-outline-primary btn-sm">
-                  거래 화면 보기
+                  {hasScopedSettlementContext ? "현재 맥락 거래 보기" : "거래 화면 보기"}
                 </Link>
                 <Link to="/people" className="btn btn-outline-secondary btn-sm">
                   사람 관리 보기
