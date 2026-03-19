@@ -285,18 +285,20 @@ export function TransactionsPage() {
     }
 
     if (resolvedSourceType === "account") {
+      const selectedAccount = accountId ? accounts.find((account) => account.id === accountId) : null;
       return {
         sourceType: resolvedSourceType,
-        ownerPersonId: ownerPersonId ?? null,
+        ownerPersonId: selectedAccount?.ownerPersonId ?? ownerPersonId ?? null,
         accountId: accountId ?? null,
         cardId: null,
       };
     }
 
+    const selectedCard = cardId ? cards.find((card) => card.id === cardId) : null;
     return {
       sourceType: resolvedSourceType,
-      ownerPersonId: ownerPersonId ?? null,
-      accountId: accountId ?? null,
+      ownerPersonId: selectedCard?.ownerPersonId ?? ownerPersonId ?? null,
+      accountId: selectedCard?.linkedAccountId ?? accountId ?? null,
       cardId: cardId ?? null,
     };
   };
