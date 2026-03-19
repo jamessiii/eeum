@@ -88,7 +88,12 @@ export function DashboardPage() {
       completed: isDiagnosisReady,
     },
   ];
-  const { progress: journeyProgress, isReady: isJourneyReady } = getJourneyProgress(journeySteps);
+  const {
+    progress: journeyProgress,
+    isReady: isJourneyReady,
+    completedCount: journeyCompletedCount,
+    totalCount: journeyTotalCount,
+  } = getJourneyProgress(journeySteps);
   const dominantSource = insights.dominantSource;
   const attentionItems = [
     insights.reviewCount > 0
@@ -289,7 +294,7 @@ export function DashboardPage() {
             <div className="guide-progress-fill" style={{ width: `${journeyProgress * 100}%` }} />
           </div>
           <div className="small text-secondary mt-3">
-            전체 여정 {journeySteps.length}단계 중 {journeySteps.filter((step) => step.completed).length}단계가 준비됐습니다.
+            전체 여정 {journeyTotalCount}단계 중 {journeyCompletedCount}단계가 준비됐습니다.
           </div>
         </div>
         <div className="resource-grid mt-4">
