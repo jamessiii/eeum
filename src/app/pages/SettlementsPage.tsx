@@ -100,10 +100,11 @@ export function SettlementsPage() {
       ...row,
       name: peopleMap.get(row.personId) ?? "공동 계정",
     }));
+  const settlementRecordsForView = hasScopedSettlementContext ? [] : scope.settlements;
 
   const { settlementHistory, completedSettlementAmount, rows } = getSettlementBalanceSummary(
     baseRows,
-    scope.settlements,
+    settlementRecordsForView,
     currentMonth,
   );
   const settlementRows = rows.map((row) => ({
@@ -115,6 +116,7 @@ export function SettlementsPage() {
   const sender = settlementRows.find((row) => row.remainingDelta < 0);
   const suggestedSettlementAmount =
     receiver && sender ? Math.min(receiver.remainingDelta, Math.abs(sender.remainingDelta)) : 0;
+  const canRecordSuggestedSettlement = !hasScopedSettlementContext && Boolean(receiver && sender && suggestedSettlementAmount > 0);
   const settlementHeadlineCards = settlementRows.length
     ? [
         receiver
@@ -133,9 +135,11 @@ export function SettlementsPage() {
           : null,
         {
           title: "정산 진행 상태",
-          description: settlementHistory.length
-            ? `이번 달 정산 ${settlementHistory.length}건이 이미 기록되어 있고, 완료 금액은 ${formatCurrency(completedSettlementAmount)}입니다.`
-            : "아직 기록된 정산이 없습니다. 추천 정산을 확인한 뒤 완료로 남겨보세요.",
+          description: hasScopedSettlementContext
+            ? "현재 맥락에서는 전체 정산 기록을 따로 합산하지 않습니다. 부담 차이와 공동지출 흐름만 먼저 확인해보세요."
+            : settlementHistory.length
+              ? `이번 달 정산 ${settlementHistory.length}건이 이미 기록되어 있고, 완료 금액은 ${formatCurrency(completedSettlementAmount)}입니다.`
+              : "아직 기록된 정산이 없습니다. 추천 정산을 확인한 뒤 완료로 남겨보세요.",
         },
       ].filter((card): card is SettlementHeadlineCard => Boolean(card))
     : [];
@@ -152,9 +156,11 @@ export function SettlementsPage() {
     ? receiver && sender && suggestedSettlementAmount > 0
       ? {
           title: "지금 가장 먼저 할 일",
-          description: `${sender.name}에서 ${receiver.name} 쪽으로 ${formatCurrency(suggestedSettlementAmount)} 정산 흐름이 잡혀 있습니다. 거래 화면에서 공동지출 흐름을 다시 보고, 맞다면 정산 완료로 기록해보세요.`,
+          description: hasScopedSettlementContext
+            ? `${sender.name}에서 ${receiver.name} 쪽으로 ${formatCurrency(suggestedSettlementAmount)} 부담 차이가 보입니다. 거래 화면에서 현재 맥락의 공동지출 흐름을 다시 확인해보세요.`
+            : `${sender.name}에서 ${receiver.name} 쪽으로 ${formatCurrency(suggestedSettlementAmount)} 정산 흐름이 잡혀 있습니다. 거래 화면에서 공동지출 흐름을 다시 보고, 맞다면 정산 완료로 기록해보세요.`,
           to: "/transactions?nature=shared",
-          actionLabel: "공동지출 점검하기",
+          actionLabel: hasScopedSettlementContext ? "현재 맥락 공동지출 점검" : "공동지출 점검하기",
         }
       : {
           title: "지금 가장 먼저 할 일",
@@ -239,8 +245,12 @@ export function SettlementsPage() {
         {isSettlementBalanced ? (
           <CompletionBanner
             className="mt-3"
-            title="이번 달 정산 균형이 맞춰졌습니다"
-            description="공동지출은 있었지만 남아 있는 정산 편차는 거의 없습니다. 거래 흐름과 완료 기록만 가볍게 확인하면 됩니다."
+            title={hasScopedSettlementContext ? "현재 맥락의 부담 균형이 맞춰졌습니다" : "이번 달 정산 균형이 맞춰졌습니다"}
+            description={
+              hasScopedSettlementContext
+                ? "현재 보이는 공동지출 범위에서는 남아 있는 편차가 거의 없습니다. 전체 정산과 구분해서 가볍게 확인하면 됩니다."
+                : "공동지출은 있었지만 남아 있는 정산 편차는 거의 없습니다. 거래 흐름과 완료 기록만 가볍게 확인하면 됩니다."
+            }
             actions={
               <>
                 <Link to={appendCurrentTransactionFilters("/transactions?nature=shared")} className="btn btn-outline-primary btn-sm">
@@ -349,7 +359,7 @@ export function SettlementsPage() {
                   <span className="badge text-bg-light">완료 금액 {formatCurrency(completedSettlementAmount)}</span>
                   <span className="badge text-bg-light">남은 후보 {receiver && sender ? "있음" : "없음"}</span>
                 </div>
-                {receiver && sender ? (
+                {canRecordSuggestedSettlement && receiver && sender ? (
                   <div className="action-row mt-3">
                     <button
                       className="btn btn-primary btn-sm"
@@ -367,6 +377,10 @@ export function SettlementsPage() {
                       추천 정산 완료로 기록
                     </button>
                   </div>
+                ) : hasScopedSettlementContext && receiver && sender ? (
+                  <p className="small text-secondary mt-3 mb-0">
+                    현재 맥락 요약에서는 완료 정산 기록을 바로 남기지 않습니다. 실제 기록은 전체 정산 화면에서 확인해 주세요.
+                  </p>
                 ) : null}
               </div>
 
@@ -492,8 +506,12 @@ export function SettlementsPage() {
           {!settlementHistory.length ? (
             <EmptyStateCallout
               kicker="기록 없음"
-              title="아직 완료로 남긴 정산이 없습니다"
-              description="추천 정산이 맞다면 완료로 기록해서 이번 달 정산 내역을 남겨보세요."
+              title={hasScopedSettlementContext ? "필터 맥락에서는 정산 기록을 따로 보여주지 않습니다" : "아직 완료로 남긴 정산이 없습니다"}
+              description={
+                hasScopedSettlementContext
+                  ? "현재 화면은 공동지출 근거와 부담 차이 확인용입니다. 실제 정산 기록은 전체 정산 화면에서 확인해 주세요."
+                  : "추천 정산이 맞다면 완료로 기록해서 이번 달 정산 내역을 남겨보세요."
+              }
               actions={
                 <Link to={appendCurrentTransactionFilters("/transactions?nature=shared")} className="btn btn-outline-primary btn-sm">
                   공동지출 거래 보기

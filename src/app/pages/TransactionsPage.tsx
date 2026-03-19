@@ -368,7 +368,10 @@ export function TransactionsPage() {
     if (!selectedCard) {
       if (sourceTypeField?.value === "card") sourceTypeField.value = accountField?.value ? "account" : "manual";
       if (ownerField) ownerField.value = accountField?.value
-        ? accounts.find((account) => account.id === accountField.value)?.ownerPersonId ?? ""
+        ? (() => {
+            const fallbackAccount = accounts.find((account) => account.id === accountField.value);
+            return fallbackAccount?.isShared ? "" : fallbackAccount?.ownerPersonId ?? "";
+          })()
         : "";
       if (accountField && !accountField.value) accountField.value = "";
       return;
@@ -428,7 +431,7 @@ export function TransactionsPage() {
       updateEditDraft({
         cardId,
         sourceType: editDraft.accountId ? "account" : "manual",
-        ownerPersonId: fallbackAccount?.ownerPersonId ?? "",
+        ownerPersonId: fallbackAccount?.isShared ? "" : fallbackAccount?.ownerPersonId ?? "",
       });
       return;
     }
