@@ -3,7 +3,7 @@ import type { AppState, Category, FinancialProfile, ReviewItem, Tag, Transaction
 import { getRecurringMerchantSuggestionCount } from "../classification/suggestions";
 import { isDiagnosisReady } from "./diagnosisReady";
 import { getExpenseImpactStats } from "../transactions/expenseImpactStats";
-import { isActiveExpenseImpactTransaction } from "../transactions/meta";
+import { getActiveTransactions, isActiveExpenseImpactTransaction } from "../transactions/meta";
 import { getSourceTypeLabel } from "../transactions/sourceTypes";
 import {
   getDominantSourceBreakdown,
@@ -68,6 +68,7 @@ function buildInsightMetrics(
   monthlyNetIncome: number,
   recurringSuggestionCount: number,
 ): InsightMetrics {
+  const activeTransactions = getActiveTransactions(transactions);
   const stats = getExpenseImpactStats(transactions);
   let expense = stats.expenseImpactAmount;
   let fixedExpense = 0;
@@ -86,7 +87,7 @@ function buildInsightMetrics(
   const fixedExpenseRate = monthlyNetIncome > 0 ? fixedExpense / monthlyNetIncome : 0;
 
   return {
-    transactionCount: transactions.length,
+    transactionCount: activeTransactions.length,
     income: monthlyNetIncome,
     expense,
     savings,
@@ -103,7 +104,7 @@ function buildInsightMetrics(
     recurringSuggestionCount,
     isFinancialProfileReady: monthlyNetIncome > 0,
     isDiagnosisReady: isDiagnosisReady({
-      hasTransactions: transactions.length > 0,
+      hasTransactions: activeTransactions.length > 0,
       postImportReady: reviewCount === 0 && stats.uncategorizedCount === 0 && stats.untaggedCount === 0,
       monthlyNetIncome,
     }),
@@ -298,6 +299,7 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
   const transactions = state.transactions.filter(
     (item) => item.workspaceId === workspaceId && monthKey(item.occurredAt) === baseMonth,
   );
+  const activeTransactions = getActiveTransactions(transactions);
   const reviews = state.reviews.filter((item) => item.workspaceId === workspaceId);
   const categories = state.categories.filter((item) => item.workspaceId === workspaceId);
   const tags = state.tags.filter((item) => item.workspaceId === workspaceId);
@@ -306,7 +308,7 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
   const accountCount = state.accounts.filter((item) => item.workspaceId === workspaceId).length;
   const cardCount = state.cards.filter((item) => item.workspaceId === workspaceId).length;
   const recurringSuggestionCount = getRecurringMerchantSuggestionCount(transactions, categories);
-  const expenseTransactions = transactions.filter(isActiveExpenseImpactTransaction);
+  const expenseTransactions = activeTransactions.filter(isActiveExpenseImpactTransaction);
   const fixedCategoryIds = new Set(
     categories.filter((category) => category.fixedOrVariable === "fixed").map((category) => category.id),
   );
@@ -330,7 +332,7 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
   };
   const topCategories = summarizeCategories(expenseTransactions, categories);
   const topTags = summarizeTags(expenseTransactions, tags);
-  const sourceBreakdown = getSourceBreakdown(transactions);
+  const sourceBreakdown = getSourceBreakdown(activeTransactions);
   const dominantSource = getDominantSourceBreakdown(sourceBreakdown, metrics.transactionCount);
 
   return {
