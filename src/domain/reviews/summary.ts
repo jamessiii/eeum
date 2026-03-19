@@ -4,6 +4,7 @@ import { SOURCE_TYPE_OPTIONS } from "../transactions/sourceTypes";
 
 export interface ReviewSummary {
   openReviews: ReviewItem[];
+  openReviewCount: number;
   resolvedReviews: ReviewItem[];
   dismissedReviews: ReviewItem[];
   reviewCounts: Partial<Record<ReviewType, number>>;
@@ -40,6 +41,7 @@ export function getReviewSummary(
   transactionMap: Map<string, Transaction>,
 ): ReviewSummary {
   const openReviews = getOpenReviews(reviews);
+  const openReviewCount = openReviews.length;
   const resolvedReviews: ReviewItem[] = [];
   const dismissedReviews: ReviewItem[] = [];
   const sourceTypeReviewCounts = SOURCE_TYPE_OPTIONS.reduce<Record<(typeof SOURCE_TYPE_OPTIONS)[number], number>>(
@@ -78,6 +80,7 @@ export function getReviewSummary(
 
   return {
     openReviews,
+    openReviewCount,
     resolvedReviews,
     dismissedReviews,
     reviewCounts,

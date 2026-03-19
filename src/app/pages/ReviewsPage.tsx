@@ -25,6 +25,7 @@ export function ReviewsPage() {
   const tags = new Map(scope.tags.map((item) => [item.id, item]));
   const {
     openReviews: reviews,
+    openReviewCount,
     resolvedReviews,
     dismissedReviews,
     reviewCounts,
@@ -83,7 +84,7 @@ export function ReviewsPage() {
           <span className="section-kicker">검토함</span>
           <h2 className="section-title">자동 감지 결과 검토</h2>
         </div>
-        <span className="badge text-bg-warning">{reviews.length}건</span>
+        <span className="badge text-bg-warning">{openReviewCount}건</span>
       </div>
       <p className="text-secondary">
         팝업으로 즉답을 강요하지 않고, 확인이 필요한 항목을 여기에 모아둡니다. 거래 흐름을 보고 한 번에 정리할 수 있게 만드는
@@ -94,7 +95,7 @@ export function ReviewsPage() {
           <div>
             <span className="section-kicker">검토 진행률</span>
             <div className="small text-secondary mt-1">
-              전체 {totalReviewCount}건 중 해결 {resolvedReviews.length}건 · 보류 {dismissedReviews.length}건 · 남음 {reviews.length}건
+              전체 {totalReviewCount}건 중 해결 {resolvedReviews.length}건 · 보류 {dismissedReviews.length}건 · 남음 {openReviewCount}건
             </div>
           </div>
           <strong>{Math.round(reviewProgress * 100)}%</strong>
@@ -103,7 +104,7 @@ export function ReviewsPage() {
           <div className="guide-progress-fill" style={{ width: `${reviewProgress * 100}%` }} />
         </div>
       </div>
-      {reviews.length ? (
+      {openReviewCount ? (
         <div className="review-summary-panel">
           <div className="review-summary-copy">
             <strong>지금 먼저 볼 것</strong>
@@ -116,7 +117,7 @@ export function ReviewsPage() {
           <ReviewTypeFilterBar
             activeFilter={activeFilter}
             counts={reviewCounts}
-            totalCount={reviews.length}
+            totalCount={openReviewCount}
             onChange={setActiveFilter}
           />
           <div className="toolbar-row mt-2">
@@ -147,7 +148,7 @@ export function ReviewsPage() {
           </div>
           <div className="d-flex flex-wrap gap-2 mt-2">
             <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setActiveSourceType("all")}>
-              전체 {reviews.length}건
+              전체 {openReviewCount}건
             </button>
             {SOURCE_TYPE_OPTIONS.map((sourceType) => (
               <button
@@ -204,9 +205,9 @@ export function ReviewsPage() {
 
       <div className="review-summary-panel mt-3">
         <div className="review-summary-copy">
-          <strong>{reviews.length ? "검토 후 바로 이어서 할 일" : "검토는 끝났고 다음 단계만 남았습니다"}</strong>
+          <strong>{openReviewCount ? "검토 후 바로 이어서 할 일" : "검토는 끝났고 다음 단계만 남았습니다"}</strong>
           <p className="mb-0 text-secondary">
-            {reviews.length
+            {openReviewCount
               ? "검토 후보를 줄인 뒤에는 미분류 거래와 무태그 거래를 정리해야 대시보드 해석이 더 정확해집니다."
               : "열린 검토 항목은 모두 정리됐습니다. 이제 분류와 태그 정리를 끝내고 진단 화면으로 넘어가면 됩니다."}
           </p>
@@ -238,7 +239,7 @@ export function ReviewsPage() {
         </div>
       </div>
 
-      {!reviews.length ? (
+      {!openReviewCount ? (
         <CompletionBanner
           className="mt-3"
           title="검토함 정리가 끝났습니다"
@@ -276,7 +277,7 @@ export function ReviewsPage() {
         />
       ) : null}
 
-      {!reviews.length ? (
+      {!openReviewCount ? (
         <EmptyStateCallout
           kicker="검토 완료"
           title="열려 있는 검토 항목이 없습니다"
