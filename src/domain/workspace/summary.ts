@@ -33,7 +33,7 @@ export function getWorkspaceEntitySummary(scope: WorkspaceScope | null, workspac
     cards: scope?.cards.length ?? 0,
     categories: scope?.categories.length ?? 0,
     tags: scope?.tags.length ?? 0,
-    transactions: scope?.transactions.length ?? 0,
+    transactions: scope ? getActiveTransactions(scope.transactions).length : 0,
     reviews: scope ? getOpenReviewCount(scope.reviews) : 0,
   };
 }
