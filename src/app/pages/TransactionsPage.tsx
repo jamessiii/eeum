@@ -200,6 +200,14 @@ export function TransactionsPage() {
       filters.tagId !== "all" ? `태그 ${scope.tags.find((tag) => tag.id === filters.tagId)?.name ?? "-"}` : null,
       activeSearchQuery ? `검색 ${activeSearchQuery}` : null,
     ].filter(Boolean).join(" · ") || null;
+  const getSettlementsLink = () => {
+    const nextSearchParams = new URLSearchParams();
+    if (filters.sourceType !== "all") nextSearchParams.set("sourceType", filters.sourceType);
+    if (filters.ownerPersonId !== "all") nextSearchParams.set("ownerPersonId", filters.ownerPersonId);
+    if (filters.tagId !== "all") nextSearchParams.set("tagId", filters.tagId);
+    const query = nextSearchParams.toString();
+    return query ? `/settlements?${query}` : "/settlements";
+  };
 
   useEffect(() => {
     const cleanup = searchParams.get("cleanup");
@@ -706,7 +714,7 @@ export function TransactionsPage() {
                         무태그 {untaggedCount}건 정리
                       </button>
                     ) : null}
-                    <Link className="btn btn-outline-primary btn-sm" to="/settlements">
+                    <Link className="btn btn-outline-primary btn-sm" to={getSettlementsLink()}>
                       정산 화면 보기
                     </Link>
                     <Link className="btn btn-outline-secondary btn-sm" to="/">
@@ -742,7 +750,7 @@ export function TransactionsPage() {
                     전체 거래로 돌아가기
                   </button>
                   {filters.nature === "shared" ? (
-                    <Link className="btn btn-outline-primary btn-sm" to="/settlements">
+                    <Link className="btn btn-outline-primary btn-sm" to={getSettlementsLink()}>
                       정산 화면 보기
                     </Link>
                   ) : (
@@ -837,7 +845,7 @@ export function TransactionsPage() {
                 actions={
                   <>
                     {filters.nature === "shared" ? (
-                      <Link className="btn btn-outline-primary btn-sm" to="/settlements">
+                      <Link className="btn btn-outline-primary btn-sm" to={getSettlementsLink()}>
                         정산 화면 보기
                       </Link>
                     ) : sharedExpenseCount ? (

@@ -86,7 +86,8 @@ export function SettlementsPage() {
     if (activeTagId && !transaction.tagIds.includes(activeTagId)) return false;
     return true;
   });
-  const visibleSharedTransactionCount = activeSettlementFilterSummary ? scopedSharedTransactions.length : sharedTransactions.length;
+  const hasScopedSettlementContext = Boolean(activeSettlementFilterSummary);
+  const visibleSharedTransactionCount = hasScopedSettlementContext ? scopedSharedTransactions.length : sharedTransactions.length;
 
   const totalSharedExpense = settlementSummary.totalSharedExpense;
   const splitTarget = settlementSummary.splitTarget;
@@ -135,7 +136,16 @@ export function SettlementsPage() {
         },
       ].filter((card): card is SettlementHeadlineCard => Boolean(card))
     : [];
-  const nextSettlementAction = sharedTransactions.length
+  const nextSettlementAction = !visibleSharedTransactionCount
+    ? {
+        title: hasScopedSettlementContext ? "현재 맥락에선 공동지출이 없습니다" : "지금 가장 먼저 할 일",
+        description: hasScopedSettlementContext
+          ? "현재 선택한 수단, 사람, 태그 기준으로는 이번 달 공동지출이 없습니다. 거래 화면에서 같은 맥락의 항목을 다시 확인해보세요."
+          : "아직 이번 달 공동지출 거래가 없습니다. 거래 화면에서 공동지출로 표시된 항목이 있는지 먼저 확인해보세요.",
+        to: hasScopedSettlementContext ? "/transactions" : "/transactions?nature=shared",
+        actionLabel: hasScopedSettlementContext ? "현재 맥락 거래 보기" : "공동지출 거래 보기",
+      }
+    : sharedTransactions.length
     ? receiver && sender && suggestedSettlementAmount > 0
       ? {
           title: "지금 가장 먼저 할 일",
@@ -151,16 +161,18 @@ export function SettlementsPage() {
         }
     : {
         title: "지금 가장 먼저 할 일",
-        description: "아직 이번 달 공동지출 거래가 없습니다. 거래 화면에서 공동지출로 표시된 항목이 있는지 먼저 확인해보세요.",
-        to: "/transactions?nature=shared",
-        actionLabel: "공동지출 거래 보기",
+        description: "거래 화면에서 공동지출 흐름을 다시 확인해보세요.",
+        to: "/transactions",
+        actionLabel: "거래 화면 보기",
       };
-  const isSettlementBalanced = sharedTransactions.length > 0 && !receiver && !sender;
+  const isSettlementBalanced = visibleSharedTransactionCount > 0 && !receiver && !sender;
   const settlementQuickStatus =
-    !sharedTransactions.length
+    !visibleSharedTransactionCount
       ? {
-          title: "아직 이번 달 공동지출이 없습니다",
-          description: "거래 화면에서 공동지출로 표시한 거래가 생기면 여기서 바로 분담과 정산 흐름을 이어서 볼 수 있습니다.",
+          title: hasScopedSettlementContext ? "현재 맥락에서는 공동지출이 없습니다" : "아직 이번 달 공동지출이 없습니다",
+          description: hasScopedSettlementContext
+            ? "현재 선택한 조건에 맞는 공동지출이 없어서 정산 후보도 비어 있습니다. 같은 맥락의 거래를 다시 확인해보세요."
+            : "거래 화면에서 공동지출로 표시한 거래가 생기면 여기서 바로 분담과 정산 흐름을 이어서 볼 수 있습니다.",
         }
       : receiver && sender && suggestedSettlementAmount > 0
         ? {
@@ -190,9 +202,9 @@ export function SettlementsPage() {
             <p className="mb-0 text-secondary">{settlementQuickStatus.description}</p>
           </div>
           <div className="status-badge-row">
-            <span className="badge text-bg-light">공동지출 {sharedTransactions.length}건</span>
+            <span className="badge text-bg-light">공동지출 {visibleSharedTransactionCount}건</span>
             <span className="badge text-bg-light">완료 기록 {settlementHistory.length}건</span>
-            {suggestedSettlementAmount > 0 ? (
+            {visibleSharedTransactionCount > 0 && suggestedSettlementAmount > 0 ? (
               <span className="badge text-bg-warning">추천 정산 {formatCurrency(suggestedSettlementAmount)}</span>
             ) : null}
           </div>
@@ -200,7 +212,7 @@ export function SettlementsPage() {
             to={appendCurrentTransactionFilters(visibleSharedTransactionCount ? "/transactions?nature=shared" : "/transactions")}
             className="btn btn-outline-secondary btn-sm"
           >
-            {sharedTransactions.length ? "공동지출 거래 보기" : "거래 화면 보기"}
+            {visibleSharedTransactionCount ? "공동지출 거래 보기" : "거래 화면 보기"}
           </Link>
         </div>
         {activeSettlementFilterSummary ? (
@@ -308,7 +320,7 @@ export function SettlementsPage() {
                 </article>
                 <article className="stat-card">
                   <span className="stat-label">공동지출 건수</span>
-                  <strong>{sharedTransactions.length}건</strong>
+                  <strong>{visibleSharedTransactionCount}건</strong>
                 </article>
                 <article className="stat-card">
                   <span className="stat-label">완료된 정산</span>

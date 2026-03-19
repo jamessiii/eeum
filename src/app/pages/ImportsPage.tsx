@@ -58,16 +58,25 @@ export function ImportsPage() {
   ) => {
     setPreviewBundle((current) => {
       if (!current) return current;
-      const nextAccounts = current.accounts.map((account) => (account.id === accountId ? { ...account, ...patch } : account));
+      const currentAccount = current.accounts.find((account) => account.id === accountId);
+      if (!currentAccount) return current;
+      const isShared = patch.isShared ?? currentAccount.isShared;
+      const normalizedPatch = {
+        ...patch,
+        ownerPersonId: isShared ? null : patch.ownerPersonId ?? currentAccount.ownerPersonId ?? null,
+        usageType: isShared ? "shared" : patch.usageType ?? currentAccount.usageType,
+        isShared,
+      };
+      const nextAccounts = current.accounts.map((account) => (account.id === accountId ? { ...account, ...normalizedPatch } : account));
       const nextTransactions = current.transactions.map((transaction) => {
         if (transaction.accountId !== accountId && transaction.fromAccountId !== accountId && transaction.toAccountId !== accountId) {
           return transaction;
         }
 
-        if (patch.ownerPersonId === undefined) return transaction;
+        if (normalizedPatch.ownerPersonId === undefined) return transaction;
         return {
           ...transaction,
-          ownerPersonId: transaction.sourceType === "account" ? patch.ownerPersonId : transaction.ownerPersonId,
+          ownerPersonId: transaction.sourceType === "account" ? normalizedPatch.ownerPersonId : transaction.ownerPersonId,
         };
       });
 
@@ -356,7 +365,10 @@ export function ImportsPage() {
             {previewBundle.accounts.map((account, index) => (
               <article key={account.id} className="resource-card" style={getMotionStyle(index + 4)}>
                 <h3>{account.alias || account.name}</h3>
-                <p className="mb-0 text-secondary">{account.institutionName} · {ACCOUNT_USAGE_LABELS[account.usageType]}</p>
+                <p className="mb-0 text-secondary">
+                  {account.institutionName} · {account.isShared ? "공동 계좌" : `소유자 ${previewPeopleMap.get(account.ownerPersonId ?? "") ?? "미지정"}`} ·{" "}
+                  {ACCOUNT_USAGE_LABELS[account.usageType]}
+                </p>
                 <form
                   className="profile-form w-100"
                   onSubmit={(event) => {
