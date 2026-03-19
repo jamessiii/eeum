@@ -23,6 +23,7 @@ export function CardsPage() {
   const people = scope.people.filter((person) => person.isActive);
   const personMap = new Map(scope.people.map((person) => [person.id, person.displayName || person.name]));
   const accountMap = new Map(scope.accounts.map((item) => [item.id, item.alias || item.name]));
+  const accountSharedMap = new Map(scope.accounts.map((item) => [item.id, item.isShared]));
   const transactions = getActiveTransactions(scope.transactions);
   const getOwnerOptions = (ownerPersonId: string | null) =>
     ownerPersonId ? scope.people.filter((person) => person.isActive || person.id === ownerPersonId) : people;
@@ -88,6 +89,7 @@ export function CardsPage() {
               {scope.accounts.map((account) => (
                 <option key={account.id} value={account.id}>
                   {account.alias || account.name}
+                  {account.isShared ? " (공동)" : ""}
                 </option>
               ))}
             </select>
@@ -154,7 +156,10 @@ export function CardsPage() {
                       <h3 className="mb-1">{card.name}</h3>
                       <p className="mb-1 text-secondary">{card.issuerName}</p>
                       <p className="mb-0 text-secondary">
-                        {personMap.get(card.ownerPersonId ?? "") ?? "미지정"} · 결제 {accountMap.get(card.linkedAccountId ?? "") ?? "미연결"} · 사용 {formatCurrency(usage.expenseAmount)}
+                        {personMap.get(card.ownerPersonId ?? "") ?? "미지정"} · 결제{" "}
+                        {card.linkedAccountId
+                          ? `${accountSharedMap.get(card.linkedAccountId) ? "공동 계좌 " : ""}${accountMap.get(card.linkedAccountId) ?? "-"}`
+                          : "미연결"} · 사용 {formatCurrency(usage.expenseAmount)}
                       </p>
                     </div>
                     <span className="badge text-bg-secondary">{CARD_TYPE_OPTIONS.find((option) => option.value === card.cardType)?.label ?? "기타"}</span>
@@ -198,6 +203,7 @@ export function CardsPage() {
                         {scope.accounts.map((account) => (
                           <option key={account.id} value={account.id}>
                             {account.alias || account.name}
+                            {account.isShared ? " (공동)" : ""}
                           </option>
                         ))}
                       </select>

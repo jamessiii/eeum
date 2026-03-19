@@ -186,8 +186,9 @@ export function AccountsPage() {
                         {account.name !== account.alias && account.alias ? `원본 이름 ${account.name}` : account.institutionName}
                       </p>
                       <p className="mb-0 text-secondary">
-                        {account.isShared ? "공동 계좌" : personMap.get(account.ownerPersonId ?? "") ?? "미지정"} · 지출 {formatCurrency(usage.expenseAmount)} ·
-                        내부이체 {usage.internalTransferCount}건
+                        {account.isShared ? "공동 계좌" : personMap.get(account.ownerPersonId ?? "") ?? "미지정"} ·{" "}
+                        {ACCOUNT_USAGE_OPTIONS.find((option) => option.value === account.usageType)?.label ?? "기타"} · 지출 {formatCurrency(usage.expenseAmount)} · 내부이체{" "}
+                        {usage.internalTransferCount}건
                       </p>
                     </div>
                     <span className={`badge ${account.isShared ? "text-bg-success" : "text-bg-secondary"}`}>{account.isShared ? "공동" : "개인"}</span>

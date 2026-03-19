@@ -115,6 +115,7 @@ export function ImportsPage() {
 
   const previewPeopleMap = new Map(previewBundle?.people.map((person) => [person.id, person.displayName || person.name]) ?? []);
   const previewAccountsMap = new Map(previewBundle?.accounts.map((account) => [account.id, account.alias || account.name]) ?? []);
+  const previewAccountSharedMap = new Map(previewBundle?.accounts.map((account) => [account.id, account.isShared]) ?? []);
   const linkedCardCount = previewBundle?.cards.filter((card) => card.linkedAccountId).length ?? 0;
   const ownedCardCount = previewBundle?.cards.filter((card) => card.ownerPersonId).length ?? 0;
   const ownedAccountCount = previewBundle?.accounts.filter((account) => account.ownerPersonId || account.isShared).length ?? 0;
@@ -454,7 +455,9 @@ export function ImportsPage() {
                 <h3>{card.name}</h3>
                 <p className="mb-0 text-secondary">
                   {card.issuerName} · 소유자 {previewPeopleMap.get(card.ownerPersonId ?? "") ?? "미지정"} · 결제{" "}
-                  {previewAccountsMap.get(card.linkedAccountId ?? "") ?? "미연결"}
+                  {card.linkedAccountId
+                    ? `${previewAccountSharedMap.get(card.linkedAccountId) ? "공동 계좌 " : ""}${previewAccountsMap.get(card.linkedAccountId) ?? "-"}`
+                    : "미연결"}
                 </p>
                 <form
                   className="profile-form w-100"
@@ -496,6 +499,7 @@ export function ImportsPage() {
                       {previewBundle.accounts.map((account) => (
                         <option key={account.id} value={account.id}>
                           {account.alias || account.name}
+                          {account.isShared ? " (공동)" : ""}
                         </option>
                       ))}
                     </select>
