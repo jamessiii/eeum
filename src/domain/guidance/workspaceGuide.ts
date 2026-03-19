@@ -1,6 +1,7 @@
 import { getRecurringMerchantSuggestions } from "../classification/suggestions";
 import type { AppState } from "../../shared/types/models";
 import { getWorkspaceScope } from "../../app/state/selectors";
+import { isDiagnosisReady } from "../insights/diagnosisReady";
 import { getJourneyProgress } from "../journey/progress";
 import { getSourceBreakdown } from "../transactions/sourceBreakdown";
 import { getSourceTypeLabel } from "../transactions/sourceTypes";
@@ -34,11 +35,12 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
   const dominantSourceShare = dominantSource ? dominantSource.count / Math.max(1, scope.transactions.length) : 0;
   const dominantSourceLabel = dominantSource ? getSourceTypeLabel(dominantSource.sourceType) : null;
   const readyForInsights =
-    hasTransactions &&
     recurringSuggestions.length === 0 &&
-    health.uncategorizedCount === 0 &&
-    health.untaggedCount === 0 &&
-    health.openReviewCount === 0;
+    isDiagnosisReady({
+      hasTransactions,
+      postImportReady: health.postImportReady,
+      monthlyNetIncome: monthlyIncome,
+    });
 
   const steps: GuideStep[] = [
     {
@@ -139,7 +141,7 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
       targetPath: "/",
       ctaLabel: "대시보드 보러 가기",
       tips: ["상위 지출과 재무 코치 메모를 먼저 확인해보세요.", "공동지출이 있다면 정산 화면까지 이어서 보는 흐름이 좋습니다."],
-      completed: readyForInsights && monthlyIncome > 0,
+      completed: readyForInsights,
     },
   ];
 

@@ -1,6 +1,7 @@
 import { monthKey } from "../../shared/utils/date";
 import type { AppState, Category, FinancialProfile, ReviewItem, Tag, Transaction } from "../../shared/types/models";
 import { getRecurringMerchantSuggestions } from "../classification/suggestions";
+import { isDiagnosisReady } from "./diagnosisReady";
 import {
   isActiveExpenseImpactTransaction,
   isActiveInternalTransferTransaction,
@@ -120,7 +121,11 @@ function buildInsightMetrics(
     untaggedCount,
     recurringSuggestionCount,
     isFinancialProfileReady: monthlyNetIncome > 0,
-    isDiagnosisReady: reviewCount === 0 && uncategorizedCount === 0 && untaggedCount === 0 && monthlyNetIncome > 0,
+    isDiagnosisReady: isDiagnosisReady({
+      hasTransactions: transactions.length > 0,
+      postImportReady: reviewCount === 0 && uncategorizedCount === 0 && untaggedCount === 0,
+      monthlyNetIncome,
+    }),
   };
 }
 
