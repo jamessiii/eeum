@@ -258,15 +258,20 @@ export function TransactionsPage() {
   const syncFormWithSourceType = (form: HTMLFormElement, sourceType: TransactionEditDraft["sourceType"]) => {
     const accountField = form.elements.namedItem("accountId") as HTMLSelectElement | null;
     const cardField = form.elements.namedItem("cardId") as HTMLSelectElement | null;
+    const ownerField = form.elements.namedItem("ownerPersonId") as HTMLSelectElement | null;
 
     if (sourceType === "manual") {
       if (accountField) accountField.value = "";
       if (cardField) cardField.value = "";
+      if (ownerField) ownerField.value = "";
       return;
     }
 
-    if (sourceType === "account" && cardField) {
-      cardField.value = "";
+    if (sourceType === "account") {
+      if (cardField) cardField.value = "";
+      if (ownerField) ownerField.value = accountField?.value
+        ? accounts.find((account) => account.id === accountField.value)?.ownerPersonId ?? ""
+        : "";
     }
   };
 
@@ -307,12 +312,18 @@ export function TransactionsPage() {
 
   const syncEditDraftWithSourceType = (sourceType: TransactionEditDraft["sourceType"]) => {
     if (sourceType === "manual") {
-      updateEditDraft({ sourceType, accountId: "", cardId: "" });
+      updateEditDraft({ sourceType, ownerPersonId: "", accountId: "", cardId: "" });
       return;
     }
 
     if (sourceType === "account") {
-      updateEditDraft({ sourceType, cardId: "" });
+      updateEditDraft({
+        sourceType,
+        cardId: "",
+        ownerPersonId: editDraft.accountId
+          ? accounts.find((account) => account.id === editDraft.accountId)?.ownerPersonId ?? ""
+          : "",
+      });
       return;
     }
 
