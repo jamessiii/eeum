@@ -161,7 +161,7 @@ export function ImportsPage() {
         }
       : {
           title: "지금 바로 가져와도 되는 상태입니다",
-          description: "사람, 계좌, 카드 연결이 모두 채워져 있어서 업로드 후 리뷰와 분류 화면으로 바로 이어가기 좋습니다.",
+          description: "사용자, 계좌, 카드 연결이 모두 채워져 있어서 업로드 후 리뷰와 분류 화면으로 바로 이어가기 좋습니다.",
         }
     : null;
   const previewPostImportPath = previewBundle
@@ -223,7 +223,7 @@ export function ImportsPage() {
         </div>
         <div className="d-flex flex-wrap gap-2 mb-4">
           <Link to="/people" className="btn btn-outline-secondary btn-sm">
-            사람 관리
+            사용자 관리
           </Link>
           <Link to="/accounts" className="btn btn-outline-secondary btn-sm">
             계좌 관리
@@ -234,7 +234,7 @@ export function ImportsPage() {
         </div>
         <div className="classification-flow-grid">
           <article className="stat-card">
-            <span className="stat-label">현재 사람</span>
+            <span className="stat-label">현재 사용자</span>
             <strong>{scope.people.length}명</strong>
             <div className="small text-secondary mt-2">소유자 기준</div>
           </article>
@@ -290,7 +290,7 @@ export function ImportsPage() {
             </div>
             <span className="badge text-bg-primary">{activeWorkspace?.name ?? previewBundle.workspace.name}</span>
           </div>
-          <p className="text-secondary">사람, 계좌, 카드 연결만 먼저 맞춘 뒤 현재 워크스페이스로 가져오면 됩니다.</p>
+          <p className="text-secondary">사용자, 계좌, 카드 연결만 먼저 맞춘 뒤 현재 워크스페이스로 가져오면 됩니다.</p>
 
           {previewNextAction ? (
             <div className="review-summary-panel mt-4">
@@ -338,7 +338,7 @@ export function ImportsPage() {
           <div className="section-head mt-4">
             <div>
               <span className="section-kicker">1단계</span>
-              <h3 className="section-title">사람 매핑</h3>
+              <h3 className="section-title">사용자 매핑</h3>
             </div>
           </div>
           <div className="resource-grid">
@@ -690,7 +690,7 @@ export function ImportsPage() {
             actions={
               <>
                 <Link to="/people" className="btn btn-outline-primary btn-sm">
-                  사람 관리 먼저 보기
+                  사용자 관리 먼저 보기
                 </Link>
                 <Link to="/accounts" className="btn btn-outline-secondary btn-sm">
                   계좌 관리 보기

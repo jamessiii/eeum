@@ -18,7 +18,7 @@ const ACCOUNT_TYPE_OPTIONS = [
 ] as const;
 
 const ACCOUNT_USAGE_OPTIONS = [
-  { value: "daily", label: "일반 생활비" },
+  { value: "daily", label: "일상 생활비" },
   { value: "salary", label: "급여 수령" },
   { value: "shared", label: "공동 자금" },
   { value: "card_payment", label: "카드 결제" },
@@ -151,9 +151,6 @@ export function AccountsPage() {
             <span className="section-kicker">자산 관리</span>
             <h2 className="section-title">계좌</h2>
           </div>
-          <button type="button" className="btn btn-primary" onClick={openCreateModal}>
-            계좌 등록
-          </button>
         </div>
       </section>
 
@@ -169,7 +166,7 @@ export function AccountsPage() {
           <EmptyStateCallout
             kicker="자산 준비"
             title="분석 전에 계좌를 먼저 등록해주세요"
-            description="생활비, 카드결제, 급여통장처럼 역할이 다른 계좌를 먼저 구분해두면 업로드와 거래 분류가 훨씬 수월해집니다."
+            description="생활비, 카드 결제, 급여 계좌처럼 자산 흐름을 먼저 나눠두면 업로드와 분류가 쉬워집니다."
             actions={
               <>
                 <Link to="/settings?tab=cards" className="btn btn-outline-primary btn-sm">
@@ -181,76 +178,80 @@ export function AccountsPage() {
               </>
             }
           />
-        ) : (
-          <div className="resource-grid compact-resource-grid">
-            {accounts.map((account, index) => {
-              const usage = getAccountUsageSummary(transactions, account.id);
-              const isExpanded = expandedAccountId === account.id;
-              const usageLabel = ACCOUNT_USAGE_OPTIONS.find((option) => option.value === (account.isShared ? "shared" : account.usageType))?.label ?? "기타";
+        ) : null}
+        <div className="resource-grid compact-resource-grid">
+          {accounts.map((account, index) => {
+            const usage = getAccountUsageSummary(transactions, account.id);
+            const isExpanded = expandedAccountId === account.id;
+            const usageLabel = ACCOUNT_USAGE_OPTIONS.find((option) => option.value === (account.isShared ? "shared" : account.usageType))?.label ?? "기타";
 
-              return (
-                <article key={account.id} className={`resource-card compact-resource-card${isExpanded ? " expanded" : ""}`} style={getMotionStyle(index + 2)}>
-                  <div className="compact-card-summary">
-                    <div>
-                      <div className="compact-card-meta">
-                        <span className={`badge ${account.isShared ? "text-bg-success" : "text-bg-secondary"}`}>{account.isShared ? "공동" : "개인"}</span>
-                        <span className="compact-card-caption">{usageLabel}</span>
-                      </div>
-                      <h3 className="mb-1">{account.alias || account.name}</h3>
-                      <p className="mb-1 text-secondary">{account.institutionName || "직접입력"}</p>
-                      <p className="mb-0 text-secondary">
-                        {account.isShared ? "공동 계좌" : personMap.get(account.ownerPersonId ?? "") ?? "미지정"} · 지출 {formatCurrency(usage.expenseAmount)}
-                      </p>
+            return (
+              <article key={account.id} className={`resource-card compact-resource-card${isExpanded ? " expanded" : ""}`} style={getMotionStyle(index + 2)}>
+                <div className="compact-card-summary">
+                  <div>
+                    <div className="compact-card-meta">
+                      <span className={`badge ${account.isShared ? "text-bg-success" : "text-bg-secondary"}`}>{account.isShared ? "공동" : "개인"}</span>
+                      <span className="compact-card-caption">{usageLabel}</span>
                     </div>
-                    <div className="compact-card-actions">
-                      <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => openEditModal(account.id)}>
-                        수정
-                      </button>
-                      <button
-                        type="button"
-                        className="expand-toggle-button"
-                        onClick={() => setExpandedAccountId((current) => (current === account.id ? null : account.id))}
-                        aria-expanded={isExpanded}
-                        aria-label={isExpanded ? "상세 접기" : "상세 펼치기"}
-                      >
-                        {isExpanded ? "▴" : "▾"}
-                      </button>
-                    </div>
+                    <h3 className="mb-1">{account.alias || account.name}</h3>
+                    <p className="mb-1 text-secondary">{account.institutionName || "직접 입력"}</p>
+                    <p className="mb-0 text-secondary">
+                      {account.isShared ? "공동 계좌" : personMap.get(account.ownerPersonId ?? "") ?? "미지정"} · 지출 {formatCurrency(usage.expenseAmount)}
+                    </p>
                   </div>
-                  {isExpanded ? (
-                    <div className="compact-card-details">
-                      <div className="compact-detail-grid">
-                        <div>
-                          <span className="section-kicker">소유자</span>
-                          <strong>{account.isShared ? "공동" : personMap.get(account.ownerPersonId ?? "") ?? "미지정"}</strong>
-                        </div>
-                        <div>
-                          <span className="section-kicker">계좌 유형</span>
-                          <strong>{ACCOUNT_TYPE_OPTIONS.find((option) => option.value === account.accountType)?.label ?? "기타"}</strong>
-                        </div>
-                        <div>
-                          <span className="section-kicker">끝번호</span>
-                          <strong>{account.accountNumberMasked || "-"}</strong>
-                        </div>
-                        <div>
-                          <span className="section-kicker">내부이체</span>
-                          <strong>{usage.internalTransferCount}건</strong>
-                        </div>
+                  <div className="compact-card-actions">
+                    <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => openEditModal(account.id)}>
+                      수정
+                    </button>
+                    <button
+                      type="button"
+                      className="expand-toggle-button"
+                      onClick={() => setExpandedAccountId((current) => (current === account.id ? null : account.id))}
+                      aria-expanded={isExpanded}
+                      aria-label={isExpanded ? "상세 닫기" : "상세 펼치기"}
+                    >
+                      {isExpanded ? "−" : "+"}
+                    </button>
+                  </div>
+                </div>
+                {isExpanded ? (
+                  <div className="compact-card-details">
+                    <div className="compact-detail-grid">
+                      <div>
+                        <span className="section-kicker">소유자</span>
+                        <strong>{account.isShared ? "공동" : personMap.get(account.ownerPersonId ?? "") ?? "미지정"}</strong>
                       </div>
-                      {account.memo ? <div className="compact-note">{account.memo}</div> : null}
+                      <div>
+                        <span className="section-kicker">계좌 유형</span>
+                        <strong>{ACCOUNT_TYPE_OPTIONS.find((option) => option.value === account.accountType)?.label ?? "기타"}</strong>
+                      </div>
+                      <div>
+                        <span className="section-kicker">번호</span>
+                        <strong>{account.accountNumberMasked || "-"}</strong>
+                      </div>
+                      <div>
+                        <span className="section-kicker">내부이체</span>
+                        <strong>{usage.internalTransferCount}건</strong>
+                      </div>
                     </div>
-                  ) : null}
-                </article>
-              );
-            })}
-          </div>
-        )}
+                    {account.memo ? <div className="compact-note">{account.memo}</div> : null}
+                  </div>
+                ) : null}
+              </article>
+            );
+          })}
+          <button type="button" className="resource-card compact-resource-card resource-card-add" style={getMotionStyle(accounts.length + 2)} onClick={openCreateModal}>
+            <span className="resource-card-add-plus">+</span>
+            <strong>계좌 추가</strong>
+            <span className="text-secondary small">목록 끝에서 바로 등록</span>
+          </button>
+        </div>
       </section>
 
       <AppModal
         open={isCreateModalOpen}
         title="계좌 등록"
-        description="주요 정보만 먼저 입력하고, 필요할 때 다시 수정하면 됩니다."
+        description="북마크 추가처럼 필요한 값만 채우고 바로 저장할 수 있습니다."
         onClose={() => setIsCreateModalOpen(false)}
       >
         <form
@@ -266,44 +267,23 @@ export function AccountsPage() {
         >
           <label>
             계좌 이름
-            <input
-              className="form-control"
-              value={createDraft.name}
-              onChange={(event) => handleDraftPatch(setCreateDraft, { name: event.target.value })}
-            />
+            <input className="form-control" value={createDraft.name} onChange={(event) => handleDraftPatch(setCreateDraft, { name: event.target.value })} />
           </label>
           <label>
             표시명
-            <input
-              className="form-control"
-              value={createDraft.alias}
-              onChange={(event) => handleDraftPatch(setCreateDraft, { alias: event.target.value })}
-            />
+            <input className="form-control" value={createDraft.alias} onChange={(event) => handleDraftPatch(setCreateDraft, { alias: event.target.value })} />
           </label>
           <label>
             금융기관
-            <input
-              className="form-control"
-              value={createDraft.institutionName}
-              onChange={(event) => handleDraftPatch(setCreateDraft, { institutionName: event.target.value })}
-            />
+            <input className="form-control" value={createDraft.institutionName} onChange={(event) => handleDraftPatch(setCreateDraft, { institutionName: event.target.value })} />
           </label>
           <label>
-            계좌 끝번호
-            <input
-              className="form-control"
-              value={createDraft.accountNumberMasked}
-              onChange={(event) => handleDraftPatch(setCreateDraft, { accountNumberMasked: event.target.value })}
-            />
+            계좌 번호
+            <input className="form-control" value={createDraft.accountNumberMasked} onChange={(event) => handleDraftPatch(setCreateDraft, { accountNumberMasked: event.target.value })} />
           </label>
           <label>
             소유자
-            <select
-              className="form-select"
-              value={createDraft.ownerPersonId}
-              disabled={createDraft.isShared}
-              onChange={(event) => handleDraftPatch(setCreateDraft, { ownerPersonId: event.target.value })}
-            >
+            <select className="form-select" value={createDraft.ownerPersonId} disabled={createDraft.isShared} onChange={(event) => handleDraftPatch(setCreateDraft, { ownerPersonId: event.target.value })}>
               <option value="">공동 또는 미지정</option>
               {people.map((person) => (
                 <option key={person.id} value={person.id}>
@@ -314,11 +294,7 @@ export function AccountsPage() {
           </label>
           <label>
             계좌 유형
-            <select
-              className="form-select"
-              value={createDraft.accountType}
-              onChange={(event) => handleDraftPatch(setCreateDraft, { accountType: event.target.value as AccountDraftState["accountType"] })}
-            >
+            <select className="form-select" value={createDraft.accountType} onChange={(event) => handleDraftPatch(setCreateDraft, { accountType: event.target.value as AccountDraftState["accountType"] })}>
               {ACCOUNT_TYPE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
@@ -328,12 +304,7 @@ export function AccountsPage() {
           </label>
           <label>
             용도
-            <select
-              className="form-select"
-              value={createDraft.isShared ? "shared" : createDraft.usageType}
-              disabled={createDraft.isShared}
-              onChange={(event) => handleDraftPatch(setCreateDraft, { usageType: event.target.value as AccountUsageType })}
-            >
+            <select className="form-select" value={createDraft.isShared ? "shared" : createDraft.usageType} disabled={createDraft.isShared} onChange={(event) => handleDraftPatch(setCreateDraft, { usageType: event.target.value as AccountUsageType })}>
               {ACCOUNT_USAGE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
@@ -343,21 +314,11 @@ export function AccountsPage() {
           </label>
           <label className="compact-check">
             <span className="fw-semibold">공동 자금 계좌</span>
-            <input
-              type="checkbox"
-              className="form-check-input mt-0"
-              checked={createDraft.isShared}
-              onChange={(event) => handleDraftPatch(setCreateDraft, { isShared: event.target.checked })}
-            />
+            <input type="checkbox" className="form-check-input mt-0" checked={createDraft.isShared} onChange={(event) => handleDraftPatch(setCreateDraft, { isShared: event.target.checked })} />
           </label>
           <label style={{ gridColumn: "1 / -1" }}>
             메모
-            <textarea
-              className="form-control"
-              rows={3}
-              value={createDraft.memo}
-              onChange={(event) => handleDraftPatch(setCreateDraft, { memo: event.target.value })}
-            />
+            <textarea className="form-control" rows={3} value={createDraft.memo} onChange={(event) => handleDraftPatch(setCreateDraft, { memo: event.target.value })} />
           </label>
           <div className="d-flex justify-content-end" style={{ gridColumn: "1 / -1" }}>
             <button className="btn btn-primary" type="submit">
@@ -370,7 +331,7 @@ export function AccountsPage() {
       <AppModal
         open={Boolean(editingAccount)}
         title="계좌 수정"
-        description="연결 규칙은 유지하고, 필요한 정보만 바로 고칠 수 있습니다."
+        description="핵심 연결 정보만 바로 고칠 수 있습니다."
         onClose={() => {
           setEditingAccountId(null);
           setEditDraft(EMPTY_ACCOUNT_DRAFT);
@@ -401,33 +362,24 @@ export function AccountsPage() {
               <input className="form-control" value={editDraft.institutionName} onChange={(event) => handleDraftPatch(setEditDraft, { institutionName: event.target.value })} />
             </label>
             <label>
-              계좌 끝번호
+              계좌 번호
               <input className="form-control" value={editDraft.accountNumberMasked} onChange={(event) => handleDraftPatch(setEditDraft, { accountNumberMasked: event.target.value })} />
             </label>
             <label>
               소유자
-              <select
-                className="form-select"
-                value={editDraft.ownerPersonId}
-                disabled={editDraft.isShared}
-                onChange={(event) => handleDraftPatch(setEditDraft, { ownerPersonId: event.target.value })}
-              >
+              <select className="form-select" value={editDraft.ownerPersonId} disabled={editDraft.isShared} onChange={(event) => handleDraftPatch(setEditDraft, { ownerPersonId: event.target.value })}>
                 <option value="">공동 또는 미지정</option>
                 {getOwnerOptions(editingAccount.ownerPersonId).map((person) => (
                   <option key={person.id} value={person.id}>
                     {person.displayName || person.name}
-                    {!person.isActive ? " (보관됨)" : ""}
+                    {!person.isActive ? " (보관)" : ""}
                   </option>
                 ))}
               </select>
             </label>
             <label>
               계좌 유형
-              <select
-                className="form-select"
-                value={editDraft.accountType}
-                onChange={(event) => handleDraftPatch(setEditDraft, { accountType: event.target.value as AccountDraftState["accountType"] })}
-              >
+              <select className="form-select" value={editDraft.accountType} onChange={(event) => handleDraftPatch(setEditDraft, { accountType: event.target.value as AccountDraftState["accountType"] })}>
                 {ACCOUNT_TYPE_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
@@ -437,12 +389,7 @@ export function AccountsPage() {
             </label>
             <label>
               용도
-              <select
-                className="form-select"
-                value={editDraft.isShared ? "shared" : editDraft.usageType}
-                disabled={editDraft.isShared}
-                onChange={(event) => handleDraftPatch(setEditDraft, { usageType: event.target.value as AccountUsageType })}
-              >
+              <select className="form-select" value={editDraft.isShared ? "shared" : editDraft.usageType} disabled={editDraft.isShared} onChange={(event) => handleDraftPatch(setEditDraft, { usageType: event.target.value as AccountUsageType })}>
                 {ACCOUNT_USAGE_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
@@ -452,12 +399,7 @@ export function AccountsPage() {
             </label>
             <label className="compact-check">
               <span className="fw-semibold">공동 자금 계좌</span>
-              <input
-                type="checkbox"
-                className="form-check-input mt-0"
-                checked={editDraft.isShared}
-                onChange={(event) => handleDraftPatch(setEditDraft, { isShared: event.target.checked })}
-              />
+              <input type="checkbox" className="form-check-input mt-0" checked={editDraft.isShared} onChange={(event) => handleDraftPatch(setEditDraft, { isShared: event.target.checked })} />
             </label>
             <label style={{ gridColumn: "1 / -1" }}>
               메모

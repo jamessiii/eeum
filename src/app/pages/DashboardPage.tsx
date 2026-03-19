@@ -1,7 +1,6 @@
 import { Link } from "react-router-dom";
 import { getWorkspaceInsights } from "../../domain/insights/workspaceInsights";
 import { getJourneyProgress } from "../../domain/journey/progress";
-import { getSourceTypeLabel } from "../../domain/transactions/sourceTypes";
 import { formatCurrency, formatPercent } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { useAppState } from "../state/AppStateProvider";
@@ -11,14 +10,6 @@ import { getWorkspaceScope } from "../state/selectors";
 
 function toneClass(tone: "stable" | "caution" | "warning") {
   return tone === "warning" ? "warning" : tone === "caution" ? "caution" : "stable";
-}
-
-interface DashboardAttentionItem {
-  key: string;
-  title: string;
-  description: string;
-  actionLabel: string;
-  to: string;
 }
 
 interface DashboardJourneyStep {
@@ -53,6 +44,7 @@ export function DashboardPage() {
           ? { to: "/transactions?cleanup=untagged", actionLabel: `무태그 ${insights.untaggedCount}건 정리` }
           : { to: "/transactions", actionLabel: "거래 화면 보기" }
     : { to: "/imports", actionLabel: "거래 가져오기" };
+
   const journeySteps: DashboardJourneyStep[] = [
     {
       key: "import",
@@ -106,126 +98,26 @@ export function DashboardPage() {
       completed: isDiagnosisReady,
     },
   ];
+
   const {
     progress: journeyProgress,
     isReady: isJourneyReady,
     completedCount: journeyCompletedCount,
     totalCount: journeyTotalCount,
   } = getJourneyProgress(journeySteps);
-  const dominantSource = insights.dominantSource;
-  const attentionItems = [
-    activePeopleCount === 0
-      ? {
-          key: "people-setup",
-          title: "사람 정보부터 먼저 정리해주세요",
-          description: "사람이 있어야 업로드 데이터의 소유자와 공동지출 흐름을 안정적으로 연결할 수 있습니다.",
-          actionLabel: "사람 관리",
-          to: "/people",
-        }
-      : null,
-    unmappedAccountCount > 0
-      ? {
-          key: "account-mapping",
-          title: "소유자 없는 계좌가 남아 있습니다",
-          description: `${unmappedAccountCount}개 계좌에 소유자 또는 공동 여부가 비어 있어 업로드 연결이 흔들릴 수 있습니다.`,
-          actionLabel: "계좌 관리",
-          to: "/accounts",
-        }
-      : null,
-    unmappedCardCount > 0
-      ? {
-          key: "card-mapping",
-          title: "카드 연결 정보가 덜 정리됐습니다",
-          description: `${unmappedCardCount}개 카드에 소유자 또는 결제 계좌 연결이 비어 있어 업로드 후 검토량이 늘어날 수 있습니다.`,
-          actionLabel: "카드 관리",
-          to: "/cards",
-        }
-      : null,
-    insights.reviewCount > 0
-      ? {
-          key: "reviews",
-          title: "검토함 정리가 필요합니다",
-          description: `${insights.reviewCount}건의 자동 검토 후보가 남아 있어 지출 해석이 달라질 수 있습니다.`,
-          actionLabel: "검토함 열기",
-          to: "/reviews",
-        }
-      : null,
-    insights.recurringSuggestionCount > 0
-      ? {
-          key: "recurring",
-          title: "반복 지출 제안을 먼저 적용해보세요",
-          description: `${insights.recurringSuggestionCount}개의 반복 지출 후보가 있어 카테고리를 한 번에 정리할 수 있습니다.`,
-          actionLabel: "분류 화면 열기",
-          to: "/categories",
-        }
-      : null,
-    insights.uncategorizedCount > 0
-      ? {
-          key: "uncategorized",
-          title: "미분류 거래가 남아 있습니다",
-          description: `${insights.uncategorizedCount}건이 아직 미분류 상태라 상위 지출 분석이 왜곡될 수 있습니다.`,
-          actionLabel: "미분류 거래 정리",
-          to: "/transactions?cleanup=uncategorized",
-        }
-      : null,
-    insights.untaggedCount > 0
-      ? {
-          key: "untagged",
-          title: "무태그 거래를 묶어두면 해석이 더 좋아집니다",
-          description: `${insights.untaggedCount}건의 지출에 아직 태그가 없어 같은 맥락의 소비 흐름을 한 번에 보기 어렵습니다.`,
-          actionLabel: "무태그 거래 정리",
-          to: "/transactions?cleanup=untagged",
-        }
-      : null,
-    insights.sharedExpenseCount > 0
-      ? {
-          key: "shared",
-          title: "공동지출 흐름을 한 번 더 점검해보세요",
-          description: `${insights.sharedExpenseCount}건의 공동지출이 있어 정산으로 이어지는 흐름을 한 번 더 확인해보면 좋습니다.`,
-          actionLabel: "공동지출 점검하기",
-          to: "/transactions?nature=shared",
-        }
-      : null,
-    insights.internalTransferCount > 0
-      ? {
-          key: "internal-transfer",
-          title: "내부이체 흐름을 모아서 점검해보세요",
-          description: `${insights.internalTransferCount}건의 내부이체가 있어 소비 통계에 과하게 잡히지 않는지 다시 보면 좋습니다.`,
-          actionLabel: "내부이체 점검하기",
-          to: "/transactions?nature=internal_transfer",
-        }
-      : null,
-    dominantSource && dominantSource.share >= 0.7
-      ? {
-          key: "source-dominance",
-          title: `${getSourceTypeLabel(dominantSource.sourceType)} 흐름이 많이 몰려 있습니다`,
-          description: `${getSourceTypeLabel(dominantSource.sourceType)} 경로가 이번 달 거래의 ${Math.round(dominantSource.share * 100)}%를 차지하고 있어 이 수단 흐름을 먼저 점검하면 전체 정확도를 빠르게 높일 수 있습니다.`,
-          actionLabel: `${getSourceTypeLabel(dominantSource.sourceType)} 거래 보기`,
-          to: `/transactions?sourceType=${dominantSource.sourceType}`,
-        }
-      : null,
-    !insights.isFinancialProfileReady
-      ? {
-          key: "profile",
-          title: "재무 기준선 입력이 필요합니다",
-          description: "월 순수입과 목표 저축률이 비어 있어 지출률과 저축률 진단이 약하게 동작하고 있습니다.",
-          actionLabel: "기준선 설정하기",
-          to: "/settings",
-        }
-      : null,
-  ].filter((item): item is DashboardAttentionItem => Boolean(item));
+
   const nextFoundationAction =
     peopleSetupRemaining > 0
-      ? { to: "/people", label: "사람 등록하기" }
+      ? { to: "/people", label: "사용자 등록하기" }
       : unmappedAccountCount > 0
         ? { to: "/accounts", label: "계좌 연결 정리" }
         : unmappedCardCount > 0
           ? { to: "/cards", label: "카드 연결 정리" }
           : null;
+
   const prioritizedJourneySteps = [...journeySteps]
     .sort((left, right) => Number(left.completed) - Number(right.completed))
     .slice(0, 4);
-  const visibleAttentionItems = attentionItems.slice(0, 4);
 
   return (
     <div className="page-stack">
@@ -261,8 +153,17 @@ export function DashboardPage() {
           </article>
         </div>
 
+        <div className="resource-grid mt-4">
+          {insights.headlineCards.map((card, index) => (
+            <article key={card.title} className="resource-card" style={getMotionStyle(index + 6)}>
+              <h3>{card.title}</h3>
+              <p className="mb-0 text-secondary" title={card.description}>{card.description}</p>
+            </article>
+          ))}
+        </div>
+
         <div className="insight-status-grid mt-4">
-          <article className={`insight-status-card ${toneClass(insights.spendTone)}`} style={getMotionStyle(6)}>
+          <article className={`insight-status-card ${toneClass(insights.spendTone)}`} style={getMotionStyle(9)}>
             <span className="stat-label">지출률</span>
             <strong>{formatPercent(insights.spendRate)}</strong>
             <p className="mb-0 small">
@@ -273,7 +174,7 @@ export function DashboardPage() {
                   : "안정적인 범위 안에 있습니다."}
             </p>
           </article>
-          <article className={`insight-status-card ${toneClass(insights.savingsTone)}`} style={getMotionStyle(7)}>
+          <article className={`insight-status-card ${toneClass(insights.savingsTone)}`} style={getMotionStyle(10)}>
             <span className="stat-label">저축률</span>
             <strong>{formatPercent(insights.savingsRate)}</strong>
             <p className="mb-0 small">
@@ -284,7 +185,7 @@ export function DashboardPage() {
                   : "목표 수준을 잘 지키고 있습니다."}
             </p>
           </article>
-          <article className={`insight-status-card ${toneClass(insights.fixedTone)}`} style={getMotionStyle(8)}>
+          <article className={`insight-status-card ${toneClass(insights.fixedTone)}`} style={getMotionStyle(11)}>
             <span className="stat-label">고정지출 비중</span>
             <strong>{formatPercent(insights.fixedExpenseRate)}</strong>
             <p className="mb-0 small">
@@ -328,7 +229,7 @@ export function DashboardPage() {
         <div className="section-head">
           <div>
             <span className="section-kicker">기반 정보</span>
-            <h2 className="section-title">사람·계좌·카드 준비 상태</h2>
+            <h2 className="section-title">자산 설정 현황</h2>
           </div>
         </div>
         <div className="review-summary-panel mb-4">
@@ -336,11 +237,11 @@ export function DashboardPage() {
             <strong>
               {foundationRemainingCount
                 ? `아직 ${foundationRemainingCount}개의 연결 설정이 남아 있습니다`
-                : "사람·계좌·카드 기본 연결이 모두 준비되었습니다"}
+                : "사용자·계좌·카드 기본 연결이 모두 준비되었습니다"}
             </strong>
-            <p className="mb-0 text-secondary">{foundationRemainingCount ? "사람, 계좌, 카드 연결만 먼저 맞추면 됩니다." : "기본 연결 정리가 끝났습니다."}</p>
+            <p className="mb-0 text-secondary">{foundationRemainingCount ? "사용자, 계좌, 카드 연결만 먼저 맞추면 됩니다." : "기본 연결 정리가 끝났습니다."}</p>
           </div>
-          {nextFoundationAction ? (
+          {nextFoundationAction && nextFoundationAction.to !== "/accounts" ? (
             <Link to={nextFoundationAction.to} className="btn btn-outline-primary btn-sm">
               {nextFoundationAction.label}
             </Link>
@@ -350,16 +251,16 @@ export function DashboardPage() {
             </Link>
           )}
         </div>
-        <div className="resource-grid">
+        <div className="resource-grid foundation-resource-grid">
           <article className="resource-card" style={getMotionStyle(2)}>
-            <h3>사람</h3>
+            <h3>사용자</h3>
             <p className="mb-0 text-secondary">활성 {activePeopleCount}명 / 전체 {scope.people.length}명</p>
             <span className={`badge ${peopleSetupRemaining ? "text-bg-warning" : "text-bg-success"}`}>
               {peopleSetupRemaining ? "설정 필요" : "준비 완료"}
             </span>
-            <p className="mb-0 text-secondary">{peopleSetupRemaining ? "활성 사용자 등록 필요" : "바로 사용 가능"}</p>
+            <p className="mb-0 text-secondary">{peopleSetupRemaining ? "사용자 정보부터 먼저 정리해주세요" : "사용자 정보가 준비됐습니다"}</p>
             <Link to="/people" className="btn btn-outline-primary btn-sm mt-3">
-              사람 관리
+              사용자 관리
             </Link>
           </article>
           <article className="resource-card" style={getMotionStyle(3)}>
@@ -368,7 +269,7 @@ export function DashboardPage() {
             <span className={`badge ${unmappedAccountCount ? "text-bg-warning" : "text-bg-success"}`}>
               {unmappedAccountCount ? `${unmappedAccountCount}개 미연결` : "준비 완료"}
             </span>
-            <p className="mb-0 text-secondary">{unmappedAccountCount ? "소유자 또는 공동 여부 지정 필요" : "연결 완료"}</p>
+            <p className="mb-0 text-secondary">{unmappedAccountCount ? "소유자 없는 계좌가 남아 있습니다" : "계좌 연결이 준비됐습니다"}</p>
             <Link to="/accounts" className="btn btn-outline-primary btn-sm mt-3">
               계좌 관리
             </Link>
@@ -379,28 +280,11 @@ export function DashboardPage() {
             <span className={`badge ${unmappedCardCount ? "text-bg-warning" : "text-bg-success"}`}>
               {unmappedCardCount ? `${unmappedCardCount}개 미연결` : "준비 완료"}
             </span>
-            <p className="mb-0 text-secondary">{unmappedCardCount ? "소유자와 결제 계좌 연결 필요" : "연결 완료"}</p>
+            <p className="mb-0 text-secondary">{unmappedCardCount ? "카드 연결 정보가 덜 정리됐습니다" : "카드 연결이 준비됐습니다"}</p>
             <Link to="/cards" className="btn btn-outline-primary btn-sm mt-3">
               카드 관리
             </Link>
           </article>
-        </div>
-      </section>
-
-      <section className="card shadow-sm" style={getMotionStyle(2)}>
-        <div className="section-head">
-          <div>
-            <span className="section-kicker">핵심 해석</span>
-            <h2 className="section-title">지금 볼 포인트</h2>
-          </div>
-        </div>
-        <div className="resource-grid">
-          {insights.headlineCards.map((card, index) => (
-            <article key={card.title} className="resource-card" style={getMotionStyle(index + 2)}>
-              <h3>{card.title}</h3>
-              <p className="mb-0 text-secondary" title={card.description}>{card.description}</p>
-            </article>
-          ))}
         </div>
       </section>
 
@@ -447,64 +331,8 @@ export function DashboardPage() {
         </div>
       </section>
 
-      {attentionItems.length ? (
-        <section className="card shadow-sm" style={getMotionStyle(2)}>
-          <div className="section-head">
-            <div>
-              <span className="section-kicker">먼저 정리할 것</span>
-              <h2 className="section-title">아직 숫자를 더 다듬을 수 있습니다</h2>
-            </div>
-          </div>
-          <div className="review-summary-panel mb-4">
-            <div className="review-summary-copy">
-              <strong>{`현재 바로 처리하면 좋은 항목이 ${attentionItems.length}개 남아 있습니다`}</strong>
-              <p className="mb-0 text-secondary">우선순위가 높은 항목만 먼저 보여줍니다.</p>
-            </div>
-            <Link to={attentionItems[0]?.to ?? "/"} className="btn btn-outline-secondary btn-sm">
-              {attentionItems[0]?.actionLabel ?? "대시보드 보기"}
-            </Link>
-          </div>
-          <div className="resource-grid">
-            {visibleAttentionItems.map((item, index) => (
-              <article key={item.key} className="resource-card" style={getMotionStyle(index + 2)}>
-                <h3>{item.title}</h3>
-                <p className="mb-0 text-secondary" title={item.description}>
-                  바로 확인하면 정확도가 올라갑니다.
-                </p>
-                <Link to={item.to} className="btn btn-outline-primary btn-sm mt-3">
-                  {item.actionLabel}
-                </Link>
-              </article>
-            ))}
-          </div>
-        </section>
-      ) : (
-        <section className="card shadow-sm" style={getMotionStyle(2)}>
-          <div className="section-head">
-            <div>
-              <span className="section-kicker">정리 상태</span>
-              <h2 className="section-title">지금은 비교적 안정적으로 볼 수 있습니다</h2>
-            </div>
-          </div>
-          <CompletionBanner
-            title="핵심 정리가 끝난 상태입니다"
-            description="열린 검토, 미분류, 무태그, 기준선 입력까지 모두 정리돼서 이번 달 진단과 저축 흐름을 비교적 안정적으로 읽을 수 있습니다."
-            actions={
-              <>
-                <Link to="/settlements" className="btn btn-outline-primary btn-sm">
-                  정산 화면 보기
-                </Link>
-                <Link to="/transactions" className="btn btn-outline-secondary btn-sm">
-                  거래 화면 보기
-                </Link>
-              </>
-            }
-          />
-        </section>
-      )}
-
       <div className="page-grid">
-        <section className="card shadow-sm" style={getMotionStyle(attentionItems.length ? 3 : 2)}>
+        <section className="card shadow-sm" style={getMotionStyle(2)}>
           <div className="section-head">
             <div>
               <span className="section-kicker">다음 행동</span>
@@ -518,7 +346,7 @@ export function DashboardPage() {
           </ul>
         </section>
 
-        <section className="card shadow-sm" style={getMotionStyle(attentionItems.length ? 4 : 3)}>
+        <section className="card shadow-sm" style={getMotionStyle(3)}>
           <div className="section-head">
             <div>
               <span className="section-kicker">상위 지출</span>

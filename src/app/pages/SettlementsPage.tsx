@@ -40,7 +40,7 @@ export function SettlementsPage() {
   const activeSettlementFilterSummary =
     [
       activeSourceType ? `수단 ${getSourceTypeLabel(activeSourceType)}` : null,
-      activeOwnerPersonId ? `사람 ${peopleMap.get(activeOwnerPersonId) ?? "-"}` : null,
+      activeOwnerPersonId ? `사용자 ${peopleMap.get(activeOwnerPersonId) ?? "-"}` : null,
       activeTagId ? `태그 ${scope.tags.find((tag) => tag.id === activeTagId)?.name ?? "-"}` : null,
     ]
       .filter(Boolean)
@@ -128,7 +128,7 @@ export function SettlementsPage() {
     ? [
         receiver
           ? {
-              title: "가장 많이 부담한 사람",
+              title: "가장 많이 부담한 사용자",
               description: `${receiver.name}이(가) 현재 기준으로 ${formatCurrency(receiver.amount)}를 부담했고, 아직 ${formatCurrency(
                 receiver.remainingDelta,
               )} 더 부담한 상태입니다.`,
@@ -136,7 +136,7 @@ export function SettlementsPage() {
           : null,
         sender
           ? {
-              title: "정산이 가장 필요한 사람",
+              title: "정산이 가장 필요한 사용자",
               description: `${sender.name}은(는) 현재 ${formatCurrency(Math.abs(sender.remainingDelta))}만큼 덜 부담한 상태로 계산됩니다.`,
             }
           : null,
@@ -339,7 +339,7 @@ export function SettlementsPage() {
                   </Link>
                 ) : null}
                 <Link to="/people" className="btn btn-outline-secondary btn-sm">
-                  사람 관리 보기
+                  사용자 관리 보기
                 </Link>
                 <Link to="/imports" className="btn btn-outline-secondary btn-sm">
                   업로드 화면 보기
@@ -476,7 +476,7 @@ export function SettlementsPage() {
                             to={getTransactionListLink({ nature: "shared", ownerPersonId: transaction.ownerPersonId })}
                             className="btn btn-outline-secondary btn-sm"
                           >
-                            {hasScopedSettlementContext ? "현재 맥락 사람 보기" : "이 사람 거래 보기"}
+                            {hasScopedSettlementContext ? "현재 맥락 사용자 보기" : "이 사용자 거래 보기"}
                           </Link>
                         ) : null}
                       </div>
@@ -525,7 +525,7 @@ export function SettlementsPage() {
                             to={getTransactionListLink({ nature: "shared", ownerPersonId: row.personId })}
                             className="btn btn-outline-secondary btn-sm"
                           >
-                            {hasScopedSettlementContext ? "현재 맥락 사람 보기" : "이 사람 공동지출 보기"}
+                            {hasScopedSettlementContext ? "현재 맥락 사용자 보기" : "이 사용자 공동지출 보기"}
                           </Link>
                         ) : null}
                       </div>

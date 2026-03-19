@@ -670,7 +670,7 @@ export function TransactionsPage() {
                   엑셀 업로드 먼저 하기
                 </Link>
                 <Link to="/people" className="btn btn-outline-secondary btn-sm">
-                  사람 관리 보기
+                  사용자 관리 보기
                 </Link>
               </>
             }
@@ -807,7 +807,7 @@ export function TransactionsPage() {
               <div className="review-summary-panel mb-3">
                 <div className="review-summary-copy">
                   <strong>{activeOwnerName}의 거래 흐름을 보고 있습니다</strong>
-                  <p className="mb-0 text-secondary">이 사람에게 연결된 거래만 보고 있습니다.</p>
+                  <p className="mb-0 text-secondary">이 사용자에게 연결된 거래만 보고 있습니다.</p>
                 </div>
                 <div className="action-row">
                   <button
@@ -815,7 +815,7 @@ export function TransactionsPage() {
                     type="button"
                     onClick={() => setFilters((current) => ({ ...current, ownerPersonId: "all" }))}
                   >
-                    사람 필터 해제
+                    사용자 필터 해제
                   </button>
                   {filters.nature !== "shared" ? (
                     <button

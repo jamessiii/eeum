@@ -11,7 +11,7 @@ import { getWorkspaceScope } from "../state/selectors";
 
 const SETTINGS_TABS = [
   { id: "profile", label: "기준값" },
-  { id: "people", label: "사람" },
+  { id: "people", label: "사용자" },
   { id: "accounts", label: "계좌" },
   { id: "cards", label: "카드" },
   { id: "categories", label: "분류" },

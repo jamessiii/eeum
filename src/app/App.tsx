@@ -138,9 +138,11 @@ function AppTopNav({ isDeveloperModeUnlocked }: { isDeveloperModeUnlocked: boole
 
       const navRect = nav.getBoundingClientRect();
       const linkRect = activeLink.getBoundingClientRect();
+      const navStyles = window.getComputedStyle(nav);
+      const navPaddingLeft = Number.parseFloat(navStyles.paddingLeft) || 0;
       setIndicatorStyle({
         width: linkRect.width,
-        x: linkRect.left - navRect.left,
+        x: linkRect.left - navRect.left - navPaddingLeft,
         visible: true,
       });
     };
@@ -215,6 +217,31 @@ function AppFrame() {
   const { isReady, setActiveWorkspace, state } = useAppState();
   const { isDeveloperModeUnlocked, registerUnlockTap, lockDeveloperMode } = useDeveloperMode();
   const { themeMode, toggleThemeMode } = useThemeMode();
+  const [isTopbarCondensed, setIsTopbarCondensed] = useState(false);
+
+  useEffect(() => {
+    let frameId = 0;
+
+    const syncTopbar = () => {
+      frameId = 0;
+      setIsTopbarCondensed(window.scrollY > 24);
+    };
+
+    const handleScroll = () => {
+      if (frameId) return;
+      frameId = window.requestAnimationFrame(syncTopbar);
+    };
+
+    syncTopbar();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", handleScroll);
+
+    return () => {
+      if (frameId) window.cancelAnimationFrame(frameId);
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", handleScroll);
+    };
+  }, []);
 
   if (!isReady) return <LoadingScreen />;
   if (!state.workspaces.length) return <EmptyWorkspaceScreen />;
@@ -229,10 +256,22 @@ function AppFrame() {
     peopleCount: scope.people.length,
   });
   const latestImport = headerSummary.latestImport;
+  const workspaceBadgeClass =
+    activeWorkspace.source === "demo"
+      ? "text-bg-info"
+      : activeWorkspace.source === "imported"
+        ? "text-bg-success"
+        : "text-bg-secondary";
+  const workspaceBadgeLabel =
+    activeWorkspace.source === "demo"
+      ? "?뚯뒪??紐⑤뱶"
+      : activeWorkspace.source === "imported"
+        ? "?낅줈???곗씠??"
+        : "鍮?紐⑤뱶";
 
   return (
     <div className="app-shell">
-      <header className="app-topbar">
+      <header className={`app-topbar${isTopbarCondensed ? " condensed" : ""}`}>
         <div className="app-topbar-main">
           <div className="app-brand-block">
             <span className="sidebar-kicker">Household Web App</span>
@@ -240,6 +279,16 @@ function AppFrame() {
               <h1>가계부 웹앱</h1>
             </button>
             <p className="sidebar-copy">빠르게 기록하고 바로 정리하는 흐름입니다.</p>
+          </div>
+          <div className="app-topbar-compact-header">
+            <span className="section-kicker">Current Workspace</span>
+            <div className="app-topbar-workspace-row">
+              <strong>{activeWorkspace.name}</strong>
+              <span className={`badge ${workspaceBadgeClass}`}>{workspaceBadgeLabel}</span>
+            </div>
+            <span className="app-topbar-compact-meta">
+              거래 {headerSummary.transactionsCount}건 · 검토 {headerSummary.openReviewCount}건 · 사용자 {headerSummary.peopleCount}명
+            </span>
           </div>
           <div className="app-topbar-actions">
             <select
@@ -254,12 +303,13 @@ function AppFrame() {
               ))}
             </select>
             <button type="button" className="theme-toggle-button" onClick={toggleThemeMode}>
-              <span className="theme-toggle-button-label">{themeMode === "dark" ? "다크 모드" : "라이트 모드"}</span>
+              <span className="theme-toggle-button-label">테마</span>
               <strong>{themeMode === "dark" ? "Light" : "Dark"}</strong>
             </button>
           </div>
+          {isTopbarCondensed ? <AppTopNav isDeveloperModeUnlocked={isDeveloperModeUnlocked} /> : null}
         </div>
-        <AppTopNav isDeveloperModeUnlocked={isDeveloperModeUnlocked} />
+        {!isTopbarCondensed ? <AppTopNav isDeveloperModeUnlocked={isDeveloperModeUnlocked} /> : null}
       </header>
 
       <div className="app-main">
@@ -268,7 +318,7 @@ function AppFrame() {
             <span className="section-kicker">활성 워크스페이스</span>
             <h2 className="mb-0">{activeWorkspace.name}</h2>
             <p className="app-header-meta">
-              거래 {headerSummary.transactionsCount}건 · 검토 {headerSummary.openReviewCount}건 · 사람 {headerSummary.peopleCount}명
+              거래 {headerSummary.transactionsCount}건 · 검토 {headerSummary.openReviewCount}건 · 사용자 {headerSummary.peopleCount}명            
               {latestImport ? ` · 최근 업로드 ${latestImport.importedAt.slice(0, 10)}` : ""}
             </p>
           </div>

@@ -967,7 +967,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
       addPerson(workspaceId, input) {
         const values = createPersonDraft(input);
         dispatch({ type: "addPerson", payload: { workspaceId, values } });
-        showToast(`${values.displayName || values.name} 사람을 추가했습니다.`, "success");
+        showToast(`${values.displayName || values.name} 사용자를 추가했습니다.`, "success");
       },
       updatePerson(workspaceId, personId, input) {
         const current = state.people.find((item) => item.workspaceId === workspaceId && item.id === personId);
