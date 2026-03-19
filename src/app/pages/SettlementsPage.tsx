@@ -150,7 +150,7 @@ export function SettlementsPage() {
           ? "현재 선택한 수단, 사람, 태그 기준으로는 이번 달 공동지출이 없습니다. 거래 화면에서 같은 맥락의 항목을 다시 확인해보세요."
           : "아직 이번 달 공동지출 거래가 없습니다. 거래 화면에서 공동지출로 표시된 항목이 있는지 먼저 확인해보세요.",
         to: hasScopedSettlementContext ? "/transactions" : "/transactions?nature=shared",
-        actionLabel: hasScopedSettlementContext ? "현재 맥락 거래 보기" : "공동지출 거래 보기",
+        actionLabel: hasScopedSettlementContext ? "현재 맥락 공동지출 보기" : "공동지출 거래 보기",
       }
     : sharedTransactions.length
     ? receiver && sender && suggestedSettlementAmount > 0
@@ -166,13 +166,13 @@ export function SettlementsPage() {
           title: "지금 가장 먼저 할 일",
           description: "이번 달 공동지출은 잡혀 있지만 남은 정산 편차는 크지 않습니다. 공동지출 흐름과 완료 기록이 맞는지 한 번 더 확인해보세요.",
           to: "/transactions?nature=shared",
-          actionLabel: "공동지출 거래 보기",
+          actionLabel: hasScopedSettlementContext ? "현재 맥락 공동지출 보기" : "공동지출 거래 보기",
         }
     : {
         title: "지금 가장 먼저 할 일",
         description: "거래 화면에서 공동지출 흐름을 다시 확인해보세요.",
         to: "/transactions",
-        actionLabel: "거래 화면 보기",
+        actionLabel: hasScopedSettlementContext ? "현재 맥락 거래 보기" : "거래 화면 보기",
       };
   const isSettlementBalanced = visibleSharedTransactionCount > 0 && !receiver && !sender;
   const settlementQuickStatus =
@@ -223,7 +223,13 @@ export function SettlementsPage() {
             to={appendCurrentTransactionFilters(visibleSharedTransactionCount ? "/transactions?nature=shared" : "/transactions")}
             className="btn btn-outline-secondary btn-sm"
           >
-            {visibleSharedTransactionCount ? "공동지출 거래 보기" : hasScopedSettlementContext ? "현재 맥락 거래 보기" : "거래 화면 보기"}
+            {visibleSharedTransactionCount
+              ? hasScopedSettlementContext
+                ? "현재 맥락 공동지출 보기"
+                : "공동지출 거래 보기"
+              : hasScopedSettlementContext
+                ? "현재 맥락 거래 보기"
+                : "거래 화면 보기"}
           </Link>
         </div>
         {activeSettlementFilterSummary ? (
@@ -255,8 +261,8 @@ export function SettlementsPage() {
             }
             actions={
               <>
-                <Link to={appendCurrentTransactionFilters("/transactions?nature=shared")} className="btn btn-outline-primary btn-sm">
-                  공동지출 거래 보기
+              <Link to={appendCurrentTransactionFilters("/transactions?nature=shared")} className="btn btn-outline-primary btn-sm">
+                  {hasScopedSettlementContext ? "현재 맥락 공동지출 보기" : "공동지출 거래 보기"}
                 </Link>
                 <Link to="/" className="btn btn-outline-secondary btn-sm">
                   대시보드 보기
@@ -468,7 +474,7 @@ export function SettlementsPage() {
                         ?꾩껜 ?뺤궛 蹂닿린
                       </Link>
                       <Link className="btn btn-outline-secondary btn-sm" to={appendCurrentTransactionFilters("/transactions?nature=shared")}>
-                        嫄곕옒 ?붾㈃ 蹂닿린
+                        {hasScopedSettlementContext ? "현재 맥락 공동지출 보기" : "공동지출 거래 보기"}
                       </Link>
                     </>
                   }
@@ -528,7 +534,7 @@ export function SettlementsPage() {
               }
               actions={
                 <Link to={appendCurrentTransactionFilters("/transactions?nature=shared")} className="btn btn-outline-primary btn-sm">
-                  공동지출 거래 보기
+                  {hasScopedSettlementContext ? "현재 맥락 공동지출 보기" : "공동지출 거래 보기"}
                 </Link>
               }
             />
