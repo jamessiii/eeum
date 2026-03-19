@@ -34,6 +34,30 @@ export function AccountsPage() {
   const people = scope.people.filter((person) => person.isActive);
   const personMap = new Map(scope.people.map((person) => [person.id, person.displayName || person.name]));
   const transactions = getActiveTransactions(scope.transactions);
+  const getOwnerOptions = (ownerPersonId: string | null) =>
+    ownerPersonId ? scope.people.filter((person) => person.isActive || person.id === ownerPersonId) : people;
+  const getAccountFormValues = (formData: FormData) => {
+    const isShared = formData.get("isShared") === "on";
+    return {
+      ownerPersonId: isShared ? null : String(formData.get("ownerPersonId") ?? "") || null,
+      name: String(formData.get("name") ?? "").trim(),
+      alias: String(formData.get("alias") ?? "").trim(),
+      institutionName: String(formData.get("institutionName") ?? "").trim(),
+      accountNumberMasked: String(formData.get("accountNumberMasked") ?? "").trim(),
+      accountType: String(formData.get("accountType") ?? "checking") as "checking" | "savings" | "loan" | "cash" | "other",
+      usageType: String(formData.get("usageType") ?? "daily") as
+        | "daily"
+        | "salary"
+        | "shared"
+        | "card_payment"
+        | "savings"
+        | "investment"
+        | "loan"
+        | "other",
+      isShared,
+      memo: String(formData.get("memo") ?? "").trim(),
+    };
+  };
 
   return (
     <div className="page-stack">
@@ -53,33 +77,10 @@ export function AccountsPage() {
           onSubmit={(event) => {
             event.preventDefault();
             const formData = new FormData(event.currentTarget);
-            const name = String(formData.get("name") ?? "").trim();
-            if (!name) return;
+            const values = getAccountFormValues(formData);
+            if (!values.name) return;
 
-            addAccount(workspaceId, {
-              ownerPersonId: String(formData.get("ownerPersonId") ?? "") || null,
-              name,
-              alias: String(formData.get("alias") ?? "").trim(),
-              institutionName: String(formData.get("institutionName") ?? "").trim(),
-              accountNumberMasked: String(formData.get("accountNumberMasked") ?? "").trim(),
-              accountType: String(formData.get("accountType") ?? "checking") as
-                | "checking"
-                | "savings"
-                | "loan"
-                | "cash"
-                | "other",
-              usageType: String(formData.get("usageType") ?? "daily") as
-                | "daily"
-                | "salary"
-                | "shared"
-                | "card_payment"
-                | "savings"
-                | "investment"
-                | "loan"
-                | "other",
-              isShared: formData.get("isShared") === "on",
-              memo: String(formData.get("memo") ?? "").trim(),
-            });
+            addAccount(workspaceId, values);
 
             event.currentTarget.reset();
           }}
@@ -197,33 +198,10 @@ export function AccountsPage() {
                     onSubmit={(event) => {
                       event.preventDefault();
                       const formData = new FormData(event.currentTarget);
-                      const name = String(formData.get("name") ?? "").trim();
-                      if (!name) return;
+                      const values = getAccountFormValues(formData);
+                      if (!values.name) return;
 
-                      updateAccount(workspaceId, account.id, {
-                        ownerPersonId: String(formData.get("ownerPersonId") ?? "") || null,
-                        name,
-                        alias: String(formData.get("alias") ?? "").trim(),
-                        institutionName: String(formData.get("institutionName") ?? "").trim(),
-                        accountNumberMasked: String(formData.get("accountNumberMasked") ?? "").trim(),
-                        accountType: String(formData.get("accountType") ?? "checking") as
-                          | "checking"
-                          | "savings"
-                          | "loan"
-                          | "cash"
-                          | "other",
-                        usageType: String(formData.get("usageType") ?? "daily") as
-                          | "daily"
-                          | "salary"
-                          | "shared"
-                          | "card_payment"
-                          | "savings"
-                          | "investment"
-                          | "loan"
-                          | "other",
-                        isShared: formData.get("isShared") === "on",
-                        memo: String(formData.get("memo") ?? "").trim(),
-                      });
+                      updateAccount(workspaceId, account.id, values);
                     }}
                   >
                     <label>
@@ -246,9 +224,10 @@ export function AccountsPage() {
                       소유자
                       <select name="ownerPersonId" className="form-select" defaultValue={account.ownerPersonId ?? ""}>
                         <option value="">공동 또는 미지정</option>
-                        {people.map((person) => (
+                        {getOwnerOptions(account.ownerPersonId).map((person) => (
                           <option key={person.id} value={person.id}>
                             {person.displayName || person.name}
+                            {!person.isActive ? " (보관됨)" : ""}
                           </option>
                         ))}
                       </select>

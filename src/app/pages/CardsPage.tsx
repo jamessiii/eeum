@@ -24,6 +24,17 @@ export function CardsPage() {
   const personMap = new Map(scope.people.map((person) => [person.id, person.displayName || person.name]));
   const accountMap = new Map(scope.accounts.map((item) => [item.id, item.alias || item.name]));
   const transactions = getActiveTransactions(scope.transactions);
+  const getOwnerOptions = (ownerPersonId: string | null) =>
+    ownerPersonId ? scope.people.filter((person) => person.isActive || person.id === ownerPersonId) : people;
+  const getCardFormValues = (formData: FormData) => ({
+    ownerPersonId: String(formData.get("ownerPersonId") ?? "") || null,
+    name: String(formData.get("name") ?? "").trim(),
+    issuerName: String(formData.get("issuerName") ?? "").trim(),
+    cardNumberMasked: String(formData.get("cardNumberMasked") ?? "").trim(),
+    linkedAccountId: String(formData.get("linkedAccountId") ?? "") || null,
+    cardType: String(formData.get("cardType") ?? "credit") as "credit" | "check" | "debit" | "prepaid" | "other",
+    memo: String(formData.get("memo") ?? "").trim(),
+  });
 
   return (
     <div className="page-stack">
@@ -43,18 +54,10 @@ export function CardsPage() {
           onSubmit={(event) => {
             event.preventDefault();
             const formData = new FormData(event.currentTarget);
-            const name = String(formData.get("name") ?? "").trim();
-            if (!name) return;
+            const values = getCardFormValues(formData);
+            if (!values.name) return;
 
-            addCard(workspaceId, {
-              ownerPersonId: String(formData.get("ownerPersonId") ?? "") || null,
-              name,
-              issuerName: String(formData.get("issuerName") ?? "").trim(),
-              cardNumberMasked: String(formData.get("cardNumberMasked") ?? "").trim(),
-              linkedAccountId: String(formData.get("linkedAccountId") ?? "") || null,
-              cardType: String(formData.get("cardType") ?? "credit") as "credit" | "check" | "debit" | "prepaid" | "other",
-              memo: String(formData.get("memo") ?? "").trim(),
-            });
+            addCard(workspaceId, values);
 
             event.currentTarget.reset();
           }}
@@ -162,23 +165,10 @@ export function CardsPage() {
                     onSubmit={(event) => {
                       event.preventDefault();
                       const formData = new FormData(event.currentTarget);
-                      const name = String(formData.get("name") ?? "").trim();
-                      if (!name) return;
+                      const values = getCardFormValues(formData);
+                      if (!values.name) return;
 
-                      updateCard(workspaceId, card.id, {
-                        ownerPersonId: String(formData.get("ownerPersonId") ?? "") || null,
-                        name,
-                        issuerName: String(formData.get("issuerName") ?? "").trim(),
-                        cardNumberMasked: String(formData.get("cardNumberMasked") ?? "").trim(),
-                        linkedAccountId: String(formData.get("linkedAccountId") ?? "") || null,
-                        cardType: String(formData.get("cardType") ?? "credit") as
-                          | "credit"
-                          | "check"
-                          | "debit"
-                          | "prepaid"
-                          | "other",
-                        memo: String(formData.get("memo") ?? "").trim(),
-                      });
+                      updateCard(workspaceId, card.id, values);
                     }}
                   >
                     <label>
@@ -193,9 +183,10 @@ export function CardsPage() {
                       소유자
                       <select name="ownerPersonId" className="form-select" defaultValue={card.ownerPersonId ?? ""}>
                         <option value="">미지정</option>
-                        {people.map((person) => (
+                        {getOwnerOptions(card.ownerPersonId).map((person) => (
                           <option key={person.id} value={person.id}>
                             {person.displayName || person.name}
+                            {!person.isActive ? " (보관됨)" : ""}
                           </option>
                         ))}
                       </select>
