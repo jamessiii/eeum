@@ -569,7 +569,11 @@ export function ImportsPage() {
                       </p>
                     </div>
                     <div className="action-row justify-content-end">
-                      {item.reviewCount > 0 ? (
+                      {item.id === latestImport?.id ? (
+                        <Link to={latestImportWorkspaceAction.to} className="btn btn-sm btn-outline-primary">
+                          {latestImportWorkspaceAction.label}
+                        </Link>
+                      ) : item.reviewCount > 0 ? (
                         <Link to="/reviews" className="btn btn-sm btn-outline-primary">
                           리뷰 {item.reviewCount}건 보기
                         </Link>
