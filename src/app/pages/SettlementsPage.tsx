@@ -195,11 +195,27 @@ export function SettlementsPage() {
             </div>
           </div>
           {!settlementRows.length ? (
+            <>
+            <div className="review-summary-panel mb-4">
+              <div className="review-summary-copy">
+                <strong>공동지출 거래가 생기면 여기서 바로 정산 흐름이 시작됩니다</strong>
+                <p className="mb-0 text-secondary">먼저 거래 화면에서 공동지출 체크를 붙이거나, 사람 구성을 정리해 두면 정산 계산이 자연스럽게 이어집니다.</p>
+              </div>
+              <div className="d-flex flex-wrap gap-2">
+                <Link to="/transactions" className="btn btn-outline-primary btn-sm">
+                  거래 화면 보기
+                </Link>
+                <Link to="/people" className="btn btn-outline-secondary btn-sm">
+                  사람 관리 보기
+                </Link>
+              </div>
+            </div>
             <EmptyStateCallout
               kicker="정산 대기"
               title="아직 공동지출 데이터가 없습니다"
               description="거래 입력이나 업로드 뒤에 공동지출 체크를 해두면 여기서 사람별 부담과 정산 후보를 계산해 보여줍니다."
             />
+            </>
           ) : (
             <>
               <div className="stats-grid">

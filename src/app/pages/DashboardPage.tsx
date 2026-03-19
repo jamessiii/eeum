@@ -453,6 +453,17 @@ export function DashboardPage() {
               <h2 className="section-title">아직 숫자를 더 다듬을 수 있습니다</h2>
             </div>
           </div>
+          <div className="review-summary-panel mb-4">
+            <div className="review-summary-copy">
+              <strong>{`현재 바로 처리하면 좋은 항목이 ${attentionItems.length}개 남아 있습니다`}</strong>
+              <p className="mb-0 text-secondary">
+                준비가 덜 된 항목을 먼저 줄이면 업로드, 분류, 정산 화면이 같은 기준으로 더 안정적으로 이어집니다.
+              </p>
+            </div>
+            <Link to={attentionItems[0]?.to ?? "/"} className="btn btn-outline-secondary btn-sm">
+              {attentionItems[0]?.actionLabel ?? "대시보드 보기"}
+            </Link>
+          </div>
           <div className="resource-grid">
             {attentionItems.map((item, index) => (
               <article key={item.key} className="resource-card" style={getMotionStyle(index + 2)}>

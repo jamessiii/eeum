@@ -30,6 +30,13 @@ export function ImportsPage() {
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const activeWorkspace = state.workspaces.find((workspace) => workspace.id === workspaceId) ?? null;
+  const recentImports = [...scope.imports].sort((a, b) => b.importedAt.localeCompare(a.importedAt));
+  const latestImport = recentImports[0] ?? null;
+  const latestImportAction = latestImport
+    ? latestImport.reviewCount > 0
+      ? { to: "/reviews", label: `리뷰 ${latestImport.reviewCount}건 확인` }
+      : { to: "/transactions", label: "최근 가져온 거래 보기" }
+    : { to: "/imports", label: "업로드 준비 보기" };
 
   const applyPreviewPersonPatch = (
     personId: string,
@@ -524,14 +531,12 @@ export function ImportsPage() {
                   검토가 남아 있으면 리뷰로, 아니면 거래 정리 화면으로 바로 이동해서 업로드 직후 흐름을 이어가세요.
                 </p>
               </div>
-              <Link to="/reviews" className="btn btn-outline-secondary btn-sm">
+              <Link to={latestImportAction.to} className="btn btn-outline-secondary btn-sm">
                 리뷰 화면 보기
               </Link>
             </div>
           <div className="review-list">
-            {[...scope.imports]
-              .sort((a, b) => b.importedAt.localeCompare(a.importedAt))
-              .map((item, index) => (
+            {recentImports.map((item, index) => (
                 <article key={item.id} className="review-card" style={getMotionStyle(index + 10)}>
                   <div className="d-flex justify-content-between align-items-start gap-3">
                     <div>
