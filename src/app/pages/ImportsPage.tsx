@@ -7,6 +7,7 @@ import { getExpenseImpactStats } from "../../domain/transactions/expenseImpactSt
 import { getTransactionTypeCounts } from "../../domain/transactions/transactionTypeCounts";
 import { getSourceBreakdown } from "../../domain/transactions/sourceBreakdown";
 import { getWorkspaceHealthSummary } from "../../domain/workspace/health";
+import { getLatestImportRecord } from "../../domain/workspace/summary";
 import type { WorkspaceBundle } from "../../shared/types/models";
 import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
@@ -34,7 +35,7 @@ export function ImportsPage() {
   const sharedExpenseCount = expenseStats.sharedExpenseCount;
   const internalTransferCount = expenseStats.internalTransferCount;
   const sourceBreakdown = getSourceBreakdown(scope.transactions);
-  const latestImport = imports[0] ?? null;
+  const latestImport = getLatestImportRecord(scope.imports);
   const postImportFlow = [
     {
       id: "reviews",
