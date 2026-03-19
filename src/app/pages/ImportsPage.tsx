@@ -3,11 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { REVIEW_TYPE_LABELS } from "../../domain/reviews/meta";
 import { getJourneyProgress } from "../../domain/journey/progress";
 import { getExpenseImpactStats } from "../../domain/transactions/expenseImpactStats";
-import {
-  isActiveExpenseImpactTransaction,
-  isActiveInternalTransferTransaction,
-  isActiveSharedExpenseTransaction,
-} from "../../domain/transactions/meta";
+import { getTransactionTypeCounts } from "../../domain/transactions/transactionTypeCounts";
 import { getSourceBreakdown } from "../../domain/transactions/sourceBreakdown";
 import { getWorkspaceHealthSummary } from "../../domain/workspace/health";
 import type { WorkspaceBundle } from "../../shared/types/models";
@@ -121,30 +117,16 @@ export function ImportsPage() {
       ).sort((a, b) => b[1] - a[1])
     : [];
   const previewTransactionSummary = previewBundle
-    ? previewBundle.transactions.reduce(
-        (accumulator, transaction) => {
-          accumulator.byType[transaction.transactionType] = (accumulator.byType[transaction.transactionType] ?? 0) + 1;
-          if (isActiveExpenseImpactTransaction(transaction)) {
-            accumulator.expenseCount += 1;
-            accumulator.expenseAmount += transaction.amount;
-          }
-          if (isActiveInternalTransferTransaction(transaction)) accumulator.internalTransferCount += 1;
-          if (isActiveSharedExpenseTransaction(transaction)) accumulator.sharedExpenseCount += 1;
-          return accumulator;
-        },
-        {
-          byType: {
-            expense: 0,
-            income: 0,
-            transfer: 0,
-            adjustment: 0,
-          },
-          expenseCount: 0,
-          expenseAmount: 0,
-          internalTransferCount: 0,
-          sharedExpenseCount: 0,
-        },
-      )
+    ? (() => {
+        const previewStats = getExpenseImpactStats(previewBundle.transactions);
+        return {
+          byType: getTransactionTypeCounts(previewBundle.transactions),
+          expenseCount: previewStats.activeExpenseCount,
+          expenseAmount: previewStats.expenseImpactAmount,
+          internalTransferCount: previewStats.internalTransferCount,
+          sharedExpenseCount: previewStats.sharedExpenseCount,
+        };
+      })()
     : null;
 
   return (
