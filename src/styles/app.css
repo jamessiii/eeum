@@ -679,6 +679,29 @@ a {
   padding: 1rem 1.1rem;
 }
 
+.review-card-main {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.review-card-side {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: end;
+  min-width: fit-content;
+}
+
+.review-card-meta {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.review-inline-list {
+  margin: 0;
+  line-height: 1.55;
+  word-break: break-word;
+}
+
 .review-type {
   display: inline-block;
   margin-bottom: 0.4rem;
@@ -936,6 +959,11 @@ a {
   .review-card > .d-flex,
   .review-summary-panel > .d-flex {
     width: 100%;
+  }
+
+  .review-card-side {
+    width: 100%;
+    justify-items: stretch;
   }
 
   .resource-card {

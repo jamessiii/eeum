@@ -296,7 +296,7 @@ export function SettlementsPage() {
                 {sharedTransactions.slice(0, 8).map((transaction, index) => (
                   <article key={transaction.id} className="review-card" style={getMotionStyle(index + 2)}>
                     <div className="d-flex justify-content-between align-items-start gap-3">
-                      <div>
+                      <div className="review-card-main">
                         <span className="review-type">공동지출 근거</span>
                         <h3>{transaction.merchantName}</h3>
                         <p className="mb-1 text-secondary">
@@ -305,7 +305,7 @@ export function SettlementsPage() {
                         <p className="mb-1 text-secondary">{getTransactionConnectionSummary(transaction)}</p>
                         <p className="mb-0 text-secondary">{transaction.description || "설명 없음"}</p>
                       </div>
-                      <div className="d-flex flex-column align-items-end gap-2">
+                      <div className="review-card-side">
                         <strong>{formatCurrency(transaction.amount)}</strong>
                         {transaction.cardId ? (
                           <Link to={`/transactions?sourceType=card&ownerPersonId=${transaction.ownerPersonId ?? ""}`} className="btn btn-outline-secondary btn-sm">
@@ -335,7 +335,7 @@ export function SettlementsPage() {
                 {settlementRows.map((row, index) => (
                   <article key={row.personId} className="review-card" style={getMotionStyle(index + 2)}>
                     <div className="d-flex justify-content-between align-items-start gap-3">
-                      <div>
+                      <div className="review-card-main">
                         <span className="review-type">정산 요약</span>
                         <h3>{row.name}</h3>
                         <p className="mb-1 text-secondary">현재 부담액 {formatCurrency(row.amount)}</p>
@@ -343,7 +343,7 @@ export function SettlementsPage() {
                           정산 전 편차 {formatCurrency(Math.abs(row.delta))} · 남은 편차 {formatCurrency(Math.abs(row.remainingDelta))}
                         </p>
                       </div>
-                      <div className="d-flex flex-column align-items-end gap-2">
+                      <div className="review-card-side">
                         <span className={`badge ${row.remainingDelta > 0 ? "text-bg-warning" : "text-bg-success"}`}>
                           {row.remainingDelta > 0
                             ? `${formatCurrency(row.remainingDelta)} 더 부담`
@@ -378,13 +378,18 @@ export function SettlementsPage() {
               kicker="기록 없음"
               title="아직 완료로 남긴 정산이 없습니다"
               description="추천 정산이 맞다면 완료로 기록해서 이번 달 정산 내역을 남겨보세요."
+              actions={
+                <Link to="/transactions?nature=shared" className="btn btn-outline-primary btn-sm">
+                  공동지출 거래 보기
+                </Link>
+              }
             />
           ) : (
             <div className="review-list">
               {settlementHistory.map((item, index) => (
                 <article key={item.id} className="review-card" style={getMotionStyle(index + 3)}>
                   <div className="d-flex justify-content-between align-items-start gap-3">
-                    <div>
+                    <div className="review-card-main">
                       <span className="review-type">정산 완료</span>
                       <h3>
                         {(item.fromPersonId ? peopleMap.get(item.fromPersonId) : "공동") ?? "공동"} →{" "}

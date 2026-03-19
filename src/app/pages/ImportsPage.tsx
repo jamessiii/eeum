@@ -544,7 +544,7 @@ export function ImportsPage() {
             {recentImports.map((item, index) => (
                 <article key={item.id} className="review-card" style={getMotionStyle(index + 10)}>
                   <div className="d-flex justify-content-between align-items-start gap-3">
-                    <div>
+                    <div className="review-card-main">
                       <span className="review-type">{item.parserId}</span>
                       <h3>{item.fileName}</h3>
                       <p className="mb-0 text-secondary">

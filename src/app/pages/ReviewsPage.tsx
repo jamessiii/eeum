@@ -421,7 +421,7 @@ export function ReviewsPage() {
             return (
               <article key={review.id} className="review-card" style={getMotionStyle(index)}>
                 <div className="d-flex justify-content-between align-items-start gap-3">
-                  <div>
+                  <div className="review-card-main">
                     <span className="review-type">{REVIEW_TYPE_LABELS[review.reviewType] ?? review.reviewType}</span>
                     <h3>{review.summary}</h3>
                     {primaryTransaction ? (
@@ -431,14 +431,16 @@ export function ReviewsPage() {
                       </p>
                     ) : null}
                     {primaryTransaction ? (
-                      <p className="mb-2 text-secondary">
+                      <div className="review-card-meta mb-2 text-secondary">
+                        <p className="mb-0">
                         {primaryTransaction.ownerPersonId ? `사용자 ${peopleMap.get(primaryTransaction.ownerPersonId) ?? "-"}` : "사용자 미지정"} ·{" "}
                         {primaryTransaction.accountId ? `계좌 ${accountMap.get(primaryTransaction.accountId) ?? "-"}` : "계좌 미연결"} ·{" "}
                         {primaryTransaction.cardId ? `카드 ${cardMap.get(primaryTransaction.cardId) ?? "-"}` : "카드 미연결"}
-                      </p>
+                        </p>
+                      </div>
                     ) : null}
                     {relatedTransactions.length ? (
-                      <div className="small text-secondary">
+                      <div className="small text-secondary review-inline-list">
                         관련 거래:{" "}
                         {relatedTransactions
                           .map((item) => `${item.merchantName} ${item.amount.toLocaleString("ko-KR")}원`)
@@ -458,9 +460,11 @@ export function ReviewsPage() {
                       </div>
                     ) : null}
                   </div>
-                  <span className="badge text-bg-light">신뢰도 {Math.round(review.confidenceScore * 100)}%</span>
+                  <div className="review-card-side">
+                    <span className="badge text-bg-light">신뢰도 {Math.round(review.confidenceScore * 100)}%</span>
+                  </div>
                 </div>
-                <div className="d-flex flex-wrap gap-2 mt-3">
+                <div className="action-row mt-3">
                   <button
                     className="btn btn-sm btn-primary"
                     onClick={() => {
