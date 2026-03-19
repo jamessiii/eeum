@@ -90,16 +90,27 @@ export function ReviewsPage() {
       : null;
 
   const getReviewTransactionLink = (reviewType: ReviewType) => {
+    const searchParams = new URLSearchParams();
     switch (reviewType) {
       case "uncategorized_transaction":
-        return "/transactions?cleanup=uncategorized";
+        searchParams.set("cleanup", "uncategorized");
+        break;
       case "shared_expense_candidate":
-        return "/transactions?nature=shared";
+        searchParams.set("nature", "shared");
+        break;
       case "internal_transfer_candidate":
-        return "/transactions?nature=internal_transfer";
+        searchParams.set("nature", "internal_transfer");
+        break;
       default:
-        return "/transactions";
+        break;
     }
+
+    if (activeSourceType !== "all") {
+      searchParams.set("sourceType", activeSourceType);
+    }
+
+    const query = searchParams.toString();
+    return query ? `/transactions?${query}` : "/transactions";
   };
 
   const getReviewTransactionLinkLabel = (reviewType: ReviewType) => {
