@@ -1,9 +1,9 @@
-import { SOURCE_TYPE_OPTIONS } from "./sourceTypes";
 import type { Transaction } from "../../shared/types/models";
+import { getSourceTypeSummary } from "./sourceTypeSummary";
 
 export function getSourceTypeCounts(transactions: Transaction[]) {
-  return SOURCE_TYPE_OPTIONS.reduce<Record<(typeof SOURCE_TYPE_OPTIONS)[number], number>>((accumulator, sourceType) => {
-    accumulator[sourceType] = transactions.filter((transaction) => transaction.sourceType === sourceType).length;
+  return getSourceTypeSummary(transactions).reduce<Record<"manual" | "account" | "card" | "import", number>>((accumulator, item) => {
+    accumulator[item.sourceType] = item.count;
     return accumulator;
   }, {
     manual: 0,
