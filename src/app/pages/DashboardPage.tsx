@@ -44,13 +44,22 @@ export function DashboardPage() {
   const foundationRemainingCount = peopleSetupRemaining + unmappedAccountCount + unmappedCardCount;
   const hasPreparedTransactions = insights.transactionCount > 0;
   const isDiagnosisReady = insights.isDiagnosisReady;
+  const importFollowUpAction = hasPreparedTransactions
+    ? insights.reviewCount > 0
+      ? { to: "/reviews", actionLabel: `리뷰 ${insights.reviewCount}건 확인` }
+      : insights.uncategorizedCount > 0
+        ? { to: "/transactions?cleanup=uncategorized", actionLabel: `미분류 ${insights.uncategorizedCount}건 정리` }
+        : insights.untaggedCount > 0
+          ? { to: "/transactions?cleanup=untagged", actionLabel: `무태그 ${insights.untaggedCount}건 정리` }
+          : { to: "/transactions", actionLabel: "거래 화면 보기" }
+    : { to: "/imports", actionLabel: "거래 가져오기" };
   const journeySteps: DashboardJourneyStep[] = [
     {
       key: "import",
       title: "거래 준비",
       description: hasPreparedTransactions ? "거래 흐름이 이미 들어와 있어 검토와 분류 단계로 바로 이어갈 수 있습니다." : "엑셀 업로드나 수동 입력으로 첫 거래 흐름을 넣어야 진단이 시작됩니다.",
-      to: "/imports",
-      actionLabel: hasPreparedTransactions ? "거래 흐름 확인하기" : "거래 가져오기",
+      to: importFollowUpAction.to,
+      actionLabel: importFollowUpAction.actionLabel,
       completed: hasPreparedTransactions,
     },
     {
