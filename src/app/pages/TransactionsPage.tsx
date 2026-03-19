@@ -3,7 +3,12 @@ import { Link, useSearchParams } from "react-router-dom";
 import {
   isActiveTransaction,
 } from "../../domain/transactions/meta";
-import { getFilteredTransactions, type TransactionFilters } from "../../domain/transactions/filters";
+import {
+  clearTransactionSearchQuery,
+  getFilteredTransactions,
+  resetTransactionCleanupFilters,
+  type TransactionFilters,
+} from "../../domain/transactions/filters";
 import { getTransactionActivitySummary } from "../../domain/transactions/transactionActivitySummary";
 import { getTransactionFilterContext } from "../../domain/transactions/transactionFilterContext";
 import { getSourceTypeCounts } from "../../domain/transactions/sourceTypeCounts";
@@ -462,7 +467,7 @@ export function TransactionsPage() {
                       미분류 정리로 이어가기
                     </button>
                   ) : null}
-                  <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, nature: "all", tagId: "all", searchQuery: "" }))}>
+                  <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters(resetTransactionCleanupFilters)}>
                     전체 거래로 돌아가기
                   </button>
                   <Link className="btn btn-outline-dark btn-sm" to="/">
@@ -520,7 +525,7 @@ export function TransactionsPage() {
                       공동지출 {sharedExpenseCount}건 보기
                     </button>
                   ) : null}
-                  <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, nature: "all", tagId: "all", searchQuery: "" }))}>
+                  <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters(resetTransactionCleanupFilters)}>
                     전체 거래로 돌아가기
                   </button>
                   {filters.nature === "shared" ? (
@@ -600,7 +605,7 @@ export function TransactionsPage() {
                   </p>
                 </div>
                 <div className="d-flex flex-wrap gap-2">
-                  <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, searchQuery: "" }))}>
+                  <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters(clearTransactionSearchQuery)}>
                     검색 해제
                   </button>
                 </div>
@@ -627,7 +632,7 @@ export function TransactionsPage() {
                         공동지출 {sharedExpenseCount}건 보기
                       </button>
                     ) : null}
-                    <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, nature: "all", tagId: "all", searchQuery: "" }))}>
+                    <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters(resetTransactionCleanupFilters)}>
                       전체 거래로 돌아가기
                     </button>
                     <Link className="btn btn-outline-dark btn-sm" to="/">
@@ -656,7 +661,7 @@ export function TransactionsPage() {
                 onShowUntagged={() => setFilters((current) => ({ ...current, nature: "untagged" }))}
                 onShowShared={() => setFilters((current) => ({ ...current, nature: "shared" }))}
                 onShowInternalTransfer={() => setFilters((current) => ({ ...current, nature: "internal_transfer" }))}
-                onResetCleanupFilters={() => setFilters((current) => ({ ...current, nature: "all", tagId: "all", searchQuery: "" }))}
+                onResetCleanupFilters={() => setFilters(resetTransactionCleanupFilters)}
               />
 
               <TransactionSourceSummaryPanel

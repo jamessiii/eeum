@@ -17,6 +17,22 @@ export interface TransactionFilters {
   searchQuery: string;
 }
 
+export function resetTransactionCleanupFilters(filters: TransactionFilters): TransactionFilters {
+  return {
+    ...filters,
+    nature: "all",
+    tagId: "all",
+    searchQuery: "",
+  };
+}
+
+export function clearTransactionSearchQuery(filters: TransactionFilters): TransactionFilters {
+  return {
+    ...filters,
+    searchQuery: "",
+  };
+}
+
 export function getFilteredTransactions(transactions: Transaction[], filters: TransactionFilters) {
   const query = filters.searchQuery.trim().toLowerCase();
 
