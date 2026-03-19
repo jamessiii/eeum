@@ -29,66 +29,45 @@ export function AppGuidePanel() {
   const isCurrentStepActive = currentStep ? matchesGuideTargetPath(currentPath, currentStep.targetPath) : false;
 
   return (
-    <section className="guide-panel" style={getMotionStyle(0)}>
-      <div className="guide-panel-main">
+    <section className="floating-guide-panel" style={getMotionStyle(0)}>
+      <div className="floating-guide-kicker-row">
+        <span className="section-kicker">플로팅 가이드</span>
+        <strong>
+          {completedSteps}/{totalSteps}
+        </strong>
+      </div>
+      <div className="guide-progress-bar" aria-hidden="true">
+        <div className="guide-progress-fill" style={{ width: `${journeyProgress.progress * 100}%` }} />
+      </div>
+      <div className="floating-guide-body">
         <div>
-          <span className="section-kicker">시작 가이드</span>
           <h3 className="guide-panel-title">
             {currentStep ? currentStep.title : "기본 설정과 분류가 완료되었습니다"}
           </h3>
           <p className="guide-panel-copy">
             {currentStep
-              ? currentStep.description
-              : "이제 대시보드와 정산, 검토함을 오가며 데이터를 계속 다듬으면 됩니다."}
+              ? currentStep.tips[0] ?? currentStep.description
+              : "이제 필요한 화면만 오가며 계속 데이터를 다듬으면 됩니다."}
           </p>
+          <div className="small text-secondary">
+            {currentStep
+              ? upcomingSteps.length > 1
+                ? `다음 단계: ${upcomingSteps[1]?.title}`
+                : `${formatPercent(journeyProgress.progress)} 진행`
+              : "가이드는 필요할 때만 다시 떠오릅니다."}
+          </div>
         </div>
         {currentStep ? (
           <button
-            className="btn btn-primary"
+            className={`btn ${isCurrentStepActive ? "btn-outline-light" : "btn-primary"} floating-guide-action`}
             type="button"
             onClick={() => navigate(currentStep.targetPath)}
           >
-            {isCurrentStepActive ? "현재 이 단계 진행 중" : currentStep.ctaLabel}
+            {isCurrentStepActive ? "현재 단계 보기" : currentStep.ctaLabel}
           </button>
         ) : (
           <span className="badge text-bg-success">기본 흐름 완료</span>
         )}
-      </div>
-
-      <div className="guide-progress-bar" aria-hidden="true">
-        <div className="guide-progress-fill" style={{ width: `${journeyProgress.progress * 100}%` }} />
-      </div>
-
-      <div className="guide-panel-meta">
-        <span>
-          {completedSteps} / {totalSteps} 단계 완료
-        </span>
-        <strong>{formatPercent(journeyProgress.progress)}</strong>
-      </div>
-
-      {currentStep ? (
-        <div className="guide-next-summary">
-          <strong>지금 이 단계에서 할 일</strong>
-          <p className="mb-0 text-secondary">{currentStep.tips[0]}</p>
-          {upcomingSteps.length > 1 ? (
-            <div className="small text-secondary mt-2">다음 단계: {upcomingSteps[1]?.title}</div>
-          ) : null}
-        </div>
-      ) : null}
-
-      <div className="guide-step-list">
-        {guide.steps.map((step, index) => (
-          <button
-            key={step.id}
-            type="button"
-            className={`guide-step-chip${step.completed ? " completed" : ""}${currentStep?.id === step.id ? " current" : ""}`}
-            style={getMotionStyle(index)}
-            onClick={() => navigate(step.targetPath)}
-          >
-            <span>{step.title}</span>
-            <small>{step.completed ? "완료" : "진행 필요"}</small>
-          </button>
-        ))}
       </div>
     </section>
   );

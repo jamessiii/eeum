@@ -3,7 +3,6 @@ import { HashRouter, Navigate, NavLink, Route, Routes, useLocation } from "react
 import { getWorkspaceHeaderSummary } from "../domain/workspace/summary";
 import { MotionProvider } from "./motion/MotionProvider";
 import { AppGuidePanel } from "./components/AppGuidePanel";
-import { PageStepBanner } from "./components/PageStepBanner";
 import { EmptyWorkspaceScreen } from "./pages/EmptyWorkspaceScreen";
 import { LoadingScreen } from "./pages/LoadingScreen";
 import { AppStateProvider, useAppState } from "./state/AppStateProvider";
@@ -14,12 +13,6 @@ const DashboardPage = lazy(() => import("./pages/DashboardPage").then((module) =
 const TransactionsPage = lazy(() =>
   import("./pages/TransactionsPage").then((module) => ({ default: module.TransactionsPage })),
 );
-const PeoplePage = lazy(() => import("./pages/PeoplePage").then((module) => ({ default: module.PeoplePage })));
-const AccountsPage = lazy(() => import("./pages/AccountsPage").then((module) => ({ default: module.AccountsPage })));
-const CardsPage = lazy(() => import("./pages/CardsPage").then((module) => ({ default: module.CardsPage })));
-const CategoriesPage = lazy(() =>
-  import("./pages/CategoriesPage").then((module) => ({ default: module.CategoriesPage })),
-);
 const ImportsPage = lazy(() => import("./pages/ImportsPage").then((module) => ({ default: module.ImportsPage })));
 const ReviewsPage = lazy(() => import("./pages/ReviewsPage").then((module) => ({ default: module.ReviewsPage })));
 const SettlementsPage = lazy(() =>
@@ -29,6 +22,9 @@ const SettingsPage = lazy(() => import("./pages/SettingsPage").then((module) => 
 const DeveloperPage = lazy(() => import("./pages/DeveloperPage").then((module) => ({ default: module.DeveloperPage })));
 
 const DEVELOPER_MODE_KEY = "household-webapp.developer-mode";
+const THEME_STORAGE_KEY = "household-webapp.theme";
+
+type ThemeMode = "light" | "dark";
 
 type NavItem = {
   to: string;
@@ -36,43 +32,14 @@ type NavItem = {
   end?: boolean;
 };
 
-type NavGroup = {
-  label: string;
-  items: NavItem[];
-};
-
-const baseNavGroups: NavGroup[] = [
-  {
-    label: "핵심",
-    items: [
-      { to: "/", label: "대시보드", end: true },
-      { to: "/transactions", label: "거래" },
-      { to: "/settlements", label: "정산" },
-    ],
-  },
-  {
-    label: "데이터 입력",
-    items: [
-      { to: "/imports", label: "업로드" },
-      { to: "/reviews", label: "검토함" },
-      { to: "/categories", label: "분류" },
-    ],
-  },
-  {
-    label: "기반 정보",
-    items: [
-      { to: "/people", label: "사람" },
-      { to: "/accounts", label: "계좌관리" },
-      { to: "/cards", label: "카드관리" },
-    ],
-  },
-  {
-    label: "관리",
-    items: [
-      { to: "/settings", label: "설정" },
-      { to: "/dev", label: "개발자" },
-    ],
-  },
+const baseNavItems: NavItem[] = [
+  { to: "/", label: "대시보드", end: true },
+  { to: "/transactions", label: "거래" },
+  { to: "/settlements", label: "정산" },
+  { to: "/imports", label: "업로드" },
+  { to: "/reviews", label: "검토함" },
+  { to: "/settings", label: "설정" },
+  { to: "/dev", label: "개발자" },
 ];
 
 function useDeveloperMode() {
@@ -110,29 +77,50 @@ function useDeveloperMode() {
   return { isDeveloperModeUnlocked, registerUnlockTap, lockDeveloperMode };
 }
 
-function SidebarNav({ isDeveloperModeUnlocked }: { isDeveloperModeUnlocked: boolean }) {
+function getPreferredTheme(): ThemeMode {
+  if (typeof window === "undefined") return "light";
+
+  const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+  if (stored === "light" || stored === "dark") return stored;
+
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function useThemeMode() {
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => getPreferredTheme());
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = themeMode;
+    document.body.dataset.theme = themeMode;
+    window.localStorage.setItem(THEME_STORAGE_KEY, themeMode);
+  }, [themeMode]);
+
+  return {
+    themeMode,
+    toggleThemeMode: () => setThemeMode((current) => (current === "dark" ? "light" : "dark")),
+  };
+}
+
+function AppTopNav({ isDeveloperModeUnlocked }: { isDeveloperModeUnlocked: boolean }) {
   const location = useLocation();
   const navRef = useRef<HTMLElement | null>(null);
   const linkRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
-  const [indicatorStyle, setIndicatorStyle] = useState<{ height: number; y: number; visible: boolean }>({
-    height: 0,
-    y: 0,
+  const [indicatorStyle, setIndicatorStyle] = useState<{ width: number; x: number; visible: boolean }>({
+    width: 0,
+    x: 0,
     visible: false,
   });
 
-  const navGroups = useMemo(
-    () =>
-      baseNavGroups.map((group) => ({
-        ...group,
-        items: group.items.filter((item) => isDeveloperModeUnlocked || item.to !== "/dev"),
-      })),
+  const navItems = useMemo(
+    () => baseNavItems.filter((item) => isDeveloperModeUnlocked || item.to !== "/dev"),
     [isDeveloperModeUnlocked],
   );
 
-  const navItems = navGroups.flatMap((group) => group.items);
-
   const activeKey = useMemo(() => {
     const pathname = location.pathname || "/";
+    if (pathname === "/people" || pathname === "/accounts" || pathname === "/cards" || pathname === "/categories") {
+      return "/settings";
+    }
     const exact = navItems.find((item) => item.to === pathname);
     if (exact) return exact.to;
     const partial = navItems.find((item) => item.to !== "/" && pathname.startsWith(item.to));
@@ -151,8 +139,8 @@ function SidebarNav({ isDeveloperModeUnlocked }: { isDeveloperModeUnlocked: bool
       const navRect = nav.getBoundingClientRect();
       const linkRect = activeLink.getBoundingClientRect();
       setIndicatorStyle({
-        height: linkRect.height,
-        y: linkRect.top - navRect.top,
+        width: linkRect.width,
+        x: linkRect.left - navRect.left,
         visible: true,
       });
     };
@@ -163,33 +151,26 @@ function SidebarNav({ isDeveloperModeUnlocked }: { isDeveloperModeUnlocked: bool
   }, [activeKey]);
 
   return (
-    <nav ref={navRef} className="app-nav">
+    <nav ref={navRef} className="app-top-nav">
       <div
-        className={`app-nav-indicator${indicatorStyle.visible ? " visible" : ""}`}
+        className={`app-top-nav-indicator${indicatorStyle.visible ? " visible" : ""}`}
         style={{
-          height: `${indicatorStyle.height}px`,
-          transform: `translateY(${indicatorStyle.y}px)`,
+          width: `${indicatorStyle.width}px`,
+          transform: `translateX(${indicatorStyle.x}px)`,
         }}
       />
-      {navGroups.map((group) => (
-        <section key={group.label} className="app-nav-group">
-          <div className="app-nav-group-label">{group.label}</div>
-          <div className="nav flex-column">
-            {group.items.map((item) => (
-              <NavLink
-                key={item.to}
-                ref={(element) => {
-                  linkRefs.current[item.to] = element;
-                }}
-                to={item.to}
-                end={item.end}
-                className="nav-link"
-              >
-                {item.label}
-              </NavLink>
-            ))}
-          </div>
-        </section>
+      {navItems.map((item) => (
+        <NavLink
+          key={item.to}
+          ref={(element) => {
+            linkRefs.current[item.to] = element;
+          }}
+          to={item.to}
+          end={item.end}
+          className="nav-link"
+        >
+          {item.label}
+        </NavLink>
       ))}
     </nav>
   );
@@ -207,10 +188,10 @@ function AppRoutes({
       <Routes>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/transactions" element={<TransactionsPage />} />
-        <Route path="/people" element={<PeoplePage />} />
-        <Route path="/accounts" element={<AccountsPage />} />
-        <Route path="/cards" element={<CardsPage />} />
-        <Route path="/categories" element={<CategoriesPage />} />
+        <Route path="/people" element={<Navigate to="/settings?tab=people" replace />} />
+        <Route path="/accounts" element={<Navigate to="/settings?tab=accounts" replace />} />
+        <Route path="/cards" element={<Navigate to="/settings?tab=cards" replace />} />
+        <Route path="/categories" element={<Navigate to="/settings?tab=categories" replace />} />
         <Route path="/imports" element={<ImportsPage />} />
         <Route path="/reviews" element={<ReviewsPage />} />
         <Route path="/settlements" element={<SettlementsPage />} />
@@ -233,6 +214,7 @@ function AppRoutes({
 function AppFrame() {
   const { isReady, setActiveWorkspace, state } = useAppState();
   const { isDeveloperModeUnlocked, registerUnlockTap, lockDeveloperMode } = useDeveloperMode();
+  const { themeMode, toggleThemeMode } = useThemeMode();
 
   if (!isReady) return <LoadingScreen />;
   if (!state.workspaces.length) return <EmptyWorkspaceScreen />;
@@ -250,30 +232,38 @@ function AppFrame() {
 
   return (
     <div className="app-shell">
-      <aside className="app-sidebar">
-        <div>
-          <span className="sidebar-kicker">Household Web App</span>
-          <button type="button" className="sidebar-brand-button" onClick={registerUnlockTap}>
-            <h1>가계부 웹앱</h1>
-          </button>
-          <p className="sidebar-copy">입력, 분류, 검토, 정산까지 한 흐름으로 관리합니다.</p>
+      <header className="app-topbar">
+        <div className="app-topbar-main">
+          <div className="app-brand-block">
+            <span className="sidebar-kicker">Household Web App</span>
+            <button type="button" className="sidebar-brand-button" onClick={registerUnlockTap}>
+              <h1>가계부 웹앱</h1>
+            </button>
+            <p className="sidebar-copy">기능은 빠르게, 설명은 가볍게, 흐름은 한 번에 이어지게 정리합니다.</p>
+          </div>
+          <div className="app-topbar-actions">
+            <select
+              className="form-select workspace-select"
+              value={activeWorkspace.id}
+              onChange={(event) => setActiveWorkspace(event.target.value)}
+            >
+              {state.workspaces.map((workspace) => (
+                <option key={workspace.id} value={workspace.id}>
+                  {workspace.name}
+                </option>
+              ))}
+            </select>
+            <button type="button" className="theme-toggle-button" onClick={toggleThemeMode}>
+              <span className="theme-toggle-button-label">{themeMode === "dark" ? "다크 모드" : "라이트 모드"}</span>
+              <strong>{themeMode === "dark" ? "Light" : "Dark"}</strong>
+            </button>
+          </div>
         </div>
-        <select
-          className="form-select workspace-select"
-          value={activeWorkspace.id}
-          onChange={(event) => setActiveWorkspace(event.target.value)}
-        >
-          {state.workspaces.map((workspace) => (
-            <option key={workspace.id} value={workspace.id}>
-              {workspace.name}
-            </option>
-          ))}
-        </select>
-        <SidebarNav isDeveloperModeUnlocked={isDeveloperModeUnlocked} />
-      </aside>
+        <AppTopNav isDeveloperModeUnlocked={isDeveloperModeUnlocked} />
+      </header>
 
       <div className="app-main">
-        <header className="app-header">
+        <section className="app-header">
           <div className="app-header-copy">
             <span className="section-kicker">활성 워크스페이스</span>
             <h2 className="mb-0">{activeWorkspace.name}</h2>
@@ -298,11 +288,10 @@ function AppFrame() {
                 ? "업로드 데이터"
                 : "빈 모드"}
           </span>
-        </header>
+        </section>
 
         <main className="app-content">
           <AppGuidePanel />
-          <PageStepBanner />
           <div className="route-stage">
             <div className="route-page">
               <AppRoutes
