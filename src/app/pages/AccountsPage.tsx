@@ -223,7 +223,7 @@ export function AccountsPage() {
                     </label>
                     <label>
                       소유자
-                      <select name="ownerPersonId" className="form-select" defaultValue={account.ownerPersonId ?? ""}>
+                      <select name="ownerPersonId" className="form-select" defaultValue={account.ownerPersonId ?? ""} disabled={account.isShared}>
                         <option value="">공동 또는 미지정</option>
                         {getOwnerOptions(account.ownerPersonId).map((person) => (
                           <option key={person.id} value={person.id}>
@@ -233,6 +233,11 @@ export function AccountsPage() {
                         ))}
                       </select>
                     </label>
+                    {account.isShared ? (
+                      <div className="small text-secondary" style={{ gridColumn: "1 / -1" }}>
+                        공동 자금 계좌로 저장된 동안에는 소유자를 따로 저장하지 않습니다.
+                      </div>
+                    ) : null}
                     <label>
                       계좌 유형
                       <select name="accountType" className="form-select" defaultValue={account.accountType}>

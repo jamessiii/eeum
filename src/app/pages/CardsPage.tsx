@@ -208,6 +208,11 @@ export function CardsPage() {
                         ))}
                       </select>
                     </label>
+                    {card.linkedAccountId && accountSharedMap.get(card.linkedAccountId) ? (
+                      <div className="small text-secondary" style={{ gridColumn: "1 / -1" }}>
+                        공동 계좌에 연결된 카드라서 결제 흐름이 공동 자금 기준으로 이어집니다.
+                      </div>
+                    ) : null}
                     <label>
                       카드 종류
                       <select name="cardType" className="form-select" defaultValue={card.cardType}>
