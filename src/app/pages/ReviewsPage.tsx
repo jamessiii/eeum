@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { REVIEW_ACTION_LABELS, REVIEW_TYPE_LABELS, REVIEW_TYPE_ORDER, type ReviewType } from "../../domain/reviews/meta";
+import { getReviewSummary } from "../../domain/reviews/summary";
 import { getSourceTypeLabel, SOURCE_TYPE_OPTIONS } from "../../domain/transactions/sourceTypes";
 import { getWorkspaceHealthSummary } from "../../domain/workspace/health";
 import { getMotionStyle } from "../../shared/utils/motion";
@@ -21,21 +22,10 @@ export function ReviewsPage() {
   const health = getWorkspaceHealthSummary(scope);
   const transactions = new Map(scope.transactions.map((item) => [item.id, item]));
   const tags = new Map(scope.tags.map((item) => [item.id, item]));
-  const reviews = scope.reviews.filter((item) => item.status === "open");
-  const resolvedReviews = scope.reviews.filter((item) => item.status === "resolved");
-  const dismissedReviews = scope.reviews.filter((item) => item.status === "dismissed");
+  const { openReviews: reviews, resolvedReviews, dismissedReviews, reviewCounts, resolvedCounts, dominantType, sourceTypeReviewCounts, totalReviewCount, reviewProgress } =
+    getReviewSummary(scope.reviews, transactions);
   const uncategorizedCount = health.uncategorizedCount;
   const untaggedCount = health.untaggedCount;
-  const totalReviewCount = scope.reviews.length;
-  const reviewProgress = totalReviewCount ? (resolvedReviews.length + dismissedReviews.length) / totalReviewCount : 1;
-  const reviewCounts = reviews.reduce<Partial<Record<ReviewType, number>>>((accumulator, item) => {
-    accumulator[item.reviewType] = (accumulator[item.reviewType] ?? 0) + 1;
-    return accumulator;
-  }, {});
-  const resolvedCounts = resolvedReviews.reduce<Partial<Record<ReviewType, number>>>((accumulator, item) => {
-    accumulator[item.reviewType] = (accumulator[item.reviewType] ?? 0) + 1;
-    return accumulator;
-  }, {});
   const filteredReviews = reviews
     .filter((item) => (activeFilter === "all" ? true : item.reviewType === activeFilter))
     .filter((item) => {
@@ -51,19 +41,8 @@ export function ReviewsPage() {
         .flatMap((transaction) => transaction.tagIds);
       return relatedTagIds.includes(activeTagId);
     });
-  const dominantType =
-    REVIEW_TYPE_ORDER
-      .map((type) => ({ type, count: reviewCounts[type] ?? 0 }))
-      .sort((a, b) => b.count - a.count)[0] ?? null;
   const openSharedReviewCount = reviewCounts.shared_expense_candidate ?? 0;
   const openInternalTransferReviewCount = reviewCounts.internal_transfer_candidate ?? 0;
-  const sourceTypeReviewCounts = SOURCE_TYPE_OPTIONS.reduce<Record<(typeof SOURCE_TYPE_OPTIONS)[number], number>>(
-    (accumulator, sourceType) => {
-      accumulator[sourceType] = reviews.filter((review) => transactions.get(review.primaryTransactionId)?.sourceType === sourceType).length;
-      return accumulator;
-    },
-    { manual: 0, account: 0, card: 0, import: 0 },
-  );
   const nextReviewAction = uncategorizedCount
     ? {
         title: "지금 가장 먼저 할 일",
