@@ -1,6 +1,7 @@
 import { Link, useSearchParams } from "react-router-dom";
 import { monthKey } from "../../shared/utils/date";
 import { getMonthlySharedSettlementSummary, getSettlementBalanceSummary } from "../../domain/settlements/summary";
+import { getSourceTypeLabel } from "../../domain/transactions/sourceTypes";
 import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { CompletionBanner } from "../components/CompletionBanner";
@@ -38,7 +39,7 @@ export function SettlementsPage() {
   })();
   const activeSettlementFilterSummary =
     [
-      activeSourceType ? `수단 ${activeSourceType === "card" ? "카드" : activeSourceType === "account" ? "계좌" : activeSourceType}` : null,
+      activeSourceType ? `수단 ${getSourceTypeLabel(activeSourceType)}` : null,
       activeOwnerPersonId ? `사람 ${peopleMap.get(activeOwnerPersonId) ?? "-"}` : null,
       activeTagId ? `태그 ${scope.tags.find((tag) => tag.id === activeTagId)?.name ?? "-"}` : null,
     ]
@@ -64,7 +65,13 @@ export function SettlementsPage() {
     const transactionSearchParams = new URLSearchParams();
     if (params.nature) transactionSearchParams.set("nature", params.nature);
     if (params.sourceType) transactionSearchParams.set("sourceType", params.sourceType);
-    if (params.ownerPersonId) transactionSearchParams.set("ownerPersonId", params.ownerPersonId);
+    if ("ownerPersonId" in params) {
+      if (params.ownerPersonId) {
+        transactionSearchParams.set("ownerPersonId", params.ownerPersonId);
+      } else {
+        transactionSearchParams.set("ownerPersonId", "all");
+      }
+    }
     const query = transactionSearchParams.toString();
     return appendCurrentTransactionFilters(query ? `/transactions?${query}` : "/transactions");
   };
@@ -149,7 +156,7 @@ export function SettlementsPage() {
         description: hasScopedSettlementContext
           ? "현재 선택한 수단, 사람, 태그 기준으로는 이번 달 공동지출이 없습니다. 거래 화면에서 같은 맥락의 항목을 다시 확인해보세요."
           : "아직 이번 달 공동지출 거래가 없습니다. 거래 화면에서 공동지출로 표시된 항목이 있는지 먼저 확인해보세요.",
-        to: hasScopedSettlementContext ? "/transactions" : "/transactions?nature=shared",
+        to: "/transactions?nature=shared",
         actionLabel: hasScopedSettlementContext ? "현재 맥락 공동지출 보기" : "공동지출 거래 보기",
       }
     : sharedTransactions.length
@@ -413,7 +420,7 @@ export function SettlementsPage() {
                 </div>
                 <div className="action-row">
                   <Link to={appendCurrentTransactionFilters("/transactions?nature=shared")} className="btn btn-outline-primary btn-sm">
-                    {hasScopedSettlementContext ? "현재 맥락 공동지출 보기" : "공동지출 전체 보기"}
+                    {hasScopedSettlementContext ? "현재 맥락 공동지출 보기" : "공동지출 거래 보기"}
                   </Link>
                 </div>
               </div>
@@ -439,7 +446,7 @@ export function SettlementsPage() {
                             to={getTransactionListLink({ nature: "shared", sourceType: "card", ownerPersonId: transaction.ownerPersonId })}
                             className="btn btn-outline-secondary btn-sm"
                           >
-                            카드 거래 보기
+                            {hasScopedSettlementContext ? "현재 맥락 카드 보기" : "카드 거래 보기"}
                           </Link>
                         ) : null}
                         {transaction.accountId ? (
@@ -447,7 +454,7 @@ export function SettlementsPage() {
                             to={getTransactionListLink({ nature: "shared", sourceType: "account", ownerPersonId: transaction.ownerPersonId })}
                             className="btn btn-outline-secondary btn-sm"
                           >
-                            계좌 거래 보기
+                            {hasScopedSettlementContext ? "현재 맥락 계좌 보기" : "계좌 거래 보기"}
                           </Link>
                         ) : null}
                         {transaction.ownerPersonId ? (
@@ -455,7 +462,7 @@ export function SettlementsPage() {
                             to={getTransactionListLink({ nature: "shared", ownerPersonId: transaction.ownerPersonId })}
                             className="btn btn-outline-secondary btn-sm"
                           >
-                            이 사람 거래 보기
+                            {hasScopedSettlementContext ? "현재 맥락 사람 보기" : "이 사람 거래 보기"}
                           </Link>
                         ) : null}
                       </div>
@@ -504,7 +511,7 @@ export function SettlementsPage() {
                             to={getTransactionListLink({ nature: "shared", ownerPersonId: row.personId })}
                             className="btn btn-outline-secondary btn-sm"
                           >
-                            이 사람 공동지출 보기
+                            {hasScopedSettlementContext ? "현재 맥락 사람 보기" : "이 사람 공동지출 보기"}
                           </Link>
                         ) : null}
                       </div>

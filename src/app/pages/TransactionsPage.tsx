@@ -229,11 +229,12 @@ export function TransactionsPage() {
         : nature === "shared" || nature === "internal_transfer"
           ? nature
           : null;
-    const matchedOwnerPersonId = ownerPersonId && people.some((person) => person.id === ownerPersonId) ? ownerPersonId : null;
+    const matchedOwnerPersonId =
+      ownerPersonId === "all" ? "all" : ownerPersonId && people.some((person) => person.id === ownerPersonId) ? ownerPersonId : null;
     const matchedSourceType = SOURCE_TYPE_OPTIONS.find((item) => item === sourceType);
     const matchedTagId = tagId && scope.tags.some((tag) => tag.id === tagId) ? tagId : null;
 
-    if (matchedNature || matchedOwnerPersonId || matchedSourceType || matchedTagId) {
+    if (matchedNature || ownerPersonId === "all" || matchedOwnerPersonId || matchedSourceType || matchedTagId) {
       setFilters((current) => ({
         ...current,
         nature: matchedNature ?? current.nature,
