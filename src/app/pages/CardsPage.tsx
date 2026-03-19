@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { getCardUsageSummary } from "../../domain/assets/usageSummary";
+import { getActiveTransactions } from "../../domain/transactions/meta";
 import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
@@ -12,7 +13,7 @@ export function CardsPage() {
   const scope = getWorkspaceScope(state, workspaceId);
   const cards = scope.cards;
   const accountMap = new Map(scope.accounts.map((item) => [item.id, item.name]));
-  const transactions = scope.transactions.filter((item) => item.status === "active");
+  const transactions = getActiveTransactions(scope.transactions);
 
   return (
     <div className="page-stack">

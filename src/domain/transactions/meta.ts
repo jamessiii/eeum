@@ -22,6 +22,10 @@ export function isActiveTransaction(transaction: Transaction) {
   return transaction.status === "active";
 }
 
+export function getActiveTransactions(transactions: Transaction[]) {
+  return transactions.filter(isActiveTransaction);
+}
+
 export function isActiveExpenseImpactTransaction(transaction: Transaction) {
   return isActiveTransaction(transaction) && transaction.isExpenseImpact;
 }

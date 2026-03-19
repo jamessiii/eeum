@@ -1,3 +1,4 @@
+import { isActiveTransaction } from "../../domain/transactions/meta";
 import type { Tag, Transaction } from "../../shared/types/models";
 
 interface TransactionTagEditorProps {
@@ -19,7 +20,7 @@ export function TransactionTagEditor({
   onApplyTag,
   onRemoveTag,
 }: TransactionTagEditorProps) {
-  const canEdit = transaction.status === "active" && transaction.isExpenseImpact;
+  const canEdit = isActiveTransaction(transaction) && transaction.isExpenseImpact;
 
   return (
     <>

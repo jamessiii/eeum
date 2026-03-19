@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
+  isActiveTransaction,
   isActiveExpenseImpactTransaction,
   isActiveInternalTransferTransaction,
   isActiveSharedExpenseTransaction,
@@ -849,7 +850,7 @@ export function TransactionsPage() {
                                 .filter(Boolean)
                                 .join(" · ") || "연결 정보 없음"
                             }
-                            canEdit={transaction.status === "active"}
+                            canEdit={isActiveTransaction(transaction)}
                             isEditing={editingTransactionId === transaction.id}
                             onToggleEdit={() => {
                               if (editingTransactionId === transaction.id) {

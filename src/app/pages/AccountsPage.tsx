@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { getAccountUsageSummary } from "../../domain/assets/usageSummary";
+import { getActiveTransactions } from "../../domain/transactions/meta";
 import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
@@ -11,7 +12,7 @@ export function AccountsPage() {
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const accounts = scope.accounts;
-  const transactions = scope.transactions.filter((item) => item.status === "active");
+  const transactions = getActiveTransactions(scope.transactions);
 
   return (
     <div className="page-stack">

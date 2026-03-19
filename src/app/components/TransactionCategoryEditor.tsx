@@ -1,3 +1,4 @@
+import { isActiveTransaction } from "../../domain/transactions/meta";
 import type { Category, Transaction } from "../../shared/types/models";
 
 interface TransactionCategoryEditorProps {
@@ -21,7 +22,7 @@ export function TransactionCategoryEditor({
   onApplyCategory,
   onClearCategory,
 }: TransactionCategoryEditorProps) {
-  const canEdit = transaction.status === "active" && transaction.isExpenseImpact;
+  const canEdit = isActiveTransaction(transaction) && transaction.isExpenseImpact;
 
   return (
     <>
