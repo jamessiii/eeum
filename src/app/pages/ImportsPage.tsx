@@ -218,13 +218,9 @@ export function ImportsPage() {
         <div className="section-head">
           <div>
             <span className="section-kicker">업로드 센터</span>
-            <h2 className="section-title">업로드 전에 연결 정보 먼저 잡기</h2>
+            <h2 className="section-title">업로드와 매핑 확인</h2>
           </div>
         </div>
-        <p className="text-secondary">
-          사람, 계좌, 카드 관리 화면에서 만든 구조를 기준으로 업로드 데이터를 정리하는 흐름입니다. 업로드 직후 바로 가져오지 않고, 누가
-          쓴 데이터인지와 어떤 카드 또는 계좌에 연결할지를 먼저 확인합니다.
-        </p>
         <div className="d-flex flex-wrap gap-2 mb-4">
           <Link to="/people" className="btn btn-outline-secondary btn-sm">
             사람 관리
@@ -240,24 +236,24 @@ export function ImportsPage() {
           <article className="stat-card">
             <span className="stat-label">현재 사람</span>
             <strong>{scope.people.length}명</strong>
-            <div className="small text-secondary mt-2">활성 구성원을 먼저 정리해두면 업로드 미리보기에서도 소유자 기준을 맞추기 쉽습니다.</div>
+            <div className="small text-secondary mt-2">소유자 기준</div>
           </article>
           <article className="stat-card">
             <span className="stat-label">현재 계좌</span>
             <strong>{scope.accounts.length}개</strong>
-            <div className="small text-secondary mt-2">카드 결제 계좌와 공동 계좌를 구분해두면 매핑 실수가 줄어듭니다.</div>
+            <div className="small text-secondary mt-2">결제 흐름 기준</div>
           </article>
           <article className="stat-card">
             <span className="stat-label">현재 카드</span>
             <strong>{scope.cards.length}개</strong>
-            <div className="small text-secondary mt-2">카드 이름과 카드사가 정리돼 있으면 업로드 후 검토량이 줄어듭니다.</div>
+            <div className="small text-secondary mt-2">카드 매핑 기준</div>
           </article>
         </div>
 
         <label className="upload-dropzone mt-4">
           <div>
             <strong>가계부 워크북 업로드</strong>
-            <p className="mb-0 text-secondary">파일을 바로 반영하지 않고, 먼저 사람·계좌·카드 매핑까지 점검할 수 있는 미리보기를 준비합니다.</p>
+            <p className="mb-0 text-secondary">바로 반영하지 않고 미리보기에서 매핑만 먼저 확인합니다.</p>
           </div>
           <input
             hidden
@@ -285,7 +281,7 @@ export function ImportsPage() {
         {isPreparingPreview ? <p className="small text-secondary mt-3 mb-0">업로드 미리보기와 매핑 데이터를 준비하고 있습니다.</p> : null}
       </section>
 
-      {previewBundle ? (
+        {previewBundle ? (
         <section className="card shadow-sm" style={getMotionStyle(1)}>
           <div className="section-head">
             <div>
@@ -294,16 +290,13 @@ export function ImportsPage() {
             </div>
             <span className="badge text-bg-primary">{activeWorkspace?.name ?? previewBundle.workspace.name}</span>
           </div>
-          <p className="text-secondary">
-            아래에서 업로드 데이터의 사람, 계좌, 카드 연결을 먼저 맞춘 뒤 <strong>{activeWorkspace?.name ?? "현재 가계부"}</strong>에
-            가져오세요. 여기서 맞춘 연결 정보는 거래 소유자와 카드 결제 계좌에도 같이 반영됩니다.
-          </p>
+          <p className="text-secondary">사람, 계좌, 카드 연결만 먼저 맞춘 뒤 현재 워크스페이스로 가져오면 됩니다.</p>
 
           {previewNextAction ? (
             <div className="review-summary-panel mt-4">
               <div className="review-summary-copy">
                 <strong>{previewNextAction.title}</strong>
-                <p className="mb-0 text-secondary">{previewNextAction.description}</p>
+                <p className="mb-0 text-secondary">{previewRemainingMappingCount > 0 ? "빈 연결만 먼저 채우면 됩니다." : "바로 가져와도 됩니다."}</p>
               </div>
               <button className="btn btn-outline-secondary btn-sm" type="button" onClick={commitPreviewAndMoveNext}>
                 매핑 확인 후 {previewPostImportLabel}
@@ -319,12 +312,12 @@ export function ImportsPage() {
             <article className="stat-card">
               <span className="stat-label">계좌 소유자</span>
               <strong>{ownedAccountCount}/{previewBundle.accounts.length}</strong>
-              <div className="small text-secondary mt-2">공동 계좌 또는 개인 소유자까지 잡힌 계좌 수입니다.</div>
+              <div className="small text-secondary mt-2">소유자 확인</div>
             </article>
             <article className="stat-card">
               <span className="stat-label">카드 연결</span>
               <strong>{linkedCardCount}/{previewBundle.cards.length}</strong>
-              <div className="small text-secondary mt-2">소유자 {ownedCardCount}개 · 결제 계좌 {linkedCardCount}개 연결</div>
+              <div className="small text-secondary mt-2">소유자 {ownedCardCount}개 · 결제 계좌 {linkedCardCount}개</div>
             </article>
           </div>
 
@@ -332,9 +325,7 @@ export function ImportsPage() {
             <div className="review-summary-panel mt-4">
               <div className="review-summary-copy">
                 <strong>가져오기 전에 확인할 매핑이 남아 있습니다</strong>
-                <p className="mb-0 text-secondary">
-                  빈 매핑이 남아 있으면 거래 소유자나 결제 흐름이 비어 들어올 수 있습니다. 필요한 항목만 먼저 채워주세요.
-                </p>
+                <p className="mb-0 text-secondary">빈 연결만 먼저 채워주세요.</p>
               </div>
               <div className="action-row">
                 {missingAccountOwnerCount ? <span className="badge text-bg-warning">소유자 없는 계좌 {missingAccountOwnerCount}개</span> : null}
@@ -347,14 +338,14 @@ export function ImportsPage() {
           <div className="section-head mt-4">
             <div>
               <span className="section-kicker">1단계</span>
-              <h3 className="section-title">사람 이름 정리</h3>
+              <h3 className="section-title">사람 매핑</h3>
             </div>
           </div>
           <div className="resource-grid">
             {previewBundle.people.map((person, index) => (
               <article key={person.id} className="resource-card" style={getMotionStyle(index + 2)}>
                 <h3>{person.displayName || person.name}</h3>
-                <p className="mb-0 text-secondary">이 사람이 계좌/카드/거래의 소유자 기준으로 사용됩니다.</p>
+                <p className="mb-0 text-secondary">소유자 기준</p>
                 <form
                   className="profile-form w-100"
                   onSubmit={(event) => {
@@ -395,7 +386,7 @@ export function ImportsPage() {
           <div className="section-head mt-4">
             <div>
               <span className="section-kicker">2단계</span>
-              <h3 className="section-title">계좌 소유자와 용도 매핑</h3>
+              <h3 className="section-title">계좌 매핑</h3>
             </div>
           </div>
           <div className="resource-grid">
@@ -475,7 +466,7 @@ export function ImportsPage() {
                   </label>
                   {selectedIsShared ? (
                     <div className="small text-secondary" style={{ gridColumn: "1 / -1" }}>
-                      공동 자금 계좌로 체크된 동안에는 소유자를 따로 저장하지 않습니다.
+                      공동 계좌는 소유자를 따로 저장하지 않습니다.
                     </div>
                   ) : null}
                   <label>
@@ -544,7 +535,7 @@ export function ImportsPage() {
           <div className="section-head mt-4">
             <div>
               <span className="section-kicker">3단계</span>
-              <h3 className="section-title">카드 소유자와 결제 계좌 매핑</h3>
+              <h3 className="section-title">카드 매핑</h3>
             </div>
           </div>
           <div className="resource-grid">
@@ -638,7 +629,7 @@ export function ImportsPage() {
                   </label>
                   {selectedLinkedAccountId && previewAccountSharedMap.get(selectedLinkedAccountId) ? (
                     <div className="small text-secondary" style={{ gridColumn: "1 / -1" }}>
-                      공동 계좌에 연결된 카드라서 가져온 뒤에도 결제 흐름이 공동 자금 기준으로 이어집니다.
+                      공동 계좌 결제로 이어집니다.
                     </div>
                   ) : null}
                   <label style={{ gridColumn: "1 / -1" }}>
@@ -695,7 +686,7 @@ export function ImportsPage() {
           <EmptyStateCallout
             kicker="이력 없음"
             title="아직 업로드한 파일이 없습니다"
-            description="워크북을 업로드하면 이 화면에서 어떤 파일을 언제 가져왔는지 계속 확인할 수 있습니다."
+            description="업로드하면 이 화면에 최근 기록이 쌓입니다."
             actions={
               <>
                 <Link to="/people" className="btn btn-outline-primary btn-sm">
@@ -711,10 +702,8 @@ export function ImportsPage() {
           <>
             <div className="review-summary-panel mb-4">
               <div className="review-summary-copy">
-                <strong>현재 워크스페이스 정리 흐름으로 바로 이어갈 수 있습니다</strong>
-                <p className="mb-0 text-secondary">
-                  아직 열린 리뷰나 정리 대상이 남아 있으면 해당 화면으로 바로 이동합니다. 최근 업로드 이후 남은 작업을 현재 워크스페이스 기준으로 이어가세요.
-                </p>
+                <strong>최근 업로드 뒤 작업으로 바로 이어갈 수 있습니다</strong>
+                <p className="mb-0 text-secondary">현재 워크스페이스 기준 남은 작업으로 이동합니다.</p>
               </div>
               <Link to={latestImportWorkspaceAction.to} className="btn btn-outline-primary btn-sm">
                 {"summaryLabel" in latestImportWorkspaceAction ? latestImportWorkspaceAction.summaryLabel : latestImportWorkspaceAction.label}
