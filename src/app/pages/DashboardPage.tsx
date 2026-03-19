@@ -296,14 +296,14 @@ export function DashboardPage() {
             description="검토와 카테고리, 태그, 기준선 설정까지 끝나서 이번 달 진단과 저축 가이드를 비교적 안정적으로 볼 수 있습니다."
             actions={
               <>
-                <Link to="/transactions" className="btn btn-outline-primary btn-sm">
+                <Link to="/settlements" className="btn btn-outline-primary btn-sm">
+                  정산 화면 보기
+                </Link>
+                <Link to="/transactions" className="btn btn-outline-secondary btn-sm">
                   거래 화면 보기
                 </Link>
                 <Link to="/imports" className="btn btn-outline-secondary btn-sm">
                   업로드 기록 보기
-                </Link>
-                <Link to="/settlements" className="btn btn-outline-secondary btn-sm">
-                  정산 화면 보기
                 </Link>
               </>
             }
@@ -492,11 +492,11 @@ export function DashboardPage() {
             description="열린 검토, 미분류, 무태그, 기준선 입력까지 모두 정리돼서 이번 달 진단과 저축 흐름을 비교적 안정적으로 읽을 수 있습니다."
             actions={
               <>
-                <Link to="/transactions" className="btn btn-outline-primary btn-sm">
-                  거래 화면 보기
-                </Link>
-                <Link to="/settlements" className="btn btn-outline-secondary btn-sm">
+                <Link to="/settlements" className="btn btn-outline-primary btn-sm">
                   정산 화면 보기
+                </Link>
+                <Link to="/transactions" className="btn btn-outline-secondary btn-sm">
+                  거래 화면 보기
                 </Link>
               </>
             }

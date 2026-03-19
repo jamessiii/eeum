@@ -550,7 +550,7 @@ export function TransactionsPage() {
             actions={
               <>
                 <Link to="/imports" className="btn btn-outline-primary btn-sm">
-                  업로드 화면 보기
+                  엑셀 업로드 먼저 하기
                 </Link>
                 <Link to="/people" className="btn btn-outline-secondary btn-sm">
                   사람 관리 보기
@@ -606,7 +606,7 @@ export function TransactionsPage() {
                   <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters(resetTransactionCleanupFilters)}>
                     전체 거래로 돌아가기
                   </button>
-                  <Link className="btn btn-outline-dark btn-sm" to="/">
+                  <Link className="btn btn-outline-secondary btn-sm" to="/">
                     대시보드 보기
                   </Link>
                 </div>
@@ -629,11 +629,11 @@ export function TransactionsPage() {
                         무태그 {untaggedCount}건 정리
                       </button>
                     ) : null}
-                    <Link className="btn btn-outline-dark btn-sm" to="/">
-                      대시보드 보기
-                    </Link>
-                    <Link className="btn btn-outline-secondary btn-sm" to="/settlements">
+                    <Link className="btn btn-outline-primary btn-sm" to="/settlements">
                       정산 화면 보기
+                    </Link>
+                    <Link className="btn btn-outline-secondary btn-sm" to="/">
+                      대시보드 보기
                     </Link>
                   </>
                 }
@@ -665,11 +665,11 @@ export function TransactionsPage() {
                     전체 거래로 돌아가기
                   </button>
                   {filters.nature === "shared" ? (
-                    <Link className="btn btn-outline-dark btn-sm" to="/settlements">
+                    <Link className="btn btn-outline-primary btn-sm" to="/settlements">
                       정산 화면 보기
                     </Link>
                   ) : (
-                    <Link className="btn btn-outline-dark btn-sm" to="/">
+                    <Link className="btn btn-outline-secondary btn-sm" to="/">
                       대시보드 보기
                     </Link>
                   )}
@@ -771,7 +771,7 @@ export function TransactionsPage() {
                     <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters(resetTransactionCleanupFilters)}>
                       전체 거래로 돌아가기
                     </button>
-                    <Link className="btn btn-outline-dark btn-sm" to="/">
+                    <Link className="btn btn-outline-secondary btn-sm" to="/">
                       대시보드 보기
                     </Link>
                   </>
