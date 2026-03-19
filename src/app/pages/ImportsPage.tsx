@@ -7,7 +7,7 @@ import { getJourneyProgress } from "../../domain/journey/progress";
 import { getExpenseImpactStats } from "../../domain/transactions/expenseImpactStats";
 import { getSourceBreakdown } from "../../domain/transactions/sourceBreakdown";
 import { getWorkspaceHealthSummary } from "../../domain/workspace/health";
-import { getLatestImportRecord } from "../../domain/workspace/summary";
+import { getLatestImportRecord, getSortedImportRecords } from "../../domain/workspace/summary";
 import type { WorkspaceBundle } from "../../shared/types/models";
 import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
@@ -28,7 +28,7 @@ export function ImportsPage() {
   const scope = getWorkspaceScope(state, workspaceId);
   const health = getWorkspaceHealthSummary(scope);
   const expenseStats = getExpenseImpactStats(scope.transactions);
-  const imports = [...scope.imports].sort((a, b) => b.importedAt.localeCompare(a.importedAt));
+  const imports = getSortedImportRecords(scope.imports);
   const openReviews = health.openReviews;
   const openReviewCount = health.openReviewCount;
   const uncategorizedCount = expenseStats.uncategorizedCount;

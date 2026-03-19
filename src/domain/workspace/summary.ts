@@ -1,8 +1,12 @@
 import type { ImportRecord, ReviewItem } from "../../shared/types/models";
 import { getOpenReviewCount } from "./health";
 
+export function getSortedImportRecords(imports: ImportRecord[]) {
+  return [...imports].sort((a, b) => b.importedAt.localeCompare(a.importedAt));
+}
+
 export function getLatestImportRecord(imports: ImportRecord[]) {
-  return [...imports].sort((a, b) => b.importedAt.localeCompare(a.importedAt))[0] ?? null;
+  return getSortedImportRecords(imports)[0] ?? null;
 }
 
 export function getWorkspaceHeaderSummary(input: {
