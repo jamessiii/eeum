@@ -720,12 +720,12 @@ export function TransactionsPage() {
                   </button>
                   {filters.sourceType !== "card" ? (
                     <button className="btn btn-outline-primary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, sourceType: "card" }))}>
-                      카드 흐름 보기
+                      카드 거래 보기
                     </button>
                   ) : null}
                   {filters.sourceType !== "account" ? (
                     <button className="btn btn-outline-primary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, sourceType: "account" }))}>
-                      계좌 흐름 보기
+                      계좌 거래 보기
                     </button>
                   ) : null}
                 </div>
@@ -853,65 +853,65 @@ export function TransactionsPage() {
                 <select
                   className="form-select toolbar-select"
                   value={filters.ownerPersonId}
-                onChange={(event) => setFilters((current) => ({ ...current, ownerPersonId: event.target.value }))}
-              >
-                <option value="all">전체 사용자</option>
-                {people.map((person) => (
-                  <option key={person.id} value={person.id}>
-                    {person.displayName || person.name}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="form-select toolbar-select"
-                value={filters.status}
-                onChange={(event) =>
-                  setFilters((current) => ({
-                    ...current,
-                    status: event.target.value as TransactionFilters["status"],
-                  }))
-                }
-              >
-                <option value="all">전체 상태</option>
-                <option value="active">활성</option>
-                <option value="cancelled">제외됨</option>
-                <option value="refunded">환불됨</option>
-              </select>
-              <select
-                className="form-select toolbar-select"
-                value={filters.nature}
-                onChange={(event) =>
-                  setFilters((current) => ({
-                    ...current,
-                    nature: event.target.value as TransactionFilters["nature"],
-                  }))
-                }
-              >
-                <option value="all">전체 성격</option>
-                <option value="expense">실지출만</option>
-                <option value="shared">공동지출만</option>
-                <option value="internal_transfer">내부이체만</option>
-                <option value="uncategorized">미분류만</option>
-                <option value="untagged">무태그만</option>
-              </select>
-              <select
-                className="form-select toolbar-select"
-                value={filters.tagId}
-                onChange={(event) => setFilters((current) => ({ ...current, tagId: event.target.value }))}
-              >
-                <option value="all">?꾩껜 ?쒓렇</option>
-                {scope.tags.map((tag) => (
-                  <option key={tag.id} value={tag.id}>
-                    {tag.name}
-                  </option>
-                ))}
-              </select>
-              <input
-                className="form-control toolbar-search"
-                value={filters.searchQuery}
-                onChange={(event) => setFilters((current) => ({ ...current, searchQuery: event.target.value }))}
-                placeholder="가맹점 또는 설명 검색"
-              />
+                  onChange={(event) => setFilters((current) => ({ ...current, ownerPersonId: event.target.value }))}
+                >
+                  <option value="all">전체 사용자</option>
+                  {people.map((person) => (
+                    <option key={person.id} value={person.id}>
+                      {person.displayName || person.name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className="form-select toolbar-select"
+                  value={filters.status}
+                  onChange={(event) =>
+                    setFilters((current) => ({
+                      ...current,
+                      status: event.target.value as TransactionFilters["status"],
+                    }))
+                  }
+                >
+                  <option value="all">전체 상태</option>
+                  <option value="active">활성</option>
+                  <option value="cancelled">제외됨</option>
+                  <option value="refunded">환불됨</option>
+                </select>
+                <select
+                  className="form-select toolbar-select"
+                  value={filters.nature}
+                  onChange={(event) =>
+                    setFilters((current) => ({
+                      ...current,
+                      nature: event.target.value as TransactionFilters["nature"],
+                    }))
+                  }
+                >
+                  <option value="all">전체 성격</option>
+                  <option value="expense">실지출만</option>
+                  <option value="shared">공동지출만</option>
+                  <option value="internal_transfer">내부이체만</option>
+                  <option value="uncategorized">미분류만</option>
+                  <option value="untagged">무태그만</option>
+                </select>
+                <select
+                  className="form-select toolbar-select"
+                  value={filters.tagId}
+                  onChange={(event) => setFilters((current) => ({ ...current, tagId: event.target.value }))}
+                >
+                  <option value="all">전체 태그</option>
+                  {scope.tags.map((tag) => (
+                    <option key={tag.id} value={tag.id}>
+                      {tag.name}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  className="form-control toolbar-search"
+                  value={filters.searchQuery}
+                  onChange={(event) => setFilters((current) => ({ ...current, searchQuery: event.target.value }))}
+                  placeholder="가맹점 또는 설명 검색"
+                />
             </div>
 
             <TransactionBatchTagPanel

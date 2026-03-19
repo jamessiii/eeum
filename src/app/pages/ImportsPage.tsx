@@ -142,8 +142,8 @@ export function ImportsPage() {
         ? "미분류 거래 정리"
         : previewBundle.transactions.some((transaction) => transaction.isExpenseImpact && transaction.tagIds.length === 0)
           ? "무태그 거래 정리"
-          : "거래 화면으로 이동"
-    : "거래 화면으로 이동";
+          : "거래 화면 보기"
+    : "거래 화면 보기";
 
   return (
     <div className="page-stack">

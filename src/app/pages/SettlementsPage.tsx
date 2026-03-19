@@ -162,7 +162,7 @@ export function SettlementsPage() {
             actions={
               <>
                 <Link to="/transactions?nature=shared" className="btn btn-outline-primary btn-sm">
-                  공동지출 흐름 보기
+                  공동지출 거래 보기
                 </Link>
                 <Link to="/" className="btn btn-outline-secondary btn-sm">
                   대시보드 보기
