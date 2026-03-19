@@ -199,7 +199,7 @@ export function SettlementsPage() {
         <div className="section-head">
           <div>
             <span className="section-kicker">공동지출 정산</span>
-            <h2 className="section-title">이번 달 정산 흐름</h2>
+            <h2 className="section-title">{hasScopedSettlementContext ? "현재 맥락 정산 흐름" : "이번 달 정산 흐름"}</h2>
           </div>
         </div>
         <p className="text-secondary mb-0">
@@ -233,7 +233,7 @@ export function SettlementsPage() {
               <p className="mb-0 text-secondary">{activeSettlementFilterSummary}</p>
             </div>
             <Link className="btn btn-outline-secondary btn-sm" to="/settlements">
-              전체 정산 보기
+              전체 정산으로 돌아가기
             </Link>
           </div>
         ) : null}
@@ -298,8 +298,16 @@ export function SettlementsPage() {
             <>
             <div className="review-summary-panel mb-4">
               <div className="review-summary-copy">
-                <strong>공동지출 거래가 생기면 여기서 바로 정산 흐름이 시작됩니다</strong>
-                <p className="mb-0 text-secondary">먼저 거래 화면에서 공동지출 체크를 붙이거나, 사람 구성을 정리해 두면 정산 계산이 자연스럽게 이어집니다.</p>
+                <strong>
+                  {hasScopedSettlementContext
+                    ? "현재 맥락에 공동지출이 잡히면 여기서 바로 부담 차이를 확인할 수 있습니다"
+                    : "공동지출 거래가 생기면 여기서 바로 정산 흐름이 시작됩니다"}
+                </strong>
+                <p className="mb-0 text-secondary">
+                  {hasScopedSettlementContext
+                    ? "먼저 같은 조건의 거래에서 공동지출 체크를 확인해 두면, 이 화면에서도 현재 맥락 기준 부담 차이와 정산 후보가 바로 이어집니다."
+                    : "먼저 거래 화면에서 공동지출 체크를 붙이거나, 사람 구성을 정리해 두면 정산 계산이 자연스럽게 이어집니다."}
+                </p>
               </div>
               <div className="action-row">
                 <Link to={appendCurrentTransactionFilters("/transactions")} className="btn btn-outline-primary btn-sm">
@@ -318,8 +326,12 @@ export function SettlementsPage() {
             </div>
             <EmptyStateCallout
               kicker="정산 대기"
-              title="아직 공동지출 데이터가 없습니다"
-              description="거래 입력이나 업로드 뒤에 공동지출 체크를 해두면 여기서 사람별 부담과 정산 후보를 계산합니다."
+              title={hasScopedSettlementContext ? "현재 맥락에 공동지출이 없습니다" : "아직 공동지출 데이터가 없습니다"}
+              description={
+                hasScopedSettlementContext
+                  ? "현재 선택한 조건에 맞는 공동지출이 없어 정산 후보를 계산하지 않았습니다. 같은 맥락의 거래를 먼저 확인해보세요."
+                  : "거래 입력이나 업로드 뒤에 공동지출 체크를 해두면 여기서 사람별 부담과 정산 후보를 계산합니다."
+              }
             />
             </>
           ) : (
@@ -395,7 +407,7 @@ export function SettlementsPage() {
                 </div>
                 <div className="action-row">
                   <Link to={appendCurrentTransactionFilters("/transactions?nature=shared")} className="btn btn-outline-primary btn-sm">
-                    공동지출 전체 보기
+                    {hasScopedSettlementContext ? "현재 맥락 공동지출 보기" : "공동지출 전체 보기"}
                   </Link>
                 </div>
               </div>
