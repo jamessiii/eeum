@@ -532,7 +532,7 @@ export function ImportsPage() {
                 </p>
               </div>
               <Link to={latestImportAction.to} className="btn btn-outline-secondary btn-sm">
-                리뷰 화면 보기
+                {latestImportAction.label}
               </Link>
             </div>
           <div className="review-list">
@@ -553,7 +553,7 @@ export function ImportsPage() {
                         </Link>
                       ) : null}
                       <Link to="/transactions" className="btn btn-sm btn-outline-primary">
-                      거래 보기
+                      가져온 거래 보기
                       </Link>
                     </div>
                   </div>
