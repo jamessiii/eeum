@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { getFilteredReviews } from "../../domain/reviews/filters";
 import { REVIEW_ACTION_LABELS, REVIEW_TYPE_LABELS, type ReviewType } from "../../domain/reviews/meta";
-import { getReviewSummary, getSortedReviewTypeSummary } from "../../domain/reviews/summary";
+import { getReviewSummary, getReviewTypeCounts, getSortedReviewTypeSummary } from "../../domain/reviews/summary";
 import { getSourceTypeLabel, SOURCE_TYPE_OPTIONS } from "../../domain/transactions/sourceTypes";
 import { getWorkspaceHealthSummary } from "../../domain/workspace/health";
 import { getMotionStyle } from "../../shared/utils/motion";
@@ -51,9 +51,6 @@ export function ReviewsPage() {
     resolvedReviews,
     resolvedReviewCount,
     dismissedReviewCount,
-    reviewCounts,
-    openSharedReviewCount,
-    openInternalTransferReviewCount,
     dominantType,
     totalReviewCount,
     reviewProgress,
@@ -65,6 +62,13 @@ export function ReviewsPage() {
     reviews,
     transactionMap: transactions,
     activeFilter,
+    activeTagId,
+    activeSourceType,
+  });
+  const filteredReviewsByContext = getFilteredReviews({
+    reviews,
+    transactionMap: transactions,
+    activeFilter: "all",
     activeTagId,
     activeSourceType,
   });
@@ -88,6 +92,9 @@ export function ReviewsPage() {
     },
     { manual: 0, account: 0, card: 0, import: 0 },
   );
+  const filteredReviewCounts = getReviewTypeCounts(filteredReviewsByContext);
+  const contextualSharedReviewCount = filteredReviewCounts.shared_expense_candidate ?? 0;
+  const contextualInternalTransferReviewCount = filteredReviewCounts.internal_transfer_candidate ?? 0;
   const hasActiveReviewFilters = activeFilter !== "all" || activeTagId !== "all" || activeSourceType !== "all";
   const filteredReviewSummary = [
     activeFilter !== "all" ? `유형 ${REVIEW_TYPE_LABELS[activeFilter]}` : null,
@@ -111,19 +118,19 @@ export function ReviewsPage() {
           to: "/transactions?cleanup=untagged",
           actionLabel: `무태그 ${untaggedCount}건 정리`,
         }
-      : openSharedReviewCount
+      : contextualSharedReviewCount
         ? {
             title: "지금 가장 먼저 할 일",
-            description: `${openSharedReviewCount}건의 공동지출 후보를 거래 화면에서 다시 보면 정산 흐름을 더 빨리 안정화할 수 있습니다.`,
+            description: `${contextualSharedReviewCount}건의 공동지출 후보를 거래 화면에서 다시 보면 정산 흐름을 더 빨리 안정화할 수 있습니다.`,
             to: "/transactions?nature=shared",
-            actionLabel: `공동지출 ${openSharedReviewCount}건 점검`,
+            actionLabel: `공동지출 ${contextualSharedReviewCount}건 점검`,
           }
-        : openInternalTransferReviewCount
+        : contextualInternalTransferReviewCount
           ? {
               title: "지금 가장 먼저 할 일",
-              description: `${openInternalTransferReviewCount}건의 내부이체 후보를 거래 화면에서 다시 보면 지출 통계가 더 깔끔해집니다.`,
+              description: `${contextualInternalTransferReviewCount}건의 내부이체 후보를 거래 화면에서 다시 보면 지출 통계가 더 깔끔해집니다.`,
               to: "/transactions?nature=internal_transfer",
-              actionLabel: `내부이체 ${openInternalTransferReviewCount}건 점검`,
+              actionLabel: `내부이체 ${contextualInternalTransferReviewCount}건 점검`,
             }
       : null;
 
@@ -218,8 +225,8 @@ export function ReviewsPage() {
           </div>
           <ReviewTypeFilterBar
             activeFilter={activeFilter}
-            counts={reviewCounts}
-            totalCount={openReviewCount}
+            counts={filteredReviewCounts}
+            totalCount={filteredReviewsByContext.length}
             onChange={setActiveFilter}
           />
           <div className="toolbar-row mt-2">
@@ -379,14 +386,14 @@ export function ReviewsPage() {
               무태그 {untaggedCount}건 정리
             </Link>
           ) : null}
-          {!uncategorizedCount && !untaggedCount && openSharedReviewCount ? (
+          {!uncategorizedCount && !untaggedCount && contextualSharedReviewCount ? (
             <Link className="btn btn-outline-primary btn-sm" to={withActiveTransactionFilters("/transactions?nature=shared")}>
-              공동지출 {openSharedReviewCount}건 점검
+              공동지출 {contextualSharedReviewCount}건 점검
             </Link>
           ) : null}
-          {!uncategorizedCount && !untaggedCount && !openSharedReviewCount && openInternalTransferReviewCount ? (
+          {!uncategorizedCount && !untaggedCount && !contextualSharedReviewCount && contextualInternalTransferReviewCount ? (
             <Link className="btn btn-outline-secondary btn-sm" to={withActiveTransactionFilters("/transactions?nature=internal_transfer")}>
-              내부이체 {openInternalTransferReviewCount}건 점검
+              내부이체 {contextualInternalTransferReviewCount}건 점검
             </Link>
           ) : null}
           <Link className="btn btn-outline-secondary btn-sm" to="/">
@@ -412,14 +419,14 @@ export function ReviewsPage() {
                   무태그 {untaggedCount}건 정리
                 </Link>
               ) : null}
-              {!uncategorizedCount && !untaggedCount && openSharedReviewCount ? (
+              {!uncategorizedCount && !untaggedCount && contextualSharedReviewCount ? (
                 <Link className="btn btn-outline-primary btn-sm" to={withActiveTransactionFilters("/transactions?nature=shared")}>
-                  공동지출 {openSharedReviewCount}건 점검
+                  공동지출 {contextualSharedReviewCount}건 점검
                 </Link>
               ) : null}
-              {!uncategorizedCount && !untaggedCount && !openSharedReviewCount && openInternalTransferReviewCount ? (
+              {!uncategorizedCount && !untaggedCount && !contextualSharedReviewCount && contextualInternalTransferReviewCount ? (
                 <Link className="btn btn-outline-secondary btn-sm" to={withActiveTransactionFilters("/transactions?nature=internal_transfer")}>
-                  내부이체 {openInternalTransferReviewCount}건 점검
+                  내부이체 {contextualInternalTransferReviewCount}건 점검
                 </Link>
               ) : null}
               <Link className="btn btn-outline-primary btn-sm" to={settlementsLink}>
