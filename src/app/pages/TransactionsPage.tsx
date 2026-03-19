@@ -101,8 +101,8 @@ export function TransactionsPage() {
   const scope = getWorkspaceScope(state, workspaceId);
   const categories = new Map(scope.categories.map((item) => [item.id, item.name]));
   const tags = new Map(scope.tags.map((item) => [item.id, item]));
-  const peopleMap = new Map(scope.people.map((person) => [person.id, person.name]));
-  const accountMap = new Map(scope.accounts.map((account) => [account.id, account.name]));
+  const peopleMap = new Map(scope.people.map((person) => [person.id, person.displayName || person.name]));
+  const accountMap = new Map(scope.accounts.map((account) => [account.id, account.alias || account.name]));
   const cardMap = new Map(scope.cards.map((card) => [card.id, card.name]));
   const people = scope.people;
   const cards = scope.cards;
@@ -341,7 +341,7 @@ export function TransactionsPage() {
             <option value="">사용자 선택 없음</option>
             {people.map((person) => (
               <option key={person.id} value={person.id}>
-                {person.name}
+                {person.displayName || person.name}
               </option>
             ))}
           </select>
@@ -349,7 +349,7 @@ export function TransactionsPage() {
             <option value="">계좌 연결 없음</option>
             {accounts.map((account) => (
               <option key={account.id} value={account.id}>
-                {account.name}
+                {account.alias || account.name}
               </option>
             ))}
           </select>
@@ -711,7 +711,7 @@ export function TransactionsPage() {
                 <option value="all">전체 사용자</option>
                 {people.map((person) => (
                   <option key={person.id} value={person.id}>
-                    {person.name}
+                    {person.displayName || person.name}
                   </option>
                 ))}
               </select>

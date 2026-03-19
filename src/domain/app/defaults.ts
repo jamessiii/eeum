@@ -83,11 +83,23 @@ export function createStarterTags(workspaceId: string): Tag[] {
 }
 
 export function mergeWorkspaceBundle(state: AppState, bundle: WorkspaceBundle): AppState {
+  const existingWorkspaceIndex = state.workspaces.findIndex((workspace) => workspace.id === bundle.workspace.id);
+  const workspaces =
+    existingWorkspaceIndex >= 0
+      ? state.workspaces.map((workspace) => (workspace.id === bundle.workspace.id ? bundle.workspace : workspace))
+      : [...state.workspaces, bundle.workspace];
+
+  const financialProfiles = state.financialProfiles.some((profile) => profile.workspaceId === bundle.workspace.id)
+    ? state.financialProfiles.map((profile) =>
+        profile.workspaceId === bundle.workspace.id ? bundle.financialProfile : profile,
+      )
+    : [...state.financialProfiles, bundle.financialProfile];
+
   return {
     ...state,
     activeWorkspaceId: bundle.workspace.id,
-    workspaces: [...state.workspaces, bundle.workspace],
-    financialProfiles: [...state.financialProfiles, bundle.financialProfile],
+    workspaces,
+    financialProfiles,
     people: [...state.people, ...bundle.people],
     accounts: [...state.accounts, ...bundle.accounts],
     cards: [...state.cards, ...bundle.cards],

@@ -12,6 +12,7 @@ import { isActiveExpenseTransaction } from "../../domain/transactions/meta";
 import type { Account, AppState, Card, FinancialProfile, Person, ReviewItem, Transaction, WorkspaceBundle } from "../../shared/types/models";
 import { createId } from "../../shared/utils/id";
 import { useToast } from "../toast/ToastProvider";
+import { getWorkspaceScope } from "./selectors";
 
 type PersonDraft = Pick<Person, "name" | "displayName" | "role" | "memo" | "isActive">;
 type AccountDraft = Pick<
@@ -207,6 +208,142 @@ function normalizeAppState(rawState: AppState): AppState {
       cardType: card.cardType ?? "credit",
       memo: card.memo ?? "",
     })),
+  };
+}
+
+function normalizeKey(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function rebaseImportedBundleIntoWorkspace(state: AppState, workspaceId: string, bundle: WorkspaceBundle): WorkspaceBundle {
+  const scope = getWorkspaceScope(state, workspaceId);
+
+  const categoryIdMap = new Map<string, string>();
+  const categoriesToAdd = bundle.categories.flatMap((category) => {
+    const matched = scope.categories.find((item) => normalizeKey(item.name) === normalizeKey(category.name));
+    if (matched) {
+      categoryIdMap.set(category.id, matched.id);
+      return [];
+    }
+    const nextId = createId("category");
+    categoryIdMap.set(category.id, nextId);
+    return [{ ...category, id: nextId, workspaceId }];
+  });
+
+  const tagIdMap = new Map<string, string>();
+  const tagsToAdd = bundle.tags.flatMap((tag) => {
+    const matched = scope.tags.find((item) => normalizeKey(item.name) === normalizeKey(tag.name));
+    if (matched) {
+      tagIdMap.set(tag.id, matched.id);
+      return [];
+    }
+    const nextId = createId("tag");
+    tagIdMap.set(tag.id, nextId);
+    return [{ ...tag, id: nextId, workspaceId }];
+  });
+
+  const personIdMap = new Map<string, string>();
+  const peopleToAdd = bundle.people.flatMap((person) => {
+    const matched = scope.people.find((item) => normalizeKey(item.name) === normalizeKey(person.name));
+    if (matched) {
+      personIdMap.set(person.id, matched.id);
+      return [];
+    }
+    const nextId = createId("person");
+    personIdMap.set(person.id, nextId);
+    return [{ ...person, id: nextId, workspaceId }];
+  });
+
+  const accountIdMap = new Map<string, string>();
+  const accountsToAdd = bundle.accounts.flatMap((account) => {
+    const matched = scope.accounts.find((item) => normalizeKey(item.name) === normalizeKey(account.name));
+    if (matched) {
+      accountIdMap.set(account.id, matched.id);
+      return [];
+    }
+    const nextId = createId("account");
+    accountIdMap.set(account.id, nextId);
+    return [
+      {
+        ...account,
+        id: nextId,
+        workspaceId,
+        ownerPersonId: account.ownerPersonId ? (personIdMap.get(account.ownerPersonId) ?? null) : null,
+      },
+    ];
+  });
+
+  const cardIdMap = new Map<string, string>();
+  const cardsToAdd = bundle.cards.flatMap((card) => {
+    const matched = scope.cards.find((item) => normalizeKey(item.name) === normalizeKey(card.name));
+    if (matched) {
+      cardIdMap.set(card.id, matched.id);
+      return [];
+    }
+    const nextId = createId("card");
+    cardIdMap.set(card.id, nextId);
+    return [
+      {
+        ...card,
+        id: nextId,
+        workspaceId,
+        ownerPersonId: card.ownerPersonId ? (personIdMap.get(card.ownerPersonId) ?? null) : null,
+        linkedAccountId: card.linkedAccountId ? (accountIdMap.get(card.linkedAccountId) ?? null) : null,
+      },
+    ];
+  });
+
+  const transactionIdMap = new Map<string, string>();
+  const transactions = bundle.transactions.map((transaction) => {
+    const nextId = createId("tx");
+    transactionIdMap.set(transaction.id, nextId);
+
+    return {
+      ...transaction,
+      id: nextId,
+      workspaceId,
+      ownerPersonId: transaction.ownerPersonId ? (personIdMap.get(transaction.ownerPersonId) ?? null) : null,
+      cardId: transaction.cardId ? (cardIdMap.get(transaction.cardId) ?? null) : null,
+      accountId: transaction.accountId ? (accountIdMap.get(transaction.accountId) ?? null) : null,
+      fromAccountId: transaction.fromAccountId ? (accountIdMap.get(transaction.fromAccountId) ?? null) : null,
+      toAccountId: transaction.toAccountId ? (accountIdMap.get(transaction.toAccountId) ?? null) : null,
+      categoryId: transaction.categoryId ? (categoryIdMap.get(transaction.categoryId) ?? null) : null,
+      tagIds: transaction.tagIds.map((tagId) => tagIdMap.get(tagId)).filter((tagId): tagId is string => Boolean(tagId)),
+    };
+  });
+
+  const reviews = bundle.reviews.map((review) => ({
+    ...review,
+    id: createId("review"),
+    workspaceId,
+    primaryTransactionId: transactionIdMap.get(review.primaryTransactionId) ?? review.primaryTransactionId,
+    relatedTransactionIds: review.relatedTransactionIds
+      .map((relatedId) => transactionIdMap.get(relatedId))
+      .filter((id): id is string => Boolean(id)),
+  }));
+
+  return {
+    workspace: state.workspaces.find((item) => item.id === workspaceId) ?? bundle.workspace,
+    financialProfile: scope.financialProfile ?? createFinancialProfileBase(workspaceId),
+    people: peopleToAdd,
+    accounts: accountsToAdd,
+    cards: cardsToAdd,
+    categories: categoriesToAdd,
+    tags: tagsToAdd,
+    transactions,
+    reviews,
+    imports: [
+      {
+        id: createId("import"),
+        workspaceId,
+        fileName: bundle.imports[0]?.fileName ?? bundle.workspace.name,
+        importedAt: new Date().toISOString(),
+        parserId: bundle.imports[0]?.parserId ?? "household-v2-workbook",
+        rowCount: transactions.length,
+        reviewCount: reviews.length,
+      },
+    ],
+    settlements: [],
   };
 }
 
@@ -724,7 +861,9 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         return bundle;
       },
       commitImportedBundle(bundle, fileName) {
-        dispatch({ type: "mergeBundle", payload: bundle });
+        const activeWorkspaceId = state.activeWorkspaceId;
+        const payload = activeWorkspaceId ? rebaseImportedBundleIntoWorkspace(state, activeWorkspaceId, bundle) : bundle;
+        dispatch({ type: "mergeBundle", payload });
         showToast(`${fileName} 업로드를 완료했습니다.`, "success");
       },
       setActiveWorkspace(workspaceId) {

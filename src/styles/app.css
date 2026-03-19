@@ -533,6 +533,10 @@ a {
   gap: 0.45rem;
 }
 
+.profile-form textarea {
+  resize: vertical;
+}
+
 .simple-inline-form {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
 }
@@ -737,6 +741,21 @@ a {
 .resource-card {
   align-items: flex-start;
   flex-direction: column;
+  min-height: 0;
+}
+
+.resource-card form {
+  padding-top: 0.95rem;
+  border-top: 1px solid rgba(23, 32, 51, 0.08);
+}
+
+.resource-card .badge {
+  flex-shrink: 0;
+}
+
+.resource-card .section-kicker,
+.resource-card .text-secondary {
+  word-break: keep-all;
 }
 
 .resource-card .btn,
@@ -850,5 +869,9 @@ a {
   .section-head {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .resource-card {
+    min-height: 0;
   }
 }

@@ -10,7 +10,11 @@ interface TransactionFilterContextInput {
 
 export function getTransactionFilterContext(input: TransactionFilterContextInput) {
   const activeOwnerName =
-    input.ownerPersonId !== "all" ? input.people.find((person) => person.id === input.ownerPersonId)?.name ?? null : null;
+    input.ownerPersonId !== "all"
+      ? input.people.find((person) => person.id === input.ownerPersonId)?.displayName ??
+        input.people.find((person) => person.id === input.ownerPersonId)?.name ??
+        null
+      : null;
 
   const activeSourceTypeLabel =
     input.sourceType !== "all" && SOURCE_TYPE_OPTIONS.includes(input.sourceType)

@@ -29,6 +29,7 @@ export function ImportsPage() {
   const [isPreparingPreview, setIsPreparingPreview] = useState(false);
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
+  const activeWorkspace = state.workspaces.find((workspace) => workspace.id === workspaceId) ?? null;
 
   const applyPreviewPersonPatch = (
     personId: string,
@@ -101,6 +102,9 @@ export function ImportsPage() {
   const linkedCardCount = previewBundle?.cards.filter((card) => card.linkedAccountId).length ?? 0;
   const ownedCardCount = previewBundle?.cards.filter((card) => card.ownerPersonId).length ?? 0;
   const ownedAccountCount = previewBundle?.accounts.filter((account) => account.ownerPersonId || account.isShared).length ?? 0;
+  const missingAccountOwnerCount = previewBundle?.accounts.filter((account) => !account.ownerPersonId && !account.isShared).length ?? 0;
+  const missingCardOwnerCount = previewBundle?.cards.filter((card) => !card.ownerPersonId).length ?? 0;
+  const missingCardLinkCount = previewBundle?.cards.filter((card) => !card.linkedAccountId).length ?? 0;
   const previewExpenseAmount =
     previewBundle?.transactions.filter((transaction) => transaction.isExpenseImpact).reduce((sum, transaction) => sum + transaction.amount, 0) ?? 0;
 
@@ -117,6 +121,17 @@ export function ImportsPage() {
           사람, 계좌, 카드 관리 화면에서 만든 구조를 기준으로 업로드 데이터를 정리하는 흐름입니다. 업로드 직후 바로 가져오지 않고, 누가
           쓴 데이터인지와 어떤 카드 또는 계좌에 연결할지를 먼저 확인합니다.
         </p>
+        <div className="d-flex flex-wrap gap-2 mb-4">
+          <Link to="/people" className="btn btn-outline-secondary btn-sm">
+            사람 관리
+          </Link>
+          <Link to="/accounts" className="btn btn-outline-secondary btn-sm">
+            계좌 관리
+          </Link>
+          <Link to="/cards" className="btn btn-outline-secondary btn-sm">
+            카드 관리
+          </Link>
+        </div>
         <div className="classification-flow-grid">
           <article className="stat-card">
             <span className="stat-label">현재 사람</span>
@@ -170,11 +185,11 @@ export function ImportsPage() {
               <span className="section-kicker">업로드 미리보기</span>
               <h2 className="section-title">{previewFileName} 연결 확인</h2>
             </div>
-            <span className="badge text-bg-primary">{previewBundle.workspace.name}</span>
+            <span className="badge text-bg-primary">{activeWorkspace?.name ?? previewBundle.workspace.name}</span>
           </div>
           <p className="text-secondary">
-            아래에서 업로드 데이터의 사람, 계좌, 카드 연결을 먼저 맞춘 뒤 가져오세요. 여기서 정리된 연결 정보가 거래 소유자와 카드 결제
-            계좌에도 같이 반영됩니다.
+            아래에서 업로드 데이터의 사람, 계좌, 카드 연결을 먼저 맞춘 뒤 <strong>{activeWorkspace?.name ?? "현재 가계부"}</strong>에
+            가져오세요. 여기서 정리된 연결 정보가 거래 소유자와 카드 결제 계좌에도 같이 반영됩니다.
           </p>
 
           <div className="classification-flow-grid">
@@ -194,6 +209,22 @@ export function ImportsPage() {
               <div className="small text-secondary mt-2">소유자 {ownedCardCount}개 · 결제 계좌 {linkedCardCount}개 연결</div>
             </article>
           </div>
+
+          {missingAccountOwnerCount || missingCardOwnerCount || missingCardLinkCount ? (
+            <div className="review-summary-panel mt-4">
+              <div className="review-summary-copy">
+                <strong>가져오기 전에 확인할 매핑이 남아 있습니다</strong>
+                <p className="mb-0 text-secondary">
+                  빈 매핑이 남아 있으면 거래 소유자와 결제 흐름이 일부 비어 들어올 수 있습니다. 아래 단계에서 필요한 항목만 빠르게 채워주세요.
+                </p>
+              </div>
+              <div className="d-flex flex-wrap gap-2">
+                {missingAccountOwnerCount ? <span className="badge text-bg-warning">소유자 없는 계좌 {missingAccountOwnerCount}개</span> : null}
+                {missingCardOwnerCount ? <span className="badge text-bg-warning">소유자 없는 카드 {missingCardOwnerCount}개</span> : null}
+                {missingCardLinkCount ? <span className="badge text-bg-warning">결제 계좌 없는 카드 {missingCardLinkCount}개</span> : null}
+              </div>
+            </div>
+          ) : null}
 
           <div className="section-head mt-4">
             <div>

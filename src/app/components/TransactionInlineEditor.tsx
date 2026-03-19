@@ -53,7 +53,7 @@ export function TransactionInlineEditor({
             <option value="">사용자 선택 없음</option>
             {people.map((person) => (
               <option key={person.id} value={person.id}>
-                {person.name}
+                {person.displayName || person.name}
               </option>
             ))}
           </select>
@@ -61,7 +61,7 @@ export function TransactionInlineEditor({
             <option value="">계좌 연결 없음</option>
             {accounts.map((account) => (
               <option key={account.id} value={account.id}>
-                {account.name}
+                {account.alias || account.name}
               </option>
             ))}
           </select>
