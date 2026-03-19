@@ -124,12 +124,11 @@ function buildInsightMetrics(
   };
 }
 
-function summarizeCategories(transactions: Transaction[], categories: Category[]) {
+function summarizeCategories(expenseTransactions: Transaction[], categories: Category[]) {
   const categoryNameMap = new Map(categories.map((category) => [category.id, category.name]));
   const totals = new Map<string, number>();
 
-  for (const transaction of transactions) {
-    if (!isActiveExpenseImpactTransaction(transaction)) continue;
+  for (const transaction of expenseTransactions) {
     const categoryName = transaction.categoryId ? categoryNameMap.get(transaction.categoryId) ?? "미분류" : "미분류";
     totals.set(categoryName, (totals.get(categoryName) ?? 0) + transaction.amount);
   }
@@ -140,12 +139,12 @@ function summarizeCategories(transactions: Transaction[], categories: Category[]
     .slice(0, 4);
 }
 
-function summarizeTags(transactions: Transaction[], tags: Tag[]) {
+function summarizeTags(expenseTransactions: Transaction[], tags: Tag[]) {
   const tagMap = new Map(tags.map((tag) => [tag.id, tag]));
   const totals = new Map<string, { amount: number; count: number; color: string; tagName: string }>();
 
-  for (const transaction of transactions) {
-    if (!isActiveExpenseImpactTransaction(transaction) || !transaction.tagIds.length) continue;
+  for (const transaction of expenseTransactions) {
+    if (!transaction.tagIds.length) continue;
 
     for (const tagId of transaction.tagIds) {
       const tag = tagMap.get(tagId);
@@ -320,6 +319,7 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
   const accountCount = state.accounts.filter((item) => item.workspaceId === workspaceId).length;
   const cardCount = state.cards.filter((item) => item.workspaceId === workspaceId).length;
   const recurringSuggestionCount = getRecurringMerchantSuggestions(transactions, categories).length;
+  const expenseTransactions = transactions.filter(isActiveExpenseImpactTransaction);
   const fixedCategoryIds = new Set(
     categories.filter((category) => category.fixedOrVariable === "fixed").map((category) => category.id),
   );
@@ -341,8 +341,8 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
     accountCount,
     cardCount,
   };
-  const topCategories = summarizeCategories(transactions, categories);
-  const topTags = summarizeTags(transactions, tags);
+  const topCategories = summarizeCategories(expenseTransactions, categories);
+  const topTags = summarizeTags(expenseTransactions, tags);
   const sourceBreakdown = getSourceBreakdown(transactions);
   const dominantSource = sourceBreakdown[0]
     ? {
