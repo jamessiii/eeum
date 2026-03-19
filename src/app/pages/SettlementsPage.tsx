@@ -203,7 +203,9 @@ export function SettlementsPage() {
           </div>
         </div>
         <p className="text-secondary mb-0">
-          공동지출로 표시된 거래만 합산해서 각 사람이 얼마나 부담했는지 비교합니다. 이번 달 정산 후보를 보고, 끝낸 정산은 아래 기록으로 남길 수 있습니다.
+          {hasScopedSettlementContext
+            ? "현재 맥락에 맞는 공동지출만 다시 모아 각 사람이 얼마나 부담했는지 비교합니다. 이 화면에서는 근거 거래와 부담 차이를 먼저 확인합니다."
+            : "공동지출로 표시된 거래만 합산해서 각 사람이 얼마나 부담했는지 비교합니다. 이번 달 정산 후보를 보고, 끝낸 정산은 아래 기록으로 남길 수 있습니다."}
         </p>
         <div className="review-summary-panel mt-4">
           <div className="review-summary-copy">
@@ -212,7 +214,7 @@ export function SettlementsPage() {
           </div>
           <div className="status-badge-row">
             <span className="badge text-bg-light">공동지출 {visibleSharedTransactionCount}건</span>
-            <span className="badge text-bg-light">완료 기록 {settlementHistory.length}건</span>
+            <span className="badge text-bg-light">{hasScopedSettlementContext ? "전체 기록 별도 확인" : `완료 기록 ${settlementHistory.length}건`}</span>
             {visibleSharedTransactionCount > 0 && suggestedSettlementAmount > 0 ? (
               <span className="badge text-bg-warning">추천 정산 {formatCurrency(suggestedSettlementAmount)}</span>
             ) : null}
@@ -500,7 +502,7 @@ export function SettlementsPage() {
           <div className="section-head">
             <div>
               <span className="section-kicker">이번 달 정산 기록</span>
-              <h2 className="section-title">완료된 정산 내역</h2>
+              <h2 className="section-title">{hasScopedSettlementContext ? "전체 정산 기록 안내" : "완료된 정산 내역"}</h2>
             </div>
           </div>
           {!settlementHistory.length ? (

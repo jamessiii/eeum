@@ -147,16 +147,18 @@ export function ImportsPage() {
 
   const latestImportWorkspaceAction = latestImport
     ? scope.reviews.some((review) => review.status === "open")
-      ? { to: "/reviews", label: `리뷰 ${scope.reviews.filter((review) => review.status === "open").length}건 확인` }
+      ? { to: "/reviews", label: `리뷰 ${scope.reviews.filter((review) => review.status === "open").length}건 확인`, summaryLabel: "리뷰 화면 이어가기" }
       : scope.transactions.some((transaction) => transaction.isExpenseImpact && !transaction.categoryId)
         ? {
             to: "/transactions?cleanup=uncategorized",
             label: `미분류 ${scope.transactions.filter((transaction) => transaction.isExpenseImpact && !transaction.categoryId).length}건 정리`,
+            summaryLabel: "거래 정리 이어가기",
           }
         : scope.transactions.some((transaction) => transaction.isExpenseImpact && transaction.tagIds.length === 0)
           ? {
               to: "/transactions?cleanup=untagged",
               label: `무태그 ${scope.transactions.filter((transaction) => transaction.isExpenseImpact && transaction.tagIds.length === 0).length}건 정리`,
+              summaryLabel: "거래 정리 이어가기",
             }
           : latestImportAction
     : latestImportAction;
@@ -559,13 +561,13 @@ export function ImportsPage() {
           <>
             <div className="review-summary-panel mb-4">
               <div className="review-summary-copy">
-                <strong>최근 업로드에서 바로 이어서 정리할 수 있습니다</strong>
+                <strong>현재 워크스페이스 정리 흐름으로 바로 이어갈 수 있습니다</strong>
                 <p className="mb-0 text-secondary">
-                  검토가 남아 있으면 리뷰로, 아니면 거래 정리 화면으로 바로 이동해서 업로드 직후 흐름을 이어가세요.
+                  아직 열린 리뷰나 정리 대상이 남아 있으면 해당 화면으로 바로 이동합니다. 최근 업로드 이후 남은 작업을 현재 워크스페이스 기준으로 이어가세요.
                 </p>
               </div>
               <Link to={latestImportWorkspaceAction.to} className="btn btn-outline-primary btn-sm">
-                {latestImportWorkspaceAction.label}
+                {"summaryLabel" in latestImportWorkspaceAction ? latestImportWorkspaceAction.summaryLabel : latestImportWorkspaceAction.label}
               </Link>
             </div>
           <div className="review-list">
@@ -586,11 +588,11 @@ export function ImportsPage() {
                         </Link>
                       ) : item.reviewCount > 0 ? (
                         <Link to="/reviews" className="btn btn-sm btn-outline-primary">
-                          리뷰 {item.reviewCount}건 보기
+                          리뷰 화면 보기
                         </Link>
                       ) : null}
                       <Link to="/transactions" className="btn btn-sm btn-outline-secondary">
-                        가져온 거래 보기
+                        거래 화면 보기
                       </Link>
                     </div>
                   </div>
