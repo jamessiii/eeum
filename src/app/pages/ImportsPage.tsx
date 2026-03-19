@@ -27,6 +27,17 @@ export function ImportsPage() {
   const [previewBundle, setPreviewBundle] = useState<WorkspaceBundle | null>(null);
   const [previewFileName, setPreviewFileName] = useState("");
   const [isPreparingPreview, setIsPreparingPreview] = useState(false);
+  const [previewAccountDraftById, setPreviewAccountDraftById] = useState<
+    Record<
+      string,
+      {
+        isShared?: boolean;
+        ownerPersonId?: string;
+        usageType?: "daily" | "salary" | "shared" | "card_payment" | "savings" | "investment" | "loan" | "other";
+      }
+    >
+  >({});
+  const [previewOwnerDraftByCard, setPreviewOwnerDraftByCard] = useState<Record<string, string>>({});
   const [previewLinkedAccountDraftByCard, setPreviewLinkedAccountDraftByCard] = useState<Record<string, string>>({});
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
@@ -88,20 +99,6 @@ export function ImportsPage() {
       };
     });
   };
-  const syncPreviewSharedAccountForm = (form: HTMLFormElement, isShared: boolean) => {
-    const ownerField = form.elements.namedItem("ownerPersonId") as HTMLSelectElement | null;
-    const usageField = form.elements.namedItem("usageType") as HTMLSelectElement | null;
-
-    if (ownerField) {
-      ownerField.disabled = isShared;
-      if (isShared) ownerField.value = "";
-    }
-    if (usageField) {
-      usageField.disabled = isShared;
-      usageField.value = isShared ? "shared" : usageField.value === "shared" ? "daily" : usageField.value;
-    }
-  };
-
   const applyPreviewCardPatch = (
     cardId: string,
     patch: Partial<WorkspaceBundle["cards"][number]>,
@@ -128,14 +125,31 @@ export function ImportsPage() {
   };
 
   const previewPeopleMap = new Map(previewBundle?.people.map((person) => [person.id, person.displayName || person.name]) ?? []);
-  const previewAccountsMap = new Map(previewBundle?.accounts.map((account) => [account.id, account.alias || account.name]) ?? []);
-  const previewAccountSharedMap = new Map(previewBundle?.accounts.map((account) => [account.id, account.isShared]) ?? []);
-  const linkedCardCount = previewBundle?.cards.filter((card) => card.linkedAccountId).length ?? 0;
-  const ownedCardCount = previewBundle?.cards.filter((card) => card.ownerPersonId).length ?? 0;
-  const ownedAccountCount = previewBundle?.accounts.filter((account) => account.ownerPersonId || account.isShared).length ?? 0;
-  const missingAccountOwnerCount = previewBundle?.accounts.filter((account) => !account.ownerPersonId && !account.isShared).length ?? 0;
-  const missingCardOwnerCount = previewBundle?.cards.filter((card) => !card.ownerPersonId).length ?? 0;
-  const missingCardLinkCount = previewBundle?.cards.filter((card) => !card.linkedAccountId).length ?? 0;
+  const previewAccountsWithDraft =
+    previewBundle?.accounts.map((account) => {
+      const draft = previewAccountDraftById[account.id];
+      const isShared = draft?.isShared ?? account.isShared;
+      return {
+        ...account,
+        isShared,
+        ownerPersonId: isShared ? null : draft?.ownerPersonId ?? account.ownerPersonId ?? null,
+        usageType: isShared ? "shared" : draft?.usageType ?? (account.usageType === "shared" ? "daily" : account.usageType),
+      };
+    }) ?? [];
+  const previewAccountsMap = new Map(previewAccountsWithDraft.map((account) => [account.id, account.alias || account.name]));
+  const previewAccountSharedMap = new Map(previewAccountsWithDraft.map((account) => [account.id, account.isShared]));
+  const previewCardsWithDraft =
+    previewBundle?.cards.map((card) => ({
+      ...card,
+      ownerPersonId: previewOwnerDraftByCard[card.id] ?? card.ownerPersonId ?? null,
+      linkedAccountId: previewLinkedAccountDraftByCard[card.id] ?? card.linkedAccountId ?? null,
+    })) ?? [];
+  const linkedCardCount = previewCardsWithDraft.filter((card) => card.linkedAccountId).length;
+  const ownedCardCount = previewCardsWithDraft.filter((card) => card.ownerPersonId).length;
+  const ownedAccountCount = previewAccountsWithDraft.filter((account) => account.ownerPersonId || account.isShared).length;
+  const missingAccountOwnerCount = previewAccountsWithDraft.filter((account) => !account.ownerPersonId && !account.isShared).length;
+  const missingCardOwnerCount = previewCardsWithDraft.filter((card) => !card.ownerPersonId).length;
+  const missingCardLinkCount = previewCardsWithDraft.filter((card) => !card.linkedAccountId).length;
   const previewExpenseAmount =
     previewBundle?.transactions.filter((transaction) => transaction.isExpenseImpact).reduce((sum, transaction) => sum + transaction.amount, 0) ?? 0;
   const previewRemainingMappingCount = missingAccountOwnerCount + missingCardOwnerCount + missingCardLinkCount;
@@ -192,6 +206,8 @@ export function ImportsPage() {
     commitImportedBundle(previewBundle, previewFileName);
     setPreviewBundle(null);
     setPreviewFileName("");
+    setPreviewAccountDraftById({});
+    setPreviewOwnerDraftByCard({});
     setPreviewLinkedAccountDraftByCard({});
     void navigate(previewPostImportPath);
   };
@@ -256,6 +272,8 @@ export function ImportsPage() {
                 const bundle = await previewWorkbookImport(file);
                 setPreviewBundle(bundle);
                 setPreviewFileName(file.name);
+                setPreviewAccountDraftById({});
+                setPreviewOwnerDraftByCard({});
                 setPreviewLinkedAccountDraftByCard({});
               } finally {
                 setIsPreparingPreview(false);
@@ -381,12 +399,18 @@ export function ImportsPage() {
             </div>
           </div>
           <div className="resource-grid">
-            {previewBundle.accounts.map((account, index) => (
-              <article key={account.id} className="resource-card" style={getMotionStyle(index + 4)}>
+            {previewBundle.accounts.map((account, index) => {
+              const draft = previewAccountDraftById[account.id];
+              const selectedIsShared = draft?.isShared ?? account.isShared;
+              const selectedOwnerPersonId = selectedIsShared ? "" : draft?.ownerPersonId ?? account.ownerPersonId ?? "";
+              const selectedUsageType = selectedIsShared ? "shared" : draft?.usageType ?? (account.usageType === "shared" ? "daily" : account.usageType);
+
+              return (
+                <article key={account.id} className="resource-card" style={getMotionStyle(index + 4)}>
                 <h3>{account.alias || account.name}</h3>
                 <p className="mb-0 text-secondary">
-                  {account.institutionName} · {account.isShared ? "공동 계좌" : `소유자 ${previewPeopleMap.get(account.ownerPersonId ?? "") ?? "미지정"}`} ·{" "}
-                  {ACCOUNT_USAGE_LABELS[account.usageType]}
+                  {account.institutionName} · {selectedIsShared ? "공동 계좌" : `소유자 ${previewPeopleMap.get(selectedOwnerPersonId) ?? "미지정"}`} ·{" "}
+                  {ACCOUNT_USAGE_LABELS[selectedUsageType]}
                 </p>
                 <form
                   className="profile-form w-100"
@@ -409,6 +433,11 @@ export function ImportsPage() {
                         | "other",
                       isShared,
                     });
+                    setPreviewAccountDraftById((current) => {
+                      const next = { ...current };
+                      delete next[account.id];
+                      return next;
+                    });
                   }}
                 >
                   <label>
@@ -421,7 +450,21 @@ export function ImportsPage() {
                   </label>
                   <label>
                     소유자
-                    <select name="ownerPersonId" className="form-select" defaultValue={account.ownerPersonId ?? ""} disabled={account.isShared}>
+                    <select
+                      name="ownerPersonId"
+                      className="form-select"
+                      value={selectedOwnerPersonId}
+                      disabled={selectedIsShared}
+                      onChange={(event) =>
+                        setPreviewAccountDraftById((current) => ({
+                          ...current,
+                          [account.id]: {
+                            ...current[account.id],
+                            ownerPersonId: event.target.value,
+                          },
+                        }))
+                      }
+                    >
                       <option value="">미지정</option>
                       {previewBundle.people.map((person) => (
                         <option key={person.id} value={person.id}>
@@ -430,14 +473,36 @@ export function ImportsPage() {
                       ))}
                     </select>
                   </label>
-                  {account.isShared ? (
+                  {selectedIsShared ? (
                     <div className="small text-secondary" style={{ gridColumn: "1 / -1" }}>
                       공동 자금 계좌로 체크된 동안에는 소유자를 따로 저장하지 않습니다.
                     </div>
                   ) : null}
                   <label>
                     용도
-                    <select name="usageType" className="form-select" defaultValue={account.usageType} disabled={account.isShared}>
+                    <select
+                      name="usageType"
+                      className="form-select"
+                      value={selectedUsageType}
+                      disabled={selectedIsShared}
+                      onChange={(event) =>
+                        setPreviewAccountDraftById((current) => ({
+                          ...current,
+                          [account.id]: {
+                            ...current[account.id],
+                            usageType: event.target.value as
+                              | "daily"
+                              | "salary"
+                              | "shared"
+                              | "card_payment"
+                              | "savings"
+                              | "investment"
+                              | "loan"
+                              | "other",
+                          },
+                        }))
+                      }
+                    >
                       {Object.entries(ACCOUNT_USAGE_LABELS).map(([value, label]) => (
                         <option key={value} value={value}>
                           {label}
@@ -451,8 +516,18 @@ export function ImportsPage() {
                       name="isShared"
                       type="checkbox"
                       className="form-check-input mt-0"
-                      defaultChecked={account.isShared}
-                      onChange={(event) => syncPreviewSharedAccountForm(event.currentTarget.form!, event.target.checked)}
+                      checked={selectedIsShared}
+                      onChange={(event) =>
+                        setPreviewAccountDraftById((current) => ({
+                          ...current,
+                          [account.id]: {
+                            ...current[account.id],
+                            isShared: event.target.checked,
+                            ownerPersonId: event.target.checked ? "" : current[account.id]?.ownerPersonId ?? account.ownerPersonId ?? "",
+                            usageType: event.target.checked ? "shared" : current[account.id]?.usageType ?? (account.usageType === "shared" ? "daily" : account.usageType),
+                          },
+                        }))
+                      }
                     />
                   </label>
                   <div className="d-flex justify-content-end" style={{ gridColumn: "1 / -1" }}>
@@ -461,8 +536,9 @@ export function ImportsPage() {
                     </button>
                   </div>
                 </form>
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </div>
 
           <div className="section-head mt-4">
@@ -473,13 +549,14 @@ export function ImportsPage() {
           </div>
           <div className="resource-grid">
             {previewBundle.cards.map((card, index) => {
+              const selectedOwnerPersonId = previewOwnerDraftByCard[card.id] ?? card.ownerPersonId ?? "";
               const selectedLinkedAccountId = previewLinkedAccountDraftByCard[card.id] ?? card.linkedAccountId ?? "";
 
               return (
                 <article key={card.id} className="resource-card" style={getMotionStyle(index + 6)}>
                 <h3>{card.name}</h3>
                 <p className="mb-0 text-secondary">
-                  {card.issuerName} · 소유자 {previewPeopleMap.get(card.ownerPersonId ?? "") ?? "미지정"} · 결제{" "}
+                  {card.issuerName} · 소유자 {previewPeopleMap.get(selectedOwnerPersonId) ?? "미지정"} · 결제{" "}
                   {selectedLinkedAccountId
                     ? `${previewAccountSharedMap.get(selectedLinkedAccountId) ? "공동 계좌 " : ""}${previewAccountsMap.get(selectedLinkedAccountId) ?? "-"}`
                     : "미연결"}
@@ -496,6 +573,16 @@ export function ImportsPage() {
                       linkedAccountId: String(formData.get("linkedAccountId") ?? "") || null,
                       cardType: String(formData.get("cardType") ?? "credit") as "credit" | "check" | "debit" | "prepaid" | "other",
                     });
+                    setPreviewOwnerDraftByCard((current) => {
+                      const next = { ...current };
+                      delete next[card.id];
+                      return next;
+                    });
+                    setPreviewLinkedAccountDraftByCard((current) => {
+                      const next = { ...current };
+                      delete next[card.id];
+                      return next;
+                    });
                   }}
                 >
                   <label>
@@ -508,7 +595,17 @@ export function ImportsPage() {
                   </label>
                   <label>
                     소유자
-                    <select name="ownerPersonId" className="form-select" defaultValue={card.ownerPersonId ?? ""}>
+<select
+                      name="ownerPersonId"
+                      className="form-select"
+                      value={selectedOwnerPersonId}
+                      onChange={(event) =>
+                        setPreviewOwnerDraftByCard((current) => ({
+                          ...current,
+                          [card.id]: event.target.value,
+                        }))
+                      }
+                    >
                       <option value="">미지정</option>
                       {previewBundle.people.map((person) => (
                         <option key={person.id} value={person.id}>
@@ -575,6 +672,8 @@ export function ImportsPage() {
               onClick={() => {
                 setPreviewBundle(null);
                 setPreviewFileName("");
+                setPreviewAccountDraftById({});
+                setPreviewOwnerDraftByCard({});
                 setPreviewLinkedAccountDraftByCard({});
               }}
             >
