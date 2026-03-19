@@ -211,6 +211,10 @@ export function TransactionsPage() {
     const query = nextSearchParams.toString();
     return query ? `/settlements?${query}` : "/settlements";
   };
+  const settlementsActionLabel =
+    filters.sourceType !== "all" || filters.ownerPersonId !== "all" || filters.tagId !== "all"
+      ? "현재 맥락 정산 보기"
+      : "정산 화면 보기";
 
   useEffect(() => {
     const cleanup = searchParams.get("cleanup");
@@ -730,7 +734,9 @@ export function TransactionsPage() {
                 description={
                   filters.nature === "uncategorized"
                     ? "이제 남은 무태그 거래를 묶거나 대시보드에서 이번 달 진단을 확인하면 됩니다."
-                    : "이제 카테고리와 태그 기준 정리가 끝난 흐름으로 대시보드와 정산 화면을 더 믿고 볼 수 있습니다."
+                    : filters.sourceType !== "all" || filters.ownerPersonId !== "all" || filters.tagId !== "all"
+                      ? "이제 카테고리와 태그 기준 정리가 끝난 흐름으로 대시보드와 현재 맥락 정산 흐름을 더 믿고 볼 수 있습니다."
+                      : "이제 카테고리와 태그 기준 정리가 끝난 흐름으로 대시보드와 정산 화면을 더 믿고 볼 수 있습니다."
                 }
                 actions={
                   <>
@@ -741,7 +747,7 @@ export function TransactionsPage() {
                     ) : null}
                     {sharedExpenseCount ? (
                       <Link className="btn btn-outline-primary btn-sm" to={getSettlementsLink()}>
-                        정산 화면 보기
+                        {settlementsActionLabel}
                       </Link>
                     ) : null}
                     <Link className="btn btn-outline-secondary btn-sm" to="/">
@@ -758,7 +764,9 @@ export function TransactionsPage() {
                   <strong>{filters.nature === "shared" ? "공동지출 점검 모드입니다" : "내부이체 점검 모드입니다"}</strong>
                   <p className="mb-0 text-secondary">
                     {filters.nature === "shared"
-                      ? "정산과 연결되는 공동지출만 모아 보고 있습니다. 실제로 함께 부담할 항목이 맞는지, 정산 화면으로 이어질 흐름인지 빠르게 확인해보세요."
+                      ? filters.sourceType !== "all" || filters.ownerPersonId !== "all" || filters.tagId !== "all"
+                        ? "정산과 연결되는 공동지출만 모아 보고 있습니다. 실제로 함께 부담할 항목이 맞는지, 현재 맥락 정산 흐름으로 이어질 내용인지 빠르게 확인해보세요."
+                        : "정산과 연결되는 공동지출만 모아 보고 있습니다. 실제로 함께 부담할 항목이 맞는지, 정산 화면으로 이어질 흐름인지 빠르게 확인해보세요."
                       : "소비 통계에 바로 잡히지 않아야 하는 내부이체만 모아 보고 있습니다. 내 계좌 간 이동이나 생활비 이동이 지출로 잘못 보이지 않는지 먼저 점검하면 좋습니다."}
                   </p>
                 </div>
@@ -778,7 +786,7 @@ export function TransactionsPage() {
                   </button>
                   {filters.nature === "shared" ? (
                     <Link className="btn btn-outline-primary btn-sm" to={getSettlementsLink()}>
-                      정산 화면 보기
+                      {settlementsActionLabel}
                     </Link>
                   ) : (
                     <Link className="btn btn-outline-secondary btn-sm" to="/">
@@ -794,7 +802,7 @@ export function TransactionsPage() {
                 <div className="review-summary-copy">
                   <strong>{activeOwnerName}의 거래 흐름을 보고 있습니다</strong>
                   <p className="mb-0 text-secondary">
-                    지금 화면은 {activeOwnerName}에게 연결된 거래만 좁혀서 보고 있습니다. 정산 화면에서 넘어온 경우라면 이 사람의 공동지출 흐름을 바로 확인하는 용도입니다.
+                    지금 화면은 {activeOwnerName}에게 연결된 거래만 좁혀서 보고 있습니다. 현재 맥락으로 이어 본 경우라면 이 사람의 공동지출 흐름을 바로 확인하는 용도입니다.
                   </p>
                 </div>
                 <div className="action-row">
@@ -873,7 +881,7 @@ export function TransactionsPage() {
                   <>
                     {filters.nature === "shared" ? (
                       <Link className="btn btn-outline-primary btn-sm" to={getSettlementsLink()}>
-                        정산 화면 보기
+                        {settlementsActionLabel}
                       </Link>
                     ) : sharedExpenseCount ? (
                       <button className="btn btn-outline-primary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, nature: "shared" }))}>

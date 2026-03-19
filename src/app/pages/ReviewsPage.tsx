@@ -170,6 +170,7 @@ export function ReviewsPage() {
     ? { ...nextReviewAction, to: withActiveTransactionFilters(nextReviewAction.to) }
     : null;
   const settlementsLink = withActiveTransactionFilters("/settlements");
+  const settlementsActionLabel = hasActiveReviewFilters ? "현재 맥락 정산 보기" : "정산 화면 보기";
 
   const getReviewTransactionLink = (reviewType: ReviewType) => {
     const searchParams = new URLSearchParams();
@@ -381,7 +382,7 @@ export function ReviewsPage() {
             </Link>
             {contextualSharedTransactionCount ? (
               <Link className="btn btn-outline-secondary btn-sm" to={settlementsLink}>
-                정산 화면 보기
+                {settlementsActionLabel}
               </Link>
             ) : null}
           </div>
@@ -430,7 +431,9 @@ export function ReviewsPage() {
           title="검토함 정리가 끝났습니다"
           description={
             canOpenSettlementsFromReviewContext
-              ? "자동 검토 후보가 모두 처리됐습니다. 이제 미분류와 무태그 거래를 마무리하고 대시보드와 정산 화면의 흐름을 확인하면 됩니다."
+              ? hasActiveReviewFilters
+                ? "자동 검토 후보가 모두 처리됐습니다. 이제 미분류와 무태그 거래를 마무리하고 대시보드와 현재 맥락 정산 흐름을 확인하면 됩니다."
+                : "자동 검토 후보가 모두 처리됐습니다. 이제 미분류와 무태그 거래를 마무리하고 대시보드와 정산 화면의 흐름을 확인하면 됩니다."
               : "자동 검토 후보가 모두 처리됐습니다. 이제 미분류와 무태그 거래를 마무리하고 대시보드와 거래 흐름을 확인하면 됩니다."
           }
           actions={
@@ -457,7 +460,7 @@ export function ReviewsPage() {
               ) : null}
               {contextualSharedTransactionCount ? (
                 <Link className="btn btn-outline-primary btn-sm" to={settlementsLink}>
-                  정산 화면 보기
+                  {settlementsActionLabel}
                 </Link>
               ) : null}
               <Link className="btn btn-outline-secondary btn-sm" to="/">
@@ -474,14 +477,16 @@ export function ReviewsPage() {
           title="열려 있는 검토 항목이 없습니다"
           description={
             canOpenSettlementsFromReviewContext
-              ? "중복, 환불, 내부이체, 공동지출 후보를 모두 정리했습니다. 이제 대시보드와 정산 화면의 수치를 더 믿고 볼 수 있습니다."
+              ? hasActiveReviewFilters
+                ? "중복, 환불, 내부이체, 공동지출 후보를 모두 정리했습니다. 이제 대시보드와 현재 맥락 정산 흐름의 수치를 더 믿고 볼 수 있습니다."
+                : "중복, 환불, 내부이체, 공동지출 후보를 모두 정리했습니다. 이제 대시보드와 정산 화면의 수치를 더 믿고 볼 수 있습니다."
               : "중복, 환불, 내부이체, 공동지출 후보를 모두 정리했습니다. 이제 대시보드와 거래 화면의 수치를 더 믿고 볼 수 있습니다."
           }
           actions={
             <>
               {contextualSharedTransactionCount ? (
                 <Link className="btn btn-outline-primary btn-sm" to={settlementsLink}>
-                  정산 화면 보기
+                  {settlementsActionLabel}
                 </Link>
               ) : null}
               <Link className="btn btn-outline-secondary btn-sm" to="/">
