@@ -29,7 +29,6 @@ export function ImportsPage() {
   const health = getWorkspaceHealthSummary(scope);
   const expenseStats = getExpenseImpactStats(scope.transactions);
   const imports = getSortedImportRecords(scope.imports);
-  const openReviews = health.openReviews;
   const openReviewCount = health.openReviewCount;
   const uncategorizedCount = expenseStats.uncategorizedCount;
   const untaggedCount = expenseStats.untaggedCount;
@@ -42,7 +41,7 @@ export function ImportsPage() {
       id: "reviews",
       title: "검토함 정리",
       description: openReviewCount
-        ? `${openReviews.length}건의 자동 검토 후보가 남아 있습니다.`
+        ? `${openReviewCount}건의 자동 검토 후보가 남아 있습니다.`
         : "열려 있는 검토 항목이 없어 다음 단계로 넘어갈 수 있습니다.",
       to: "/reviews",
       actionLabel: "검토함 열기",
