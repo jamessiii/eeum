@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { monthKey } from "../../shared/utils/date";
-import { getMonthlySharedSettlementSummary } from "../../domain/settlements/summary";
+import { getMonthlySharedSettlementSummary, getSettlementBalanceSummary } from "../../domain/settlements/summary";
 import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { CompletionBanner } from "../components/CompletionBanner";
@@ -33,35 +33,21 @@ export function SettlementsPage() {
       name: peopleMap.get(row.personId) ?? "공동 계정",
     }));
 
-  const settlementHistory = [...scope.settlements]
-    .filter((item) => item.month === currentMonth)
-    .sort((a, b) => b.completedAt.localeCompare(a.completedAt));
-  const completedSettlementAmount = settlementHistory.reduce((sum, item) => sum + item.amount, 0);
+  const { settlementHistory, completedSettlementAmount, rows } = getSettlementBalanceSummary(
+    baseRows,
+    scope.settlements,
+    currentMonth,
+  );
+  const settlementRows = rows.map((row) => ({
+    ...row,
+    name: peopleMap.get(row.personId) ?? "공동 계정",
+  }));
 
-  const remainingDeltaByPerson = new Map(baseRows.map((row) => [row.personId, row.delta]));
-  for (const item of settlementHistory) {
-    const fromKey = item.fromPersonId ?? "shared";
-    const toKey = item.toPersonId ?? "shared";
-    if (remainingDeltaByPerson.has(fromKey)) {
-      remainingDeltaByPerson.set(fromKey, (remainingDeltaByPerson.get(fromKey) ?? 0) + item.amount);
-    }
-    if (remainingDeltaByPerson.has(toKey)) {
-      remainingDeltaByPerson.set(toKey, (remainingDeltaByPerson.get(toKey) ?? 0) - item.amount);
-    }
-  }
-
-  const rows = baseRows
-    .map((row) => ({
-      ...row,
-      remainingDelta: remainingDeltaByPerson.get(row.personId) ?? row.delta,
-    }))
-    .sort((a, b) => Math.abs(b.remainingDelta) - Math.abs(a.remainingDelta));
-
-  const receiver = rows.find((row) => row.remainingDelta > 0);
-  const sender = rows.find((row) => row.remainingDelta < 0);
+  const receiver = settlementRows.find((row) => row.remainingDelta > 0);
+  const sender = settlementRows.find((row) => row.remainingDelta < 0);
   const suggestedSettlementAmount =
     receiver && sender ? Math.min(receiver.remainingDelta, Math.abs(sender.remainingDelta)) : 0;
-  const settlementHeadlineCards = rows.length
+  const settlementHeadlineCards = settlementRows.length
     ? [
         receiver
           ? {
@@ -173,7 +159,7 @@ export function SettlementsPage() {
               <h2 className="section-title">누가 더 냈는지 보기</h2>
             </div>
           </div>
-          {!rows.length ? (
+          {!settlementRows.length ? (
             <EmptyStateCallout
               kicker="정산 대기"
               title="아직 공동지출 데이터가 없습니다"
@@ -278,7 +264,7 @@ export function SettlementsPage() {
               </div>
 
               <div className="review-list mt-4">
-                {rows.map((row, index) => (
+                {settlementRows.map((row, index) => (
                   <article key={row.personId} className="review-card" style={getMotionStyle(index + 2)}>
                     <div className="d-flex justify-content-between align-items-start gap-3">
                       <div>

@@ -1,5 +1,5 @@
 import { monthKey } from "../../shared/utils/date";
-import type { Transaction } from "../../shared/types/models";
+import type { SettlementRecord, Transaction } from "../../shared/types/models";
 import { isActiveSharedExpenseTransaction } from "../transactions/meta";
 
 export interface SettlementBaseRow {
@@ -14,6 +14,16 @@ export interface MonthlySharedSettlementSummary {
   splitTarget: number;
   participantCount: number;
   baseRows: SettlementBaseRow[];
+}
+
+export interface SettlementBalanceRow extends SettlementBaseRow {
+  remainingDelta: number;
+}
+
+export interface SettlementBalanceSummary {
+  settlementHistory: SettlementRecord[];
+  completedSettlementAmount: number;
+  rows: SettlementBalanceRow[];
 }
 
 export function getMonthlySharedSettlementSummary(
@@ -46,5 +56,41 @@ export function getMonthlySharedSettlementSummary(
     splitTarget,
     participantCount,
     baseRows,
+  };
+}
+
+export function getSettlementBalanceSummary(
+  baseRows: SettlementBaseRow[],
+  settlements: SettlementRecord[],
+  month = monthKey(new Date()),
+): SettlementBalanceSummary {
+  const settlementHistory = [...settlements]
+    .filter((item) => item.month === month)
+    .sort((a, b) => b.completedAt.localeCompare(a.completedAt));
+  const completedSettlementAmount = settlementHistory.reduce((sum, item) => sum + item.amount, 0);
+
+  const remainingDeltaByPerson = new Map(baseRows.map((row) => [row.personId, row.delta]));
+  for (const item of settlementHistory) {
+    const fromKey = item.fromPersonId ?? "shared";
+    const toKey = item.toPersonId ?? "shared";
+    if (remainingDeltaByPerson.has(fromKey)) {
+      remainingDeltaByPerson.set(fromKey, (remainingDeltaByPerson.get(fromKey) ?? 0) + item.amount);
+    }
+    if (remainingDeltaByPerson.has(toKey)) {
+      remainingDeltaByPerson.set(toKey, (remainingDeltaByPerson.get(toKey) ?? 0) - item.amount);
+    }
+  }
+
+  const rows = baseRows
+    .map((row) => ({
+      ...row,
+      remainingDelta: remainingDeltaByPerson.get(row.personId) ?? row.delta,
+    }))
+    .sort((a, b) => Math.abs(b.remainingDelta) - Math.abs(a.remainingDelta));
+
+  return {
+    settlementHistory,
+    completedSettlementAmount,
+    rows,
   };
 }
