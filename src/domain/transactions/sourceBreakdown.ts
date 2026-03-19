@@ -8,5 +8,7 @@ export interface SourceBreakdownItem {
 }
 
 export function getSourceBreakdown(transactions: Transaction[]): SourceBreakdownItem[] {
-  return getSourceTypeSummary(transactions).filter((item) => item.count > 0);
+  return getSourceTypeSummary(transactions)
+    .filter((item) => item.count > 0)
+    .sort((a, b) => b.count - a.count || b.expenseAmount - a.expenseAmount);
 }
