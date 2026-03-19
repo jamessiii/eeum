@@ -1,4 +1,4 @@
-import { getOpenReviewCount } from "../../domain/workspace/health";
+import { getWorkspaceEntitySummary } from "../../domain/workspace/summary";
 import { useAppState } from "../state/AppStateProvider";
 import { getActiveWorkspace, getWorkspaceScope } from "../state/selectors";
 
@@ -11,16 +11,7 @@ export function DeveloperPage({ onLockDeveloperMode }: DeveloperPageProps) {
   const activeWorkspace = getActiveWorkspace(state);
   const scope = activeWorkspace ? getWorkspaceScope(state, activeWorkspace.id) : null;
 
-  const summary = {
-    workspaces: state.workspaces.length,
-    people: scope?.people.length ?? 0,
-    accounts: scope?.accounts.length ?? 0,
-    cards: scope?.cards.length ?? 0,
-    categories: scope?.categories.length ?? 0,
-    tags: scope?.tags.length ?? 0,
-    transactions: scope?.transactions.length ?? 0,
-    reviews: scope ? getOpenReviewCount(scope.reviews) : 0,
-  };
+  const summary = getWorkspaceEntitySummary(scope, state.workspaces.length);
 
   return (
     <div className="page-grid">
