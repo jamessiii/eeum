@@ -15,8 +15,11 @@ export interface RecurringMerchantSuggestion {
 export interface CategoryCleanupSummary {
   recurringSuggestions: RecurringMerchantSuggestion[];
   recurringSuggestionCount: number;
+  recurringSuggestionTransactionCount: number;
   uncategorizedTransactions: Transaction[];
   uncategorizedCount: number;
+  remainingWorkCount: number;
+  isCategoryCleanupComplete: boolean;
 }
 
 interface RecurringMerchantAccumulator {
@@ -110,11 +113,19 @@ export function getRecurringMerchantSuggestionCount(transactions: Transaction[],
 export function getCategoryCleanupSummary(transactions: Transaction[], categories: Category[]): CategoryCleanupSummary {
   const recurringSuggestions = getRecurringMerchantSuggestions(transactions, categories);
   const uncategorizedTransactions = getUncategorizedTransactions(transactions);
+  const recurringSuggestionTransactionCount = recurringSuggestions.reduce(
+    (sum, suggestion) => sum + suggestion.transactionIds.length,
+    0,
+  );
+  const uncategorizedCount = uncategorizedTransactions.length;
 
   return {
     recurringSuggestions,
     recurringSuggestionCount: recurringSuggestions.length,
+    recurringSuggestionTransactionCount,
     uncategorizedTransactions,
-    uncategorizedCount: uncategorizedTransactions.length,
+    uncategorizedCount,
+    remainingWorkCount: recurringSuggestionTransactionCount + uncategorizedCount,
+    isCategoryCleanupComplete: recurringSuggestions.length === 0 && uncategorizedCount === 0,
   };
 }
