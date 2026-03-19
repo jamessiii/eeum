@@ -1,3 +1,4 @@
+import { getOpenReviewCount } from "../../domain/workspace/health";
 import { useAppState } from "../state/AppStateProvider";
 import { getActiveWorkspace, getWorkspaceScope } from "../state/selectors";
 
@@ -18,7 +19,7 @@ export function DeveloperPage({ onLockDeveloperMode }: DeveloperPageProps) {
     categories: scope?.categories.length ?? 0,
     tags: scope?.tags.length ?? 0,
     transactions: scope?.transactions.length ?? 0,
-    reviews: scope?.reviews.filter((item) => item.status === "open").length ?? 0,
+    reviews: scope ? getOpenReviewCount(scope.reviews) : 0,
   };
 
   return (

@@ -29,3 +29,7 @@ export function getJourneyProgress<TStep extends JourneyStepLike>(steps: TStep[]
     nextStep,
   };
 }
+
+export function getUpcomingJourneySteps<TStep extends JourneyStepLike>(steps: TStep[], limit = 2) {
+  return steps.filter((step) => !step.completed).slice(0, limit);
+}
