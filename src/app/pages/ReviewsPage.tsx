@@ -27,7 +27,8 @@ export function ReviewsPage() {
     openReviews: reviews,
     openReviewCount,
     resolvedReviews,
-    dismissedReviews,
+    resolvedReviewCount,
+    dismissedReviewCount,
     reviewCounts,
     openSharedReviewCount,
     openInternalTransferReviewCount,
@@ -95,7 +96,7 @@ export function ReviewsPage() {
           <div>
             <span className="section-kicker">검토 진행률</span>
             <div className="small text-secondary mt-1">
-              전체 {totalReviewCount}건 중 해결 {resolvedReviews.length}건 · 보류 {dismissedReviews.length}건 · 남음 {openReviewCount}건
+              전체 {totalReviewCount}건 중 해결 {resolvedReviewCount}건 · 보류 {dismissedReviewCount}건 · 남음 {openReviewCount}건
             </div>
           </div>
           <strong>{Math.round(reviewProgress * 100)}%</strong>

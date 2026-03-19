@@ -6,7 +6,9 @@ export interface ReviewSummary {
   openReviews: ReviewItem[];
   openReviewCount: number;
   resolvedReviews: ReviewItem[];
+  resolvedReviewCount: number;
   dismissedReviews: ReviewItem[];
+  dismissedReviewCount: number;
   reviewCounts: Partial<Record<ReviewType, number>>;
   openSharedReviewCount: number;
   openInternalTransferReviewCount: number;
@@ -73,8 +75,10 @@ export function getReviewSummary(
   const openSharedReviewCount = reviewCounts.shared_expense_candidate ?? 0;
   const openInternalTransferReviewCount = reviewCounts.internal_transfer_candidate ?? 0;
   const resolvedCounts = getReviewTypeCounts(resolvedReviews);
+  const resolvedReviewCount = resolvedReviews.length;
+  const dismissedReviewCount = dismissedReviews.length;
   const totalReviewCount = reviews.length;
-  const reviewProgress = totalReviewCount ? (resolvedReviews.length + dismissedReviews.length) / totalReviewCount : 1;
+  const reviewProgress = totalReviewCount ? (resolvedReviewCount + dismissedReviewCount) / totalReviewCount : 1;
   const dominantType =
     REVIEW_TYPE_ORDER.map((type) => ({ type, count: reviewCounts[type] ?? 0 })).sort((a, b) => b.count - a.count)[0] ?? null;
 
@@ -82,7 +86,9 @@ export function getReviewSummary(
     openReviews,
     openReviewCount,
     resolvedReviews,
+    resolvedReviewCount,
     dismissedReviews,
+    dismissedReviewCount,
     reviewCounts,
     openSharedReviewCount,
     openInternalTransferReviewCount,
