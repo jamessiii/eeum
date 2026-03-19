@@ -154,9 +154,10 @@ export function TransactionsPage() {
   const selectedBulkTagName = scope.tags.find((tag) => tag.id === bulkTagId)?.name ?? null;
   const selectedBulkCategoryName = scope.categories.find((category) => category.id === bulkCategoryId)?.name ?? null;
   const activeCleanupMode = cleanupModeCopy[filters.nature as keyof typeof cleanupModeCopy] ?? cleanupModeCopy.all;
-  const { activeOwnerName, activeSourceTypeLabel } = getTransactionFilterContext({
+  const { activeOwnerName, activeSourceTypeLabel, activeSearchQuery } = getTransactionFilterContext({
     ownerPersonId: filters.ownerPersonId,
     sourceType: filters.sourceType as "all" | "manual" | "account" | "card" | "import",
+    searchQuery: filters.searchQuery,
     people,
   });
   const {
@@ -586,6 +587,22 @@ export function TransactionsPage() {
                       계좌 흐름 보기
                     </button>
                   ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            {activeSearchQuery ? (
+              <div className="review-summary-panel mb-3">
+                <div className="review-summary-copy">
+                  <strong>검색어 &quot;{activeSearchQuery}&quot;로 좁혀 보고 있습니다</strong>
+                  <p className="mb-0 text-secondary">
+                    가맹점명이나 설명에 검색어가 들어간 거래만 보고 있습니다. 비슷한 거래를 한 번에 찾거나 빠른 정리 대상을 모아보기 좋은 흐름입니다.
+                  </p>
+                </div>
+                <div className="d-flex flex-wrap gap-2">
+                  <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, searchQuery: "" }))}>
+                    검색 해제
+                  </button>
                 </div>
               </div>
             ) : null}

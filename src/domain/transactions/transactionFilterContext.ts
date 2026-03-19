@@ -4,6 +4,7 @@ import type { Person, Transaction } from "../../shared/types/models";
 interface TransactionFilterContextInput {
   ownerPersonId: string;
   sourceType: "all" | Transaction["sourceType"];
+  searchQuery: string;
   people: Person[];
 }
 
@@ -15,9 +16,11 @@ export function getTransactionFilterContext(input: TransactionFilterContextInput
     input.sourceType !== "all" && SOURCE_TYPE_OPTIONS.includes(input.sourceType)
       ? getSourceTypeLabel(input.sourceType)
       : null;
+  const activeSearchQuery = input.searchQuery.trim() ? input.searchQuery.trim() : null;
 
   return {
     activeOwnerName,
     activeSourceTypeLabel,
+    activeSearchQuery,
   };
 }
