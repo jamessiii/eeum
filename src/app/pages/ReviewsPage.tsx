@@ -89,17 +89,22 @@ export function ReviewsPage() {
             }
       : null;
 
-  const withActiveSourceType = (path: string) => {
-    if (activeSourceType === "all") return path;
+  const withActiveTransactionFilters = (path: string) => {
+    if (activeSourceType === "all" && activeTagId === "all") return path;
     const [pathname, queryString = ""] = path.split("?");
     const searchParams = new URLSearchParams(queryString);
-    searchParams.set("sourceType", activeSourceType);
+    if (activeSourceType !== "all") {
+      searchParams.set("sourceType", activeSourceType);
+    }
+    if (activeTagId !== "all") {
+      searchParams.set("tagId", activeTagId);
+    }
     const query = searchParams.toString();
     return query ? `${pathname}?${query}` : pathname;
   };
 
   const resolvedNextReviewAction = nextReviewAction
-    ? { ...nextReviewAction, to: withActiveSourceType(nextReviewAction.to) }
+    ? { ...nextReviewAction, to: withActiveTransactionFilters(nextReviewAction.to) }
     : null;
 
   const getReviewTransactionLink = (reviewType: ReviewType) => {
@@ -119,7 +124,7 @@ export function ReviewsPage() {
     }
 
     const query = searchParams.toString();
-    return withActiveSourceType(query ? `/transactions?${query}` : "/transactions");
+    return withActiveTransactionFilters(query ? `/transactions?${query}` : "/transactions");
   };
 
   const getReviewTransactionLinkLabel = (reviewType: ReviewType) => {
@@ -248,7 +253,7 @@ export function ReviewsPage() {
             <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setActiveSourceType("all")}>
               수단 필터 해제
             </button>
-            <Link className="btn btn-outline-primary btn-sm" to={`/transactions?sourceType=${activeSourceType}`}>
+            <Link className="btn btn-outline-primary btn-sm" to={withActiveTransactionFilters("/transactions")}>
               {getSourceTypeLabel(activeSourceType)} 거래 보기
             </Link>
           </div>
@@ -302,10 +307,10 @@ export function ReviewsPage() {
             </p>
           </div>
           <div className="action-row">
-            <Link className="btn btn-outline-primary btn-sm" to={withActiveSourceType("/transactions?cleanup=uncategorized")}>
+            <Link className="btn btn-outline-primary btn-sm" to={withActiveTransactionFilters("/transactions?cleanup=uncategorized")}>
               미분류 정리
             </Link>
-            <Link className="btn btn-outline-secondary btn-sm" to={withActiveSourceType("/transactions?cleanup=untagged")}>
+            <Link className="btn btn-outline-secondary btn-sm" to={withActiveTransactionFilters("/transactions?cleanup=untagged")}>
               태그 정리
             </Link>
             <Link className="btn btn-outline-secondary btn-sm" to="/settlements">
@@ -326,22 +331,22 @@ export function ReviewsPage() {
         </div>
         <div className="action-row">
           {uncategorizedCount ? (
-            <Link className="btn btn-outline-primary btn-sm" to={withActiveSourceType("/transactions?cleanup=uncategorized")}>
+            <Link className="btn btn-outline-primary btn-sm" to={withActiveTransactionFilters("/transactions?cleanup=uncategorized")}>
               미분류 {uncategorizedCount}건 정리
             </Link>
           ) : null}
           {untaggedCount ? (
-            <Link className="btn btn-outline-secondary btn-sm" to={withActiveSourceType("/transactions?cleanup=untagged")}>
+            <Link className="btn btn-outline-secondary btn-sm" to={withActiveTransactionFilters("/transactions?cleanup=untagged")}>
               무태그 {untaggedCount}건 정리
             </Link>
           ) : null}
           {!uncategorizedCount && !untaggedCount && openSharedReviewCount ? (
-            <Link className="btn btn-outline-primary btn-sm" to={withActiveSourceType("/transactions?nature=shared")}>
+            <Link className="btn btn-outline-primary btn-sm" to={withActiveTransactionFilters("/transactions?nature=shared")}>
               공동지출 {openSharedReviewCount}건 점검
             </Link>
           ) : null}
           {!uncategorizedCount && !untaggedCount && !openSharedReviewCount && openInternalTransferReviewCount ? (
-            <Link className="btn btn-outline-secondary btn-sm" to={withActiveSourceType("/transactions?nature=internal_transfer")}>
+            <Link className="btn btn-outline-secondary btn-sm" to={withActiveTransactionFilters("/transactions?nature=internal_transfer")}>
               내부이체 {openInternalTransferReviewCount}건 점검
             </Link>
           ) : null}
@@ -359,22 +364,22 @@ export function ReviewsPage() {
           actions={
             <>
               {uncategorizedCount ? (
-                <Link className="btn btn-outline-primary btn-sm" to={withActiveSourceType("/transactions?cleanup=uncategorized")}>
+                <Link className="btn btn-outline-primary btn-sm" to={withActiveTransactionFilters("/transactions?cleanup=uncategorized")}>
                   미분류 {uncategorizedCount}건 정리
                 </Link>
               ) : null}
               {untaggedCount ? (
-                <Link className="btn btn-outline-secondary btn-sm" to={withActiveSourceType("/transactions?cleanup=untagged")}>
+                <Link className="btn btn-outline-secondary btn-sm" to={withActiveTransactionFilters("/transactions?cleanup=untagged")}>
                   무태그 {untaggedCount}건 정리
                 </Link>
               ) : null}
               {!uncategorizedCount && !untaggedCount && openSharedReviewCount ? (
-                <Link className="btn btn-outline-primary btn-sm" to={withActiveSourceType("/transactions?nature=shared")}>
+                <Link className="btn btn-outline-primary btn-sm" to={withActiveTransactionFilters("/transactions?nature=shared")}>
                   공동지출 {openSharedReviewCount}건 점검
                 </Link>
               ) : null}
               {!uncategorizedCount && !untaggedCount && !openSharedReviewCount && openInternalTransferReviewCount ? (
-                <Link className="btn btn-outline-secondary btn-sm" to={withActiveSourceType("/transactions?nature=internal_transfer")}>
+                <Link className="btn btn-outline-secondary btn-sm" to={withActiveTransactionFilters("/transactions?nature=internal_transfer")}>
                   내부이체 {openInternalTransferReviewCount}건 점검
                 </Link>
               ) : null}
