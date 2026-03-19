@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { getFilteredReviews } from "../../domain/reviews/filters";
 import { REVIEW_ACTION_LABELS, REVIEW_TYPE_LABELS, REVIEW_TYPE_ORDER, type ReviewType } from "../../domain/reviews/meta";
 import { getReviewSummary } from "../../domain/reviews/summary";
 import { getSourceTypeLabel, SOURCE_TYPE_OPTIONS } from "../../domain/transactions/sourceTypes";
@@ -26,21 +27,13 @@ export function ReviewsPage() {
     getReviewSummary(scope.reviews, transactions);
   const uncategorizedCount = health.uncategorizedCount;
   const untaggedCount = health.untaggedCount;
-  const filteredReviews = reviews
-    .filter((item) => (activeFilter === "all" ? true : item.reviewType === activeFilter))
-    .filter((item) => {
-      if (activeSourceType === "all") return true;
-      const primaryTransaction = transactions.get(item.primaryTransactionId);
-      return primaryTransaction?.sourceType === activeSourceType;
-    })
-    .filter((item) => {
-      if (activeTagId === "all") return true;
-      const relatedTagIds = [item.primaryTransactionId, ...item.relatedTransactionIds]
-        .map((id) => transactions.get(id))
-        .filter((transaction): transaction is NonNullable<typeof transaction> => Boolean(transaction))
-        .flatMap((transaction) => transaction.tagIds);
-      return relatedTagIds.includes(activeTagId);
-    });
+  const filteredReviews = getFilteredReviews({
+    reviews,
+    transactionMap: transactions,
+    activeFilter,
+    activeTagId,
+    activeSourceType,
+  });
   const openSharedReviewCount = reviewCounts.shared_expense_candidate ?? 0;
   const openInternalTransferReviewCount = reviewCounts.internal_transfer_candidate ?? 0;
   const nextReviewAction = uncategorizedCount
