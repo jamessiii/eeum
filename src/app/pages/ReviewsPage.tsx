@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { getFilteredReviews } from "../../domain/reviews/filters";
-import { REVIEW_ACTION_LABELS, REVIEW_TYPE_LABELS, REVIEW_TYPE_ORDER, type ReviewType } from "../../domain/reviews/meta";
-import { getReviewSummary } from "../../domain/reviews/summary";
+import { REVIEW_ACTION_LABELS, REVIEW_TYPE_LABELS, type ReviewType } from "../../domain/reviews/meta";
+import { getReviewSummary, getSortedReviewTypeSummary } from "../../domain/reviews/summary";
 import { getSourceTypeLabel, SOURCE_TYPE_OPTIONS } from "../../domain/transactions/sourceTypes";
 import { getWorkspaceHealthSummary } from "../../domain/workspace/health";
 import { getMotionStyle } from "../../shared/utils/motion";
@@ -23,7 +23,7 @@ export function ReviewsPage() {
   const health = getWorkspaceHealthSummary(scope);
   const transactions = new Map(scope.transactions.map((item) => [item.id, item]));
   const tags = new Map(scope.tags.map((item) => [item.id, item]));
-  const { openReviews: reviews, resolvedReviews, dismissedReviews, reviewCounts, resolvedCounts, dominantType, sourceTypeReviewCounts, totalReviewCount, reviewProgress } =
+  const { openReviews: reviews, resolvedReviews, dismissedReviews, reviewCounts, dominantType, sourceTypeReviewCounts, totalReviewCount, reviewProgress } =
     getReviewSummary(scope.reviews, transactions);
   const uncategorizedCount = health.uncategorizedCount;
   const untaggedCount = health.untaggedCount;
@@ -36,6 +36,7 @@ export function ReviewsPage() {
   });
   const openSharedReviewCount = reviewCounts.shared_expense_candidate ?? 0;
   const openInternalTransferReviewCount = reviewCounts.internal_transfer_candidate ?? 0;
+  const resolvedReviewTypeSummary = getSortedReviewTypeSummary(resolvedReviews);
   const nextReviewAction = uncategorizedCount
     ? {
         title: "지금 가장 먼저 할 일",
@@ -150,12 +151,12 @@ export function ReviewsPage() {
               </button>
             ))}
           </div>
-          {resolvedReviews.length ? (
+          {resolvedReviewTypeSummary.length ? (
             <div className="resource-grid">
-              {REVIEW_TYPE_ORDER.filter((type) => (resolvedCounts[type] ?? 0) > 0).map((type) => (
+              {resolvedReviewTypeSummary.map(([type, count]) => (
                 <article key={type} className="resource-card">
-                  <h3>{REVIEW_TYPE_LABELS[type]}</h3>
-                  <p className="mb-0 text-secondary">처리 완료 {resolvedCounts[type] ?? 0}건</p>
+                  <h3>{REVIEW_TYPE_LABELS[type as keyof typeof REVIEW_TYPE_LABELS] ?? type}</h3>
+                  <p className="mb-0 text-secondary">처리 완료 {count}건</p>
                 </article>
               ))}
             </div>
