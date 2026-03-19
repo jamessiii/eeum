@@ -1,4 +1,5 @@
-import type { Transaction } from "../../shared/types/models";
+import type { ReviewItem, Transaction } from "../../shared/types/models";
+import { getSortedReviewTypeSummary } from "../reviews/summary";
 import { getExpenseImpactStats } from "../transactions/expenseImpactStats";
 import { getTransactionTypeCounts } from "../transactions/transactionTypeCounts";
 
@@ -12,4 +13,8 @@ export function getImportPreviewTransactionSummary(transactions: Transaction[]) 
     internalTransferCount: previewStats.internalTransferCount,
     sharedExpenseCount: previewStats.sharedExpenseCount,
   };
+}
+
+export function getImportPreviewReviewSummary(reviews: ReviewItem[]) {
+  return getSortedReviewTypeSummary(reviews);
 }
