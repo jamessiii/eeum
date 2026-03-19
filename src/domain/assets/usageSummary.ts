@@ -1,7 +1,8 @@
 import type { Transaction } from "../../shared/types/models";
+import { getActiveTransactions } from "../transactions/meta";
 
 export function getPersonUsageSummary(transactions: Transaction[], personId: string) {
-  const ownedTransactions = transactions.filter((item) => item.ownerPersonId === personId);
+  const ownedTransactions = getActiveTransactions(transactions).filter((item) => item.ownerPersonId === personId);
   const sharedExpenseAmount = ownedTransactions.reduce(
     (sum, item) => sum + Number(item.isExpenseImpact && item.isSharedExpense) * item.amount,
     0,
@@ -15,7 +16,7 @@ export function getPersonUsageSummary(transactions: Transaction[], personId: str
 }
 
 export function getAccountUsageSummary(transactions: Transaction[], accountId: string) {
-  const linkedTransactions = transactions.filter(
+  const linkedTransactions = getActiveTransactions(transactions).filter(
     (item) => item.accountId === accountId || item.fromAccountId === accountId || item.toAccountId === accountId,
   );
   const expenseAmount = linkedTransactions.reduce((sum, item) => sum + Number(item.isExpenseImpact) * item.amount, 0);
@@ -33,7 +34,7 @@ export function getAccountUsageSummary(transactions: Transaction[], accountId: s
 }
 
 export function getCardUsageSummary(transactions: Transaction[], cardId: string) {
-  const cardTransactions = transactions.filter((item) => item.cardId === cardId);
+  const cardTransactions = getActiveTransactions(transactions).filter((item) => item.cardId === cardId);
   const expenseAmount = cardTransactions.reduce((sum, item) => sum + Number(item.isExpenseImpact) * item.amount, 0);
 
   return {
