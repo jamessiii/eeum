@@ -11,6 +11,8 @@ export interface DominantSourceBreakdownItem extends SourceBreakdownItem {
   share: number;
 }
 
+const DEFAULT_DOMINANT_SOURCE_THRESHOLD = 0.7;
+
 export function getSourceBreakdown(transactions: Transaction[]): SourceBreakdownItem[] {
   return getSourceTypeSummary(transactions)
     .filter((item) => item.count > 0)
@@ -28,4 +30,11 @@ export function getDominantSourceBreakdown(
     ...dominantSource,
     share: dominantSource.count / Math.max(1, totalTransactionCount),
   };
+}
+
+export function isDominantSourceConcentrated(
+  dominantSource: DominantSourceBreakdownItem | null,
+  threshold = DEFAULT_DOMINANT_SOURCE_THRESHOLD,
+) {
+  return Boolean(dominantSource && dominantSource.share >= threshold);
 }

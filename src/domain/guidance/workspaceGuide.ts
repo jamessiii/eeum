@@ -3,7 +3,11 @@ import type { AppState } from "../../shared/types/models";
 import { getWorkspaceScope } from "../../app/state/selectors";
 import { isDiagnosisReady } from "../insights/diagnosisReady";
 import { getJourneyProgress } from "../journey/progress";
-import { getDominantSourceBreakdown, getSourceBreakdown } from "../transactions/sourceBreakdown";
+import {
+  getDominantSourceBreakdown,
+  getSourceBreakdown,
+  isDominantSourceConcentrated,
+} from "../transactions/sourceBreakdown";
 import { getSourceTypeLabel } from "../transactions/sourceTypes";
 import { getWorkspaceHealthSummary } from "../workspace/health";
 
@@ -32,7 +36,7 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
   const hasTransactions = scope.transactions.length > 0;
   const sourceBreakdown = getSourceBreakdown(scope.transactions);
   const dominantSource = getDominantSourceBreakdown(sourceBreakdown, scope.transactions.length);
-  const dominantSourceShare = dominantSource?.share ?? 0;
+  const hasDominantSourceConcentration = isDominantSourceConcentrated(dominantSource);
   const dominantSourceLabel = dominantSource ? getSourceTypeLabel(dominantSource.sourceType) : null;
   const readyForInsights =
     recurringSuggestions.length === 0 &&
@@ -87,16 +91,16 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
       id: "source-flow",
       title: dominantSourceLabel ? `${dominantSourceLabel} 흐름 점검` : "거래 흐름 점검",
       description:
-        dominantSourceLabel && dominantSourceShare >= 0.7
+        dominantSourceLabel && hasDominantSourceConcentration
           ? `${dominantSourceLabel} 경로가 거래 대부분을 차지하고 있습니다. 이 수단의 연결값과 흐름을 먼저 점검하면 전체 데이터 정확도를 빠르게 높일 수 있습니다.`
           : "거래 수단이 과하게 한쪽에 몰려 있지 않아 바로 분류 단계로 넘어가도 좋습니다.",
       targetPath: dominantSourceLabel && dominantSource ? `/transactions?sourceType=${dominantSource.sourceType}` : "/transactions",
       ctaLabel: dominantSourceLabel && dominantSource ? `${dominantSourceLabel} 거래 보러 가기` : "거래 흐름 보러 가기",
       tips:
-        dominantSourceLabel && dominantSourceShare >= 0.7
+        dominantSourceLabel && hasDominantSourceConcentration
           ? [`${dominantSourceLabel} 거래만 모아 보고 연결값이나 성격 구분이 어색한 항목부터 먼저 다듬어보세요.`, "수단 흐름이 안정되면 이후 검토와 분류도 훨씬 빨라집니다."]
           : ["거래 수단 흐름은 비교적 고르게 들어와 있습니다.", "이제 검토함과 분류 화면 중심으로 계속 정리해보세요."],
-      completed: hasTransactions ? !(dominantSourceLabel && dominantSourceShare >= 0.7) : false,
+      completed: hasTransactions ? !(dominantSourceLabel && hasDominantSourceConcentration) : false,
     },
     {
       id: "recurring",

@@ -7,7 +7,11 @@ import {
   isActiveInternalTransferTransaction,
 } from "../transactions/meta";
 import { getSourceTypeLabel } from "../transactions/sourceTypes";
-import { getDominantSourceBreakdown, getSourceBreakdown } from "../transactions/sourceBreakdown";
+import {
+  getDominantSourceBreakdown,
+  getSourceBreakdown,
+  isDominantSourceConcentrated,
+} from "../transactions/sourceBreakdown";
 import { getOpenReviewCount } from "../workspace/health";
 
 export type InsightTone = "stable" | "caution" | "warning";
@@ -195,13 +199,14 @@ function buildCoaching(
   sourceBreakdown: WorkspaceInsights["sourceBreakdown"],
 ): string {
   const profile = context.financialProfile;
-  const topSource = sourceBreakdown[0] ?? null;
+  const topSource = getDominantSourceBreakdown(sourceBreakdown, metrics.transactionCount);
+  const hasDominantSourceConcentration = isDominantSourceConcentrated(topSource);
   if (!profile) {
     return "월 순수입이 아직 설정되지 않았습니다. 설정 화면에서 재무 기준선을 먼저 입력해주세요.";
   }
 
-  if (topSource && topSource.count > 0) {
-    const sourceShare = topSource.count / Math.max(1, metrics.transactionCount);
+  if (topSource && hasDominantSourceConcentration) {
+    const sourceShare = topSource.share;
     if (sourceShare >= 0.7) {
       const sourceLabel = getSourceTypeLabel(topSource.sourceType);
       return `이번 달 거래의 ${Math.round(sourceShare * 100)}%가 ${sourceLabel} 경로에 몰려 있습니다. 이 수단의 연결값과 분류 상태를 먼저 점검해보세요.`;
@@ -229,13 +234,13 @@ function buildNextSteps(
   sourceBreakdown: WorkspaceInsights["sourceBreakdown"],
 ): string[] {
   const nextSteps: string[] = [];
-  const topSource = sourceBreakdown[0] ?? null;
+  const topSource = getDominantSourceBreakdown(sourceBreakdown, metrics.transactionCount);
 
   if (context.peopleCount === 0) nextSteps.push("사람을 추가해서 개인지출과 공동지출을 나눠보세요.");
   if (context.accountCount === 0) nextSteps.push("계좌를 등록하면 내부이체와 실제 지출을 더 정확하게 구분할 수 있습니다.");
   if (context.cardCount === 0) nextSteps.push("카드를 등록하면 카드 명세서 업로드와 소비 흐름 분석이 쉬워집니다.");
   if (context.transactions.length === 0) nextSteps.push("첫 거래를 입력하거나 엑셀 파일을 업로드해서 분석을 시작해보세요.");
-  if (topSource && topSource.count / Math.max(1, metrics.transactionCount) >= 0.7) {
+  if (topSource && isDominantSourceConcentrated(topSource)) {
     const sourceLabel = getSourceTypeLabel(topSource.sourceType);
     nextSteps.push(`${sourceLabel} 거래가 대부분을 차지합니다. 이 수단 흐름을 먼저 점검하면 전체 데이터 정확도를 빠르게 높일 수 있습니다.`);
   }
@@ -286,9 +291,9 @@ function buildHeadlineCards(
     });
   }
 
-  if (sourceBreakdown.length) {
-    const biggestSource = sourceBreakdown[0];
-    const sourceShare = biggestSource.count / Math.max(1, metrics.transactionCount);
+  const biggestSource = getDominantSourceBreakdown(sourceBreakdown, metrics.transactionCount);
+  if (biggestSource) {
+    const sourceShare = biggestSource.share;
     const sourceLabel = getSourceTypeLabel(biggestSource.sourceType);
     cards.push({
       title: "가장 큰 입력 경로",
