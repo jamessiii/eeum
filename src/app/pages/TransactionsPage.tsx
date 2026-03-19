@@ -103,6 +103,7 @@ export function TransactionsPage() {
   const tags = new Map(scope.tags.map((item) => [item.id, item]));
   const peopleMap = new Map(scope.people.map((person) => [person.id, person.displayName || person.name]));
   const accountMap = new Map(scope.accounts.map((account) => [account.id, account.alias || account.name]));
+  const accountSharedMap = new Map(scope.accounts.map((account) => [account.id, account.isShared]));
   const cardMap = new Map(scope.cards.map((card) => [card.id, card.name]));
   const getTransactionOwnerLabel = (transaction: (typeof transactions)[number]) =>
     transaction.ownerPersonId
@@ -578,6 +579,7 @@ export function TransactionsPage() {
             {accounts.map((account) => (
               <option key={account.id} value={account.id}>
                 {account.alias || account.name}
+                {account.isShared ? " (공동)" : ""}
               </option>
             ))}
           </select>
@@ -1115,7 +1117,9 @@ export function TransactionsPage() {
                               [
                                 `수단 ${getSourceTypeLabel(transaction.sourceType)}`,
                                 `사용자 ${getTransactionOwnerLabel(transaction)}`,
-                                transaction.accountId ? `계좌 ${accountMap.get(transaction.accountId) ?? "-"}` : null,
+                                transaction.accountId
+                                  ? `계좌 ${accountSharedMap.get(transaction.accountId) ? "공동 계좌 " : ""}${accountMap.get(transaction.accountId) ?? "-"}`
+                                  : null,
                                 transaction.cardId ? `카드 ${cardMap.get(transaction.cardId) ?? "-"}` : null,
                               ]
                                 .filter(Boolean)

@@ -70,6 +70,7 @@ export function TransactionInlineEditor({
             {accounts.map((account) => (
               <option key={account.id} value={account.id}>
                 {account.alias || account.name}
+                {account.isShared ? " (공동)" : ""}
               </option>
             ))}
           </select>
@@ -82,6 +83,7 @@ export function TransactionInlineEditor({
             ))}
           </select>
         </div>
+        {ownerDisabled ? <div className="small text-secondary">공유 계좌에 연결된 거래라서 사용자는 공동으로 저장됩니다.</div> : null}
         <div className="d-flex flex-wrap gap-2">
           <input className="form-control form-control-sm" type="date" value={draft.occurredAt} onChange={(event) => onDraftChange({ occurredAt: event.target.value })} />
           <input className="form-control form-control-sm" type="date" value={draft.settledAt} onChange={(event) => onDraftChange({ settledAt: event.target.value })} />

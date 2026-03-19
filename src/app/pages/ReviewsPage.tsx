@@ -39,7 +39,11 @@ export function ReviewsPage() {
     ];
 
     if (transaction.sourceType === "account" || transaction.sourceType === "card") {
-      parts.push(transaction.accountId ? `계좌 ${accountMap.get(transaction.accountId) ?? "-"}` : "계좌 미연결");
+      parts.push(
+        transaction.accountId
+          ? `계좌 ${scope.accounts.find((account) => account.id === transaction.accountId)?.isShared ? "공동 계좌 " : ""}${accountMap.get(transaction.accountId) ?? "-"}`
+          : "계좌 미연결",
+      );
     }
     if (transaction.sourceType === "card") {
       parts.push(transaction.cardId ? `카드 ${cardMap.get(transaction.cardId) ?? "-"}` : "카드 미연결");
