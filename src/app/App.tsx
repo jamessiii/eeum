@@ -243,7 +243,7 @@ function AppFrame() {
   const headerSummary = getWorkspaceHeaderSummary({
     imports: scope.imports,
     reviews: scope.reviews,
-    transactionsCount: scope.transactions.length,
+    transactions: scope.transactions,
     peopleCount: scope.people.length,
   });
   const latestImport = headerSummary.latestImport;

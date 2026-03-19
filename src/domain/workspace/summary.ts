@@ -1,5 +1,6 @@
-import type { ImportRecord, ReviewItem } from "../../shared/types/models";
+import type { ImportRecord, ReviewItem, Transaction } from "../../shared/types/models";
 import type { WorkspaceScope } from "../../app/state/selectors";
+import { getActiveTransactions } from "../transactions/meta";
 import { getOpenReviewCount } from "./health";
 
 export function getSortedImportRecords(imports: ImportRecord[]) {
@@ -13,13 +14,13 @@ export function getLatestImportRecord(imports: ImportRecord[]) {
 export function getWorkspaceHeaderSummary(input: {
   imports: ImportRecord[];
   reviews: ReviewItem[];
-  transactionsCount: number;
+  transactions: Transaction[];
   peopleCount: number;
 }) {
   return {
     latestImport: getLatestImportRecord(input.imports),
     openReviewCount: getOpenReviewCount(input.reviews),
-    transactionsCount: input.transactionsCount,
+    transactionsCount: getActiveTransactions(input.transactions).length,
     peopleCount: input.peopleCount,
   };
 }
