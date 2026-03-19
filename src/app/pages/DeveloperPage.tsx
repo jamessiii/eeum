@@ -32,7 +32,7 @@ export function DeveloperPage({ onLockDeveloperMode }: DeveloperPageProps) {
           <button className="btn btn-outline-primary" onClick={() => createEmptyWorkspace(`빈 워크스페이스 ${state.workspaces.length + 1}`)}>
             빈 워크스페이스 추가
           </button>
-          <button className="btn btn-outline-dark" onClick={() => createDemoWorkspace()}>
+          <button className="btn btn-outline-secondary" onClick={() => createDemoWorkspace()}>
             테스트 워크스페이스 추가
           </button>
         </div>

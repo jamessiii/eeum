@@ -9,6 +9,24 @@ export function EmptyWorkspaceScreen() {
   const [previewBundle, setPreviewBundle] = useState<WorkspaceBundle | null>(null);
   const [previewFileName, setPreviewFileName] = useState("");
   const [isPreparingPreview, setIsPreparingPreview] = useState(false);
+  const previewPostImportPath = previewBundle
+    ? previewBundle.reviews.length > 0
+      ? "/reviews"
+      : previewBundle.transactions.some((transaction) => transaction.isExpenseImpact && !transaction.categoryId)
+        ? "/transactions?cleanup=uncategorized"
+        : previewBundle.transactions.some((transaction) => transaction.isExpenseImpact && transaction.tagIds.length === 0)
+          ? "/transactions?cleanup=untagged"
+          : "/transactions"
+    : "/transactions";
+  const previewPostImportLabel = previewBundle
+    ? previewBundle.reviews.length > 0
+      ? `리뷰 ${previewBundle.reviews.length}건 확인`
+      : previewBundle.transactions.some((transaction) => transaction.isExpenseImpact && !transaction.categoryId)
+        ? "미분류 거래 정리"
+        : previewBundle.transactions.some((transaction) => transaction.isExpenseImpact && transaction.tagIds.length === 0)
+          ? "무태그 거래 정리"
+          : "거래 화면 보기"
+    : "거래 화면 보기";
 
   return (
     <main className="container py-5">
@@ -20,13 +38,7 @@ export function EmptyWorkspaceScreen() {
           엑셀 파일을 업로드하면 실제 데이터 기반 워크스페이스를 생성합니다.
         </p>
         <div className="d-flex flex-wrap gap-3 mt-4">
-          <button className="btn btn-primary btn-lg" onClick={() => createEmptyWorkspace()}>
-            데이터 없는 모드
-          </button>
-          <button className="btn btn-outline-primary btn-lg" onClick={() => createDemoWorkspace()}>
-            테스트 모드
-          </button>
-          <label className="btn btn-dark btn-lg">
+          <label className="btn btn-primary btn-lg">
             엑셀 업로드
             <input
               hidden
@@ -48,6 +60,12 @@ export function EmptyWorkspaceScreen() {
               }}
             />
           </label>
+          <button className="btn btn-outline-primary btn-lg" onClick={() => createEmptyWorkspace()}>
+            빈 가계부로 시작
+          </button>
+          <button className="btn btn-outline-secondary btn-lg" onClick={() => createDemoWorkspace()}>
+            테스트 모드
+          </button>
         </div>
         {isPreparingPreview ? <p className="text-secondary mt-3 mb-0">엑셀 데이터를 분석해서 미리보기를 준비하고 있습니다.</p> : null}
         {previewBundle ? (
@@ -70,10 +88,10 @@ export function EmptyWorkspaceScreen() {
                   commitImportedBundle(previewBundle, previewFileName);
                   setPreviewBundle(null);
                   setPreviewFileName("");
-                  void navigate("/transactions");
+                  void navigate(previewPostImportPath);
                 }}
               >
-                이 미리보기로 시작하기
+                이 미리보기로 시작하고 {previewPostImportLabel}
               </button>
               <button
                 className="btn btn-outline-secondary"
@@ -82,7 +100,7 @@ export function EmptyWorkspaceScreen() {
                   setPreviewFileName("");
                 }}
               >
-                다시 선택하기
+                업로드 다시 선택
               </button>
             </div>
           </div>
