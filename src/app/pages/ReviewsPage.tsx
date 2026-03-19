@@ -31,6 +31,8 @@ export function ReviewsPage() {
       `수단 ${getSourceTypeLabel(transaction.sourceType)}`,
       transaction.ownerPersonId
         ? `사용자 ${peopleMap.get(transaction.ownerPersonId) ?? "-"}`
+        : transaction.isSharedExpense
+          ? "사용자 공동"
         : transaction.accountId && scope.accounts.find((account) => account.id === transaction.accountId)?.isShared
           ? "사용자 공동"
           : "사용자 미지정",

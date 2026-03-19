@@ -107,6 +107,8 @@ export function TransactionsPage() {
   const getTransactionOwnerLabel = (transaction: (typeof transactions)[number]) =>
     transaction.ownerPersonId
       ? peopleMap.get(transaction.ownerPersonId) ?? "-"
+      : transaction.isSharedExpense
+        ? "공동"
       : transaction.accountId && scope.accounts.find((account) => account.id === transaction.accountId)?.isShared
         ? "공동"
         : "-";
@@ -305,7 +307,7 @@ export function TransactionsPage() {
       const selectedAccount = accountId ? accounts.find((account) => account.id === accountId) : null;
       return {
         sourceType: resolvedSourceType,
-        ownerPersonId: selectedAccount?.ownerPersonId ?? ownerPersonId ?? null,
+        ownerPersonId: selectedAccount?.isShared ? null : selectedAccount?.ownerPersonId ?? ownerPersonId ?? null,
         accountId: accountId ?? null,
         cardId: null,
       };
@@ -334,7 +336,10 @@ export function TransactionsPage() {
       const ownerField = form.elements.namedItem("ownerPersonId") as HTMLSelectElement | null;
       if (cardField) cardField.value = "";
       if (ownerField) ownerField.value = accountField?.value
-        ? accounts.find((account) => account.id === accountField.value)?.ownerPersonId ?? ""
+        ? (() => {
+            const selectedAccount = accounts.find((account) => account.id === accountField.value);
+            return selectedAccount?.isShared ? "" : selectedAccount?.ownerPersonId ?? "";
+          })()
         : "";
     }
   };
@@ -351,7 +356,7 @@ export function TransactionsPage() {
     }
 
     if (sourceTypeField) sourceTypeField.value = "account";
-    if (ownerField) ownerField.value = selectedAccount.ownerPersonId ?? "";
+    if (ownerField) ownerField.value = selectedAccount.isShared ? "" : selectedAccount.ownerPersonId ?? "";
     if (cardField) cardField.value = "";
   };
 
@@ -385,7 +390,10 @@ export function TransactionsPage() {
         sourceType,
         cardId: "",
         ownerPersonId: editDraft.accountId
-          ? accounts.find((account) => account.id === editDraft.accountId)?.ownerPersonId ?? ""
+          ? (() => {
+              const selectedAccount = accounts.find((account) => account.id === editDraft.accountId);
+              return selectedAccount?.isShared ? "" : selectedAccount?.ownerPersonId ?? "";
+            })()
           : "",
       });
       return;
@@ -409,7 +417,7 @@ export function TransactionsPage() {
       sourceType: "account",
       accountId,
       cardId: "",
-      ownerPersonId: selectedAccount.ownerPersonId ?? "",
+      ownerPersonId: selectedAccount.isShared ? "" : selectedAccount.ownerPersonId ?? "",
     });
   };
 

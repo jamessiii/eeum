@@ -396,6 +396,8 @@ function applyReviewSuggestionToTransactions(transactions: Transaction[], review
           isExpenseImpact: false,
           isSharedExpense: false,
           isInternalTransfer: false,
+          fromAccountId: null,
+          toAccountId: null,
         };
       case "refund_candidate":
         return {
@@ -407,6 +409,8 @@ function applyReviewSuggestionToTransactions(transactions: Transaction[], review
           isInternalTransfer: false,
           categoryId: null,
           refundOfTransactionId: relatedTransactionId,
+          fromAccountId: null,
+          toAccountId: null,
         };
       case "internal_transfer_candidate":
         return {
@@ -416,11 +420,15 @@ function applyReviewSuggestionToTransactions(transactions: Transaction[], review
           isExpenseImpact: false,
           isSharedExpense: false,
           categoryId: null,
+          fromAccountId: transaction.accountId,
+          toAccountId: null,
         };
       case "shared_expense_candidate":
         return {
           ...transaction,
+          isExpenseImpact: true,
           isSharedExpense: true,
+          isInternalTransfer: false,
         };
       default:
         return transaction;

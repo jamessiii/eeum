@@ -89,10 +89,13 @@ export function SettlementsPage() {
   const hasScopedSettlementContext = Boolean(activeSettlementFilterSummary);
   const visibleSharedTransactionCount = hasScopedSettlementContext ? scopedSharedTransactions.length : sharedTransactions.length;
 
-  const totalSharedExpense = settlementSummary.totalSharedExpense;
-  const splitTarget = settlementSummary.splitTarget;
+  const visibleSettlementSummary = hasScopedSettlementContext
+    ? getMonthlySharedSettlementSummary(scopedSharedTransactions, activePeople.length, currentMonth)
+    : settlementSummary;
+  const totalSharedExpense = visibleSettlementSummary.totalSharedExpense;
+  const splitTarget = visibleSettlementSummary.splitTarget;
 
-  const baseRows = settlementSummary.baseRows
+  const baseRows = visibleSettlementSummary.baseRows
     .map((row) => ({
       ...row,
       name: peopleMap.get(row.personId) ?? "공동 계정",
