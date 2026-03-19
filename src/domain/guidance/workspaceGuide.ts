@@ -1,4 +1,4 @@
-import { getRecurringMerchantSuggestionCount } from "../classification/suggestions";
+import { getCategoryCleanupSummary } from "../classification/suggestions";
 import type { AppState } from "../../shared/types/models";
 import { getWorkspaceScope } from "../../app/state/selectors";
 import { isDiagnosisReady } from "../insights/diagnosisReady";
@@ -30,7 +30,9 @@ export interface WorkspaceGuide {
 export function getWorkspaceGuide(state: AppState, workspaceId: string): WorkspaceGuide {
   const scope = getWorkspaceScope(state, workspaceId);
   const health = getWorkspaceHealthSummary(scope);
-  const recurringSuggestionCount = getRecurringMerchantSuggestionCount(scope.transactions, scope.categories);
+  const categoryCleanupSummary = getCategoryCleanupSummary(scope.transactions, scope.categories);
+  const recurringSuggestionCount = categoryCleanupSummary.recurringSuggestionCount;
+  const uncategorizedCount = categoryCleanupSummary.uncategorizedCount;
   const monthlyIncome = scope.financialProfile?.monthlyNetIncome ?? 0;
   const hasImportedData = scope.imports.length > 0;
   const hasTransactions = scope.transactions.length > 0;
@@ -118,7 +120,7 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
       targetPath: "/categories",
       ctaLabel: "미분류 거래 정리하기",
       tips: ["반복 제안 아래쪽 미분류 거래를 하나씩 정리해보세요.", "카테고리가 채워질수록 대시보드의 해석 정확도가 올라갑니다."],
-      completed: hasTransactions ? health.uncategorizedCount === 0 : false,
+      completed: hasTransactions ? uncategorizedCount === 0 : false,
     },
     {
       id: "tags",
