@@ -325,6 +325,7 @@ export function TransactionsPage() {
       updateEditDraft({
         accountId,
         sourceType: editDraft.sourceType === "account" ? "manual" : editDraft.sourceType,
+        ownerPersonId: "",
       });
       return;
     }
@@ -340,9 +341,11 @@ export function TransactionsPage() {
   const syncEditDraftWithCard = (cardId: string) => {
     const selectedCard = cards.find((card) => card.id === cardId);
     if (!selectedCard) {
+      const fallbackAccount = accounts.find((account) => account.id === editDraft.accountId);
       updateEditDraft({
         cardId,
         sourceType: editDraft.accountId ? "account" : "manual",
+        ownerPersonId: fallbackAccount?.ownerPersonId ?? "",
       });
       return;
     }
