@@ -399,6 +399,19 @@ export function ReviewsPage() {
           </p>
         </div>
         <div className="action-row">
+          {hasActiveReviewFilters ? (
+            <button
+              className="btn btn-outline-secondary btn-sm"
+              type="button"
+              onClick={() => {
+                setActiveFilter("all");
+                setActiveTagId("all");
+                setActiveSourceType("all");
+              }}
+            >
+              전체 리뷰 보기
+            </button>
+          ) : null}
           {uncategorizedCount ? (
             <Link className="btn btn-outline-primary btn-sm" to={withActiveTransactionFilters("/transactions?cleanup=uncategorized")}>
               미분류 {uncategorizedCount}건 정리
@@ -419,9 +432,11 @@ export function ReviewsPage() {
               내부이체 {contextualInternalTransferReviewCount}건 점검
             </Link>
           ) : null}
-          <Link className="btn btn-outline-secondary btn-sm" to="/">
-            대시보드 보기
-          </Link>
+          {!hasActiveReviewFilters ? (
+            <Link className="btn btn-outline-secondary btn-sm" to="/">
+              대시보드 보기
+            </Link>
+          ) : null}
         </div>
       </div>
 
