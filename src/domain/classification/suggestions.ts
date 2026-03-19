@@ -11,13 +11,15 @@ export interface RecurringMerchantSuggestion {
   transactionIds: string[];
 }
 
-function getAmountSpreadRate(amounts: number[]) {
-  if (!amounts.length) return 0;
-  const min = Math.min(...amounts);
-  const max = Math.max(...amounts);
-  const average = amounts.reduce((sum, amount) => sum + amount, 0) / amounts.length;
-  if (!average) return 0;
-  return (max - min) / average;
+interface RecurringMerchantAccumulator {
+  merchantName: string;
+  count: number;
+  minAmount: number;
+  maxAmount: number;
+  amountSum: number;
+  lastOccurredAt: string;
+  transactionIds: string[];
+  monthKeys: Set<string>;
 }
 
 function isUncategorizedExpenseCandidate(transaction: Transaction) {
@@ -43,33 +45,55 @@ export function getUncategorizedTransactions(transactions: Transaction[]) {
 
 export function getRecurringMerchantSuggestions(transactions: Transaction[], categories: Category[]) {
   const categoryIds = new Set(categories.map((category) => category.id));
-  const merchantMap = new Map<string, Transaction[]>();
+  const merchantMap = new Map<string, RecurringMerchantAccumulator>();
 
   for (const transaction of transactions) {
     if (!isRecurringSuggestionCandidate(transaction, categoryIds)) continue;
     const key = transaction.merchantName.trim();
     if (!key) continue;
-    merchantMap.set(key, [...(merchantMap.get(key) ?? []), transaction]);
+    const current = merchantMap.get(key);
+
+    if (!current) {
+      merchantMap.set(key, {
+        merchantName: key,
+        count: 1,
+        minAmount: transaction.amount,
+        maxAmount: transaction.amount,
+        amountSum: transaction.amount,
+        lastOccurredAt: transaction.occurredAt,
+        transactionIds: [transaction.id],
+        monthKeys: new Set([transaction.occurredAt.slice(0, 7)]),
+      });
+      continue;
+    }
+
+    current.count += 1;
+    current.minAmount = Math.min(current.minAmount, transaction.amount);
+    current.maxAmount = Math.max(current.maxAmount, transaction.amount);
+    current.amountSum += transaction.amount;
+    if (transaction.occurredAt > current.lastOccurredAt) {
+      current.lastOccurredAt = transaction.occurredAt;
+    }
+    current.transactionIds.push(transaction.id);
+    current.monthKeys.add(transaction.occurredAt.slice(0, 7));
   }
 
   return [...merchantMap.entries()]
-    .map<RecurringMerchantSuggestion>(([merchantName, items]) => {
-      const monthSet = new Set(items.map((item) => item.occurredAt.slice(0, 7)));
-      const amounts = items.map((item) => item.amount);
-      const amountAverage = Math.round(amounts.reduce((sum, amount) => sum + amount, 0) / amounts.length);
-      const amountSpreadRate = getAmountSpreadRate(amounts);
+    .map<RecurringMerchantSuggestion>(([merchantName, item]) => {
+      const amountAverage = Math.round(item.amountSum / item.count);
+      const amountSpreadRate = amountAverage ? (item.maxAmount - item.minAmount) / amountAverage : 0;
       const confidence: RecurringMerchantSuggestion["confidence"] =
-        monthSet.size >= 2 && amountSpreadRate <= 0.35 ? "high" : "medium";
+        item.monthKeys.size >= 2 && amountSpreadRate <= 0.35 ? "high" : "medium";
 
       return {
         merchantName,
-        count: items.length,
-        monthCount: monthSet.size,
+        count: item.count,
+        monthCount: item.monthKeys.size,
         amountAverage,
         amountSpreadRate,
         confidence,
-        lastOccurredAt: [...items].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt))[0]?.occurredAt ?? "",
-        transactionIds: items.map((item) => item.id),
+        lastOccurredAt: item.lastOccurredAt,
+        transactionIds: item.transactionIds,
       };
     })
     .filter((item) => item.count >= 2 && item.monthCount >= 2)
