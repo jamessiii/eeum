@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { monthKey } from "../../shared/utils/date";
 import { getMonthlySharedSettlementSummary, getSettlementBalanceSummary } from "../../domain/settlements/summary";
 import { formatCurrency } from "../../shared/utils/format";
@@ -16,19 +16,57 @@ interface SettlementHeadlineCard {
 
 export function SettlementsPage() {
   const { addSettlement, state } = useAppState();
+  const [searchParams] = useSearchParams();
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const activePeople = scope.people.filter((person) => person.isActive);
   const peopleMap = new Map(scope.people.map((person) => [person.id, person.displayName || person.name]));
   const accountMap = new Map(scope.accounts.map((account) => [account.id, account.alias || account.name]));
   const cardMap = new Map(scope.cards.map((card) => [card.id, card.name]));
-  const getTransactionListLink = (params: { nature?: "shared" | "internal_transfer"; sourceType?: "card" | "account"; ownerPersonId?: string | null }) => {
+
+  const activeSourceType = (() => {
+    const value = searchParams.get("sourceType");
+    return value === "card" || value === "account" || value === "manual" || value === "import" ? value : null;
+  })();
+  const activeOwnerPersonId = (() => {
+    const value = searchParams.get("ownerPersonId");
+    return value && scope.people.some((person) => person.id === value) ? value : null;
+  })();
+  const activeTagId = (() => {
+    const value = searchParams.get("tagId");
+    return value && scope.tags.some((tag) => tag.id === value) ? value : null;
+  })();
+  const activeSettlementFilterSummary =
+    [
+      activeSourceType ? `수단 ${activeSourceType === "card" ? "카드" : activeSourceType === "account" ? "계좌" : activeSourceType}` : null,
+      activeOwnerPersonId ? `사람 ${peopleMap.get(activeOwnerPersonId) ?? "-"}` : null,
+      activeTagId ? `태그 ${scope.tags.find((tag) => tag.id === activeTagId)?.name ?? "-"}` : null,
+    ]
+      .filter(Boolean)
+      .join(" · ") || null;
+  const appendCurrentTransactionFilters = (path: string) => {
+    const [pathname, queryString = ""] = path.split("?");
     const searchParams = new URLSearchParams();
-    if (params.nature) searchParams.set("nature", params.nature);
-    if (params.sourceType) searchParams.set("sourceType", params.sourceType);
-    if (params.ownerPersonId) searchParams.set("ownerPersonId", params.ownerPersonId);
+    for (const [key, value] of new URLSearchParams(queryString).entries()) {
+      searchParams.set(key, value);
+    }
+    if (activeSourceType && !searchParams.has("sourceType")) searchParams.set("sourceType", activeSourceType);
+    if (activeOwnerPersonId && !searchParams.has("ownerPersonId")) searchParams.set("ownerPersonId", activeOwnerPersonId);
+    if (activeTagId && !searchParams.has("tagId")) searchParams.set("tagId", activeTagId);
     const query = searchParams.toString();
-    return query ? `/transactions?${query}` : "/transactions";
+    return query ? `${pathname}?${query}` : pathname;
+  };
+  const getTransactionListLink = (params: {
+    nature?: "shared" | "internal_transfer";
+    sourceType?: "card" | "account";
+    ownerPersonId?: string | null;
+  }) => {
+    const transactionSearchParams = new URLSearchParams();
+    if (params.nature) transactionSearchParams.set("nature", params.nature);
+    if (params.sourceType) transactionSearchParams.set("sourceType", params.sourceType);
+    if (params.ownerPersonId) transactionSearchParams.set("ownerPersonId", params.ownerPersonId);
+    const query = transactionSearchParams.toString();
+    return appendCurrentTransactionFilters(query ? `/transactions?${query}` : "/transactions");
   };
   const getTransactionConnectionSummary = (transaction: { ownerPersonId: string | null; accountId: string | null; cardId: string | null }) =>
     [
@@ -42,6 +80,12 @@ export function SettlementsPage() {
   const currentMonth = monthKey(new Date());
   const settlementSummary = getMonthlySharedSettlementSummary(scope.transactions, activePeople.length, currentMonth);
   const sharedTransactions = settlementSummary.sharedTransactions;
+  const scopedSharedTransactions = sharedTransactions.filter((transaction) => {
+    if (activeSourceType && transaction.sourceType !== activeSourceType) return false;
+    if (activeOwnerPersonId && transaction.ownerPersonId !== activeOwnerPersonId) return false;
+    if (activeTagId && !transaction.tagIds.includes(activeTagId)) return false;
+    return true;
+  });
 
   const totalSharedExpense = settlementSummary.totalSharedExpense;
   const splitTarget = settlementSummary.splitTarget;
@@ -151,16 +195,30 @@ export function SettlementsPage() {
               <span className="badge text-bg-warning">추천 정산 {formatCurrency(suggestedSettlementAmount)}</span>
             ) : null}
           </div>
-          <Link to={sharedTransactions.length ? "/transactions?nature=shared" : "/transactions"} className="btn btn-outline-secondary btn-sm">
+          <Link
+            to={appendCurrentTransactionFilters(sharedTransactions.length ? "/transactions?nature=shared" : "/transactions")}
+            className="btn btn-outline-secondary btn-sm"
+          >
             {sharedTransactions.length ? "공동지출 거래 보기" : "거래 화면 보기"}
           </Link>
         </div>
+        {activeSettlementFilterSummary ? (
+          <div className="review-summary-panel compact-summary-panel mt-3">
+            <div className="review-summary-copy">
+              <strong>현재 이어진 맥락</strong>
+              <p className="mb-0 text-secondary">{activeSettlementFilterSummary}</p>
+            </div>
+            <Link className="btn btn-outline-secondary btn-sm" to="/settlements">
+              전체 정산 보기
+            </Link>
+          </div>
+        ) : null}
         <NextStepCallout
           className="mt-4"
           title={nextSettlementAction.title}
           description={nextSettlementAction.description}
           actionLabel={nextSettlementAction.actionLabel}
-          to={nextSettlementAction.to}
+          to={appendCurrentTransactionFilters(nextSettlementAction.to)}
         />
         {isSettlementBalanced ? (
           <CompletionBanner
@@ -169,7 +227,7 @@ export function SettlementsPage() {
             description="공동지출은 있었지만 남아 있는 정산 편차는 거의 없습니다. 거래 흐름과 완료 기록만 가볍게 확인하면 됩니다."
             actions={
               <>
-                <Link to="/transactions?nature=shared" className="btn btn-outline-primary btn-sm">
+                <Link to={appendCurrentTransactionFilters("/transactions?nature=shared")} className="btn btn-outline-primary btn-sm">
                   공동지출 거래 보기
                 </Link>
                 <Link to="/" className="btn btn-outline-secondary btn-sm">
@@ -216,7 +274,7 @@ export function SettlementsPage() {
                 <p className="mb-0 text-secondary">먼저 거래 화면에서 공동지출 체크를 붙이거나, 사람 구성을 정리해 두면 정산 계산이 자연스럽게 이어집니다.</p>
               </div>
               <div className="action-row">
-                <Link to="/transactions" className="btn btn-outline-primary btn-sm">
+                <Link to={appendCurrentTransactionFilters("/transactions")} className="btn btn-outline-primary btn-sm">
                   거래 화면 보기
                 </Link>
                 <Link to="/people" className="btn btn-outline-secondary btn-sm">
@@ -304,14 +362,14 @@ export function SettlementsPage() {
                   </p>
                 </div>
                 <div className="action-row">
-                  <Link to="/transactions?nature=shared" className="btn btn-outline-primary btn-sm">
+                  <Link to={appendCurrentTransactionFilters("/transactions?nature=shared")} className="btn btn-outline-primary btn-sm">
                     공동지출 전체 보기
                   </Link>
                 </div>
               </div>
 
               <div className="review-list mt-4">
-                {sharedTransactions.slice(0, 8).map((transaction, index) => (
+                {scopedSharedTransactions.slice(0, 8).map((transaction, index) => (
                   <article key={transaction.id} className="review-card" style={getMotionStyle(index + 2)}>
                     <div className="d-flex justify-content-between align-items-start gap-3">
                       <div className="review-card-main">
@@ -403,7 +461,7 @@ export function SettlementsPage() {
               title="아직 완료로 남긴 정산이 없습니다"
               description="추천 정산이 맞다면 완료로 기록해서 이번 달 정산 내역을 남겨보세요."
               actions={
-                <Link to="/transactions?nature=shared" className="btn btn-outline-primary btn-sm">
+                <Link to={appendCurrentTransactionFilters("/transactions?nature=shared")} className="btn btn-outline-primary btn-sm">
                   공동지출 거래 보기
                 </Link>
               }
