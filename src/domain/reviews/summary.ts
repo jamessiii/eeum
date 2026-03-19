@@ -14,6 +14,17 @@ export interface ReviewSummary {
   reviewProgress: number;
 }
 
+export function getReviewTypeCounts(reviews: ReviewItem[]) {
+  return reviews.reduce<Partial<Record<ReviewType, number>>>((accumulator, review) => {
+    accumulator[review.reviewType] = (accumulator[review.reviewType] ?? 0) + 1;
+    return accumulator;
+  }, {});
+}
+
+export function getSortedReviewTypeSummary(reviews: ReviewItem[]) {
+  return Object.entries(getReviewTypeCounts(reviews)).sort((a, b) => b[1] - a[1]);
+}
+
 export function getReviewSummary(
   reviews: ReviewItem[],
   transactionMap: Map<string, Transaction>,
@@ -21,8 +32,6 @@ export function getReviewSummary(
   const openReviews: ReviewItem[] = [];
   const resolvedReviews: ReviewItem[] = [];
   const dismissedReviews: ReviewItem[] = [];
-  const reviewCounts: Partial<Record<ReviewType, number>> = {};
-  const resolvedCounts: Partial<Record<ReviewType, number>> = {};
   const sourceTypeReviewCounts = SOURCE_TYPE_OPTIONS.reduce<Record<(typeof SOURCE_TYPE_OPTIONS)[number], number>>(
     (accumulator, sourceType) => {
       accumulator[sourceType] = 0;
@@ -34,7 +43,6 @@ export function getReviewSummary(
   for (const review of reviews) {
     if (review.status === "open") {
       openReviews.push(review);
-      reviewCounts[review.reviewType] = (reviewCounts[review.reviewType] ?? 0) + 1;
 
       const sourceType = transactionMap.get(review.primaryTransactionId)?.sourceType;
       if (sourceType) {
@@ -45,13 +53,14 @@ export function getReviewSummary(
 
     if (review.status === "resolved") {
       resolvedReviews.push(review);
-      resolvedCounts[review.reviewType] = (resolvedCounts[review.reviewType] ?? 0) + 1;
       continue;
     }
 
     dismissedReviews.push(review);
   }
 
+  const reviewCounts = getReviewTypeCounts(openReviews);
+  const resolvedCounts = getReviewTypeCounts(resolvedReviews);
   const totalReviewCount = reviews.length;
   const reviewProgress = totalReviewCount ? (resolvedReviews.length + dismissedReviews.length) / totalReviewCount : 1;
   const dominantType =

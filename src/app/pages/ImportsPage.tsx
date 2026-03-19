@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { REVIEW_TYPE_LABELS } from "../../domain/reviews/meta";
+import { getSortedReviewTypeSummary } from "../../domain/reviews/summary";
 import { getJourneyProgress } from "../../domain/journey/progress";
 import { getExpenseImpactStats } from "../../domain/transactions/expenseImpactStats";
 import { getTransactionTypeCounts } from "../../domain/transactions/transactionTypeCounts";
@@ -102,20 +103,8 @@ export function ImportsPage() {
     isReady: isPostImportReady,
     nextStep: nextPostImportStep,
   } = getJourneyProgress(postImportFlow);
-  const reviewTypeSummary = Object.entries(
-    openReviews.reduce<Record<string, number>>((accumulator, item) => {
-      accumulator[item.reviewType] = (accumulator[item.reviewType] ?? 0) + 1;
-      return accumulator;
-    }, {}),
-  ).sort((a, b) => b[1] - a[1]);
-  const previewReviewSummary = previewBundle
-    ? Object.entries(
-        previewBundle.reviews.reduce<Record<string, number>>((accumulator, item) => {
-          accumulator[item.reviewType] = (accumulator[item.reviewType] ?? 0) + 1;
-          return accumulator;
-        }, {}),
-      ).sort((a, b) => b[1] - a[1])
-    : [];
+  const reviewTypeSummary = getSortedReviewTypeSummary(openReviews);
+  const previewReviewSummary = previewBundle ? getSortedReviewTypeSummary(previewBundle.reviews) : [];
   const previewTransactionSummary = previewBundle
     ? (() => {
         const previewStats = getExpenseImpactStats(previewBundle.transactions);
