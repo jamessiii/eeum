@@ -3,6 +3,7 @@ import type { AppState } from "../../shared/types/models";
 import { getWorkspaceScope } from "../../app/state/selectors";
 import { isDiagnosisReady } from "../insights/diagnosisReady";
 import { getJourneyProgress } from "../journey/progress";
+import { getActiveTransactions } from "../transactions/meta";
 import {
   getDominantSourceBreakdown,
   getSourceBreakdown,
@@ -34,10 +35,11 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
   const recurringSuggestionCount = categoryCleanupSummary.recurringSuggestionCount;
   const uncategorizedCount = categoryCleanupSummary.uncategorizedCount;
   const monthlyIncome = scope.financialProfile?.monthlyNetIncome ?? 0;
+  const activeTransactions = getActiveTransactions(scope.transactions);
   const hasImportedData = scope.imports.length > 0;
-  const hasTransactions = scope.transactions.length > 0;
-  const sourceBreakdown = getSourceBreakdown(scope.transactions);
-  const dominantSource = getDominantSourceBreakdown(sourceBreakdown, scope.transactions.length);
+  const hasTransactions = activeTransactions.length > 0;
+  const sourceBreakdown = getSourceBreakdown(activeTransactions);
+  const dominantSource = getDominantSourceBreakdown(sourceBreakdown, activeTransactions.length);
   const hasDominantSourceConcentration = isDominantSourceConcentrated(dominantSource);
   const dominantSourceLabel = dominantSource ? getSourceTypeLabel(dominantSource.sourceType) : null;
   const readyForInsights =
