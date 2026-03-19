@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getImportPreviewReviewSummary, getImportPreviewTransactionSummary } from "../../domain/imports/previewSummary";
 import { REVIEW_TYPE_LABELS } from "../../domain/reviews/meta";
-import { getSortedReviewTypeSummary } from "../../domain/reviews/summary";
+import { getOpenReviewTypeSummary } from "../../domain/reviews/summary";
 import { getJourneyProgress } from "../../domain/journey/progress";
 import { getExpenseImpactStats } from "../../domain/transactions/expenseImpactStats";
 import { getSourceBreakdown } from "../../domain/transactions/sourceBreakdown";
@@ -105,7 +105,7 @@ export function ImportsPage() {
     isReady: isPostImportReady,
     nextStep: nextPostImportStep,
   } = getJourneyProgress(postImportFlow);
-  const reviewTypeSummary = getSortedReviewTypeSummary(openReviews);
+  const reviewTypeSummary = getOpenReviewTypeSummary(scope.reviews);
   const previewReviewSummary = previewBundle ? getImportPreviewReviewSummary(previewBundle.reviews) : [];
   const previewTransactionSummary = previewBundle
     ? getImportPreviewTransactionSummary(previewBundle.transactions)

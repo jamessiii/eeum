@@ -29,6 +29,10 @@ export function getOpenReviews(reviews: ReviewItem[]) {
   return reviews.filter((review) => review.status === "open");
 }
 
+export function getOpenReviewTypeSummary(reviews: ReviewItem[]) {
+  return getSortedReviewTypeSummary(getOpenReviews(reviews));
+}
+
 export function getReviewSummary(
   reviews: ReviewItem[],
   transactionMap: Map<string, Transaction>,
