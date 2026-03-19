@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import { getWorkspaceGuide } from "../../domain/guidance/workspaceGuide";
 import { useAppState } from "../state/AppStateProvider";
+import { matchesGuideTargetPath } from "./guidePathMatch";
 
 export function PageStepBanner() {
   const { state } = useAppState();
@@ -14,7 +15,7 @@ export function PageStepBanner() {
     return getWorkspaceGuide(state, workspaceId).currentStep;
   }, [state, workspaceId]);
 
-  if (!currentStep || currentStep.targetPath !== currentPath) return null;
+  if (!currentStep || !matchesGuideTargetPath(currentPath, currentStep.targetPath)) return null;
 
   return (
     <section className="page-step-banner">

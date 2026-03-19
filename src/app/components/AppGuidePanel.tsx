@@ -5,6 +5,7 @@ import { getJourneyProgress, getUpcomingJourneySteps } from "../../domain/journe
 import { formatPercent } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { useAppState } from "../state/AppStateProvider";
+import { matchesGuideTargetPath } from "./guidePathMatch";
 
 export function AppGuidePanel() {
   const { state } = useAppState();
@@ -25,6 +26,7 @@ export function AppGuidePanel() {
   const totalSteps = journeyProgress.totalCount;
   const currentPath = `${location.pathname || "/"}${location.search || ""}`;
   const upcomingSteps = getUpcomingJourneySteps(guide.steps, 2);
+  const isCurrentStepActive = currentStep ? matchesGuideTargetPath(currentPath, currentStep.targetPath) : false;
 
   return (
     <section className="guide-panel" style={getMotionStyle(0)}>
@@ -46,7 +48,7 @@ export function AppGuidePanel() {
             type="button"
             onClick={() => navigate(currentStep.targetPath)}
           >
-            {currentPath === currentStep.targetPath ? "현재 이 단계 진행 중" : currentStep.ctaLabel}
+            {isCurrentStepActive ? "현재 이 단계 진행 중" : currentStep.ctaLabel}
           </button>
         ) : (
           <span className="badge text-bg-success">기본 흐름 완료</span>
