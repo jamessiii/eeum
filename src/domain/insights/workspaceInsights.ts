@@ -303,7 +303,7 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
   const categories = state.categories.filter((item) => item.workspaceId === workspaceId);
   const tags = state.tags.filter((item) => item.workspaceId === workspaceId);
   const financialProfile = state.financialProfiles.find((item) => item.workspaceId === workspaceId) ?? null;
-  const peopleCount = state.people.filter((item) => item.workspaceId === workspaceId).length;
+  const peopleCount = state.people.filter((item) => item.workspaceId === workspaceId && item.isActive).length;
   const accountCount = state.accounts.filter((item) => item.workspaceId === workspaceId).length;
   const cardCount = state.cards.filter((item) => item.workspaceId === workspaceId).length;
   const recurringSuggestionCount = getRecurringMerchantSuggestionCount(transactions, categories);

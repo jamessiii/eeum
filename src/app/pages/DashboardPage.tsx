@@ -7,6 +7,7 @@ import { getMotionStyle } from "../../shared/utils/motion";
 import { useAppState } from "../state/AppStateProvider";
 import { CompletionBanner } from "../components/CompletionBanner";
 import { SourceBreakdownSection } from "../components/SourceBreakdownSection";
+import { getWorkspaceScope } from "../state/selectors";
 
 function toneClass(tone: "stable" | "caution" | "warning") {
   return tone === "warning" ? "warning" : tone === "caution" ? "caution" : "stable";
@@ -33,6 +34,12 @@ export function DashboardPage() {
   const { state } = useAppState();
   const workspaceId = state.activeWorkspaceId!;
   const insights = getWorkspaceInsights(state, workspaceId);
+  const scope = getWorkspaceScope(state, workspaceId);
+  const activePeopleCount = scope.people.filter((person) => person.isActive).length;
+  const ownedAccountCount = scope.accounts.filter((account) => account.ownerPersonId || account.isShared).length;
+  const linkedCardCount = scope.cards.filter((card) => card.ownerPersonId && card.linkedAccountId).length;
+  const unmappedAccountCount = scope.accounts.length - ownedAccountCount;
+  const unmappedCardCount = scope.cards.length - linkedCardCount;
   const hasPreparedTransactions = insights.transactionCount > 0;
   const isDiagnosisReady = insights.isDiagnosisReady;
   const journeySteps: DashboardJourneyStep[] = [
@@ -96,6 +103,33 @@ export function DashboardPage() {
   } = getJourneyProgress(journeySteps);
   const dominantSource = insights.dominantSource;
   const attentionItems = [
+    activePeopleCount === 0
+      ? {
+          key: "people-setup",
+          title: "사람 정보부터 먼저 정리해주세요",
+          description: "사람이 있어야 업로드 데이터의 소유자와 공동지출 흐름을 안정적으로 연결할 수 있습니다.",
+          actionLabel: "사람 관리",
+          to: "/people",
+        }
+      : null,
+    unmappedAccountCount > 0
+      ? {
+          key: "account-mapping",
+          title: "소유자 없는 계좌가 남아 있습니다",
+          description: `${unmappedAccountCount}개 계좌에 소유자 또는 공동 여부가 비어 있어 업로드 연결이 흔들릴 수 있습니다.`,
+          actionLabel: "계좌 관리",
+          to: "/accounts",
+        }
+      : null,
+    unmappedCardCount > 0
+      ? {
+          key: "card-mapping",
+          title: "카드 연결 정보가 덜 정리됐습니다",
+          description: `${unmappedCardCount}개 카드에 소유자 또는 결제 계좌 연결이 비어 있어 업로드 후 검토량이 늘어날 수 있습니다.`,
+          actionLabel: "카드 관리",
+          to: "/cards",
+        }
+      : null,
     insights.reviewCount > 0
       ? {
           key: "reviews",
@@ -265,6 +299,38 @@ export function DashboardPage() {
       </section>
 
       <section className="card shadow-sm" style={getMotionStyle(1)}>
+        <div className="section-head">
+          <div>
+            <span className="section-kicker">기반 정보</span>
+            <h2 className="section-title">사람·계좌·카드 준비 상태</h2>
+          </div>
+        </div>
+        <div className="resource-grid">
+          <article className="resource-card" style={getMotionStyle(2)}>
+            <h3>사람</h3>
+            <p className="mb-0 text-secondary">활성 {activePeopleCount}명 / 전체 {scope.people.length}명</p>
+            <Link to="/people" className="btn btn-outline-primary btn-sm mt-3">
+              사람 관리
+            </Link>
+          </article>
+          <article className="resource-card" style={getMotionStyle(3)}>
+            <h3>계좌</h3>
+            <p className="mb-0 text-secondary">소유자 또는 공동 설정 {ownedAccountCount}개 / 전체 {scope.accounts.length}개</p>
+            <Link to="/accounts" className="btn btn-outline-primary btn-sm mt-3">
+              계좌 관리
+            </Link>
+          </article>
+          <article className="resource-card" style={getMotionStyle(4)}>
+            <h3>카드</h3>
+            <p className="mb-0 text-secondary">소유자+결제계좌 연결 {linkedCardCount}개 / 전체 {scope.cards.length}개</p>
+            <Link to="/cards" className="btn btn-outline-primary btn-sm mt-3">
+              카드 관리
+            </Link>
+          </article>
+        </div>
+      </section>
+
+      <section className="card shadow-sm" style={getMotionStyle(2)}>
         <div className="section-head">
           <div>
             <span className="section-kicker">핵심 해석</span>

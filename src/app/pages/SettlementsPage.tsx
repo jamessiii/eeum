@@ -18,10 +18,13 @@ export function SettlementsPage() {
   const { addSettlement, state } = useAppState();
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
-  const peopleMap = new Map(scope.people.map((person) => [person.id, person.name]));
+  const activePeople = scope.people.filter((person) => person.isActive);
+  const peopleMap = new Map(scope.people.map((person) => [person.id, person.displayName || person.name]));
+  const accountMap = new Map(scope.accounts.map((account) => [account.id, account.alias || account.name]));
+  const cardMap = new Map(scope.cards.map((card) => [card.id, card.name]));
 
   const currentMonth = monthKey(new Date());
-  const settlementSummary = getMonthlySharedSettlementSummary(scope.transactions, scope.people.length, currentMonth);
+  const settlementSummary = getMonthlySharedSettlementSummary(scope.transactions, activePeople.length, currentMonth);
   const sharedTransactions = settlementSummary.sharedTransactions;
 
   const totalSharedExpense = settlementSummary.totalSharedExpense;
@@ -247,6 +250,10 @@ export function SettlementsPage() {
                         </p>
                         <p className="mb-0 text-secondary">{transaction.description || "설명 없음"}</p>
                       </div>
+                      <p className="mb-1 text-secondary">
+                        {transaction.cardId ? `카드 ${cardMap.get(transaction.cardId) ?? "-"}` : "카드 미연결"} ·{" "}
+                        {transaction.accountId ? `계좌 ${accountMap.get(transaction.accountId) ?? "-"}` : "계좌 미연결"}
+                      </p>
                       <div className="d-flex flex-column align-items-end gap-2">
                         <strong>{formatCurrency(transaction.amount)}</strong>
                         {transaction.ownerPersonId ? (
