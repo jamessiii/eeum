@@ -107,9 +107,9 @@ export function ReviewsPage() {
       case "uncategorized_transaction":
         return "미분류 거래 보기";
       case "shared_expense_candidate":
-        return "공동지출 흐름 보기";
+        return "공동지출 거래 보기";
       case "internal_transfer_candidate":
-        return "내부이체 흐름 보기";
+        return "내부이체 거래 보기";
       default:
         return "거래 화면 보기";
     }

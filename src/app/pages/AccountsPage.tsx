@@ -166,7 +166,7 @@ export function AccountsPage() {
                   카드 관리 보기
                 </Link>
                 <Link to="/imports" className="btn btn-outline-secondary btn-sm">
-                  업로드 흐름 보기
+                  업로드 화면 보기
                 </Link>
               </>
             }

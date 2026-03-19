@@ -162,7 +162,7 @@ export function CategoriesPage() {
               </Link>
             ) : null}
             <Link to="/" className="btn btn-outline-secondary btn-sm">
-              대시보드에서 결과 보기
+              대시보드 보기
             </Link>
           </div>
         </div>

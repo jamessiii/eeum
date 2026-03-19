@@ -94,7 +94,7 @@ export function SettlementsPage() {
           title: "지금 가장 먼저 할 일",
           description: "이번 달 공동지출은 잡혀 있지만 남은 정산 편차는 크지 않습니다. 공동지출 흐름과 완료 기록이 맞는지 한 번 더 확인해보세요.",
           to: "/transactions?nature=shared",
-          actionLabel: "공동지출 흐름 보기",
+          actionLabel: "공동지출 거래 보기",
         }
     : {
         title: "지금 가장 먼저 할 일",
