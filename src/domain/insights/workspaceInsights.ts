@@ -1,11 +1,9 @@
 import { monthKey } from "../../shared/utils/date";
 import type { AppState, Category, FinancialProfile, ReviewItem, Tag, Transaction } from "../../shared/types/models";
-import { getRecurringMerchantSuggestions, getUncategorizedTransactions } from "../classification/suggestions";
+import { getRecurringMerchantSuggestions } from "../classification/suggestions";
 import {
   isActiveExpenseImpactTransaction,
   isActiveInternalTransferTransaction,
-  isActiveSharedExpenseTransaction,
-  isUntaggedExpenseTransaction,
 } from "../transactions/meta";
 import { getSourceTypeLabel } from "../transactions/sourceTypes";
 import { getSourceBreakdown } from "../transactions/sourceBreakdown";
@@ -58,6 +56,73 @@ type InsightMetrics = Omit<
   WorkspaceInsights,
   "month" | "topCategories" | "topTags" | "sourceBreakdown" | "dominantSource" | "headlineCards" | "nextSteps" | "coaching" | "spendTone" | "savingsTone" | "fixedTone"
 >;
+
+function buildInsightMetrics(
+  transactions: Transaction[],
+  reviews: ReviewItem[],
+  fixedCategoryIds: Set<string>,
+  monthlyNetIncome: number,
+  recurringSuggestionCount: number,
+): InsightMetrics {
+  let expense = 0;
+  let fixedExpense = 0;
+  let sharedExpense = 0;
+  let sharedExpenseCount = 0;
+  let internalTransferCount = 0;
+  let uncategorizedCount = 0;
+  let untaggedCount = 0;
+
+  for (const transaction of transactions) {
+    if (isActiveExpenseImpactTransaction(transaction)) {
+      const amount = Math.abs(transaction.amount);
+      expense += amount;
+
+      if (transaction.categoryId && fixedCategoryIds.has(transaction.categoryId)) {
+        fixedExpense += amount;
+      }
+      if (transaction.isSharedExpense) {
+        sharedExpense += amount;
+        sharedExpenseCount += 1;
+      }
+      if (!transaction.categoryId) {
+        uncategorizedCount += 1;
+      }
+      if (transaction.tagIds.length === 0) {
+        untaggedCount += 1;
+      }
+    }
+
+    if (isActiveInternalTransferTransaction(transaction)) {
+      internalTransferCount += 1;
+    }
+  }
+
+  const reviewCount = reviews.filter((item) => item.status === "open").length;
+  const savings = Math.max(0, monthlyNetIncome - expense);
+  const spendRate = monthlyNetIncome > 0 ? expense / monthlyNetIncome : 0;
+  const savingsRate = monthlyNetIncome > 0 ? savings / monthlyNetIncome : 0;
+  const fixedExpenseRate = monthlyNetIncome > 0 ? fixedExpense / monthlyNetIncome : 0;
+
+  return {
+    transactionCount: transactions.length,
+    income: monthlyNetIncome,
+    expense,
+    savings,
+    spendRate,
+    savingsRate,
+    fixedExpense,
+    fixedExpenseRate,
+    sharedExpense,
+    sharedExpenseCount,
+    reviewCount,
+    internalTransferCount,
+    uncategorizedCount,
+    untaggedCount,
+    recurringSuggestionCount,
+    isFinancialProfileReady: monthlyNetIncome > 0,
+    isDiagnosisReady: reviewCount === 0 && uncategorizedCount === 0 && untaggedCount === 0 && monthlyNetIncome > 0,
+  };
+}
 
 function summarizeCategories(transactions: Transaction[], categories: Category[]) {
   const categoryNameMap = new Map(categories.map((category) => [category.id, category.name]));
@@ -254,50 +319,17 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
   const peopleCount = state.people.filter((item) => item.workspaceId === workspaceId).length;
   const accountCount = state.accounts.filter((item) => item.workspaceId === workspaceId).length;
   const cardCount = state.cards.filter((item) => item.workspaceId === workspaceId).length;
-  const uncategorizedCount = getUncategorizedTransactions(transactions).length;
-  const untaggedCount = transactions.filter(isUntaggedExpenseTransaction).length;
   const recurringSuggestionCount = getRecurringMerchantSuggestions(transactions, categories).length;
-
-  const income = financialProfile?.monthlyNetIncome ?? 0;
-  const expense = transactions
-    .filter(isActiveExpenseImpactTransaction)
-    .reduce((sum, item) => sum + Math.abs(item.amount), 0);
-  const savings = Math.max(0, income - expense);
-  const spendRate = income > 0 ? expense / income : 0;
-  const savingsRate = income > 0 ? savings / income : 0;
   const fixedCategoryIds = new Set(
     categories.filter((category) => category.fixedOrVariable === "fixed").map((category) => category.id),
   );
-  const fixedExpense = transactions
-    .filter((item) => isActiveExpenseImpactTransaction(item) && item.categoryId && fixedCategoryIds.has(item.categoryId))
-    .reduce((sum, item) => sum + Math.abs(item.amount), 0);
-  const fixedExpenseRate = income > 0 ? fixedExpense / income : 0;
-  const sharedExpense = transactions
-    .filter(isActiveSharedExpenseTransaction)
-    .reduce((sum, item) => sum + Math.abs(item.amount), 0);
-  const sharedExpenseCount = transactions.filter(isActiveSharedExpenseTransaction).length;
-  const reviewCount = reviews.filter((item) => item.status === "open").length;
-  const internalTransferCount = transactions.filter(isActiveInternalTransferTransaction).length;
-
-  const metrics = {
-    transactionCount: transactions.length,
-    income,
-    expense,
-    savings,
-    spendRate,
-    savingsRate,
-    fixedExpense,
-    fixedExpenseRate,
-    sharedExpense,
-    sharedExpenseCount,
-    reviewCount,
-    internalTransferCount,
-    uncategorizedCount,
-    untaggedCount,
+  const metrics = buildInsightMetrics(
+    transactions,
+    reviews,
+    fixedCategoryIds,
+    financialProfile?.monthlyNetIncome ?? 0,
     recurringSuggestionCount,
-    isFinancialProfileReady: income > 0,
-    isDiagnosisReady: reviewCount === 0 && uncategorizedCount === 0 && untaggedCount === 0 && income > 0,
-  };
+  );
 
   const context: WorkspaceContext = {
     transactions,
@@ -329,8 +361,8 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
     headlineCards: buildHeadlineCards(topCategories, sourceBreakdown, metrics),
     nextSteps: buildNextSteps(context, metrics, sourceBreakdown),
     coaching: buildCoaching(context, metrics, sourceBreakdown),
-    spendTone: getSpendTone(financialProfile, spendRate),
-    savingsTone: getSavingsTone(financialProfile, savingsRate),
-    fixedTone: getFixedTone(financialProfile, fixedExpenseRate),
+    spendTone: getSpendTone(financialProfile, metrics.spendRate),
+    savingsTone: getSavingsTone(financialProfile, metrics.savingsRate),
+    fixedTone: getFixedTone(financialProfile, metrics.fixedExpenseRate),
   };
 }
