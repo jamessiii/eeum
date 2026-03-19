@@ -12,6 +12,13 @@ export interface RecurringMerchantSuggestion {
   transactionIds: string[];
 }
 
+export interface CategoryCleanupSummary {
+  recurringSuggestions: RecurringMerchantSuggestion[];
+  recurringSuggestionCount: number;
+  uncategorizedTransactions: Transaction[];
+  uncategorizedCount: number;
+}
+
 interface RecurringMerchantAccumulator {
   merchantName: string;
   count: number;
@@ -98,4 +105,16 @@ export function getRecurringMerchantSuggestions(transactions: Transaction[], cat
 
 export function getRecurringMerchantSuggestionCount(transactions: Transaction[], categories: Category[]) {
   return getRecurringMerchantSuggestions(transactions, categories).length;
+}
+
+export function getCategoryCleanupSummary(transactions: Transaction[], categories: Category[]): CategoryCleanupSummary {
+  const recurringSuggestions = getRecurringMerchantSuggestions(transactions, categories);
+  const uncategorizedTransactions = getUncategorizedTransactions(transactions);
+
+  return {
+    recurringSuggestions,
+    recurringSuggestionCount: recurringSuggestions.length,
+    uncategorizedTransactions,
+    uncategorizedCount: uncategorizedTransactions.length,
+  };
 }

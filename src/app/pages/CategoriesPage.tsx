@@ -1,7 +1,6 @@
 import { Link } from "react-router-dom";
 import {
-  getRecurringMerchantSuggestions,
-  getUncategorizedTransactions,
+  getCategoryCleanupSummary,
   type RecurringMerchantSuggestion,
 } from "../../domain/classification/suggestions";
 import { getExpenseImpactStats } from "../../domain/transactions/expenseImpactStats";
@@ -25,15 +24,15 @@ export function CategoriesPage() {
   const { addCategory, addTag, assignCategory, assignCategoryByMerchant, assignTag, assignTagByMerchant, state } = useAppState();
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
-  const uncategorizedTransactions = getUncategorizedTransactions(scope.transactions);
-  const recurringSuggestions = getRecurringMerchantSuggestions(scope.transactions, scope.categories);
-  const isCategoryCleanupComplete = recurringSuggestions.length === 0 && uncategorizedTransactions.length === 0;
+  const { recurringSuggestions, recurringSuggestionCount, uncategorizedTransactions, uncategorizedCount } =
+    getCategoryCleanupSummary(scope.transactions, scope.categories);
+  const isCategoryCleanupComplete = recurringSuggestionCount === 0 && uncategorizedCount === 0;
   const expenseStats = getExpenseImpactStats(scope.transactions);
   const expenseTransactions = expenseStats.activeExpenseTransactions;
   const untaggedExpenseCount = expenseStats.untaggedCount;
   const categorizedCount = expenseTransactions.filter((item) => item.categoryId).length;
   const classificationProgress = expenseTransactions.length ? categorizedCount / expenseTransactions.length : 0;
-  const remainingWorkCount = recurringSuggestions.reduce((sum, suggestion) => sum + suggestion.transactionIds.length, 0) + uncategorizedTransactions.length;
+  const remainingWorkCount = recurringSuggestions.reduce((sum, suggestion) => sum + suggestion.transactionIds.length, 0) + uncategorizedCount;
   const categoryUsage = new Map<string, { count: number; amount: number }>();
   for (const transaction of expenseTransactions) {
     if (!transaction.categoryId) continue;
