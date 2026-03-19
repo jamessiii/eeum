@@ -1,6 +1,6 @@
 import { monthKey } from "../../shared/utils/date";
 import type { AppState, Category, FinancialProfile, ReviewItem, Tag, Transaction } from "../../shared/types/models";
-import { getRecurringMerchantSuggestions } from "../classification/suggestions";
+import { getRecurringMerchantSuggestionCount } from "../classification/suggestions";
 import { isDiagnosisReady } from "./diagnosisReady";
 import {
   isActiveExpenseImpactTransaction,
@@ -329,7 +329,7 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
   const peopleCount = state.people.filter((item) => item.workspaceId === workspaceId).length;
   const accountCount = state.accounts.filter((item) => item.workspaceId === workspaceId).length;
   const cardCount = state.cards.filter((item) => item.workspaceId === workspaceId).length;
-  const recurringSuggestionCount = getRecurringMerchantSuggestions(transactions, categories).length;
+  const recurringSuggestionCount = getRecurringMerchantSuggestionCount(transactions, categories);
   const expenseTransactions = transactions.filter(isActiveExpenseImpactTransaction);
   const fixedCategoryIds = new Set(
     categories.filter((category) => category.fixedOrVariable === "fixed").map((category) => category.id),

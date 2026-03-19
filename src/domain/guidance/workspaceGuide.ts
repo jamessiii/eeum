@@ -1,4 +1,4 @@
-import { getRecurringMerchantSuggestions } from "../classification/suggestions";
+import { getRecurringMerchantSuggestionCount } from "../classification/suggestions";
 import type { AppState } from "../../shared/types/models";
 import { getWorkspaceScope } from "../../app/state/selectors";
 import { isDiagnosisReady } from "../insights/diagnosisReady";
@@ -30,7 +30,7 @@ export interface WorkspaceGuide {
 export function getWorkspaceGuide(state: AppState, workspaceId: string): WorkspaceGuide {
   const scope = getWorkspaceScope(state, workspaceId);
   const health = getWorkspaceHealthSummary(scope);
-  const recurringSuggestions = getRecurringMerchantSuggestions(scope.transactions, scope.categories);
+  const recurringSuggestionCount = getRecurringMerchantSuggestionCount(scope.transactions, scope.categories);
   const monthlyIncome = scope.financialProfile?.monthlyNetIncome ?? 0;
   const hasImportedData = scope.imports.length > 0;
   const hasTransactions = scope.transactions.length > 0;
@@ -39,7 +39,7 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
   const hasDominantSourceConcentration = isDominantSourceConcentrated(dominantSource);
   const dominantSourceLabel = dominantSource ? getSourceTypeLabel(dominantSource.sourceType) : null;
   const readyForInsights =
-    recurringSuggestions.length === 0 &&
+    recurringSuggestionCount === 0 &&
     isDiagnosisReady({
       hasTransactions,
       postImportReady: health.postImportReady,
@@ -109,7 +109,7 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
       targetPath: "/categories",
       ctaLabel: "반복 지출 분류하기",
       tips: ["구독, 보험, 통신비처럼 반복되는 거래부터 분류해보세요.", "여러 달 반복되고 금액 편차가 작은 후보부터 먼저 적용하면 좋습니다."],
-      completed: hasTransactions ? recurringSuggestions.length === 0 : false,
+      completed: hasTransactions ? recurringSuggestionCount === 0 : false,
     },
     {
       id: "categorize",

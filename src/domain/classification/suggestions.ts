@@ -95,3 +95,7 @@ export function getRecurringMerchantSuggestions(transactions: Transaction[], cat
         b.amountAverage - a.amountAverage,
     );
 }
+
+export function getRecurringMerchantSuggestionCount(transactions: Transaction[], categories: Category[]) {
+  return getRecurringMerchantSuggestions(transactions, categories).length;
+}
