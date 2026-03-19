@@ -200,6 +200,7 @@ export function TransactionsPage() {
     const nature = searchParams.get("nature");
     const ownerPersonId = searchParams.get("ownerPersonId");
     const sourceType = searchParams.get("sourceType");
+    const tagId = searchParams.get("tagId");
 
     const matchedNature =
       cleanup === "uncategorized" || cleanup === "untagged"
@@ -209,17 +210,19 @@ export function TransactionsPage() {
           : null;
     const matchedOwnerPersonId = ownerPersonId && people.some((person) => person.id === ownerPersonId) ? ownerPersonId : null;
     const matchedSourceType = SOURCE_TYPE_OPTIONS.find((item) => item === sourceType);
+    const matchedTagId = tagId && scope.tags.some((tag) => tag.id === tagId) ? tagId : null;
 
-    if (matchedNature || matchedOwnerPersonId || matchedSourceType) {
+    if (matchedNature || matchedOwnerPersonId || matchedSourceType || matchedTagId) {
       setFilters((current) => ({
         ...current,
         nature: matchedNature ?? current.nature,
         ownerPersonId: matchedOwnerPersonId ?? current.ownerPersonId,
         sourceType: matchedSourceType ?? current.sourceType,
+        tagId: matchedTagId ?? current.tagId,
       }));
       setSearchParams({}, { replace: true });
     }
-  }, [people, searchParams, setSearchParams]);
+  }, [people, scope.tags, searchParams, setSearchParams]);
 
   const beginTransactionEdit = (transaction: (typeof transactions)[number]) => {
     setEditingTransactionId(transaction.id);
@@ -306,16 +309,15 @@ export function TransactionsPage() {
   const syncFormWithSourceType = (form: HTMLFormElement, sourceType: TransactionEditDraft["sourceType"]) => {
     const accountField = form.elements.namedItem("accountId") as HTMLSelectElement | null;
     const cardField = form.elements.namedItem("cardId") as HTMLSelectElement | null;
-    const ownerField = form.elements.namedItem("ownerPersonId") as HTMLSelectElement | null;
 
     if (sourceType === "manual") {
       if (accountField) accountField.value = "";
       if (cardField) cardField.value = "";
-      if (ownerField) ownerField.value = "";
       return;
     }
 
     if (sourceType === "account") {
+      const ownerField = form.elements.namedItem("ownerPersonId") as HTMLSelectElement | null;
       if (cardField) cardField.value = "";
       if (ownerField) ownerField.value = accountField?.value
         ? accounts.find((account) => account.id === accountField.value)?.ownerPersonId ?? ""
@@ -360,7 +362,7 @@ export function TransactionsPage() {
 
   const syncEditDraftWithSourceType = (sourceType: TransactionEditDraft["sourceType"]) => {
     if (sourceType === "manual") {
-      updateEditDraft({ sourceType, ownerPersonId: "", accountId: "", cardId: "" });
+      updateEditDraft({ sourceType, accountId: "", cardId: "" });
       return;
     }
 

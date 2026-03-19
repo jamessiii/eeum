@@ -392,6 +392,7 @@ function applyReviewSuggestionToTransactions(transactions: Transaction[], review
           ...transaction,
           status: "cancelled" as const,
           isExpenseImpact: false,
+          isSharedExpense: false,
         };
       case "refund_candidate":
         return {
@@ -399,6 +400,8 @@ function applyReviewSuggestionToTransactions(transactions: Transaction[], review
           transactionType: "income" as const,
           amount: Math.abs(transaction.amount),
           isExpenseImpact: false,
+          isSharedExpense: false,
+          isInternalTransfer: false,
           refundOfTransactionId: relatedTransactionId,
         };
       case "internal_transfer_candidate":
@@ -407,6 +410,7 @@ function applyReviewSuggestionToTransactions(transactions: Transaction[], review
           transactionType: "transfer" as const,
           isInternalTransfer: true,
           isExpenseImpact: false,
+          isSharedExpense: false,
           categoryId: null,
         };
       case "shared_expense_candidate":
@@ -492,6 +496,16 @@ function reducer(state: AppState, action: Action): AppState {
             ? { ...account, ...action.payload.values }
             : account,
         ),
+        transactions: state.transactions.map((transaction) =>
+          transaction.workspaceId === action.payload.workspaceId &&
+          transaction.sourceType === "account" &&
+          transaction.accountId === action.payload.accountId
+            ? {
+                ...transaction,
+                ownerPersonId: action.payload.values.isShared ? null : action.payload.values.ownerPersonId,
+              }
+            : transaction,
+        ),
       };
     case "addCard":
       return {
@@ -512,6 +526,15 @@ function reducer(state: AppState, action: Action): AppState {
           card.workspaceId === action.payload.workspaceId && card.id === action.payload.cardId
             ? { ...card, ...action.payload.values }
             : card,
+        ),
+        transactions: state.transactions.map((transaction) =>
+          transaction.workspaceId === action.payload.workspaceId && transaction.cardId === action.payload.cardId
+            ? {
+                ...transaction,
+                ownerPersonId: action.payload.values.ownerPersonId,
+                accountId: action.payload.values.linkedAccountId,
+              }
+            : transaction,
         ),
       };
     case "addCategory":
