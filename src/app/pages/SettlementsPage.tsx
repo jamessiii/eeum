@@ -137,6 +137,13 @@ export function SettlementsPage() {
             <strong>{settlementQuickStatus.title}</strong>
             <p className="mb-0 text-secondary">{settlementQuickStatus.description}</p>
           </div>
+          <div className="status-badge-row">
+            <span className="badge text-bg-light">공동지출 {sharedTransactions.length}건</span>
+            <span className="badge text-bg-light">완료 기록 {settlementHistory.length}건</span>
+            {suggestedSettlementAmount > 0 ? (
+              <span className="badge text-bg-warning">추천 정산 {formatCurrency(suggestedSettlementAmount)}</span>
+            ) : null}
+          </div>
           <Link to={sharedTransactions.length ? "/transactions?nature=shared" : "/transactions"} className="btn btn-outline-secondary btn-sm">
             {sharedTransactions.length ? "공동지출 거래 보기" : "거래 화면 보기"}
           </Link>
@@ -257,6 +264,10 @@ export function SettlementsPage() {
                       ? "현재 기록 기준으로는 이번 달 정산이 거의 끝난 상태입니다."
                       : "공동지출 참여자와 거래가 더 쌓이면 정산 방향을 자동으로 제안합니다."}
                 </p>
+                <div className="status-badge-row mt-3">
+                  <span className="badge text-bg-light">완료 금액 {formatCurrency(completedSettlementAmount)}</span>
+                  <span className="badge text-bg-light">남은 후보 {receiver && sender ? "있음" : "없음"}</span>
+                </div>
                 {receiver && sender ? (
                   <div className="action-row mt-3">
                     <button

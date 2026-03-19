@@ -365,6 +365,12 @@ a {
   margin-top: 0.2rem;
 }
 
+.status-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .page-step-banner {
   display: grid;
   gap: 0.85rem;

@@ -184,14 +184,14 @@ export function ReviewsPage() {
               ))}
             </select>
           </div>
-          <div className="d-flex flex-wrap gap-2 mt-2">
+          <div className="action-row mt-2">
             <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setActiveSourceType("all")}>
               전체 {openReviewCount}건
             </button>
             {SOURCE_TYPE_OPTIONS.map((sourceType) => (
               <button
                 key={sourceType}
-                className="btn btn-outline-secondary btn-sm"
+                className={`btn btn-sm ${activeSourceType === sourceType ? "btn-outline-primary" : "btn-outline-secondary"}`}
                 type="button"
                 onClick={() => setActiveSourceType(sourceType)}
               >
@@ -220,7 +220,7 @@ export function ReviewsPage() {
               지금은 {getSourceTypeLabel(activeSourceType)} 경로로 들어온 검토 후보만 모아 보고 있습니다. 같은 수단끼리 한 번에 정리하면 연결값 오류를 더 빨리 찾을 수 있습니다.
             </p>
           </div>
-          <div className="d-flex flex-wrap gap-2">
+          <div className="action-row">
             <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setActiveSourceType("all")}>
               수단 필터 해제
             </button>
@@ -242,15 +242,17 @@ export function ReviewsPage() {
             </p>
           </div>
           {hasActiveReviewFilters ? (
-            <div className="d-flex flex-wrap gap-2">
-              <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setActiveFilter("all")}>
-                유형 초기화
-              </button>
-              <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setActiveSourceType("all")}>
-                수단 초기화
-              </button>
-              <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setActiveTagId("all")}>
-                태그 초기화
+            <div className="action-row">
+              <button
+                className="btn btn-outline-secondary btn-sm"
+                type="button"
+                onClick={() => {
+                  setActiveFilter("all");
+                  setActiveSourceType("all");
+                  setActiveTagId("all");
+                }}
+              >
+                전체 필터 초기화
               </button>
             </div>
           ) : null}
@@ -276,7 +278,7 @@ export function ReviewsPage() {
               있습니다.
             </p>
           </div>
-          <div className="d-flex flex-wrap gap-2">
+          <div className="action-row">
             <Link className="btn btn-outline-primary btn-sm" to="/transactions?cleanup=uncategorized">
               미분류 정리
             </Link>
@@ -299,7 +301,7 @@ export function ReviewsPage() {
               : "열린 검토 항목은 모두 정리됐습니다. 이제 분류와 태그 정리를 끝내고 진단 화면으로 넘어가면 됩니다."}
           </p>
         </div>
-        <div className="d-flex flex-wrap gap-2">
+        <div className="action-row">
           {uncategorizedCount ? (
             <Link className="btn btn-outline-primary btn-sm" to="/transactions?cleanup=uncategorized">
               미분류 {uncategorizedCount}건 정리
