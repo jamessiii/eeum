@@ -630,35 +630,40 @@ function reducer(state: AppState, action: Action): AppState {
         ...state,
         transactions: state.transactions.map((transaction) =>
           transaction.workspaceId === action.payload.workspaceId && transaction.id === action.payload.transactionId
-            ? {
-                ...transaction,
-                sourceType: action.payload.patch.sourceType ?? transaction.sourceType,
-                ownerPersonId:
+            ? (() => {
+                const nextSourceType = action.payload.patch.sourceType ?? transaction.sourceType;
+                const nextOwnerPersonId =
                   typeof action.payload.patch.ownerPersonId !== "undefined"
                     ? action.payload.patch.ownerPersonId
-                    : transaction.ownerPersonId,
-                accountId:
+                    : transaction.ownerPersonId;
+                const nextAccountId =
                   typeof action.payload.patch.accountId !== "undefined"
                     ? action.payload.patch.accountId
-                    : transaction.accountId,
-                cardId:
-                  typeof action.payload.patch.cardId !== "undefined" ? action.payload.patch.cardId : transaction.cardId,
-                fromAccountId:
-                  transaction.transactionType === "transfer" && typeof action.payload.patch.accountId !== "undefined"
-                    ? action.payload.patch.accountId
-                    : transaction.fromAccountId,
-                occurredAt: action.payload.patch.occurredAt ?? transaction.occurredAt,
-                settledAt:
-                  typeof action.payload.patch.settledAt !== "undefined"
-                    ? action.payload.patch.settledAt
-                    : transaction.settledAt,
-                merchantName: action.payload.patch.merchantName ?? transaction.merchantName,
-                description: action.payload.patch.description ?? transaction.description,
-                amount:
-                  typeof action.payload.patch.amount === "number"
-                    ? Math.abs(action.payload.patch.amount)
-                    : transaction.amount,
-              }
+                    : transaction.accountId;
+                const nextCardId =
+                  typeof action.payload.patch.cardId !== "undefined" ? action.payload.patch.cardId : transaction.cardId;
+
+                return {
+                  ...transaction,
+                  sourceType: nextSourceType,
+                  ownerPersonId: nextOwnerPersonId,
+                  accountId: nextAccountId,
+                  cardId: nextCardId,
+                  fromAccountId: transaction.transactionType === "transfer" ? nextAccountId : null,
+                  toAccountId: transaction.transactionType === "transfer" ? transaction.toAccountId : null,
+                  occurredAt: action.payload.patch.occurredAt ?? transaction.occurredAt,
+                  settledAt:
+                    typeof action.payload.patch.settledAt !== "undefined"
+                      ? action.payload.patch.settledAt
+                      : transaction.settledAt,
+                  merchantName: action.payload.patch.merchantName ?? transaction.merchantName,
+                  description: action.payload.patch.description ?? transaction.description,
+                  amount:
+                    typeof action.payload.patch.amount === "number"
+                      ? Math.abs(action.payload.patch.amount)
+                      : transaction.amount,
+                };
+              })()
             : transaction,
         ),
       };

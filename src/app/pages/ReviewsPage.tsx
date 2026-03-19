@@ -55,7 +55,6 @@ export function ReviewsPage() {
     openSharedReviewCount,
     openInternalTransferReviewCount,
     dominantType,
-    sourceTypeReviewCounts,
     totalReviewCount,
     reviewProgress,
   } =
@@ -69,6 +68,26 @@ export function ReviewsPage() {
     activeTagId,
     activeSourceType,
   });
+  const baseFilteredReviewCount = getFilteredReviews({
+    reviews,
+    transactionMap: transactions,
+    activeFilter,
+    activeTagId,
+    activeSourceType: "all",
+  }).length;
+  const filteredSourceTypeCounts = SOURCE_TYPE_OPTIONS.reduce<Record<(typeof SOURCE_TYPE_OPTIONS)[number], number>>(
+    (accumulator, sourceType) => {
+      accumulator[sourceType] = getFilteredReviews({
+        reviews,
+        transactionMap: transactions,
+        activeFilter,
+        activeTagId,
+        activeSourceType: sourceType,
+      }).length;
+      return accumulator;
+    },
+    { manual: 0, account: 0, card: 0, import: 0 },
+  );
   const hasActiveReviewFilters = activeFilter !== "all" || activeTagId !== "all" || activeSourceType !== "all";
   const filteredReviewSummary = [
     activeFilter !== "all" ? `유형 ${REVIEW_TYPE_LABELS[activeFilter]}` : null,
@@ -235,7 +254,7 @@ export function ReviewsPage() {
               type="button"
               onClick={() => setActiveSourceType("all")}
             >
-              전체 {openReviewCount}건
+              전체 {baseFilteredReviewCount}건
             </button>
             {SOURCE_TYPE_OPTIONS.map((sourceType) => (
               <button
@@ -244,7 +263,7 @@ export function ReviewsPage() {
                 type="button"
                 onClick={() => setActiveSourceType(sourceType)}
               >
-                {getSourceTypeLabel(sourceType)} {sourceTypeReviewCounts[sourceType]}건
+                {getSourceTypeLabel(sourceType)} {filteredSourceTypeCounts[sourceType]}건
               </button>
             ))}
           </div>

@@ -86,6 +86,7 @@ export function SettlementsPage() {
     if (activeTagId && !transaction.tagIds.includes(activeTagId)) return false;
     return true;
   });
+  const visibleSharedTransactionCount = activeSettlementFilterSummary ? scopedSharedTransactions.length : sharedTransactions.length;
 
   const totalSharedExpense = settlementSummary.totalSharedExpense;
   const splitTarget = settlementSummary.splitTarget;
@@ -196,7 +197,7 @@ export function SettlementsPage() {
             ) : null}
           </div>
           <Link
-            to={appendCurrentTransactionFilters(sharedTransactions.length ? "/transactions?nature=shared" : "/transactions")}
+            to={appendCurrentTransactionFilters(visibleSharedTransactionCount ? "/transactions?nature=shared" : "/transactions")}
             className="btn btn-outline-secondary btn-sm"
           >
             {sharedTransactions.length ? "공동지출 거래 보기" : "거래 화면 보기"}
@@ -368,6 +369,7 @@ export function SettlementsPage() {
                 </div>
               </div>
 
+              {scopedSharedTransactions.length ? (
               <div className="review-list mt-4">
                 {scopedSharedTransactions.slice(0, 8).map((transaction, index) => (
                   <article key={transaction.id} className="review-card" style={getMotionStyle(index + 2)}>
@@ -412,6 +414,23 @@ export function SettlementsPage() {
                   </article>
                 ))}
               </div>
+              ) : activeSettlementFilterSummary ? (
+                <EmptyStateCallout
+                  kicker="?꾩옱 留ν씫 寃곌낵 ?놁쓬"
+                  title="?꾩옱 ?대뼱吏?議곌굔?먯꽌??怨듬룞吏異?洹쇨굅 嫄곕옒媛 ?놁뒿?덈떎"
+                  description={`${activeSettlementFilterSummary} 湲곗??쇰줈??怨듬룞吏異?嫄곕옒媛 ?μ옉?섏? ?딆븯?듬땲?? ?꾩껜 ?뺤궛???ㅼ떆 蹂닿굅??嫄곕옒 ?붾㈃?먯꽌 議곌굔??醫뗭엫 寃?좊낫?몄슂.`}
+                  actions={
+                    <>
+                      <Link className="btn btn-outline-primary btn-sm" to="/settlements">
+                        ?꾩껜 ?뺤궛 蹂닿린
+                      </Link>
+                      <Link className="btn btn-outline-secondary btn-sm" to={appendCurrentTransactionFilters("/transactions?nature=shared")}>
+                        嫄곕옒 ?붾㈃ 蹂닿린
+                      </Link>
+                    </>
+                  }
+                />
+              ) : null}
 
               <div className="review-list mt-4">
                 {settlementRows.map((row, index) => (
