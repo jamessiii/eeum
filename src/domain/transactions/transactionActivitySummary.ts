@@ -1,53 +1,25 @@
-import {
-  isActiveExpenseImpactTransaction,
-  isActiveInternalTransferTransaction,
-  isActiveSharedExpenseTransaction,
-  isActiveTransaction,
-  isUncategorizedExpenseTransaction,
-  isUntaggedExpenseTransaction,
-} from "./meta";
+import { isActiveTransaction } from "./meta";
+import { getExpenseImpactStats } from "./expenseImpactStats";
 import type { Transaction } from "../../shared/types/models";
 
 export function getTransactionActivitySummary(transactions: Transaction[]) {
   const activeTransactions: Transaction[] = [];
-  const expenseImpactTransactions: Transaction[] = [];
-  let internalTransferCount = 0;
-  let sharedExpenseCount = 0;
-  let uncategorizedCount = 0;
-  let untaggedCount = 0;
-  let expenseImpactAmount = 0;
+  const expenseStats = getExpenseImpactStats(transactions);
 
   for (const transaction of transactions) {
     if (!isActiveTransaction(transaction)) continue;
 
     activeTransactions.push(transaction);
-
-    if (isActiveExpenseImpactTransaction(transaction)) {
-      expenseImpactTransactions.push(transaction);
-      expenseImpactAmount += transaction.amount;
-    }
-    if (isActiveInternalTransferTransaction(transaction)) {
-      internalTransferCount += 1;
-    }
-    if (isActiveSharedExpenseTransaction(transaction)) {
-      sharedExpenseCount += 1;
-    }
-    if (isUncategorizedExpenseTransaction(transaction)) {
-      uncategorizedCount += 1;
-    }
-    if (isUntaggedExpenseTransaction(transaction)) {
-      untaggedCount += 1;
-    }
   }
 
   return {
     activeTransactions,
-    expenseImpactTransactions,
-    activeExpenseCount: expenseImpactTransactions.length,
-    internalTransferCount,
-    sharedExpenseCount,
-    uncategorizedCount,
-    untaggedCount,
-    expenseImpactAmount,
+    expenseImpactTransactions: expenseStats.activeExpenseTransactions,
+    activeExpenseCount: expenseStats.activeExpenseCount,
+    internalTransferCount: expenseStats.internalTransferCount,
+    sharedExpenseCount: expenseStats.sharedExpenseCount,
+    uncategorizedCount: expenseStats.uncategorizedCount,
+    untaggedCount: expenseStats.untaggedCount,
+    expenseImpactAmount: expenseStats.expenseImpactAmount,
   };
 }
