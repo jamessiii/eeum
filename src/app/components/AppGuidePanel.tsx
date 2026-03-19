@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { getWorkspaceGuide } from "../../domain/guidance/workspaceGuide";
+import { getJourneyProgress } from "../../domain/journey/progress";
 import { formatPercent } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { useAppState } from "../state/AppStateProvider";
@@ -19,7 +20,8 @@ export function AppGuidePanel() {
   if (!guide) return null;
 
   const currentStep = guide.currentStep;
-  const completedSteps = guide.steps.filter((step) => step.completed).length;
+  const journeyProgress = getJourneyProgress(guide.steps);
+  const completedSteps = journeyProgress.completedCount;
   const currentPath = `${location.pathname || "/"}${location.search || ""}`;
   const upcomingSteps = guide.steps.filter((step) => !step.completed).slice(0, 2);
 
