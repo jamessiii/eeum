@@ -255,6 +255,40 @@ export function TransactionsPage() {
     setEditDraft((current) => ({ ...current, ...patch }));
   };
 
+  const normalizeTransactionConnectionFields = ({
+    sourceType,
+    ownerPersonId,
+    accountId,
+    cardId,
+  }: {
+    sourceType: "card" | "account" | "manual" | "import";
+    ownerPersonId: string | null;
+    accountId: string | null;
+    cardId: string | null;
+  }) => {
+    if (sourceType === "manual" || sourceType === "import") {
+      return {
+        ownerPersonId: ownerPersonId ?? null,
+        accountId: null,
+        cardId: null,
+      };
+    }
+
+    if (sourceType === "account") {
+      return {
+        ownerPersonId: ownerPersonId ?? null,
+        accountId: accountId ?? null,
+        cardId: null,
+      };
+    }
+
+    return {
+      ownerPersonId: ownerPersonId ?? null,
+      accountId: accountId ?? null,
+      cardId: cardId ?? null,
+    };
+  };
+
   const syncFormWithSourceType = (form: HTMLFormElement, sourceType: TransactionEditDraft["sourceType"]) => {
     const accountField = form.elements.namedItem("accountId") as HTMLSelectElement | null;
     const cardField = form.elements.namedItem("cardId") as HTMLSelectElement | null;
@@ -408,15 +442,22 @@ export function TransactionsPage() {
             event.preventDefault();
             const form = event.currentTarget;
             const formData = new FormData(form);
+            const sourceType = String(formData.get("sourceType") || "manual") as "card" | "account" | "manual" | "import";
+            const normalizedConnections = normalizeTransactionConnectionFields({
+              sourceType,
+              ownerPersonId: String(formData.get("ownerPersonId") || "") || null,
+              cardId: String(formData.get("cardId") || "") || null,
+              accountId: String(formData.get("accountId") || "") || null,
+            });
             addTransaction({
               workspaceId,
               occurredAt: String(formData.get("occurredAt") || ""),
               settledAt: String(formData.get("settledAt") || ""),
               transactionType: String(formData.get("transactionType") || "expense") as "expense" | "income" | "transfer" | "adjustment",
-              sourceType: String(formData.get("sourceType") || "manual") as "card" | "account" | "manual" | "import",
-              ownerPersonId: String(formData.get("ownerPersonId") || "") || null,
-              cardId: String(formData.get("cardId") || "") || null,
-              accountId: String(formData.get("accountId") || "") || null,
+              sourceType,
+              ownerPersonId: normalizedConnections.ownerPersonId,
+              cardId: normalizedConnections.cardId,
+              accountId: normalizedConnections.accountId,
               merchantName: String(formData.get("merchantName") || ""),
               description: String(formData.get("description") || ""),
               amount: Number(formData.get("amount") || 0),
@@ -1050,11 +1091,17 @@ export function TransactionsPage() {
                               onAccountSelect={syncEditDraftWithAccount}
                               onCardSelect={syncEditDraftWithCard}
                               onSave={() => {
-                                updateTransactionDetails(workspaceId, transaction.id, {
+                                const normalizedConnections = normalizeTransactionConnectionFields({
                                   sourceType: editDraft.sourceType,
                                   ownerPersonId: editDraft.ownerPersonId || null,
                                   accountId: editDraft.accountId || null,
                                   cardId: editDraft.cardId || null,
+                                });
+                                updateTransactionDetails(workspaceId, transaction.id, {
+                                  sourceType: editDraft.sourceType,
+                                  ownerPersonId: normalizedConnections.ownerPersonId,
+                                  accountId: normalizedConnections.accountId,
+                                  cardId: normalizedConnections.cardId,
                                   occurredAt: editDraft.occurredAt,
                                   settledAt: editDraft.settledAt || null,
                                   merchantName: editDraft.merchantName.trim(),
