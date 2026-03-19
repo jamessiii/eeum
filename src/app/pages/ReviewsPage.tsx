@@ -106,6 +106,13 @@ export function ReviewsPage() {
   const filteredReviewCounts = getReviewTypeCounts(filteredReviewsByContext);
   const contextualSharedReviewCount = filteredReviewCounts.shared_expense_candidate ?? 0;
   const contextualInternalTransferReviewCount = filteredReviewCounts.internal_transfer_candidate ?? 0;
+  const contextualSharedTransactionCount = Array.from(transactions.values()).filter((transaction) => {
+    if (!transaction.isSharedExpense) return false;
+    if (activeSourceType !== "all" && transaction.sourceType !== activeSourceType) return false;
+    if (activeTagId !== "all" && !transaction.tagIds.includes(activeTagId)) return false;
+    return true;
+  }).length;
+  const canOpenSettlementsFromReviewContext = contextualSharedTransactionCount > 0;
   const hasActiveReviewFilters = activeFilter !== "all" || activeTagId !== "all" || activeSourceType !== "all";
   const filteredReviewSummary = [
     activeFilter !== "all" ? `유형 ${REVIEW_TYPE_LABELS[activeFilter]}` : null,
@@ -360,7 +367,9 @@ export function ReviewsPage() {
           <div className="review-summary-copy">
             <strong>검토 뒤 바로 이어서 할 일</strong>
             <p className="mb-0 text-secondary">
-              검토를 줄인 뒤 미분류와 무태그 거래만 마무리하면, 대시보드와 정산 화면을 훨씬 안정적으로 볼 수 있습니다.
+              {canOpenSettlementsFromReviewContext
+                ? "검토를 줄인 뒤 미분류와 무태그 거래만 마무리하면, 대시보드와 정산 화면을 훨씬 안정적으로 볼 수 있습니다."
+                : "검토를 줄인 뒤 미분류와 무태그 거래만 마무리하면, 대시보드와 거래 흐름을 훨씬 안정적으로 볼 수 있습니다."}
             </p>
           </div>
           <div className="action-row">
@@ -370,9 +379,11 @@ export function ReviewsPage() {
             <Link className="btn btn-outline-secondary btn-sm" to={withActiveTransactionFilters("/transactions?cleanup=untagged")}>
               태그 정리
             </Link>
-            <Link className="btn btn-outline-secondary btn-sm" to={settlementsLink}>
-              정산 화면 보기
-            </Link>
+            {contextualSharedTransactionCount ? (
+              <Link className="btn btn-outline-secondary btn-sm" to={settlementsLink}>
+                정산 화면 보기
+              </Link>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -417,7 +428,11 @@ export function ReviewsPage() {
         <CompletionBanner
           className="mt-3"
           title="검토함 정리가 끝났습니다"
-          description="자동 검토 후보가 모두 처리됐습니다. 이제 미분류와 무태그 거래를 마무리하고 대시보드와 정산 화면의 흐름을 확인하면 됩니다."
+          description={
+            canOpenSettlementsFromReviewContext
+              ? "자동 검토 후보가 모두 처리됐습니다. 이제 미분류와 무태그 거래를 마무리하고 대시보드와 정산 화면의 흐름을 확인하면 됩니다."
+              : "자동 검토 후보가 모두 처리됐습니다. 이제 미분류와 무태그 거래를 마무리하고 대시보드와 거래 흐름을 확인하면 됩니다."
+          }
           actions={
             <>
               {uncategorizedCount ? (
@@ -440,9 +455,11 @@ export function ReviewsPage() {
                   내부이체 {contextualInternalTransferReviewCount}건 점검
                 </Link>
               ) : null}
-              <Link className="btn btn-outline-primary btn-sm" to={settlementsLink}>
-                정산 화면 보기
-              </Link>
+              {contextualSharedTransactionCount ? (
+                <Link className="btn btn-outline-primary btn-sm" to={settlementsLink}>
+                  정산 화면 보기
+                </Link>
+              ) : null}
               <Link className="btn btn-outline-secondary btn-sm" to="/">
                 대시보드 보기
               </Link>
@@ -455,12 +472,18 @@ export function ReviewsPage() {
         <EmptyStateCallout
           kicker="검토 완료"
           title="열려 있는 검토 항목이 없습니다"
-          description="중복, 환불, 내부이체, 공동지출 후보를 모두 정리했습니다. 이제 대시보드와 정산 화면의 수치를 더 믿고 볼 수 있습니다."
+          description={
+            canOpenSettlementsFromReviewContext
+              ? "중복, 환불, 내부이체, 공동지출 후보를 모두 정리했습니다. 이제 대시보드와 정산 화면의 수치를 더 믿고 볼 수 있습니다."
+              : "중복, 환불, 내부이체, 공동지출 후보를 모두 정리했습니다. 이제 대시보드와 거래 화면의 수치를 더 믿고 볼 수 있습니다."
+          }
           actions={
             <>
-              <Link className="btn btn-outline-primary btn-sm" to={settlementsLink}>
-                정산 화면 보기
-              </Link>
+              {contextualSharedTransactionCount ? (
+                <Link className="btn btn-outline-primary btn-sm" to={settlementsLink}>
+                  정산 화면 보기
+                </Link>
+              ) : null}
               <Link className="btn btn-outline-secondary btn-sm" to="/">
                 대시보드 보기
               </Link>

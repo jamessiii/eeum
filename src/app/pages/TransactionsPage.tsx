@@ -739,9 +739,11 @@ export function TransactionsPage() {
                         무태그 {untaggedCount}건 정리
                       </button>
                     ) : null}
-                    <Link className="btn btn-outline-primary btn-sm" to={getSettlementsLink()}>
-                      정산 화면 보기
-                    </Link>
+                    {sharedExpenseCount ? (
+                      <Link className="btn btn-outline-primary btn-sm" to={getSettlementsLink()}>
+                        정산 화면 보기
+                      </Link>
+                    ) : null}
                     <Link className="btn btn-outline-secondary btn-sm" to="/">
                       대시보드 보기
                     </Link>

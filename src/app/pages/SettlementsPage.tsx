@@ -223,7 +223,7 @@ export function SettlementsPage() {
             to={appendCurrentTransactionFilters(visibleSharedTransactionCount ? "/transactions?nature=shared" : "/transactions")}
             className="btn btn-outline-secondary btn-sm"
           >
-            {visibleSharedTransactionCount ? "공동지출 거래 보기" : "거래 화면 보기"}
+            {visibleSharedTransactionCount ? "공동지출 거래 보기" : hasScopedSettlementContext ? "현재 맥락 거래 보기" : "거래 화면 보기"}
           </Link>
         </div>
         {activeSettlementFilterSummary ? (
