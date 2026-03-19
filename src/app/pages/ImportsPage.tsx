@@ -161,6 +161,14 @@ export function ImportsPage() {
           : "거래 화면 보기"
     : "거래 화면 보기";
 
+  const commitPreviewAndMoveNext = () => {
+    if (!previewBundle) return;
+    commitImportedBundle(previewBundle, previewFileName);
+    setPreviewBundle(null);
+    setPreviewFileName("");
+    void navigate(previewPostImportPath);
+  };
+
   return (
     <div className="page-stack">
       <section className="card shadow-sm" style={getMotionStyle(0)}>
@@ -251,9 +259,9 @@ export function ImportsPage() {
                 <strong>{previewNextAction.title}</strong>
                 <p className="mb-0 text-secondary">{previewNextAction.description}</p>
               </div>
-              <Link to={previewPostImportPath} className="btn btn-outline-secondary btn-sm">
-                업로드 후 {previewPostImportLabel}
-              </Link>
+              <button className="btn btn-outline-secondary btn-sm" type="button" onClick={commitPreviewAndMoveNext}>
+                매핑 확인 후 {previewPostImportLabel}
+              </button>
             </div>
           ) : null}
           <div className="classification-flow-grid">
@@ -494,16 +502,7 @@ export function ImportsPage() {
           </div>
 
           <div className="d-flex flex-wrap gap-2 mt-4">
-            <button
-              className="btn btn-primary"
-              type="button"
-              onClick={() => {
-                commitImportedBundle(previewBundle, previewFileName);
-                setPreviewBundle(null);
-                setPreviewFileName("");
-                void navigate(previewPostImportPath);
-              }}
-            >
+            <button className="btn btn-primary" type="button" onClick={commitPreviewAndMoveNext}>
               매핑 확인 후 가져오기
             </button>
             <button

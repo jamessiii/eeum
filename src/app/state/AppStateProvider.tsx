@@ -150,15 +150,17 @@ function createAccountDraft(input: string | Partial<AccountDraft>, institutionNa
     };
   }
 
+  const isShared = input.isShared ?? false;
+
   return {
-    ownerPersonId: input.ownerPersonId ?? null,
+    ownerPersonId: isShared ? null : input.ownerPersonId ?? null,
     name: String(input.name ?? "").trim(),
     alias: String(input.alias ?? "").trim(),
     institutionName: String(input.institutionName ?? "").trim() || "직접입력",
     accountNumberMasked: String(input.accountNumberMasked ?? "").trim(),
     accountType: input.accountType ?? "checking",
-    usageType: input.usageType ?? (input.isShared ? "shared" : "daily"),
-    isShared: input.isShared ?? false,
+    usageType: isShared ? "shared" : input.usageType ?? "daily",
+    isShared,
     memo: String(input.memo ?? "").trim(),
   };
 }
@@ -393,6 +395,7 @@ function applyReviewSuggestionToTransactions(transactions: Transaction[], review
           status: "cancelled" as const,
           isExpenseImpact: false,
           isSharedExpense: false,
+          isInternalTransfer: false,
         };
       case "refund_candidate":
         return {
@@ -402,6 +405,7 @@ function applyReviewSuggestionToTransactions(transactions: Transaction[], review
           isExpenseImpact: false,
           isSharedExpense: false,
           isInternalTransfer: false,
+          categoryId: null,
           refundOfTransactionId: relatedTransactionId,
         };
       case "internal_transfer_candidate":

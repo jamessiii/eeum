@@ -326,12 +326,18 @@ export function SettlementsPage() {
                       <div className="review-card-side">
                         <strong>{formatCurrency(transaction.amount)}</strong>
                         {transaction.cardId ? (
-                          <Link to={getTransactionListLink({ sourceType: "card", ownerPersonId: transaction.ownerPersonId })} className="btn btn-outline-secondary btn-sm">
+                          <Link
+                            to={getTransactionListLink({ nature: "shared", sourceType: "card", ownerPersonId: transaction.ownerPersonId })}
+                            className="btn btn-outline-secondary btn-sm"
+                          >
                             카드 거래 보기
                           </Link>
                         ) : null}
                         {transaction.accountId ? (
-                          <Link to={getTransactionListLink({ sourceType: "account", ownerPersonId: transaction.ownerPersonId })} className="btn btn-outline-secondary btn-sm">
+                          <Link
+                            to={getTransactionListLink({ nature: "shared", sourceType: "account", ownerPersonId: transaction.ownerPersonId })}
+                            className="btn btn-outline-secondary btn-sm"
+                          >
                             계좌 거래 보기
                           </Link>
                         ) : null}
