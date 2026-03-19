@@ -7,7 +7,7 @@ import {
   isActiveInternalTransferTransaction,
 } from "../transactions/meta";
 import { getSourceTypeLabel } from "../transactions/sourceTypes";
-import { getSourceBreakdown } from "../transactions/sourceBreakdown";
+import { getDominantSourceBreakdown, getSourceBreakdown } from "../transactions/sourceBreakdown";
 import { getOpenReviewCount } from "../workspace/health";
 
 export type InsightTone = "stable" | "caution" | "warning";
@@ -350,12 +350,7 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
   const topCategories = summarizeCategories(expenseTransactions, categories);
   const topTags = summarizeTags(expenseTransactions, tags);
   const sourceBreakdown = getSourceBreakdown(transactions);
-  const dominantSource = sourceBreakdown[0]
-    ? {
-        ...sourceBreakdown[0],
-        share: sourceBreakdown[0].count / Math.max(1, metrics.transactionCount),
-      }
-    : null;
+  const dominantSource = getDominantSourceBreakdown(sourceBreakdown, metrics.transactionCount);
 
   return {
     month: baseMonth,

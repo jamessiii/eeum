@@ -3,7 +3,7 @@ import type { AppState } from "../../shared/types/models";
 import { getWorkspaceScope } from "../../app/state/selectors";
 import { isDiagnosisReady } from "../insights/diagnosisReady";
 import { getJourneyProgress } from "../journey/progress";
-import { getSourceBreakdown } from "../transactions/sourceBreakdown";
+import { getDominantSourceBreakdown, getSourceBreakdown } from "../transactions/sourceBreakdown";
 import { getSourceTypeLabel } from "../transactions/sourceTypes";
 import { getWorkspaceHealthSummary } from "../workspace/health";
 
@@ -30,9 +30,9 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
   const monthlyIncome = scope.financialProfile?.monthlyNetIncome ?? 0;
   const hasImportedData = scope.imports.length > 0;
   const hasTransactions = scope.transactions.length > 0;
-  const sourceBreakdown = getSourceBreakdown(scope.transactions).sort((a, b) => b.count - a.count);
-  const dominantSource = sourceBreakdown[0] ?? null;
-  const dominantSourceShare = dominantSource ? dominantSource.count / Math.max(1, scope.transactions.length) : 0;
+  const sourceBreakdown = getSourceBreakdown(scope.transactions);
+  const dominantSource = getDominantSourceBreakdown(sourceBreakdown, scope.transactions.length);
+  const dominantSourceShare = dominantSource?.share ?? 0;
   const dominantSourceLabel = dominantSource ? getSourceTypeLabel(dominantSource.sourceType) : null;
   const readyForInsights =
     recurringSuggestions.length === 0 &&
