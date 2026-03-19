@@ -548,6 +548,16 @@ export function TransactionsPage() {
             kicker="거래 없음"
             title="아직 입력된 거래가 없습니다"
             description="업로드 화면에서 엑셀을 가져오거나, 위 수동 입력 폼으로 첫 거래를 넣으면 검토와 통계가 시작됩니다."
+            actions={
+              <>
+                <Link to="/imports" className="btn btn-outline-primary btn-sm">
+                  업로드 화면 보기
+                </Link>
+                <Link to="/people" className="btn btn-outline-secondary btn-sm">
+                  사람 관리 보기
+                </Link>
+              </>
+            }
           />
         ) : (
           <>

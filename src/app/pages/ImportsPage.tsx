@@ -517,9 +517,14 @@ export function ImportsPage() {
             title="아직 업로드한 파일이 없습니다"
             description="워크북을 업로드하면 이 화면에서 어떤 파일을 언제 가져왔는지 계속 확인할 수 있습니다."
             actions={
-              <Link to="/people" className="btn btn-outline-secondary btn-sm">
-                사람 관리 먼저 보기
-              </Link>
+              <>
+                <Link to="/people" className="btn btn-outline-secondary btn-sm">
+                  사람 관리 먼저 보기
+                </Link>
+                <Link to="/accounts" className="btn btn-outline-primary btn-sm">
+                  계좌 관리 보기
+                </Link>
+              </>
             }
           />
         ) : (
@@ -549,11 +554,11 @@ export function ImportsPage() {
                     <div className="d-flex flex-wrap gap-2 justify-content-end">
                       {item.reviewCount > 0 ? (
                         <Link to="/reviews" className="btn btn-sm btn-outline-secondary">
-                          리뷰 보기
+                          리뷰 {item.reviewCount}건 보기
                         </Link>
                       ) : null}
                       <Link to="/transactions" className="btn btn-sm btn-outline-primary">
-                      가져온 거래 보기
+                        가져온 거래 보기
                       </Link>
                     </div>
                   </div>

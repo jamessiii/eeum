@@ -299,6 +299,9 @@ export function DashboardPage() {
                 <Link to="/transactions" className="btn btn-outline-primary btn-sm">
                   거래 화면 보기
                 </Link>
+                <Link to="/imports" className="btn btn-outline-secondary btn-sm">
+                  업로드 기록 보기
+                </Link>
                 <Link to="/settlements" className="btn btn-outline-secondary btn-sm">
                   정산 화면 보기
                 </Link>
