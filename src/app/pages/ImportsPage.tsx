@@ -91,8 +91,8 @@ export function ImportsPage() {
 
         return {
           ...transaction,
-          ownerPersonId: patch.ownerPersonId ?? transaction.ownerPersonId,
-          accountId: patch.linkedAccountId ?? transaction.accountId,
+          ownerPersonId: patch.ownerPersonId !== undefined ? patch.ownerPersonId : transaction.ownerPersonId,
+          accountId: patch.linkedAccountId !== undefined ? patch.linkedAccountId : transaction.accountId,
         };
       });
 
@@ -338,10 +338,11 @@ export function ImportsPage() {
                   onSubmit={(event) => {
                     event.preventDefault();
                     const formData = new FormData(event.currentTarget);
+                    const isShared = formData.get("isShared") === "on";
                     applyPreviewAccountPatch(account.id, {
                       name: String(formData.get("name") ?? "").trim(),
                       alias: String(formData.get("alias") ?? "").trim(),
-                      ownerPersonId: String(formData.get("ownerPersonId") ?? "") || null,
+                      ownerPersonId: isShared ? null : String(formData.get("ownerPersonId") ?? "") || null,
                       usageType: String(formData.get("usageType") ?? "daily") as
                         | "daily"
                         | "salary"
@@ -351,7 +352,7 @@ export function ImportsPage() {
                         | "investment"
                         | "loan"
                         | "other",
-                      isShared: formData.get("isShared") === "on",
+                      isShared,
                     });
                   }}
                 >
