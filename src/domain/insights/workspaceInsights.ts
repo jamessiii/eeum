@@ -321,7 +321,7 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
   );
 
   const context: WorkspaceContext = {
-    transactions,
+    transactions: activeTransactions,
     reviews,
     categories,
     tags,
