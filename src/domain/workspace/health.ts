@@ -1,4 +1,5 @@
 import type { WorkspaceScope } from "../../app/state/selectors";
+import { getOpenReviews } from "../reviews/summary";
 import { getExpenseImpactStats } from "../transactions/expenseImpactStats";
 
 export interface WorkspaceHealthSummary {
@@ -13,11 +14,11 @@ export interface WorkspaceHealthSummary {
 }
 
 export function getOpenReviewCount(reviews: Pick<WorkspaceScope, "reviews">["reviews"]) {
-  return reviews.reduce((count, review) => count + Number(review.status === "open"), 0);
+  return getOpenReviews(reviews).length;
 }
 
 export function getWorkspaceHealthSummary(scope: Pick<WorkspaceScope, "transactions" | "reviews">): WorkspaceHealthSummary {
-  const openReviews = scope.reviews.filter((item) => item.status === "open");
+  const openReviews = getOpenReviews(scope.reviews);
   const openReviewCount = getOpenReviewCount(scope.reviews);
   const stats = getExpenseImpactStats(scope.transactions);
 

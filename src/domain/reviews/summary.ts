@@ -25,11 +25,15 @@ export function getSortedReviewTypeSummary(reviews: ReviewItem[]) {
   return Object.entries(getReviewTypeCounts(reviews)).sort((a, b) => b[1] - a[1]);
 }
 
+export function getOpenReviews(reviews: ReviewItem[]) {
+  return reviews.filter((review) => review.status === "open");
+}
+
 export function getReviewSummary(
   reviews: ReviewItem[],
   transactionMap: Map<string, Transaction>,
 ): ReviewSummary {
-  const openReviews: ReviewItem[] = [];
+  const openReviews = getOpenReviews(reviews);
   const resolvedReviews: ReviewItem[] = [];
   const dismissedReviews: ReviewItem[] = [];
   const sourceTypeReviewCounts = SOURCE_TYPE_OPTIONS.reduce<Record<(typeof SOURCE_TYPE_OPTIONS)[number], number>>(
@@ -42,8 +46,6 @@ export function getReviewSummary(
 
   for (const review of reviews) {
     if (review.status === "open") {
-      openReviews.push(review);
-
       const sourceType = transactionMap.get(review.primaryTransactionId)?.sourceType;
       if (sourceType) {
         sourceTypeReviewCounts[sourceType] += 1;
