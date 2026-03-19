@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useState } from "react";
 import { getCardUsageSummary } from "../../domain/assets/usageSummary";
 import { getActiveTransactions } from "../../domain/transactions/meta";
 import { formatCurrency } from "../../shared/utils/format";
@@ -17,6 +18,8 @@ const CARD_TYPE_OPTIONS = [
 
 export function CardsPage() {
   const { addCard, state, updateCard } = useAppState();
+  const [createLinkedAccountId, setCreateLinkedAccountId] = useState("");
+  const [linkedAccountDraftByCard, setLinkedAccountDraftByCard] = useState<Record<string, string>>({});
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const cards = scope.cards;
@@ -61,6 +64,7 @@ export function CardsPage() {
             addCard(workspaceId, values);
 
             event.currentTarget.reset();
+            setCreateLinkedAccountId("");
           }}
         >
           <label>
@@ -84,7 +88,12 @@ export function CardsPage() {
           </label>
           <label>
             연결 계좌
-            <select name="linkedAccountId" className="form-select" defaultValue="">
+            <select
+              name="linkedAccountId"
+              className="form-select"
+              value={createLinkedAccountId}
+              onChange={(event) => setCreateLinkedAccountId(event.target.value)}
+            >
               <option value="">연결 안 함</option>
               {scope.accounts.map((account) => (
                 <option key={account.id} value={account.id}>
@@ -94,6 +103,11 @@ export function CardsPage() {
               ))}
             </select>
           </label>
+          {createLinkedAccountId && accountSharedMap.get(createLinkedAccountId) ? (
+            <div className="small text-secondary" style={{ gridColumn: "1 / -1" }}>
+              공동 계좌에 연결된 카드라서 결제 흐름이 공동 자금 기준으로 이어집니다.
+            </div>
+          ) : null}
           <label>
             카드 종류
             <select name="cardType" className="form-select" defaultValue="credit">
@@ -148,6 +162,7 @@ export function CardsPage() {
           <div className="resource-grid">
             {cards.map((card, index) => {
               const usage = getCardUsageSummary(transactions, card.id);
+              const selectedLinkedAccountId = linkedAccountDraftByCard[card.id] ?? card.linkedAccountId ?? "";
 
               return (
                 <article key={card.id} className="resource-card" style={getMotionStyle(index + 2)}>
@@ -157,8 +172,8 @@ export function CardsPage() {
                       <p className="mb-1 text-secondary">{card.issuerName}</p>
                       <p className="mb-0 text-secondary">
                         {personMap.get(card.ownerPersonId ?? "") ?? "미지정"} · 결제{" "}
-                        {card.linkedAccountId
-                          ? `${accountSharedMap.get(card.linkedAccountId) ? "공동 계좌 " : ""}${accountMap.get(card.linkedAccountId) ?? "-"}`
+                        {selectedLinkedAccountId
+                          ? `${accountSharedMap.get(selectedLinkedAccountId) ? "공동 계좌 " : ""}${accountMap.get(selectedLinkedAccountId) ?? "-"}`
                           : "미연결"} · 사용 {formatCurrency(usage.expenseAmount)}
                       </p>
                     </div>
@@ -198,7 +213,17 @@ export function CardsPage() {
                     </label>
                     <label>
                       연결 계좌
-                      <select name="linkedAccountId" className="form-select" defaultValue={card.linkedAccountId ?? ""}>
+                      <select
+                        name="linkedAccountId"
+                        className="form-select"
+                        value={selectedLinkedAccountId}
+                        onChange={(event) =>
+                          setLinkedAccountDraftByCard((current) => ({
+                            ...current,
+                            [card.id]: event.target.value,
+                          }))
+                        }
+                      >
                         <option value="">연결 안 함</option>
                         {scope.accounts.map((account) => (
                           <option key={account.id} value={account.id}>
@@ -208,7 +233,7 @@ export function CardsPage() {
                         ))}
                       </select>
                     </label>
-                    {card.linkedAccountId && accountSharedMap.get(card.linkedAccountId) ? (
+                    {selectedLinkedAccountId && accountSharedMap.get(selectedLinkedAccountId) ? (
                       <div className="small text-secondary" style={{ gridColumn: "1 / -1" }}>
                         공동 계좌에 연결된 카드라서 결제 흐름이 공동 자금 기준으로 이어집니다.
                       </div>

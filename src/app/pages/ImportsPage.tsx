@@ -27,6 +27,7 @@ export function ImportsPage() {
   const [previewBundle, setPreviewBundle] = useState<WorkspaceBundle | null>(null);
   const [previewFileName, setPreviewFileName] = useState("");
   const [isPreparingPreview, setIsPreparingPreview] = useState(false);
+  const [previewLinkedAccountDraftByCard, setPreviewLinkedAccountDraftByCard] = useState<Record<string, string>>({});
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const activeWorkspace = state.workspaces.find((workspace) => workspace.id === workspaceId) ?? null;
@@ -191,6 +192,7 @@ export function ImportsPage() {
     commitImportedBundle(previewBundle, previewFileName);
     setPreviewBundle(null);
     setPreviewFileName("");
+    setPreviewLinkedAccountDraftByCard({});
     void navigate(previewPostImportPath);
   };
 
@@ -254,6 +256,7 @@ export function ImportsPage() {
                 const bundle = await previewWorkbookImport(file);
                 setPreviewBundle(bundle);
                 setPreviewFileName(file.name);
+                setPreviewLinkedAccountDraftByCard({});
               } finally {
                 setIsPreparingPreview(false);
                 event.currentTarget.value = "";
@@ -469,13 +472,16 @@ export function ImportsPage() {
             </div>
           </div>
           <div className="resource-grid">
-            {previewBundle.cards.map((card, index) => (
-              <article key={card.id} className="resource-card" style={getMotionStyle(index + 6)}>
+            {previewBundle.cards.map((card, index) => {
+              const selectedLinkedAccountId = previewLinkedAccountDraftByCard[card.id] ?? card.linkedAccountId ?? "";
+
+              return (
+                <article key={card.id} className="resource-card" style={getMotionStyle(index + 6)}>
                 <h3>{card.name}</h3>
                 <p className="mb-0 text-secondary">
                   {card.issuerName} · 소유자 {previewPeopleMap.get(card.ownerPersonId ?? "") ?? "미지정"} · 결제{" "}
-                  {card.linkedAccountId
-                    ? `${previewAccountSharedMap.get(card.linkedAccountId) ? "공동 계좌 " : ""}${previewAccountsMap.get(card.linkedAccountId) ?? "-"}`
+                  {selectedLinkedAccountId
+                    ? `${previewAccountSharedMap.get(selectedLinkedAccountId) ? "공동 계좌 " : ""}${previewAccountsMap.get(selectedLinkedAccountId) ?? "-"}`
                     : "미연결"}
                 </p>
                 <form
@@ -511,9 +517,19 @@ export function ImportsPage() {
                       ))}
                     </select>
                   </label>
-                  <label>
-                    결제 계좌
-                    <select name="linkedAccountId" className="form-select" defaultValue={card.linkedAccountId ?? ""}>
+                    <label>
+                      결제 계좌
+                    <select
+                      name="linkedAccountId"
+                      className="form-select"
+                      value={selectedLinkedAccountId}
+                      onChange={(event) =>
+                        setPreviewLinkedAccountDraftByCard((current) => ({
+                          ...current,
+                          [card.id]: event.target.value,
+                        }))
+                      }
+                    >
                       <option value="">연결 안 함</option>
                       {previewBundle.accounts.map((account) => (
                         <option key={account.id} value={account.id}>
@@ -523,7 +539,7 @@ export function ImportsPage() {
                       ))}
                     </select>
                   </label>
-                  {card.linkedAccountId && previewAccountSharedMap.get(card.linkedAccountId) ? (
+                  {selectedLinkedAccountId && previewAccountSharedMap.get(selectedLinkedAccountId) ? (
                     <div className="small text-secondary" style={{ gridColumn: "1 / -1" }}>
                       공동 계좌에 연결된 카드라서 가져온 뒤에도 결제 흐름이 공동 자금 기준으로 이어집니다.
                     </div>
@@ -545,7 +561,8 @@ export function ImportsPage() {
                   </div>
                 </form>
               </article>
-            ))}
+              );
+            })}
           </div>
 
           <div className="d-flex flex-wrap gap-2 mt-4">
@@ -558,6 +575,7 @@ export function ImportsPage() {
               onClick={() => {
                 setPreviewBundle(null);
                 setPreviewFileName("");
+                setPreviewLinkedAccountDraftByCard({});
               }}
             >
               미리보기 닫기
