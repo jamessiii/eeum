@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { getCardUsageSummary } from "../../domain/assets/usageSummary";
 import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
@@ -70,17 +71,14 @@ export function CardsPage() {
           <div className="resource-grid">
             {cards.map((card, index) => (
               (() => {
-                const cardTransactions = transactions.filter((item) => item.cardId === card.id);
-                const cardSpend = cardTransactions
-                  .filter((item) => item.isExpenseImpact)
-                  .reduce((sum, item) => sum + item.amount, 0);
+                const usage = getCardUsageSummary(transactions, card.id);
                 return (
                   <article key={card.id} className="resource-card" style={getMotionStyle(index + 2)}>
                     <h3>{card.name}</h3>
                     <p className="mb-1 text-secondary">{card.issuerName}</p>
                     <p className="mb-1 text-secondary">{card.cardNumberMasked || "마스킹 없음"}</p>
-                    <p className="mb-1 text-secondary">사용 거래 {cardTransactions.length}건</p>
-                    <p className="mb-1 text-secondary">누적 사용액 {formatCurrency(cardSpend)}</p>
+                    <p className="mb-1 text-secondary">사용 거래 {usage.transactionCount}건</p>
+                    <p className="mb-1 text-secondary">누적 사용액 {formatCurrency(usage.expenseAmount)}</p>
                     <p className="mb-0 text-secondary">
                       결제 계좌 {card.linkedAccountId ? accountMap.get(card.linkedAccountId) ?? "연결 안 됨" : "연결 안 됨"}
                     </p>

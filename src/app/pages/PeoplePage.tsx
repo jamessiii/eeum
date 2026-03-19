@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { getPersonUsageSummary } from "../../domain/assets/usageSummary";
 import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
@@ -66,16 +67,13 @@ export function PeoplePage() {
           <div className="resource-grid">
             {people.map((person, index) => (
               (() => {
-                const ownedTransactions = transactions.filter((item) => item.ownerPersonId === person.id);
-                const sharedExpenseAmount = ownedTransactions
-                  .filter((item) => item.isExpenseImpact && item.isSharedExpense)
-                  .reduce((sum, item) => sum + item.amount, 0);
+                const usage = getPersonUsageSummary(transactions, person.id);
                 return (
                   <article key={person.id} className="resource-card" style={getMotionStyle(index + 2)}>
                     <h3>{person.name}</h3>
                     <p className="mb-1 text-secondary">{person.role === "owner" ? "기본 사용자" : "구성원"}</p>
-                    <p className="mb-1 text-secondary">거래 {ownedTransactions.length}건</p>
-                    <p className="mb-0 text-secondary">공동지출 {formatCurrency(sharedExpenseAmount)}</p>
+                    <p className="mb-1 text-secondary">거래 {usage.transactionCount}건</p>
+                    <p className="mb-0 text-secondary">공동지출 {formatCurrency(usage.sharedExpenseAmount)}</p>
                   </article>
                 );
               })()

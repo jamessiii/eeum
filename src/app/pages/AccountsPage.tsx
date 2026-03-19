@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { getAccountUsageSummary } from "../../domain/assets/usageSummary";
 import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
@@ -69,13 +70,7 @@ export function AccountsPage() {
           <div className="resource-grid">
             {accounts.map((account, index) => (
               (() => {
-                const linkedTransactions = transactions.filter(
-                  (item) => item.accountId === account.id || item.fromAccountId === account.id || item.toAccountId === account.id,
-                );
-                const expenseAmount = linkedTransactions
-                  .filter((item) => item.isExpenseImpact)
-                  .reduce((sum, item) => sum + item.amount, 0);
-                const internalTransferCount = linkedTransactions.filter((item) => item.isInternalTransfer).length;
+                const usage = getAccountUsageSummary(transactions, account.id);
                 return (
                   <article key={account.id} className="resource-card" style={getMotionStyle(index + 2)}>
                     <h3>{account.name}</h3>
@@ -83,9 +78,9 @@ export function AccountsPage() {
                     <p className="mb-1 text-secondary">
                       {account.isShared ? "공동 계좌" : "개인 계좌"} · {account.accountNumberMasked || "마스킹 없음"}
                     </p>
-                    <p className="mb-1 text-secondary">연결 거래 {linkedTransactions.length}건</p>
+                    <p className="mb-1 text-secondary">연결 거래 {usage.transactionCount}건</p>
                     <p className="mb-0 text-secondary">
-                      실지출 {formatCurrency(expenseAmount)} · 내부이체 {internalTransferCount}건
+                      실지출 {formatCurrency(usage.expenseAmount)} · 내부이체 {usage.internalTransferCount}건
                     </p>
                   </article>
                 );
