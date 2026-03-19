@@ -1,9 +1,5 @@
 import type { WorkspaceScope } from "../../app/state/selectors";
-import {
-  isActiveExpenseImpactTransaction,
-  isUncategorizedExpenseTransaction,
-  isUntaggedExpenseTransaction,
-} from "../transactions/meta";
+import { getExpenseImpactStats } from "../transactions/expenseImpactStats";
 
 export interface WorkspaceHealthSummary {
   openReviews: WorkspaceScope["reviews"];
@@ -23,33 +19,19 @@ export function getOpenReviewCount(reviews: Pick<WorkspaceScope, "reviews">["rev
 export function getWorkspaceHealthSummary(scope: Pick<WorkspaceScope, "transactions" | "reviews">): WorkspaceHealthSummary {
   const openReviews = scope.reviews.filter((item) => item.status === "open");
   const openReviewCount = getOpenReviewCount(scope.reviews);
-  const activeExpenseTransactions: WorkspaceScope["transactions"] = [];
-  const uncategorizedExpenseTransactions: WorkspaceScope["transactions"] = [];
-  const untaggedExpenseTransactions: WorkspaceScope["transactions"] = [];
-
-  for (const transaction of scope.transactions) {
-    if (!isActiveExpenseImpactTransaction(transaction)) continue;
-    activeExpenseTransactions.push(transaction);
-
-    if (isUncategorizedExpenseTransaction(transaction)) {
-      uncategorizedExpenseTransactions.push(transaction);
-    }
-    if (isUntaggedExpenseTransaction(transaction)) {
-      untaggedExpenseTransactions.push(transaction);
-    }
-  }
+  const stats = getExpenseImpactStats(scope.transactions);
 
   return {
     openReviews,
-    activeExpenseTransactions,
-    uncategorizedExpenseTransactions,
-    untaggedExpenseTransactions,
+    activeExpenseTransactions: stats.activeExpenseTransactions,
+    uncategorizedExpenseTransactions: stats.uncategorizedExpenseTransactions,
+    untaggedExpenseTransactions: stats.untaggedExpenseTransactions,
     openReviewCount,
-    uncategorizedCount: uncategorizedExpenseTransactions.length,
-    untaggedCount: untaggedExpenseTransactions.length,
+    uncategorizedCount: stats.uncategorizedCount,
+    untaggedCount: stats.untaggedCount,
     postImportReady:
       openReviewCount === 0 &&
-      uncategorizedExpenseTransactions.length === 0 &&
-      untaggedExpenseTransactions.length === 0,
+      stats.uncategorizedCount === 0 &&
+      stats.untaggedCount === 0,
   };
 }

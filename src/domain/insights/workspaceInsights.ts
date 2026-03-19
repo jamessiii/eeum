@@ -2,10 +2,8 @@ import { monthKey } from "../../shared/utils/date";
 import type { AppState, Category, FinancialProfile, ReviewItem, Tag, Transaction } from "../../shared/types/models";
 import { getRecurringMerchantSuggestionCount } from "../classification/suggestions";
 import { isDiagnosisReady } from "./diagnosisReady";
-import {
-  isActiveExpenseImpactTransaction,
-  isActiveInternalTransferTransaction,
-} from "../transactions/meta";
+import { getExpenseImpactStats } from "../transactions/expenseImpactStats";
+import { isActiveExpenseImpactTransaction } from "../transactions/meta";
 import { getSourceTypeLabel } from "../transactions/sourceTypes";
 import {
   getDominantSourceBreakdown,
@@ -70,36 +68,14 @@ function buildInsightMetrics(
   monthlyNetIncome: number,
   recurringSuggestionCount: number,
 ): InsightMetrics {
-  let expense = 0;
+  const stats = getExpenseImpactStats(transactions);
+  let expense = stats.expenseImpactAmount;
   let fixedExpense = 0;
-  let sharedExpense = 0;
-  let sharedExpenseCount = 0;
-  let internalTransferCount = 0;
-  let uncategorizedCount = 0;
-  let untaggedCount = 0;
 
-  for (const transaction of transactions) {
-    if (isActiveExpenseImpactTransaction(transaction)) {
-      const amount = Math.abs(transaction.amount);
-      expense += amount;
-
-      if (transaction.categoryId && fixedCategoryIds.has(transaction.categoryId)) {
-        fixedExpense += amount;
-      }
-      if (transaction.isSharedExpense) {
-        sharedExpense += amount;
-        sharedExpenseCount += 1;
-      }
-      if (!transaction.categoryId) {
-        uncategorizedCount += 1;
-      }
-      if (transaction.tagIds.length === 0) {
-        untaggedCount += 1;
-      }
-    }
-
-    if (isActiveInternalTransferTransaction(transaction)) {
-      internalTransferCount += 1;
+  for (const transaction of stats.activeExpenseTransactions) {
+    const amount = Math.abs(transaction.amount);
+    if (transaction.categoryId && fixedCategoryIds.has(transaction.categoryId)) {
+      fixedExpense += amount;
     }
   }
 
@@ -118,17 +94,17 @@ function buildInsightMetrics(
     savingsRate,
     fixedExpense,
     fixedExpenseRate,
-    sharedExpense,
-    sharedExpenseCount,
+    sharedExpense: stats.sharedExpenseAmount,
+    sharedExpenseCount: stats.sharedExpenseCount,
     reviewCount,
-    internalTransferCount,
-    uncategorizedCount,
-    untaggedCount,
+    internalTransferCount: stats.internalTransferCount,
+    uncategorizedCount: stats.uncategorizedCount,
+    untaggedCount: stats.untaggedCount,
     recurringSuggestionCount,
     isFinancialProfileReady: monthlyNetIncome > 0,
     isDiagnosisReady: isDiagnosisReady({
       hasTransactions: transactions.length > 0,
-      postImportReady: reviewCount === 0 && uncategorizedCount === 0 && untaggedCount === 0,
+      postImportReady: reviewCount === 0 && stats.uncategorizedCount === 0 && stats.untaggedCount === 0,
       monthlyNetIncome,
     }),
   };
