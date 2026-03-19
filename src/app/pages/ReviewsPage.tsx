@@ -284,7 +284,7 @@ export function ReviewsPage() {
             <Link className="btn btn-outline-secondary btn-sm" to="/transactions?cleanup=untagged">
               태그 정리
             </Link>
-            <Link className="btn btn-outline-dark btn-sm" to="/settlements">
+            <Link className="btn btn-outline-secondary btn-sm" to="/settlements">
               정산 화면 보기
             </Link>
           </div>
@@ -321,7 +321,7 @@ export function ReviewsPage() {
               내부이체 {openInternalTransferReviewCount}건 점검
             </Link>
           ) : null}
-          <Link className="btn btn-outline-dark btn-sm" to="/">
+          <Link className="btn btn-outline-secondary btn-sm" to="/">
             대시보드 보기
           </Link>
         </div>
@@ -354,11 +354,11 @@ export function ReviewsPage() {
                   내부이체 {openInternalTransferReviewCount}건 점검
                 </Link>
               ) : null}
-              <Link className="btn btn-outline-dark btn-sm" to="/">
-                대시보드 보기
-              </Link>
               <Link className="btn btn-outline-primary btn-sm" to="/settlements">
                 정산 화면 보기
+              </Link>
+              <Link className="btn btn-outline-secondary btn-sm" to="/">
+                대시보드 보기
               </Link>
             </>
           }
@@ -372,11 +372,11 @@ export function ReviewsPage() {
           description="중복, 환불, 내부이체, 공동지출 후보를 모두 정리했습니다. 이제 대시보드와 정산 화면의 수치를 더 믿고 볼 수 있습니다."
           actions={
             <>
-              <Link className="btn btn-outline-secondary btn-sm" to="/">
-                대시보드 보기
-              </Link>
               <Link className="btn btn-outline-primary btn-sm" to="/settlements">
                 정산 화면 보기
+              </Link>
+              <Link className="btn btn-outline-secondary btn-sm" to="/">
+                대시보드 보기
               </Link>
             </>
           }

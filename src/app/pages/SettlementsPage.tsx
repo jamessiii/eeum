@@ -217,7 +217,7 @@ export function SettlementsPage() {
                 <Link to="/imports" className="btn btn-outline-secondary btn-sm">
                   업로드 화면 보기
                 </Link>
-                <Link to="/" className="btn btn-outline-dark btn-sm">
+                <Link to="/" className="btn btn-outline-secondary btn-sm">
                   대시보드 보기
                 </Link>
               </div>

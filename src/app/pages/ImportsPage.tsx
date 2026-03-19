@@ -518,10 +518,10 @@ export function ImportsPage() {
             description="워크북을 업로드하면 이 화면에서 어떤 파일을 언제 가져왔는지 계속 확인할 수 있습니다."
             actions={
               <>
-                <Link to="/people" className="btn btn-outline-secondary btn-sm">
+                <Link to="/people" className="btn btn-outline-primary btn-sm">
                   사람 관리 먼저 보기
                 </Link>
-                <Link to="/accounts" className="btn btn-outline-primary btn-sm">
+                <Link to="/accounts" className="btn btn-outline-secondary btn-sm">
                   계좌 관리 보기
                 </Link>
               </>
@@ -536,7 +536,7 @@ export function ImportsPage() {
                   검토가 남아 있으면 리뷰로, 아니면 거래 정리 화면으로 바로 이동해서 업로드 직후 흐름을 이어가세요.
                 </p>
               </div>
-              <Link to={latestImportAction.to} className="btn btn-outline-secondary btn-sm">
+              <Link to={latestImportAction.to} className="btn btn-outline-primary btn-sm">
                 {latestImportAction.label}
               </Link>
             </div>
