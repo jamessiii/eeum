@@ -272,10 +272,9 @@ export function ReviewsPage() {
       {openReviewCount ? (
         <div className="review-summary-panel mt-3">
           <div className="review-summary-copy">
-            <strong>업로드 다음 순서</strong>
+            <strong>검토 뒤 바로 이어서 할 일</strong>
             <p className="mb-0 text-secondary">
-              검토 항목을 먼저 정리한 뒤 미분류와 무태그 거래를 마무리하면, 대시보드와 정산 화면에서 이번 달 흐름을 훨씬 안정적으로 볼 수
-              있습니다.
+              검토를 줄인 뒤 미분류와 무태그 거래만 마무리하면, 대시보드와 정산 화면을 훨씬 안정적으로 볼 수 있습니다.
             </p>
           </div>
           <div className="action-row">

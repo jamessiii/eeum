@@ -226,7 +226,7 @@ export function ImportsPage() {
           </div>
           <p className="text-secondary">
             아래에서 업로드 데이터의 사람, 계좌, 카드 연결을 먼저 맞춘 뒤 <strong>{activeWorkspace?.name ?? "현재 가계부"}</strong>에
-            가져오세요. 여기서 정리된 연결 정보가 거래 소유자와 카드 결제 계좌에도 같이 반영됩니다.
+            가져오세요. 여기서 맞춘 연결 정보는 거래 소유자와 카드 결제 계좌에도 같이 반영됩니다.
           </p>
 
           {previewNextAction ? (
@@ -263,7 +263,7 @@ export function ImportsPage() {
               <div className="review-summary-copy">
                 <strong>가져오기 전에 확인할 매핑이 남아 있습니다</strong>
                 <p className="mb-0 text-secondary">
-                  빈 매핑이 남아 있으면 거래 소유자와 결제 흐름이 일부 비어 들어올 수 있습니다. 아래 단계에서 필요한 항목만 빠르게 채워주세요.
+                  빈 매핑이 남아 있으면 거래 소유자나 결제 흐름이 비어 들어올 수 있습니다. 필요한 항목만 먼저 채워주세요.
                 </p>
               </div>
               <div className="action-row">

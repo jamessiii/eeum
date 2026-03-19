@@ -327,8 +327,8 @@ export function DashboardPage() {
             </strong>
             <p className="mb-0 text-secondary">
               {foundationRemainingCount
-                ? "사람 활성화, 계좌 소유자, 카드 결제 계좌 연결만 먼저 맞춰두면 업로드와 거래 해석이 훨씬 자연스럽게 이어집니다."
-                : "이제 업로드 데이터 연결과 거래 분류, 정산 화면에서 같은 기준으로 사람과 결제 수단을 해석할 수 있습니다."}
+                ? "사람 활성화와 계좌·카드 연결만 먼저 맞추면 업로드와 거래 해석이 훨씬 덜 흔들립니다."
+                : "이제 업로드, 거래, 정산 화면에서 사람과 결제 수단을 같은 기준으로 볼 수 있습니다."}
             </p>
           </div>
           {nextFoundationAction ? (
@@ -414,8 +414,8 @@ export function DashboardPage() {
             <strong>{isJourneyReady ? "지금은 숫자 해석과 정산 확인에 집중하면 됩니다" : "아직 남은 준비 항목부터 순서대로 정리하면 됩니다"}</strong>
             <p className="mb-0 text-secondary">
               {isJourneyReady
-                ? "기반 정보와 분류 정리가 끝난 상태라서, 이제 대시보드 해석과 공동지출 정산 흐름을 믿고 따라가기 좋습니다."
-                : `전체 ${journeyTotalCount}단계 중 ${journeyCompletedCount}단계가 준비되었습니다. 아래 단계 카드에서 막히는 항목만 먼저 채우면 됩니다.`}
+                ? "기반 정보와 분류가 정리돼서, 이제 대시보드 해석과 공동지출 정산 확인에 집중하면 됩니다."
+                : `전체 ${journeyTotalCount}단계 중 ${journeyCompletedCount}단계가 준비되었습니다. 막힌 단계만 먼저 채우면 됩니다.`}
             </p>
           </div>
           <Link to={isJourneyReady ? "/settlements" : journeySteps.find((step) => !step.completed)?.to ?? "/transactions"} className="btn btn-outline-secondary btn-sm">
@@ -460,7 +460,7 @@ export function DashboardPage() {
             <div className="review-summary-copy">
               <strong>{`현재 바로 처리하면 좋은 항목이 ${attentionItems.length}개 남아 있습니다`}</strong>
               <p className="mb-0 text-secondary">
-                준비가 덜 된 항목을 먼저 줄이면 업로드, 분류, 정산 화면이 같은 기준으로 더 안정적으로 이어집니다.
+                남은 준비 항목만 먼저 줄이면 업로드, 분류, 정산 흐름이 더 자연스럽게 이어집니다.
               </p>
             </div>
             <Link to={attentionItems[0]?.to ?? "/"} className="btn btn-outline-secondary btn-sm">
