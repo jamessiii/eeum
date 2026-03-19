@@ -286,7 +286,7 @@ export function TransactionsPage() {
 
     const ownerField = form.elements.namedItem("ownerPersonId") as HTMLSelectElement | null;
     if (sourceTypeField) sourceTypeField.value = "account";
-    if (ownerField && selectedAccount.ownerPersonId) ownerField.value = selectedAccount.ownerPersonId;
+    if (ownerField) ownerField.value = selectedAccount.ownerPersonId ?? "";
     if (cardField) cardField.value = "";
   };
 
@@ -301,8 +301,8 @@ export function TransactionsPage() {
     }
 
     if (sourceTypeField) sourceTypeField.value = "card";
-    if (ownerField && selectedCard.ownerPersonId) ownerField.value = selectedCard.ownerPersonId;
-    if (accountField && selectedCard.linkedAccountId) accountField.value = selectedCard.linkedAccountId;
+    if (ownerField) ownerField.value = selectedCard.ownerPersonId ?? "";
+    if (accountField) accountField.value = selectedCard.linkedAccountId ?? "";
   };
 
   const syncEditDraftWithSourceType = (sourceType: TransactionEditDraft["sourceType"]) => {
@@ -351,7 +351,7 @@ export function TransactionsPage() {
       sourceType: "card",
       cardId,
       ownerPersonId: selectedCard.ownerPersonId ?? "",
-      accountId: selectedCard.linkedAccountId ?? editDraft.accountId,
+      accountId: selectedCard.linkedAccountId ?? "",
     });
   };
 
