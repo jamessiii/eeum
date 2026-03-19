@@ -47,14 +47,14 @@ export function AppGuidePanel() {
           <p className="guide-panel-copy">
             {currentStep
               ? currentStep.tips[0] ?? currentStep.description
-              : "이제 필요한 화면만 오가며 계속 데이터를 다듬으면 됩니다."}
+              : "이제 필요한 화면만 이어서 보면 됩니다."}
           </p>
           <div className="small text-secondary">
             {currentStep
               ? upcomingSteps.length > 1
-                ? `다음 단계: ${upcomingSteps[1]?.title}`
+                ? `다음: ${upcomingSteps[1]?.title}`
                 : `${formatPercent(journeyProgress.progress)} 진행`
-              : "가이드는 필요할 때만 다시 떠오릅니다."}
+              : "필요할 때만 다시 뜹니다."}
           </div>
         </div>
         {currentStep ? (

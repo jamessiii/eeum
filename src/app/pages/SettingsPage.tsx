@@ -44,11 +44,11 @@ export function SettingsPage() {
           <div className="section-head">
             <div>
               <span className="section-kicker">백업 / 복원</span>
-              <h2 className="section-title">서버리스 데이터 이동</h2>
+              <h2 className="section-title">데이터 백업</h2>
             </div>
           </div>
           <div className="settings-compact-copy">
-            <p className="text-secondary mb-0">현재 워크스페이스 전체를 JSON으로 백업하거나 다른 기기 데이터로 복원합니다.</p>
+            <p className="text-secondary mb-0">현재 워크스페이스를 JSON으로 내보내거나 복원합니다.</p>
           </div>
           <div className="d-flex flex-wrap gap-2">
             <button className="btn btn-primary" onClick={() => exportState()}>
@@ -78,14 +78,14 @@ export function SettingsPage() {
           <div className="section-head">
             <div>
               <span className="section-kicker">앱 관리</span>
-              <h2 className="section-title">테스트와 초기화</h2>
+              <h2 className="section-title">초기화와 상태 확인</h2>
             </div>
           </div>
           {!profile?.monthlyNetIncome ? (
             <EmptyStateCallout
               kicker="기준선 필요"
               title="먼저 월 수입을 입력해주세요"
-              description="기준값을 먼저 넣어두면 대시보드와 정산 경고가 더 정확하게 동작합니다."
+              description="기준값부터 넣으면 진단이 더 정확해집니다."
             />
           ) : (
             <div className="settings-compact-copy">
@@ -112,13 +112,13 @@ export function SettingsPage() {
     }
 
     return (
-      <section className="card shadow-sm">
-        <div className="section-head">
-          <div>
-            <span className="section-kicker">재무 기준값</span>
-            <h2 className="section-title">월 수입과 경고 기준</h2>
+        <section className="card shadow-sm">
+          <div className="section-head">
+            <div>
+              <span className="section-kicker">재무 기준값</span>
+            <h2 className="section-title">월 수입과 경고선</h2>
+            </div>
           </div>
-        </div>
         <div className="settings-summary-row">
           <article className="resource-card">
             <h3>월 순수입</h3>
@@ -189,7 +189,7 @@ export function SettingsPage() {
           <CompletionBanner
             className="mt-4"
             title="기준값 저장이 끝났습니다"
-            description="다음에는 거래나 정산 화면에서 이번 달 흐름을 바로 확인하면 됩니다."
+            description="이제 거래나 정산에서 바로 확인하면 됩니다."
             actions={
               <>
                 <Link to="/settlements" className="btn btn-outline-primary btn-sm">
@@ -212,7 +212,7 @@ export function SettingsPage() {
         <div className="section-head">
           <div>
             <span className="section-kicker">설정</span>
-            <h2 className="section-title">기본 세팅과 관리</h2>
+            <h2 className="section-title">기본 설정</h2>
           </div>
         </div>
         <div className="settings-tab-strip">

@@ -12,7 +12,7 @@ export function CompletionBanner({ title, description, actions, className = "" }
 
   return (
     <div className={classes}>
-      <strong>{title}</strong>
+      <strong className="completion-title">{title}</strong>
       <p className="mb-0 text-secondary">{description}</p>
       {actions ? <div className="completion-actions">{actions}</div> : null}
     </div>

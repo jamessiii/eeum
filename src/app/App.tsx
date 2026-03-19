@@ -239,7 +239,7 @@ function AppFrame() {
             <button type="button" className="sidebar-brand-button" onClick={registerUnlockTap}>
               <h1>가계부 웹앱</h1>
             </button>
-            <p className="sidebar-copy">기능은 빠르게, 설명은 가볍게, 흐름은 한 번에 이어지게 정리합니다.</p>
+            <p className="sidebar-copy">빠르게 기록하고 바로 정리하는 흐름입니다.</p>
           </div>
           <div className="app-topbar-actions">
             <select
@@ -268,8 +268,7 @@ function AppFrame() {
             <span className="section-kicker">활성 워크스페이스</span>
             <h2 className="mb-0">{activeWorkspace.name}</h2>
             <p className="app-header-meta">
-              거래 {headerSummary.transactionsCount}건 · 검토 {headerSummary.openReviewCount}건 · 사람 {headerSummary.peopleCount}
-              명
+              거래 {headerSummary.transactionsCount}건 · 검토 {headerSummary.openReviewCount}건 · 사람 {headerSummary.peopleCount}명
               {latestImport ? ` · 최근 업로드 ${latestImport.importedAt.slice(0, 10)}` : ""}
             </p>
           </div>
