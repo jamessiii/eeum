@@ -1296,6 +1296,25 @@ a {
     padding: 1rem;
   }
 
+  .app-main {
+    padding: 0.85rem 1rem 5.8rem;
+  }
+
+  .hero-panel {
+    padding: 1.05rem;
+  }
+
+  .hero-panel h1,
+  .section-title {
+    margin-top: 0.45rem;
+    font-size: clamp(1.45rem, 6vw, 1.9rem);
+  }
+
+  .hero-copy {
+    margin-top: 0.7rem;
+    font-size: 0.96rem;
+  }
+
   .stats-grid,
   .settings-grid,
   .resource-grid,
@@ -1324,18 +1343,154 @@ a {
   }
 
   .app-topbar {
-    padding: 0.8rem 1rem 0;
+    padding: 0.6rem 0.8rem 0;
+  }
+
+  .app-topbar-main {
+    margin-bottom: 0.45rem;
+    padding: 0.78rem 0.85rem;
+    gap: 0.65rem;
+    border-radius: 1.1rem;
+  }
+
+  .app-brand-block h1 {
+    margin-top: 0.45rem;
+    font-size: 1.28rem;
+  }
+
+  .sidebar-copy {
+    display: none;
+  }
+
+  .workspace-select {
+    min-width: 0;
   }
 
   .app-top-nav {
     overflow-x: auto;
     flex-wrap: nowrap;
+    gap: 0.35rem;
+    padding: 0.34rem;
+    border-radius: 0.95rem;
+    scrollbar-width: none;
+  }
+
+  .app-top-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .app-top-nav .nav-link {
+    padding: 0.58rem 0.78rem;
+    font-size: 0.89rem;
+    white-space: nowrap;
+  }
+
+  .app-top-nav-indicator {
+    top: 0.34rem;
+    left: 0.34rem;
+    height: calc(100% - 0.68rem);
+    border-radius: 0.78rem;
+  }
+
+  .app-header {
+    gap: 0.7rem;
+    margin-bottom: 1rem;
+    padding: 0.95rem 1rem;
+    border-radius: 1.1rem;
+  }
+
+  .app-header-copy {
+    gap: 0.25rem;
+  }
+
+  .app-header-meta {
+    font-size: 0.88rem;
+  }
+
+  .app-modal-backdrop {
+    place-items: end center;
+    padding: 0.75rem;
+  }
+
+  .app-modal-dialog {
+    width: min(46rem, calc(100vw - 1rem));
+    max-height: calc(100vh - 0.75rem);
+    padding: 0.95rem;
+    border-radius: 1.2rem 1.2rem 0 0;
+  }
+
+  .app-modal-header,
+  .app-modal-footer {
+    gap: 0.7rem;
+  }
+
+  .app-modal-header {
+    align-items: flex-start;
+    margin-bottom: 0.8rem;
+  }
+
+  .app-modal-header p {
+    margin-top: 0.3rem;
+    font-size: 0.92rem;
+  }
+
+  .app-modal-close {
+    width: 2.15rem;
+    height: 2.15rem;
+    font-size: 1.05rem;
+  }
+
+  .app-modal-body {
+    gap: 0.85rem;
+  }
+
+  .app-modal-footer {
+    flex-wrap: wrap;
+  }
+
+  .app-modal-footer > .btn {
+    flex: 1 1 10rem;
+    min-width: 0;
+  }
+
+  .settings-shell-card {
+    position: static;
+    top: auto;
+  }
+
+  .settings-tab-strip {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 0.15rem;
+    scrollbar-width: none;
+  }
+
+  .settings-tab-strip::-webkit-scrollbar {
+    display: none;
+  }
+
+  .settings-tab-button {
+    flex: 0 0 auto;
+    padding: 0.62rem 0.78rem;
+    font-size: 0.9rem;
+    white-space: nowrap;
   }
 
   .floating-guide-panel {
     right: 1rem;
-    bottom: 1rem;
+    bottom: 0.85rem;
     width: calc(100vw - 2rem);
+    padding: 0.85rem 0.9rem;
+    gap: 0.7rem;
+  }
+
+  .floating-guide-body {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .floating-guide-action {
+    width: 100%;
   }
 
   .review-summary-panel .btn,
@@ -1351,20 +1506,42 @@ a {
     gap: 0.75rem;
   }
 
-  .compact-summary-panel > .btn,
-  .compact-action-row > .btn {
-    width: 100%;
+  .completion-actions,
+  .empty-state-actions,
+  .action-row,
+  .compact-action-row {
+    gap: 0.55rem;
   }
 
   .completion-actions > .btn,
   .empty-state-actions > .btn,
-  .action-row > .btn {
-    width: 100%;
+  .action-row > .btn,
+  .compact-action-row > .btn,
+  .compact-summary-panel > .btn {
+    flex: 1 1 10rem;
+    min-width: 0;
+  }
+
+  .review-summary-panel .btn,
+  .review-card .btn {
+    min-width: 0;
   }
 
   .review-card > .d-flex,
   .review-summary-panel > .d-flex {
     width: 100%;
+  }
+
+  .review-card > .d-flex,
+  .review-summary-panel > .d-flex {
+    flex-wrap: wrap;
+    gap: 0.55rem;
+  }
+
+  .review-card > .d-flex > .btn,
+  .review-summary-panel > .d-flex > .btn {
+    flex: 1 1 10rem;
+    min-width: 0;
   }
 
   .review-card-side {
@@ -1374,5 +1551,19 @@ a {
 
   .resource-card {
     min-height: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .completion-actions > .btn,
+  .empty-state-actions > .btn,
+  .action-row > .btn,
+  .compact-action-row > .btn,
+  .compact-summary-panel > .btn,
+  .review-card > .d-flex > .btn,
+  .review-summary-panel > .d-flex > .btn,
+  .app-modal-footer > .btn {
+    flex-basis: 100%;
+    width: 100%;
   }
 }
