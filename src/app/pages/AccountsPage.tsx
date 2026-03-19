@@ -60,6 +60,19 @@ export function AccountsPage() {
       memo: String(formData.get("memo") ?? "").trim(),
     };
   };
+  const syncSharedAccountForm = (form: HTMLFormElement, isShared: boolean) => {
+    const ownerField = form.elements.namedItem("ownerPersonId") as HTMLSelectElement | null;
+    const usageField = form.elements.namedItem("usageType") as HTMLSelectElement | null;
+
+    if (ownerField) {
+      ownerField.disabled = isShared;
+      if (isShared) ownerField.value = "";
+    }
+    if (usageField) {
+      usageField.disabled = isShared;
+      usageField.value = isShared ? "shared" : usageField.value === "shared" ? "daily" : usageField.value;
+    }
+  };
 
   return (
     <div className="page-stack">
@@ -132,7 +145,7 @@ export function AccountsPage() {
           </label>
           <label>
             용도
-            <select name="usageType" className="form-select" defaultValue="daily">
+            <select name="usageType" className="form-select" defaultValue={isCreatingSharedAccount ? "shared" : "daily"} disabled={isCreatingSharedAccount}>
               {ACCOUNT_USAGE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
@@ -147,7 +160,10 @@ export function AccountsPage() {
               type="checkbox"
               className="form-check-input mt-0"
               checked={isCreatingSharedAccount}
-              onChange={(event) => setIsCreatingSharedAccount(event.target.checked)}
+              onChange={(event) => {
+                setIsCreatingSharedAccount(event.target.checked);
+                syncSharedAccountForm(event.currentTarget.form!, event.target.checked);
+              }}
             />
           </label>
           <label style={{ gridColumn: "1 / -1" }}>
@@ -274,7 +290,13 @@ export function AccountsPage() {
                     </label>
                     <label className="compact-check">
                       <span className="fw-semibold">공동 자금 계좌</span>
-                      <input name="isShared" type="checkbox" className="form-check-input mt-0" defaultChecked={account.isShared} />
+                      <input
+                        name="isShared"
+                        type="checkbox"
+                        className="form-check-input mt-0"
+                        defaultChecked={account.isShared}
+                        onChange={(event) => syncSharedAccountForm(event.currentTarget.form!, event.target.checked)}
+                      />
                     </label>
                     <label style={{ gridColumn: "1 / -1" }}>
                       메모

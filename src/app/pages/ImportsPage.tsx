@@ -87,6 +87,19 @@ export function ImportsPage() {
       };
     });
   };
+  const syncPreviewSharedAccountForm = (form: HTMLFormElement, isShared: boolean) => {
+    const ownerField = form.elements.namedItem("ownerPersonId") as HTMLSelectElement | null;
+    const usageField = form.elements.namedItem("usageType") as HTMLSelectElement | null;
+
+    if (ownerField) {
+      ownerField.disabled = isShared;
+      if (isShared) ownerField.value = "";
+    }
+    if (usageField) {
+      usageField.disabled = isShared;
+      usageField.value = isShared ? "shared" : usageField.value === "shared" ? "daily" : usageField.value;
+    }
+  };
 
   const applyPreviewCardPatch = (
     cardId: string,
@@ -431,7 +444,13 @@ export function ImportsPage() {
                   </label>
                   <label className="compact-check" style={{ gridColumn: "1 / -1" }}>
                     <span className="fw-semibold">공동 자금 계좌</span>
-                    <input name="isShared" type="checkbox" className="form-check-input mt-0" defaultChecked={account.isShared} />
+                    <input
+                      name="isShared"
+                      type="checkbox"
+                      className="form-check-input mt-0"
+                      defaultChecked={account.isShared}
+                      onChange={(event) => syncPreviewSharedAccountForm(event.currentTarget.form!, event.target.checked)}
+                    />
                   </label>
                   <div className="d-flex justify-content-end" style={{ gridColumn: "1 / -1" }}>
                     <button className="btn btn-outline-primary btn-sm" type="submit">

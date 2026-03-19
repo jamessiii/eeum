@@ -325,23 +325,26 @@ export function TransactionsPage() {
   const syncFormWithSourceType = (form: HTMLFormElement, sourceType: TransactionEditDraft["sourceType"]) => {
     const accountField = form.elements.namedItem("accountId") as HTMLSelectElement | null;
     const cardField = form.elements.namedItem("cardId") as HTMLSelectElement | null;
+    const ownerField = form.elements.namedItem("ownerPersonId") as HTMLSelectElement | null;
 
     if (sourceType === "manual") {
       if (accountField) accountField.value = "";
       if (cardField) cardField.value = "";
+      if (ownerField) ownerField.disabled = false;
       return;
     }
 
     if (sourceType === "account") {
-      const ownerField = form.elements.namedItem("ownerPersonId") as HTMLSelectElement | null;
       if (cardField) cardField.value = "";
-      if (ownerField) ownerField.value = accountField?.value
-        ? (() => {
-            const selectedAccount = accounts.find((account) => account.id === accountField.value);
-            return selectedAccount?.isShared ? "" : selectedAccount?.ownerPersonId ?? "";
-          })()
-        : "";
+      if (ownerField) {
+        const selectedAccount = accountField?.value ? accounts.find((account) => account.id === accountField.value) : null;
+        ownerField.disabled = Boolean(selectedAccount?.isShared);
+        ownerField.value = selectedAccount?.isShared ? "" : selectedAccount?.ownerPersonId ?? "";
+      }
+      return;
     }
+
+    if (ownerField) ownerField.disabled = false;
   };
 
   const syncFormWithAccount = (form: HTMLFormElement, accountId: string) => {
@@ -351,12 +354,18 @@ export function TransactionsPage() {
     const ownerField = form.elements.namedItem("ownerPersonId") as HTMLSelectElement | null;
     if (!selectedAccount) {
       if (sourceTypeField?.value === "account") sourceTypeField.value = "manual";
-      if (ownerField) ownerField.value = "";
+      if (ownerField) {
+        ownerField.disabled = false;
+        ownerField.value = "";
+      }
       return;
     }
 
     if (sourceTypeField) sourceTypeField.value = "account";
-    if (ownerField) ownerField.value = selectedAccount.isShared ? "" : selectedAccount.ownerPersonId ?? "";
+    if (ownerField) {
+      ownerField.disabled = selectedAccount.isShared;
+      ownerField.value = selectedAccount.isShared ? "" : selectedAccount.ownerPersonId ?? "";
+    }
     if (cardField) cardField.value = "";
   };
 
@@ -367,18 +376,20 @@ export function TransactionsPage() {
     const accountField = form.elements.namedItem("accountId") as HTMLSelectElement | null;
     if (!selectedCard) {
       if (sourceTypeField?.value === "card") sourceTypeField.value = accountField?.value ? "account" : "manual";
-      if (ownerField) ownerField.value = accountField?.value
-        ? (() => {
-            const fallbackAccount = accounts.find((account) => account.id === accountField.value);
-            return fallbackAccount?.isShared ? "" : fallbackAccount?.ownerPersonId ?? "";
-          })()
-        : "";
+      if (ownerField) {
+        const fallbackAccount = accountField?.value ? accounts.find((account) => account.id === accountField.value) : null;
+        ownerField.disabled = Boolean(fallbackAccount?.isShared);
+        ownerField.value = fallbackAccount?.isShared ? "" : fallbackAccount?.ownerPersonId ?? "";
+      }
       if (accountField && !accountField.value) accountField.value = "";
       return;
     }
 
     if (sourceTypeField) sourceTypeField.value = "card";
-    if (ownerField) ownerField.value = selectedCard.ownerPersonId ?? "";
+    if (ownerField) {
+      ownerField.disabled = false;
+      ownerField.value = selectedCard.ownerPersonId ?? "";
+    }
     if (accountField) accountField.value = selectedCard.linkedAccountId ?? "";
   };
 
@@ -1126,6 +1137,10 @@ export function TransactionsPage() {
                               people={people}
                               accounts={accounts}
                               cards={cards}
+                              ownerDisabled={
+                                editDraft.sourceType === "account" &&
+                                Boolean(editDraft.accountId && accounts.find((account) => account.id === editDraft.accountId)?.isShared)
+                              }
                               saveDisabled={!editDraft.occurredAt || !editDraft.merchantName.trim() || !editDraft.amount || Number(editDraft.amount) <= 0}
                               onDraftChange={updateEditDraft}
                               onSourceTypeChange={syncEditDraftWithSourceType}

@@ -18,6 +18,7 @@ interface TransactionInlineEditorProps {
   people: Person[];
   accounts: Account[];
   cards: Card[];
+  ownerDisabled?: boolean;
   saveDisabled: boolean;
   onDraftChange: (patch: Partial<TransactionEditDraft>) => void;
   onSourceTypeChange: (sourceType: Transaction["sourceType"]) => void;
@@ -32,6 +33,7 @@ export function TransactionInlineEditor({
   people,
   accounts,
   cards,
+  ownerDisabled = false,
   saveDisabled,
   onDraftChange,
   onSourceTypeChange,
@@ -55,7 +57,7 @@ export function TransactionInlineEditor({
               </option>
             ))}
           </select>
-          <select className="form-select form-select-sm" value={draft.ownerPersonId} onChange={(event) => onDraftChange({ ownerPersonId: event.target.value })}>
+          <select className="form-select form-select-sm" value={draft.ownerPersonId} disabled={ownerDisabled} onChange={(event) => onDraftChange({ ownerPersonId: event.target.value })}>
             <option value="">사용자 선택 없음</option>
             {people.map((person) => (
               <option key={person.id} value={person.id}>
