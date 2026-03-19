@@ -201,7 +201,7 @@ export function SettlementsPage() {
                 <strong>공동지출 거래가 생기면 여기서 바로 정산 흐름이 시작됩니다</strong>
                 <p className="mb-0 text-secondary">먼저 거래 화면에서 공동지출 체크를 붙이거나, 사람 구성을 정리해 두면 정산 계산이 자연스럽게 이어집니다.</p>
               </div>
-              <div className="d-flex flex-wrap gap-2">
+              <div className="action-row">
                 <Link to="/transactions" className="btn btn-outline-primary btn-sm">
                   거래 화면 보기
                 </Link>
@@ -258,7 +258,7 @@ export function SettlementsPage() {
                       : "공동지출 참여자와 거래가 더 쌓이면 정산 방향을 자동으로 제안합니다."}
                 </p>
                 {receiver && sender ? (
-                  <div className="d-flex flex-wrap gap-2 mt-3">
+                  <div className="action-row mt-3">
                     <button
                       className="btn btn-primary btn-sm"
                       onClick={() =>
@@ -285,7 +285,7 @@ export function SettlementsPage() {
                     정산 계산에 들어간 최근 공동지출을 바로 확인할 수 있습니다. 흐름이 어색하면 먼저 공동지출 표기부터 다시 점검해보세요.
                   </p>
                 </div>
-                <div className="d-flex flex-wrap gap-2">
+                <div className="action-row">
                   <Link to="/transactions?nature=shared" className="btn btn-outline-primary btn-sm">
                     공동지출 전체 보기
                   </Link>

@@ -346,6 +346,25 @@ a {
   margin-top: 0.25rem;
 }
 
+.completion-banner {
+  display: grid;
+  gap: 0.65rem;
+  padding: 1.05rem 1.15rem;
+  border-radius: 1.05rem;
+  border: 1px solid rgba(25, 135, 84, 0.14);
+  background:
+    radial-gradient(circle at top right, rgba(25, 135, 84, 0.12), transparent 28%),
+    rgba(248, 250, 252, 0.92);
+}
+
+.completion-actions,
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.2rem;
+}
+
 .page-step-banner {
   display: grid;
   gap: 0.85rem;
@@ -891,7 +910,10 @@ a {
   }
 
   .review-summary-panel .btn,
-  .review-card .btn {
+  .review-card .btn,
+  .completion-actions .btn,
+  .empty-state-actions .btn,
+  .action-row .btn {
     white-space: normal;
   }
 
@@ -902,6 +924,12 @@ a {
 
   .compact-summary-panel > .btn,
   .compact-action-row > .btn {
+    width: 100%;
+  }
+
+  .completion-actions > .btn,
+  .empty-state-actions > .btn,
+  .action-row > .btn {
     width: 100%;
   }
 

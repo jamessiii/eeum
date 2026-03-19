@@ -593,7 +593,7 @@ export function TransactionsPage() {
                     먼저 묶고, 남은 작업이 있으면 다른 정리 모드로 이어가면 됩니다.
                   </p>
                 </div>
-                <div className="d-flex flex-wrap gap-2">
+                <div className="action-row">
                   {filters.nature === "uncategorized" && untaggedCount ? (
                     <button className="btn btn-outline-primary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, nature: "untagged" }))}>
                       무태그 정리로 이어가기
@@ -651,7 +651,7 @@ export function TransactionsPage() {
                       : "소비 통계에 바로 잡히지 않아야 하는 내부이체만 모아 보고 있습니다. 내 계좌 간 이동이나 생활비 이동이 지출로 잘못 보이지 않는지 먼저 점검하면 좋습니다."}
                   </p>
                 </div>
-                <div className="d-flex flex-wrap gap-2">
+                <div className="action-row">
                   {filters.nature === "shared" && internalTransferCount ? (
                     <button className="btn btn-outline-primary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, nature: "internal_transfer" }))}>
                       내부이체 {internalTransferCount}건 보기
@@ -686,7 +686,7 @@ export function TransactionsPage() {
                     지금 화면은 {activeOwnerName}에게 연결된 거래만 좁혀서 보고 있습니다. 정산 화면에서 넘어온 경우라면 이 사람의 공동지출 흐름을 바로 확인하는 용도입니다.
                   </p>
                 </div>
-                <div className="d-flex flex-wrap gap-2">
+                <div className="action-row">
                   <button
                     className="btn btn-outline-secondary btn-sm"
                     type="button"
@@ -715,7 +715,7 @@ export function TransactionsPage() {
                     지금 화면은 {activeSourceTypeLabel} 경로로 들어온 거래만 좁혀서 보고 있습니다. 수단별 정리 상태를 점검하거나 연결값을 수정하기 좋은 흐름입니다.
                   </p>
                 </div>
-                <div className="d-flex flex-wrap gap-2">
+                <div className="action-row">
                   <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, sourceType: "all" }))}>
                     수단 필터 해제
                   </button>

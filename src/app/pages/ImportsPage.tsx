@@ -266,7 +266,7 @@ export function ImportsPage() {
                   빈 매핑이 남아 있으면 거래 소유자와 결제 흐름이 일부 비어 들어올 수 있습니다. 아래 단계에서 필요한 항목만 빠르게 채워주세요.
                 </p>
               </div>
-              <div className="d-flex flex-wrap gap-2">
+              <div className="action-row">
                 {missingAccountOwnerCount ? <span className="badge text-bg-warning">소유자 없는 계좌 {missingAccountOwnerCount}개</span> : null}
                 {missingCardOwnerCount ? <span className="badge text-bg-warning">소유자 없는 카드 {missingCardOwnerCount}개</span> : null}
                 {missingCardLinkCount ? <span className="badge text-bg-warning">결제 계좌 없는 카드 {missingCardLinkCount}개</span> : null}
@@ -551,7 +551,7 @@ export function ImportsPage() {
                         {item.importedAt.slice(0, 19).replace("T", " ")} · 거래 {item.rowCount}건 · 검토 {item.reviewCount}건
                       </p>
                     </div>
-                    <div className="d-flex flex-wrap gap-2 justify-content-end">
+                    <div className="action-row justify-content-end">
                       {item.reviewCount > 0 ? (
                         <Link to="/reviews" className="btn btn-sm btn-outline-secondary">
                           리뷰 {item.reviewCount}건 보기

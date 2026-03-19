@@ -150,7 +150,7 @@ export function CategoriesPage() {
                   : "카테고리와 태그 정리가 모두 끝난 상태라 이제 대시보드 해석과 정산 화면을 더 믿고 볼 수 있습니다."}
             </p>
           </div>
-          <div className="d-flex flex-wrap gap-2">
+          <div className="action-row">
             {uncategorizedTransactions.length ? (
               <Link to="/transactions?cleanup=uncategorized" className="btn btn-outline-primary btn-sm">
                 미분류 {uncategorizedTransactions.length}건 정리
@@ -162,7 +162,7 @@ export function CategoriesPage() {
               </Link>
             ) : null}
             <Link to="/" className="btn btn-outline-dark btn-sm">
-              대시보드 보기
+              대시보드에서 결과 보기
             </Link>
           </div>
         </div>
