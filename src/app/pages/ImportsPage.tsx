@@ -135,6 +135,22 @@ export function ImportsPage() {
           ? "/transactions?cleanup=untagged"
           : "/transactions"
     : "/transactions";
+
+  const latestImportWorkspaceAction = latestImport
+    ? scope.reviews.some((review) => review.status === "open")
+      ? { to: "/reviews", label: `리뷰 ${scope.reviews.filter((review) => review.status === "open").length}건 확인` }
+      : scope.transactions.some((transaction) => transaction.isExpenseImpact && !transaction.categoryId)
+        ? {
+            to: "/transactions?cleanup=uncategorized",
+            label: `미분류 ${scope.transactions.filter((transaction) => transaction.isExpenseImpact && !transaction.categoryId).length}건 정리`,
+          }
+        : scope.transactions.some((transaction) => transaction.isExpenseImpact && transaction.tagIds.length === 0)
+          ? {
+              to: "/transactions?cleanup=untagged",
+              label: `무태그 ${scope.transactions.filter((transaction) => transaction.isExpenseImpact && transaction.tagIds.length === 0).length}건 정리`,
+            }
+          : latestImportAction
+    : latestImportAction;
   const previewPostImportLabel = previewBundle
     ? previewBundle.reviews.length > 0
       ? `리뷰 ${previewBundle.reviews.length}건 확인`
@@ -537,8 +553,8 @@ export function ImportsPage() {
                   검토가 남아 있으면 리뷰로, 아니면 거래 정리 화면으로 바로 이동해서 업로드 직후 흐름을 이어가세요.
                 </p>
               </div>
-              <Link to={latestImportAction.to} className="btn btn-outline-primary btn-sm">
-                {latestImportAction.label}
+              <Link to={latestImportWorkspaceAction.to} className="btn btn-outline-primary btn-sm">
+                {latestImportWorkspaceAction.label}
               </Link>
             </div>
           <div className="review-list">
