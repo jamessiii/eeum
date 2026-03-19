@@ -266,16 +266,27 @@ export function TransactionsPage() {
     accountId: string | null;
     cardId: string | null;
   }) => {
-    if (sourceType === "manual" || sourceType === "import") {
+    const resolvedSourceType =
+      sourceType === "card" && !cardId
+        ? accountId
+          ? "account"
+          : "manual"
+        : sourceType === "account" && !accountId
+          ? "manual"
+          : sourceType;
+
+    if (resolvedSourceType === "manual" || resolvedSourceType === "import") {
       return {
+        sourceType: resolvedSourceType,
         ownerPersonId: ownerPersonId ?? null,
         accountId: null,
         cardId: null,
       };
     }
 
-    if (sourceType === "account") {
+    if (resolvedSourceType === "account") {
       return {
+        sourceType: resolvedSourceType,
         ownerPersonId: ownerPersonId ?? null,
         accountId: accountId ?? null,
         cardId: null,
@@ -283,6 +294,7 @@ export function TransactionsPage() {
     }
 
     return {
+      sourceType: resolvedSourceType,
       ownerPersonId: ownerPersonId ?? null,
       accountId: accountId ?? null,
       cardId: cardId ?? null,
@@ -454,7 +466,7 @@ export function TransactionsPage() {
               occurredAt: String(formData.get("occurredAt") || ""),
               settledAt: String(formData.get("settledAt") || ""),
               transactionType: String(formData.get("transactionType") || "expense") as "expense" | "income" | "transfer" | "adjustment",
-              sourceType,
+              sourceType: normalizedConnections.sourceType,
               ownerPersonId: normalizedConnections.ownerPersonId,
               cardId: normalizedConnections.cardId,
               accountId: normalizedConnections.accountId,
@@ -1098,7 +1110,7 @@ export function TransactionsPage() {
                                   cardId: editDraft.cardId || null,
                                 });
                                 updateTransactionDetails(workspaceId, transaction.id, {
-                                  sourceType: editDraft.sourceType,
+                                  sourceType: normalizedConnections.sourceType,
                                   ownerPersonId: normalizedConnections.ownerPersonId,
                                   accountId: normalizedConnections.accountId,
                                   cardId: normalizedConnections.cardId,
