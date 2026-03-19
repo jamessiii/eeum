@@ -2,12 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   isActiveTransaction,
-  isActiveExpenseImpactTransaction,
-  isActiveInternalTransferTransaction,
-  isActiveSharedExpenseTransaction,
-  isUncategorizedExpenseTransaction,
-  isUntaggedExpenseTransaction,
 } from "../../domain/transactions/meta";
+import { getFilteredTransactions, type TransactionFilters } from "../../domain/transactions/filters";
 import { getTransactionActivitySummary } from "../../domain/transactions/transactionActivitySummary";
 import { getTransactionFilterContext } from "../../domain/transactions/transactionFilterContext";
 import { getSourceTypeCounts } from "../../domain/transactions/sourceTypeCounts";
@@ -107,7 +103,7 @@ export function TransactionsPage() {
   const cards = scope.cards;
   const accounts = scope.accounts;
 
-  const [filters, setFilters] = useState({
+  const [filters, setFilters] = useState<TransactionFilters>({
     transactionType: "all",
     sourceType: "all",
     ownerPersonId: "all",
@@ -137,32 +133,9 @@ export function TransactionsPage() {
   const [bulkTagId, setBulkTagId] = useState("");
 
   const transactions = useMemo(
-      () =>
-        scope.transactions
-          .filter((item) => (filters.transactionType === "all" ? true : item.transactionType === filters.transactionType))
-          .filter((item) => (filters.sourceType === "all" ? true : item.sourceType === filters.sourceType))
-          .filter((item) => (filters.ownerPersonId === "all" ? true : item.ownerPersonId === filters.ownerPersonId))
-        .filter((item) => (filters.status === "all" ? true : item.status === filters.status))
-        .filter((item) => {
-          if (filters.nature === "all") return true;
-          if (filters.nature === "expense") return isActiveExpenseImpactTransaction(item);
-          if (filters.nature === "shared") return isActiveSharedExpenseTransaction(item);
-          if (filters.nature === "internal_transfer") return isActiveInternalTransferTransaction(item);
-          if (filters.nature === "uncategorized") return isUncategorizedExpenseTransaction(item);
-          if (filters.nature === "untagged") return isUntaggedExpenseTransaction(item);
-          return true;
-        })
-        .filter((item) => (filters.tagId === "all" ? true : item.tagIds.includes(filters.tagId)))
-        .filter((item) => {
-          const query = filters.searchQuery.trim().toLowerCase();
-          if (!query) return true;
-          return [item.merchantName, item.description]
-            .filter(Boolean)
-            .some((value) => value.toLowerCase().includes(query));
-        })
-        .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)),
-      [filters.nature, filters.ownerPersonId, filters.searchQuery, filters.sourceType, filters.status, filters.tagId, filters.transactionType, scope.transactions],
-    );
+    () => getFilteredTransactions(scope.transactions, filters),
+    [filters, scope.transactions],
+  );
 
   const sourceTypeCounts = getSourceTypeCounts(transactions);
   const {
@@ -679,7 +652,12 @@ export function TransactionsPage() {
                 <select
                   className="form-select toolbar-select"
                   value={filters.transactionType}
-                  onChange={(event) => setFilters((current) => ({ ...current, transactionType: event.target.value }))}
+                  onChange={(event) =>
+                    setFilters((current) => ({
+                      ...current,
+                      transactionType: event.target.value as TransactionFilters["transactionType"],
+                    }))
+                  }
               >
                 <option value="all">전체 유형</option>
                 <option value="expense">지출</option>
@@ -690,7 +668,12 @@ export function TransactionsPage() {
                 <select
                   className="form-select toolbar-select"
                   value={filters.sourceType}
-                  onChange={(event) => setFilters((current) => ({ ...current, sourceType: event.target.value }))}
+                  onChange={(event) =>
+                    setFilters((current) => ({
+                      ...current,
+                      sourceType: event.target.value as TransactionFilters["sourceType"],
+                    }))
+                  }
                 >
                   <option value="all">전체 수단</option>
                   <option value="manual">수동입력</option>
@@ -713,7 +696,12 @@ export function TransactionsPage() {
               <select
                 className="form-select toolbar-select"
                 value={filters.status}
-                onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}
+                onChange={(event) =>
+                  setFilters((current) => ({
+                    ...current,
+                    status: event.target.value as TransactionFilters["status"],
+                  }))
+                }
               >
                 <option value="all">전체 상태</option>
                 <option value="active">활성</option>
@@ -723,7 +711,12 @@ export function TransactionsPage() {
               <select
                 className="form-select toolbar-select"
                 value={filters.nature}
-                onChange={(event) => setFilters((current) => ({ ...current, nature: event.target.value }))}
+                onChange={(event) =>
+                  setFilters((current) => ({
+                    ...current,
+                    nature: event.target.value as TransactionFilters["nature"],
+                  }))
+                }
               >
                 <option value="all">전체 성격</option>
                 <option value="expense">실지출만</option>
