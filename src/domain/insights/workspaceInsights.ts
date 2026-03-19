@@ -221,7 +221,7 @@ function buildNextSteps(
     nextSteps.push(`${sourceLabel} 거래가 대부분을 차지합니다. 이 수단 흐름을 먼저 점검하면 전체 데이터 정확도를 빠르게 높일 수 있습니다.`);
   }
   if (metrics.reviewCount > 0) {
-    nextSteps.push(`검토함에 ${context.reviews.filter((review) => review.status === "open").length}건이 남아 있습니다. 자동 제안을 먼저 정리해보세요.`);
+    nextSteps.push(`검토함에 ${metrics.reviewCount}건이 남아 있습니다. 자동 제안을 먼저 정리해보세요.`);
   }
   if (metrics.uncategorizedCount > 0) {
     nextSteps.push(`미분류 거래 ${metrics.uncategorizedCount}건을 정리하면 상위 지출 분석이 더 정확해집니다.`);
