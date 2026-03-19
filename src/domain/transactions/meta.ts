@@ -26,6 +26,10 @@ export function getActiveTransactions(transactions: Transaction[]) {
   return transactions.filter(isActiveTransaction);
 }
 
+export function getActiveTransactionCount(transactions: Transaction[]) {
+  return getActiveTransactions(transactions).length;
+}
+
 export function isActiveExpenseImpactTransaction(transaction: Transaction) {
   return isActiveTransaction(transaction) && transaction.isExpenseImpact;
 }

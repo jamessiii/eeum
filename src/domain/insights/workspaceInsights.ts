@@ -3,7 +3,7 @@ import type { AppState, Category, FinancialProfile, ReviewItem, Tag, Transaction
 import { getRecurringMerchantSuggestionCount } from "../classification/suggestions";
 import { isDiagnosisReady } from "./diagnosisReady";
 import { getExpenseImpactStats } from "../transactions/expenseImpactStats";
-import { getActiveTransactions, isActiveExpenseImpactTransaction } from "../transactions/meta";
+import { getActiveTransactionCount, getActiveTransactions, isActiveExpenseImpactTransaction } from "../transactions/meta";
 import { getSourceTypeLabel } from "../transactions/sourceTypes";
 import {
   getDominantSourceBreakdown,
@@ -68,7 +68,6 @@ function buildInsightMetrics(
   monthlyNetIncome: number,
   recurringSuggestionCount: number,
 ): InsightMetrics {
-  const activeTransactions = getActiveTransactions(transactions);
   const stats = getExpenseImpactStats(transactions);
   let expense = stats.expenseImpactAmount;
   let fixedExpense = 0;
@@ -87,7 +86,7 @@ function buildInsightMetrics(
   const fixedExpenseRate = monthlyNetIncome > 0 ? fixedExpense / monthlyNetIncome : 0;
 
   return {
-    transactionCount: activeTransactions.length,
+    transactionCount: getActiveTransactionCount(transactions),
     income: monthlyNetIncome,
     expense,
     savings,
@@ -104,7 +103,7 @@ function buildInsightMetrics(
     recurringSuggestionCount,
     isFinancialProfileReady: monthlyNetIncome > 0,
     isDiagnosisReady: isDiagnosisReady({
-      hasTransactions: activeTransactions.length > 0,
+      hasTransactions: getActiveTransactionCount(transactions) > 0,
       postImportReady: reviewCount === 0 && stats.uncategorizedCount === 0 && stats.untaggedCount === 0,
       monthlyNetIncome,
     }),
