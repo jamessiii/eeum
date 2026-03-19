@@ -491,7 +491,7 @@ export function SettlementsPage() {
                   description={`${activeSettlementFilterSummary} 湲곗??쇰줈??怨듬룞吏異?嫄곕옒媛 ?μ옉?섏? ?딆븯?듬땲?? ?꾩껜 ?뺤궛???ㅼ떆 蹂닿굅??嫄곕옒 ?붾㈃?먯꽌 議곌굔??醫뗭엫 寃?좊낫?몄슂.`}
                   actions={
                     <>
-                      <Link className="btn btn-outline-primary btn-sm" to="/settlements">
+                      <Link className="btn btn-outline-secondary btn-sm" to="/settlements">
                         전체 정산으로 돌아가기
                       </Link>
                       <Link className="btn btn-outline-secondary btn-sm" to={appendCurrentTransactionFilters("/transactions?nature=shared")}>

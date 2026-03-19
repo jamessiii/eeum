@@ -751,9 +751,11 @@ export function TransactionsPage() {
                         {settlementsActionLabel}
                       </Link>
                     ) : null}
-                    <Link className="btn btn-outline-secondary btn-sm" to="/">
-                      대시보드 보기
-                    </Link>
+                    {filters.sourceType === "all" && filters.ownerPersonId === "all" && filters.tagId === "all" ? (
+                      <Link className="btn btn-outline-secondary btn-sm" to="/">
+                        대시보드 보기
+                      </Link>
+                    ) : null}
                   </>
                 }
               />
@@ -892,9 +894,11 @@ export function TransactionsPage() {
                     <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters(resetTransactionCleanupFilters)}>
                       전체 거래로 돌아가기
                     </button>
-                    <Link className="btn btn-outline-secondary btn-sm" to="/">
-                      대시보드 보기
-                    </Link>
+                    {filters.sourceType === "all" && filters.ownerPersonId === "all" && filters.tagId === "all" ? (
+                      <Link className="btn btn-outline-secondary btn-sm" to="/">
+                        대시보드 보기
+                      </Link>
+                    ) : null}
                   </>
                 }
               />
