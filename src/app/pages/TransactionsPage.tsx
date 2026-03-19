@@ -593,6 +593,7 @@ export function TransactionsPage() {
             {cards.map((card) => (
               <option key={card.id} value={card.id}>
                 {card.name}
+                {card.linkedAccountId && accountSharedMap.get(card.linkedAccountId) ? " (공동 계좌)" : ""}
               </option>
             ))}
           </select>

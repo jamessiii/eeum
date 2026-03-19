@@ -30,6 +30,18 @@ const ACCOUNT_USAGE_OPTIONS = [
 export function AccountsPage() {
   const { addAccount, state, updateAccount } = useAppState();
   const [isCreatingSharedAccount, setIsCreatingSharedAccount] = useState(false);
+  const [createOwnerPersonId, setCreateOwnerPersonId] = useState("");
+  const [createUsageType, setCreateUsageType] = useState<"daily" | "salary" | "shared" | "card_payment" | "savings" | "investment" | "loan" | "other">("daily");
+  const [accountDraftById, setAccountDraftById] = useState<
+    Record<
+      string,
+      {
+        isShared?: boolean;
+        ownerPersonId?: string;
+        usageType?: "daily" | "salary" | "shared" | "card_payment" | "savings" | "investment" | "loan" | "other";
+      }
+    >
+  >({});
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const accounts = scope.accounts;
@@ -60,20 +72,6 @@ export function AccountsPage() {
       memo: String(formData.get("memo") ?? "").trim(),
     };
   };
-  const syncSharedAccountForm = (form: HTMLFormElement, isShared: boolean) => {
-    const ownerField = form.elements.namedItem("ownerPersonId") as HTMLSelectElement | null;
-    const usageField = form.elements.namedItem("usageType") as HTMLSelectElement | null;
-
-    if (ownerField) {
-      ownerField.disabled = isShared;
-      if (isShared) ownerField.value = "";
-    }
-    if (usageField) {
-      usageField.disabled = isShared;
-      usageField.value = isShared ? "shared" : usageField.value === "shared" ? "daily" : usageField.value;
-    }
-  };
-
   return (
     <div className="page-stack">
       <section className="card shadow-sm" style={getMotionStyle(0)}>
@@ -99,6 +97,8 @@ export function AccountsPage() {
 
             event.currentTarget.reset();
             setIsCreatingSharedAccount(false);
+            setCreateOwnerPersonId("");
+            setCreateUsageType("daily");
           }}
         >
           <label>
@@ -119,7 +119,13 @@ export function AccountsPage() {
           </label>
           <label>
             소유자
-            <select name="ownerPersonId" className="form-select" defaultValue="" disabled={isCreatingSharedAccount}>
+            <select
+              name="ownerPersonId"
+              className="form-select"
+              value={createOwnerPersonId}
+              disabled={isCreatingSharedAccount}
+              onChange={(event) => setCreateOwnerPersonId(event.target.value)}
+            >
               <option value="">공동 또는 미지정</option>
               {people.map((person) => (
                 <option key={person.id} value={person.id}>
@@ -145,7 +151,17 @@ export function AccountsPage() {
           </label>
           <label>
             용도
-            <select name="usageType" className="form-select" defaultValue={isCreatingSharedAccount ? "shared" : "daily"} disabled={isCreatingSharedAccount}>
+            <select
+              name="usageType"
+              className="form-select"
+              value={isCreatingSharedAccount ? "shared" : createUsageType}
+              disabled={isCreatingSharedAccount}
+              onChange={(event) =>
+                setCreateUsageType(
+                  event.target.value as "daily" | "salary" | "shared" | "card_payment" | "savings" | "investment" | "loan" | "other",
+                )
+              }
+            >
               {ACCOUNT_USAGE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
@@ -162,7 +178,11 @@ export function AccountsPage() {
               checked={isCreatingSharedAccount}
               onChange={(event) => {
                 setIsCreatingSharedAccount(event.target.checked);
-                syncSharedAccountForm(event.currentTarget.form!, event.target.checked);
+                if (event.target.checked) {
+                  setCreateOwnerPersonId("");
+                } else if (createUsageType === "shared") {
+                  setCreateUsageType("daily");
+                }
               }}
             />
           </label>
@@ -206,6 +226,10 @@ export function AccountsPage() {
           <div className="resource-grid">
             {accounts.map((account, index) => {
               const usage = getAccountUsageSummary(transactions, account.id);
+              const draft = accountDraftById[account.id];
+              const selectedIsShared = draft?.isShared ?? account.isShared;
+              const selectedOwnerPersonId = selectedIsShared ? "" : draft?.ownerPersonId ?? account.ownerPersonId ?? "";
+              const selectedUsageType = selectedIsShared ? "shared" : draft?.usageType ?? (account.usageType === "shared" ? "daily" : account.usageType);
 
               return (
                 <article key={account.id} className="resource-card" style={getMotionStyle(index + 2)}>
@@ -216,12 +240,12 @@ export function AccountsPage() {
                         {account.name !== account.alias && account.alias ? `원본 이름 ${account.name}` : account.institutionName}
                       </p>
                       <p className="mb-0 text-secondary">
-                        {account.isShared ? "공동 계좌" : personMap.get(account.ownerPersonId ?? "") ?? "미지정"} ·{" "}
-                        {ACCOUNT_USAGE_OPTIONS.find((option) => option.value === account.usageType)?.label ?? "기타"} · 지출 {formatCurrency(usage.expenseAmount)} · 내부이체{" "}
+                        {selectedIsShared ? "공동 계좌" : personMap.get(selectedOwnerPersonId) ?? "미지정"} ·{" "}
+                        {ACCOUNT_USAGE_OPTIONS.find((option) => option.value === selectedUsageType)?.label ?? "기타"} · 지출 {formatCurrency(usage.expenseAmount)} · 내부이체{" "}
                         {usage.internalTransferCount}건
                       </p>
                     </div>
-                    <span className={`badge ${account.isShared ? "text-bg-success" : "text-bg-secondary"}`}>{account.isShared ? "공동" : "개인"}</span>
+                    <span className={`badge ${selectedIsShared ? "text-bg-success" : "text-bg-secondary"}`}>{selectedIsShared ? "공동" : "개인"}</span>
                   </div>
 
                   <form
@@ -233,6 +257,11 @@ export function AccountsPage() {
                       if (!values.name) return;
 
                       updateAccount(workspaceId, account.id, values);
+                      setAccountDraftById((current) => {
+                        const next = { ...current };
+                        delete next[account.id];
+                        return next;
+                      });
                     }}
                   >
                     <label>
@@ -253,7 +282,21 @@ export function AccountsPage() {
                     </label>
                     <label>
                       소유자
-                      <select name="ownerPersonId" className="form-select" defaultValue={account.ownerPersonId ?? ""} disabled={account.isShared}>
+                      <select
+                        name="ownerPersonId"
+                        className="form-select"
+                        value={selectedOwnerPersonId}
+                        disabled={selectedIsShared}
+                        onChange={(event) =>
+                          setAccountDraftById((current) => ({
+                            ...current,
+                            [account.id]: {
+                              ...current[account.id],
+                              ownerPersonId: event.target.value,
+                            },
+                          }))
+                        }
+                      >
                         <option value="">공동 또는 미지정</option>
                         {getOwnerOptions(account.ownerPersonId).map((person) => (
                           <option key={person.id} value={person.id}>
@@ -263,7 +306,7 @@ export function AccountsPage() {
                         ))}
                       </select>
                     </label>
-                    {account.isShared ? (
+                    {selectedIsShared ? (
                       <div className="small text-secondary" style={{ gridColumn: "1 / -1" }}>
                         공동 자금 계좌로 저장된 동안에는 소유자를 따로 저장하지 않습니다.
                       </div>
@@ -280,7 +323,29 @@ export function AccountsPage() {
                     </label>
                     <label>
                       용도
-                      <select name="usageType" className="form-select" defaultValue={account.usageType} disabled={account.isShared}>
+                      <select
+                        name="usageType"
+                        className="form-select"
+                        value={selectedUsageType}
+                        disabled={selectedIsShared}
+                        onChange={(event) =>
+                          setAccountDraftById((current) => ({
+                            ...current,
+                            [account.id]: {
+                              ...current[account.id],
+                              usageType: event.target.value as
+                                | "daily"
+                                | "salary"
+                                | "shared"
+                                | "card_payment"
+                                | "savings"
+                                | "investment"
+                                | "loan"
+                                | "other",
+                            },
+                          }))
+                        }
+                      >
                         {ACCOUNT_USAGE_OPTIONS.map((option) => (
                           <option key={option.value} value={option.value}>
                             {option.label}
@@ -294,8 +359,18 @@ export function AccountsPage() {
                         name="isShared"
                         type="checkbox"
                         className="form-check-input mt-0"
-                        defaultChecked={account.isShared}
-                        onChange={(event) => syncSharedAccountForm(event.currentTarget.form!, event.target.checked)}
+                        checked={selectedIsShared}
+                        onChange={(event) =>
+                          setAccountDraftById((current) => ({
+                            ...current,
+                            [account.id]: {
+                              ...current[account.id],
+                              isShared: event.target.checked,
+                              ownerPersonId: event.target.checked ? "" : current[account.id]?.ownerPersonId ?? account.ownerPersonId ?? "",
+                              usageType: event.target.checked ? "shared" : current[account.id]?.usageType ?? (account.usageType === "shared" ? "daily" : account.usageType),
+                            },
+                          }))
+                        }
                       />
                     </label>
                     <label style={{ gridColumn: "1 / -1" }}>

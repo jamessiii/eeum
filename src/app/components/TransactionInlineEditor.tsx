@@ -42,6 +42,8 @@ export function TransactionInlineEditor({
   onSave,
   onCancel,
 }: TransactionInlineEditorProps) {
+  const accountSharedMap = new Map(accounts.map((account) => [account.id, account.isShared]));
+
   return (
     <div className="review-summary-panel mt-3">
       <div className="review-summary-copy">
@@ -79,6 +81,7 @@ export function TransactionInlineEditor({
             {cards.map((card) => (
               <option key={card.id} value={card.id}>
                 {card.name}
+                {card.linkedAccountId && accountSharedMap.get(card.linkedAccountId) ? " (공동 계좌)" : ""}
               </option>
             ))}
           </select>

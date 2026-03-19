@@ -24,7 +24,12 @@ export function ReviewsPage() {
   const transactions = new Map(scope.transactions.map((item) => [item.id, item]));
   const peopleMap = new Map(scope.people.map((person) => [person.id, person.displayName || person.name]));
   const accountMap = new Map(scope.accounts.map((account) => [account.id, account.alias || account.name]));
-  const cardMap = new Map(scope.cards.map((card) => [card.id, card.name]));
+  const cardMap = new Map(
+    scope.cards.map((card) => [
+      card.id,
+      `${card.name}${card.linkedAccountId && scope.accounts.find((account) => account.id === card.linkedAccountId)?.isShared ? " (공동 계좌)" : ""}`,
+    ]),
+  );
   const tags = new Map(scope.tags.map((item) => [item.id, item]));
   const getTransactionConnectionMeta = (transaction: NonNullable<ReturnType<typeof transactions.get>>) => {
     const parts = [

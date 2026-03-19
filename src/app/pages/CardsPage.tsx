@@ -19,6 +19,7 @@ const CARD_TYPE_OPTIONS = [
 export function CardsPage() {
   const { addCard, state, updateCard } = useAppState();
   const [createLinkedAccountId, setCreateLinkedAccountId] = useState("");
+  const [ownerDraftByCard, setOwnerDraftByCard] = useState<Record<string, string>>({});
   const [linkedAccountDraftByCard, setLinkedAccountDraftByCard] = useState<Record<string, string>>({});
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
@@ -162,6 +163,7 @@ export function CardsPage() {
           <div className="resource-grid">
             {cards.map((card, index) => {
               const usage = getCardUsageSummary(transactions, card.id);
+              const selectedOwnerPersonId = ownerDraftByCard[card.id] ?? card.ownerPersonId ?? "";
               const selectedLinkedAccountId = linkedAccountDraftByCard[card.id] ?? card.linkedAccountId ?? "";
 
               return (
@@ -171,7 +173,7 @@ export function CardsPage() {
                       <h3 className="mb-1">{card.name}</h3>
                       <p className="mb-1 text-secondary">{card.issuerName}</p>
                       <p className="mb-0 text-secondary">
-                        {personMap.get(card.ownerPersonId ?? "") ?? "미지정"} · 결제{" "}
+                        {personMap.get(selectedOwnerPersonId) ?? "미지정"} · 결제{" "}
                         {selectedLinkedAccountId
                           ? `${accountSharedMap.get(selectedLinkedAccountId) ? "공동 계좌 " : ""}${accountMap.get(selectedLinkedAccountId) ?? "-"}`
                           : "미연결"} · 사용 {formatCurrency(usage.expenseAmount)}
@@ -189,6 +191,16 @@ export function CardsPage() {
                       if (!values.name) return;
 
                       updateCard(workspaceId, card.id, values);
+                      setOwnerDraftByCard((current) => {
+                        const next = { ...current };
+                        delete next[card.id];
+                        return next;
+                      });
+                      setLinkedAccountDraftByCard((current) => {
+                        const next = { ...current };
+                        delete next[card.id];
+                        return next;
+                      });
                     }}
                   >
                     <label>
@@ -201,7 +213,17 @@ export function CardsPage() {
                     </label>
                     <label>
                       소유자
-                      <select name="ownerPersonId" className="form-select" defaultValue={card.ownerPersonId ?? ""}>
+                      <select
+                        name="ownerPersonId"
+                        className="form-select"
+                        value={selectedOwnerPersonId}
+                        onChange={(event) =>
+                          setOwnerDraftByCard((current) => ({
+                            ...current,
+                            [card.id]: event.target.value,
+                          }))
+                        }
+                      >
                         <option value="">미지정</option>
                         {getOwnerOptions(card.ownerPersonId).map((person) => (
                           <option key={person.id} value={person.id}>
