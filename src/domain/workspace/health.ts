@@ -18,9 +18,21 @@ export interface WorkspaceHealthSummary {
 
 export function getWorkspaceHealthSummary(scope: Pick<WorkspaceScope, "transactions" | "reviews">): WorkspaceHealthSummary {
   const openReviews = scope.reviews.filter((item) => item.status === "open");
-  const activeExpenseTransactions = scope.transactions.filter(isActiveExpenseImpactTransaction);
-  const uncategorizedExpenseTransactions = scope.transactions.filter(isUncategorizedExpenseTransaction);
-  const untaggedExpenseTransactions = scope.transactions.filter(isUntaggedExpenseTransaction);
+  const activeExpenseTransactions: WorkspaceScope["transactions"] = [];
+  const uncategorizedExpenseTransactions: WorkspaceScope["transactions"] = [];
+  const untaggedExpenseTransactions: WorkspaceScope["transactions"] = [];
+
+  for (const transaction of scope.transactions) {
+    if (!isActiveExpenseImpactTransaction(transaction)) continue;
+    activeExpenseTransactions.push(transaction);
+
+    if (isUncategorizedExpenseTransaction(transaction)) {
+      uncategorizedExpenseTransactions.push(transaction);
+    }
+    if (isUntaggedExpenseTransaction(transaction)) {
+      untaggedExpenseTransactions.push(transaction);
+    }
+  }
 
   return {
     openReviews,
