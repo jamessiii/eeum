@@ -37,7 +37,7 @@ export function AppGuidePanel() {
           <p className="guide-panel-copy">
             {currentStep
               ? currentStep.description
-              : "이제 대시보드와 정산, 검토함을 중심으로 데이터를 다듬으면 됩니다."}
+              : "이제 대시보드와 정산, 검토함을 오가며 데이터를 계속 다듬으면 됩니다."}
           </p>
         </div>
         {currentStep ? (
@@ -58,7 +58,9 @@ export function AppGuidePanel() {
       </div>
 
       <div className="guide-panel-meta">
-        <span>{completedSteps} / {totalSteps} 단계 완료</span>
+        <span>
+          {completedSteps} / {totalSteps} 단계 완료
+        </span>
         <strong>{formatPercent(journeyProgress.progress)}</strong>
       </div>
 
