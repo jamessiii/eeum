@@ -143,10 +143,10 @@ export function SettlementsPage() {
         {
           title: "정산 진행 상태",
           description: hasScopedSettlementContext
-            ? "현재 맥락에서는 전체 정산 기록을 따로 합산하지 않습니다. 부담 차이와 공동지출 흐름만 먼저 확인해보세요."
+            ? "현재 맥락에서는 부담 차이만 먼저 확인합니다."
             : settlementHistory.length
               ? `이번 달 정산 ${settlementHistory.length}건이 이미 기록되어 있고, 완료 금액은 ${formatCurrency(completedSettlementAmount)}입니다.`
-              : "아직 기록된 정산이 없습니다. 추천 정산을 확인한 뒤 완료로 남겨보세요.",
+              : "아직 기록된 정산이 없습니다.",
         },
       ].filter((card): card is SettlementHeadlineCard => Boolean(card))
     : [];
@@ -154,8 +154,8 @@ export function SettlementsPage() {
     ? {
         title: hasScopedSettlementContext ? "현재 맥락에선 공동지출이 없습니다" : "지금 가장 먼저 할 일",
         description: hasScopedSettlementContext
-          ? "현재 선택한 수단, 사람, 태그 기준으로는 이번 달 공동지출이 없습니다. 거래 화면에서 같은 맥락의 항목을 다시 확인해보세요."
-          : "아직 이번 달 공동지출 거래가 없습니다. 거래 화면에서 공동지출로 표시된 항목이 있는지 먼저 확인해보세요.",
+          ? "현재 조건에 맞는 공동지출이 없습니다."
+          : "공동지출 거래가 있는지 먼저 확인해보세요.",
         to: "/transactions?nature=shared",
         actionLabel: hasScopedSettlementContext ? "현재 맥락 공동지출 보기" : "공동지출 거래 보기",
       }
@@ -164,14 +164,14 @@ export function SettlementsPage() {
       ? {
           title: "지금 가장 먼저 할 일",
           description: hasScopedSettlementContext
-            ? `${sender.name}에서 ${receiver.name} 쪽으로 ${formatCurrency(suggestedSettlementAmount)} 부담 차이가 보입니다. 거래 화면에서 현재 맥락의 공동지출 흐름을 다시 확인해보세요.`
-            : `${sender.name}에서 ${receiver.name} 쪽으로 ${formatCurrency(suggestedSettlementAmount)} 정산 흐름이 잡혀 있습니다. 거래 화면에서 공동지출 흐름을 다시 보고, 맞다면 정산 완료로 기록해보세요.`,
+            ? `${sender.name} → ${receiver.name} ${formatCurrency(suggestedSettlementAmount)} 차이가 보입니다.`
+            : `${sender.name} → ${receiver.name} ${formatCurrency(suggestedSettlementAmount)} 정산 흐름이 잡혀 있습니다.`,
           to: "/transactions?nature=shared",
           actionLabel: hasScopedSettlementContext ? "현재 맥락 공동지출 점검" : "공동지출 점검하기",
         }
       : {
           title: "지금 가장 먼저 할 일",
-          description: "이번 달 공동지출은 잡혀 있지만 남은 정산 편차는 크지 않습니다. 공동지출 흐름과 완료 기록이 맞는지 한 번 더 확인해보세요.",
+          description: "남은 정산 편차는 크지 않습니다.",
           to: "/transactions?nature=shared",
           actionLabel: hasScopedSettlementContext ? "현재 맥락 공동지출 보기" : "공동지출 거래 보기",
         }
@@ -187,8 +187,8 @@ export function SettlementsPage() {
       ? {
           title: hasScopedSettlementContext ? "현재 맥락에서는 공동지출이 없습니다" : "아직 이번 달 공동지출이 없습니다",
           description: hasScopedSettlementContext
-            ? "현재 선택한 조건에 맞는 공동지출이 없어서 정산 후보도 비어 있습니다. 같은 맥락의 거래를 다시 확인해보세요."
-            : "거래 화면에서 공동지출로 표시한 거래가 생기면 여기서 바로 분담과 정산 흐름을 이어서 볼 수 있습니다.",
+            ? "현재 조건에 맞는 공동지출이 없어 정산 후보도 비어 있습니다."
+            : "공동지출 거래가 생기면 여기서 바로 정산 흐름을 볼 수 있습니다.",
         }
       : receiver && sender && suggestedSettlementAmount > 0
         ? {
@@ -197,7 +197,7 @@ export function SettlementsPage() {
           }
         : {
             title: "공동지출은 있지만 추가 정산은 거의 남지 않았습니다",
-            description: "이미 기록된 정산이 반영되었거나, 현재 잔여 차이가 작아서 거래 확인만 해도 충분한 상태입니다.",
+            description: "잔여 차이가 작아서 거래 확인만 해도 충분한 상태입니다.",
           };
 
   return (
@@ -211,8 +211,8 @@ export function SettlementsPage() {
         </div>
         <p className="text-secondary mb-0">
           {hasScopedSettlementContext
-            ? "현재 맥락에 맞는 공동지출만 다시 모아 각 사람이 얼마나 부담했는지 비교합니다. 이 화면에서는 근거 거래와 부담 차이를 먼저 확인합니다."
-            : "공동지출로 표시된 거래만 합산해서 각 사람이 얼마나 부담했는지 비교합니다. 이번 달 정산 후보를 보고, 끝낸 정산은 아래 기록으로 남길 수 있습니다."}
+            ? "현재 맥락의 공동지출만 다시 모아 부담 차이만 먼저 봅니다."
+            : "공동지출 기준으로 이번 달 정산 흐름을 봅니다."}
         </p>
         <div className="review-summary-panel mt-4">
           <div className="review-summary-copy">
@@ -263,8 +263,8 @@ export function SettlementsPage() {
             title={hasScopedSettlementContext ? "현재 맥락의 부담 균형이 맞춰졌습니다" : "이번 달 정산 균형이 맞춰졌습니다"}
             description={
               hasScopedSettlementContext
-                ? "현재 보이는 공동지출 범위에서는 남아 있는 편차가 거의 없습니다. 전체 정산과 구분해서 가볍게 확인하면 됩니다."
-                : "공동지출은 있었지만 남아 있는 정산 편차는 거의 없습니다. 거래 흐름과 완료 기록만 가볍게 확인하면 됩니다."
+                ? "현재 범위에서는 남은 편차가 거의 없습니다."
+                : "남아 있는 정산 편차는 거의 없습니다."
             }
             actions={
               <>
@@ -325,8 +325,8 @@ export function SettlementsPage() {
                 </strong>
                 <p className="mb-0 text-secondary">
                   {hasScopedSettlementContext
-                    ? "먼저 같은 조건의 거래에서 공동지출 체크를 확인해 두면, 이 화면에서도 현재 맥락 기준 부담 차이와 정산 후보가 바로 이어집니다."
-                    : "먼저 거래 화면에서 공동지출 체크를 붙이거나, 사람 구성을 정리해 두면 정산 계산이 자연스럽게 이어집니다."}
+                    ? "같은 조건의 거래에서 공동지출 체크만 먼저 확인하면 됩니다."
+                    : "거래에서 공동지출 체크를 먼저 붙이면 됩니다."}
                 </p>
               </div>
               <div className="action-row">
@@ -356,8 +356,8 @@ export function SettlementsPage() {
               title={hasScopedSettlementContext ? "현재 맥락에 공동지출이 없습니다" : "아직 공동지출 데이터가 없습니다"}
               description={
                 hasScopedSettlementContext
-                  ? "현재 선택한 조건에 맞는 공동지출이 없어 정산 후보를 계산하지 않았습니다. 같은 맥락의 거래를 먼저 확인해보세요."
-                  : "거래 입력이나 업로드 뒤에 공동지출 체크를 해두면 여기서 사람별 부담과 정산 후보를 계산합니다."
+                  ? "현재 조건에 맞는 공동지출이 없어 정산 후보를 계산하지 않았습니다."
+                  : "공동지출 체크가 생기면 여기서 정산 후보를 계산합니다."
               }
             />
             </>
@@ -391,10 +391,10 @@ export function SettlementsPage() {
                 </h3>
                 <p className="text-secondary mb-0">
                   {receiver && sender
-                    ? "이미 기록한 정산을 반영한 뒤, 아직 남아 있는 최소 정산 흐름을 기준으로 보여줍니다."
+                    ? "기록된 정산을 반영한 뒤 남은 최소 정산 흐름입니다."
                     : settlementHistory.length
                       ? "현재 기록 기준으로는 이번 달 정산이 거의 끝난 상태입니다."
-                      : "공동지출 참여자와 거래가 더 쌓이면 정산 방향을 자동으로 제안합니다."}
+                      : "공동지출이 더 쌓이면 정산 방향을 자동 제안합니다."}
                 </p>
                 <div className="status-badge-row mt-3">
                   <span className="badge text-bg-light">완료 금액 {formatCurrency(completedSettlementAmount)}</span>

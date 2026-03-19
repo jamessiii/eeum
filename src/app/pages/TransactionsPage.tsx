@@ -490,9 +490,11 @@ export function TransactionsPage() {
         <div className="review-summary-panel mb-4">
           <div className="review-summary-copy">
             <strong>{transactionDraftGuide[draftType].title}</strong>
-            <p className="mb-0 text-secondary">{transactionDraftGuide[draftType].description}</p>
+            <p className="mb-0 text-secondary">{transactionDraftGuide[draftType].helper}</p>
           </div>
-          <div className="small text-secondary">{transactionDraftGuide[draftType].helper}</div>
+          <div className="small text-secondary" title={transactionDraftGuide[draftType].description}>
+            상세 설명 보기
+          </div>
         </div>
         <form
           className="manual-transaction-form"
@@ -702,10 +704,7 @@ export function TransactionsPage() {
               <div className="review-summary-panel mb-3">
                 <div className="review-summary-copy">
                   <strong>업로드 후 정리 모드로 바로 들어왔습니다</strong>
-                  <p className="mb-0 text-secondary">
-                    지금은 {filters.nature === "uncategorized" ? "미분류 거래" : "무태그 거래"}만 모아둔 상태입니다. 아래 일괄 정리 도구로
-                    먼저 묶고, 남은 작업이 있으면 다른 정리 모드로 이어가면 됩니다.
-                  </p>
+                  <p className="mb-0 text-secondary">지금은 {filters.nature === "uncategorized" ? "미분류 거래" : "무태그 거래"}만 보고 있습니다.</p>
                 </div>
                 <div className="action-row">
                   {filters.nature === "uncategorized" && untaggedCount ? (
@@ -770,9 +769,9 @@ export function TransactionsPage() {
                   <p className="mb-0 text-secondary">
                     {filters.nature === "shared"
                       ? filters.sourceType !== "all" || filters.ownerPersonId !== "all" || filters.tagId !== "all"
-                        ? "정산과 연결되는 공동지출만 모아 보고 있습니다. 실제로 함께 부담할 항목이 맞는지, 현재 맥락 정산 흐름으로 이어질 내용인지 빠르게 확인해보세요."
-                        : "정산과 연결되는 공동지출만 모아 보고 있습니다. 실제로 함께 부담할 항목이 맞는지, 정산 화면으로 이어질 흐름인지 빠르게 확인해보세요."
-                      : "소비 통계에 바로 잡히지 않아야 하는 내부이체만 모아 보고 있습니다. 내 계좌 간 이동이나 생활비 이동이 지출로 잘못 보이지 않는지 먼저 점검하면 좋습니다."}
+                        ? "현재 맥락의 공동지출만 보고 있습니다."
+                        : "정산과 연결되는 공동지출만 보고 있습니다."
+                      : "지출로 잡히면 안 되는 내부이체만 보고 있습니다."}
                   </p>
                 </div>
                 <div className="action-row">
@@ -808,9 +807,7 @@ export function TransactionsPage() {
               <div className="review-summary-panel mb-3">
                 <div className="review-summary-copy">
                   <strong>{activeOwnerName}의 거래 흐름을 보고 있습니다</strong>
-                  <p className="mb-0 text-secondary">
-                    지금 화면은 {activeOwnerName}에게 연결된 거래만 좁혀서 보고 있습니다. 현재 맥락으로 이어 본 경우라면 이 사람의 공동지출 흐름을 바로 확인하는 용도입니다.
-                  </p>
+                  <p className="mb-0 text-secondary">이 사람에게 연결된 거래만 보고 있습니다.</p>
                 </div>
                 <div className="action-row">
                   <button
@@ -837,9 +834,7 @@ export function TransactionsPage() {
               <div className="review-summary-panel mb-3">
                 <div className="review-summary-copy">
                   <strong>{activeSourceTypeLabel} 거래만 보고 있습니다</strong>
-                  <p className="mb-0 text-secondary">
-                    지금 화면은 {activeSourceTypeLabel} 경로로 들어온 거래만 좁혀서 보고 있습니다. 수단별 정리 상태를 점검하거나 연결값을 수정하기 좋은 흐름입니다.
-                  </p>
+                  <p className="mb-0 text-secondary">{activeSourceTypeLabel} 경로 거래만 보고 있습니다.</p>
                 </div>
                 <div className="action-row">
                   <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters((current) => ({ ...current, sourceType: "all" }))}>
@@ -863,9 +858,7 @@ export function TransactionsPage() {
               <div className="review-summary-panel mb-3">
                 <div className="review-summary-copy">
                   <strong>검색어 &quot;{activeSearchQuery}&quot;로 좁혀 보고 있습니다</strong>
-                  <p className="mb-0 text-secondary">
-                    가맹점명이나 설명에 검색어가 들어간 거래만 보고 있습니다. 비슷한 거래를 한 번에 찾거나 빠른 정리 대상을 모아보기 좋은 흐름입니다.
-                  </p>
+                  <p className="mb-0 text-secondary">검색어가 들어간 거래만 보고 있습니다.</p>
                 </div>
                 <div className="action-row">
                   <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters(clearTransactionSearchQuery)}>
@@ -911,10 +904,10 @@ export function TransactionsPage() {
             <div className="review-summary-panel mb-3">
               <div className="review-summary-copy">
                 <strong>{activeCleanupMode.title}</strong>
-                <p className="mb-0 text-secondary">{activeCleanupMode.description}</p>
+                <p className="mb-0 text-secondary">실지출 {activeExpenseCount}건 · 미분류 {uncategorizedCount}건 · 무태그 {untaggedCount}건</p>
               </div>
-              <div className="small text-secondary">
-                현재 보이는 거래 {transactions.length}건 중 실지출 {activeExpenseCount}건, 미분류 {uncategorizedCount}건, 무태그 {untaggedCount}건입니다.
+              <div className="small text-secondary" title={activeCleanupMode.description}>
+                총 {transactions.length}건
               </div>
             </div>
             {activeFilterSummary ? (

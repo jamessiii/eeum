@@ -214,10 +214,6 @@ export function ReviewsPage() {
         </div>
         <span className="badge text-bg-warning">{openReviewCount}건</span>
       </div>
-      <p className="text-secondary">
-        팝업으로 즉답을 강요하지 않고, 확인이 필요한 항목을 여기에 모아둡니다. 거래 흐름을 보고 한 번에 정리할 수 있게 만드는
-        화면입니다.
-      </p>
       <div className="review-progress-box">
         <div className="d-flex justify-content-between align-items-center gap-3">
           <div>
@@ -238,8 +234,8 @@ export function ReviewsPage() {
             <strong>지금 먼저 볼 것</strong>
             <p className="mb-0 text-secondary">
               {dominantType && dominantType.count > 0
-                ? `${REVIEW_TYPE_LABELS[dominantType.type]}가 ${dominantType.count}건으로 가장 많습니다. 같은 유형끼리 모아 처리하면 더 빠르게 정리할 수 있습니다.`
-                : "검토 유형을 골라서 같은 성격의 항목부터 한 번에 정리해보세요."}
+                ? `${REVIEW_TYPE_LABELS[dominantType.type]} ${dominantType.count}건부터 보는 편이 가장 빠릅니다.`
+                : "같은 유형끼리 모아 처리하면 더 빠릅니다."}
             </p>
           </div>
           <ReviewTypeFilterBar
@@ -311,7 +307,7 @@ export function ReviewsPage() {
           <div className="review-summary-copy">
             <strong>{getSourceTypeLabel(activeSourceType)} 검토 항목만 보고 있습니다</strong>
             <p className="mb-0 text-secondary">
-              지금은 {getSourceTypeLabel(activeSourceType)} 경로로 들어온 검토 후보만 모아 보고 있습니다. 같은 수단끼리 한 번에 정리하면 연결값 오류를 더 빨리 찾을 수 있습니다.
+              같은 수단끼리 한 번에 정리하면 연결값 오류를 더 빨리 찾을 수 있습니다.
             </p>
           </div>
           <div className="action-row">
@@ -331,8 +327,8 @@ export function ReviewsPage() {
             <strong>{hasActiveReviewFilters ? "지금 보는 리뷰 범위" : "전체 리뷰를 보고 있습니다"}</strong>
             <p className="mb-0 text-secondary">
               {hasActiveReviewFilters
-                ? `${filteredReviewSummary} 기준으로 ${filteredReviews.length}건을 추려서 보고 있습니다. 같은 맥락끼리 먼저 처리하면 판단이 더 빨라집니다.`
-                : `열린 리뷰 ${openReviewCount}건을 전체 기준으로 보고 있습니다. 유형이나 수단으로 좁히면 비슷한 항목을 연속으로 처리하기 좋습니다.`}
+                ? `${filteredReviewSummary} 기준 ${filteredReviews.length}건`
+                : `열린 리뷰 ${openReviewCount}건 전체`}
             </p>
           </div>
           {hasActiveReviewFilters ? (
@@ -369,8 +365,8 @@ export function ReviewsPage() {
             <strong>검토 뒤 바로 이어서 할 일</strong>
             <p className="mb-0 text-secondary">
               {canOpenSettlementsFromReviewContext
-                ? "검토를 줄인 뒤 미분류와 무태그 거래만 마무리하면, 대시보드와 정산 화면을 훨씬 안정적으로 볼 수 있습니다."
-                : "검토를 줄인 뒤 미분류와 무태그 거래만 마무리하면, 대시보드와 거래 흐름을 훨씬 안정적으로 볼 수 있습니다."}
+                ? "검토 뒤 미분류·무태그 정리 후 정산까지 이어보면 됩니다."
+                : "검토 뒤 미분류·무태그 정리까지만 이어보면 됩니다."}
             </p>
           </div>
           <div className="action-row">
@@ -394,8 +390,8 @@ export function ReviewsPage() {
           <strong>{openReviewCount ? "검토 후 바로 이어서 할 일" : "검토는 끝났고 다음 단계만 남았습니다"}</strong>
           <p className="mb-0 text-secondary">
             {openReviewCount
-              ? "검토 후보를 줄인 뒤에는 미분류 거래와 무태그 거래를 정리해야 대시보드 해석이 더 정확해집니다."
-              : "열린 검토 항목은 모두 정리됐습니다. 이제 분류와 태그 정리를 끝내고 진단 화면으로 넘어가면 됩니다."}
+              ? "미분류와 무태그만 마무리하면 됩니다."
+              : "분류와 태그 정리를 끝내고 진단으로 넘어가면 됩니다."}
           </p>
         </div>
         <div className="action-row">

@@ -222,6 +222,10 @@ export function DashboardPage() {
         : unmappedCardCount > 0
           ? { to: "/cards", label: "카드 연결 정리" }
           : null;
+  const prioritizedJourneySteps = [...journeySteps]
+    .sort((left, right) => Number(left.completed) - Number(right.completed))
+    .slice(0, 4);
+  const visibleAttentionItems = attentionItems.slice(0, 4);
 
   return (
     <div className="page-stack">
@@ -294,7 +298,7 @@ export function DashboardPage() {
         </div>
 
         <div className="coach-box mt-4">
-          <h3>재무 코치 메모</h3>
+          <h3>이번 달 메모</h3>
           <p className="mb-0">{insights.coaching}</p>
         </div>
 
@@ -334,11 +338,7 @@ export function DashboardPage() {
                 ? `아직 ${foundationRemainingCount}개의 연결 설정이 남아 있습니다`
                 : "사람·계좌·카드 기본 연결이 모두 준비되었습니다"}
             </strong>
-            <p className="mb-0 text-secondary">
-              {foundationRemainingCount
-                ? "사람 활성화와 계좌·카드 연결만 먼저 맞추면 업로드와 거래 해석이 훨씬 덜 흔들립니다."
-                : "이제 업로드, 거래, 정산 화면에서 사람과 결제 수단을 같은 기준으로 볼 수 있습니다."}
-            </p>
+            <p className="mb-0 text-secondary">{foundationRemainingCount ? "사람, 계좌, 카드 연결만 먼저 맞추면 됩니다." : "기본 연결 정리가 끝났습니다."}</p>
           </div>
           {nextFoundationAction ? (
             <Link to={nextFoundationAction.to} className="btn btn-outline-primary btn-sm">
@@ -357,9 +357,7 @@ export function DashboardPage() {
             <span className={`badge ${peopleSetupRemaining ? "text-bg-warning" : "text-bg-success"}`}>
               {peopleSetupRemaining ? "설정 필요" : "준비 완료"}
             </span>
-            <p className="mb-0 text-secondary">
-              {peopleSetupRemaining ? "정산과 업로드 매핑 전에 사용할 사람을 먼저 활성화해 주세요." : "업로드와 거래 화면에서 사람 표시명을 바로 사용할 수 있습니다."}
-            </p>
+            <p className="mb-0 text-secondary">{peopleSetupRemaining ? "활성 사용자 등록 필요" : "바로 사용 가능"}</p>
             <Link to="/people" className="btn btn-outline-primary btn-sm mt-3">
               사람 관리
             </Link>
@@ -370,9 +368,7 @@ export function DashboardPage() {
             <span className={`badge ${unmappedAccountCount ? "text-bg-warning" : "text-bg-success"}`}>
               {unmappedAccountCount ? `${unmappedAccountCount}개 미연결` : "준비 완료"}
             </span>
-            <p className="mb-0 text-secondary">
-              {unmappedAccountCount ? "소유자나 공동 사용 여부를 채우면 업로드 연결과 거래 해석이 덜 흔들립니다." : "계좌 소유자 연결이 끝나서 거래 필터와 업로드 매핑에 바로 쓸 수 있습니다."}
-            </p>
+            <p className="mb-0 text-secondary">{unmappedAccountCount ? "소유자 또는 공동 여부 지정 필요" : "연결 완료"}</p>
             <Link to="/accounts" className="btn btn-outline-primary btn-sm mt-3">
               계좌 관리
             </Link>
@@ -383,9 +379,7 @@ export function DashboardPage() {
             <span className={`badge ${unmappedCardCount ? "text-bg-warning" : "text-bg-success"}`}>
               {unmappedCardCount ? `${unmappedCardCount}개 미연결` : "준비 완료"}
             </span>
-            <p className="mb-0 text-secondary">
-              {unmappedCardCount ? "카드 소유자와 결제 계좌를 함께 연결해야 업로드와 정산에서 같은 수단으로 이어집니다." : "카드 소유자와 결제 계좌 연결이 끝나서 거래 연결 흐름이 자연스럽습니다."}
-            </p>
+            <p className="mb-0 text-secondary">{unmappedCardCount ? "소유자와 결제 계좌 연결 필요" : "연결 완료"}</p>
             <Link to="/cards" className="btn btn-outline-primary btn-sm mt-3">
               카드 관리
             </Link>
@@ -397,14 +391,14 @@ export function DashboardPage() {
         <div className="section-head">
           <div>
             <span className="section-kicker">핵심 해석</span>
-            <h2 className="section-title">이번 달에 먼저 읽을 포인트</h2>
+            <h2 className="section-title">지금 볼 포인트</h2>
           </div>
         </div>
         <div className="resource-grid">
           {insights.headlineCards.map((card, index) => (
             <article key={card.title} className="resource-card" style={getMotionStyle(index + 2)}>
               <h3>{card.title}</h3>
-              <p className="mb-0 text-secondary">{card.description}</p>
+              <p className="mb-0 text-secondary" title={card.description}>{card.description}</p>
             </article>
           ))}
         </div>
@@ -421,11 +415,7 @@ export function DashboardPage() {
         <div className="review-summary-panel mb-4">
           <div className="review-summary-copy">
             <strong>{isJourneyReady ? "지금은 숫자 해석과 정산 확인에 집중하면 됩니다" : "아직 남은 준비 항목부터 순서대로 정리하면 됩니다"}</strong>
-            <p className="mb-0 text-secondary">
-              {isJourneyReady
-                ? "기반 정보와 분류가 정리돼서, 이제 대시보드 해석과 공동지출 정산 확인에 집중하면 됩니다."
-                : `전체 ${journeyTotalCount}단계 중 ${journeyCompletedCount}단계가 준비되었습니다. 막힌 단계만 먼저 채우면 됩니다.`}
-            </p>
+            <p className="mb-0 text-secondary">{isJourneyReady ? "핵심 준비가 끝났습니다." : `전체 ${journeyTotalCount}단계 중 ${journeyCompletedCount}단계 완료`}</p>
           </div>
           <Link to={isJourneyReady ? "/settlements" : journeySteps.find((step) => !step.completed)?.to ?? "/transactions"} className="btn btn-outline-secondary btn-sm">
             {isJourneyReady ? "정산 화면 보기" : "다음 단계로 이동"}
@@ -435,17 +425,17 @@ export function DashboardPage() {
           <div className="guide-progress-bar" aria-hidden="true">
             <div className="guide-progress-fill" style={{ width: `${journeyProgress * 100}%` }} />
           </div>
-          <div className="small text-secondary mt-3">
-            전체 여정 {journeyTotalCount}단계 중 {journeyCompletedCount}단계가 준비됐습니다.
-          </div>
+          <div className="small text-secondary mt-3">미완료 단계부터 우선 보여줍니다.</div>
         </div>
         <div className="resource-grid mt-4">
-          {journeySteps.map((step, index) => (
+          {prioritizedJourneySteps.map((step, index) => (
             <article key={step.key} className="resource-card" style={getMotionStyle(index + 3)}>
               <div className="d-flex justify-content-between align-items-start gap-3">
                 <div>
                   <h3>{step.title}</h3>
-                  <p className="mb-0 text-secondary">{step.description}</p>
+                  <p className="mb-0 text-secondary" title={step.description}>
+                    {step.completed ? "정리됨" : "다음으로 처리할 항목"}
+                  </p>
                 </div>
                 <span className={`badge ${step.completed ? "text-bg-success" : "text-bg-light"}`}>{step.completed ? "완료" : "진행 중"}</span>
               </div>
@@ -468,19 +458,19 @@ export function DashboardPage() {
           <div className="review-summary-panel mb-4">
             <div className="review-summary-copy">
               <strong>{`현재 바로 처리하면 좋은 항목이 ${attentionItems.length}개 남아 있습니다`}</strong>
-              <p className="mb-0 text-secondary">
-                남은 준비 항목만 먼저 줄이면 업로드, 분류, 정산 흐름이 더 자연스럽게 이어집니다.
-              </p>
+              <p className="mb-0 text-secondary">우선순위가 높은 항목만 먼저 보여줍니다.</p>
             </div>
             <Link to={attentionItems[0]?.to ?? "/"} className="btn btn-outline-secondary btn-sm">
               {attentionItems[0]?.actionLabel ?? "대시보드 보기"}
             </Link>
           </div>
           <div className="resource-grid">
-            {attentionItems.map((item, index) => (
+            {visibleAttentionItems.map((item, index) => (
               <article key={item.key} className="resource-card" style={getMotionStyle(index + 2)}>
                 <h3>{item.title}</h3>
-                <p className="mb-0 text-secondary">{item.description}</p>
+                <p className="mb-0 text-secondary" title={item.description}>
+                  바로 확인하면 정확도가 올라갑니다.
+                </p>
                 <Link to={item.to} className="btn btn-outline-primary btn-sm mt-3">
                   {item.actionLabel}
                 </Link>
