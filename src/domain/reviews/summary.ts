@@ -7,6 +7,8 @@ export interface ReviewSummary {
   resolvedReviews: ReviewItem[];
   dismissedReviews: ReviewItem[];
   reviewCounts: Partial<Record<ReviewType, number>>;
+  openSharedReviewCount: number;
+  openInternalTransferReviewCount: number;
   resolvedCounts: Partial<Record<ReviewType, number>>;
   dominantType: { type: ReviewType; count: number } | null;
   sourceTypeReviewCounts: Record<(typeof SOURCE_TYPE_OPTIONS)[number], number>;
@@ -66,6 +68,8 @@ export function getReviewSummary(
   }
 
   const reviewCounts = getReviewTypeCounts(openReviews);
+  const openSharedReviewCount = reviewCounts.shared_expense_candidate ?? 0;
+  const openInternalTransferReviewCount = reviewCounts.internal_transfer_candidate ?? 0;
   const resolvedCounts = getReviewTypeCounts(resolvedReviews);
   const totalReviewCount = reviews.length;
   const reviewProgress = totalReviewCount ? (resolvedReviews.length + dismissedReviews.length) / totalReviewCount : 1;
@@ -77,6 +81,8 @@ export function getReviewSummary(
     resolvedReviews,
     dismissedReviews,
     reviewCounts,
+    openSharedReviewCount,
+    openInternalTransferReviewCount,
     resolvedCounts,
     dominantType,
     sourceTypeReviewCounts,

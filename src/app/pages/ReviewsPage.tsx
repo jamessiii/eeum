@@ -23,7 +23,18 @@ export function ReviewsPage() {
   const health = getWorkspaceHealthSummary(scope);
   const transactions = new Map(scope.transactions.map((item) => [item.id, item]));
   const tags = new Map(scope.tags.map((item) => [item.id, item]));
-  const { openReviews: reviews, resolvedReviews, dismissedReviews, reviewCounts, dominantType, sourceTypeReviewCounts, totalReviewCount, reviewProgress } =
+  const {
+    openReviews: reviews,
+    resolvedReviews,
+    dismissedReviews,
+    reviewCounts,
+    openSharedReviewCount,
+    openInternalTransferReviewCount,
+    dominantType,
+    sourceTypeReviewCounts,
+    totalReviewCount,
+    reviewProgress,
+  } =
     getReviewSummary(scope.reviews, transactions);
   const uncategorizedCount = health.uncategorizedCount;
   const untaggedCount = health.untaggedCount;
@@ -34,8 +45,6 @@ export function ReviewsPage() {
     activeTagId,
     activeSourceType,
   });
-  const openSharedReviewCount = reviewCounts.shared_expense_candidate ?? 0;
-  const openInternalTransferReviewCount = reviewCounts.internal_transfer_candidate ?? 0;
   const resolvedReviewTypeSummary = getSortedReviewTypeSummary(resolvedReviews);
   const nextReviewAction = uncategorizedCount
     ? {
