@@ -4,6 +4,7 @@ type TransactionBatchCategoryPanelProps = {
   categories: Array<{ id: string; name: string }>;
   selectedCategoryId: string;
   selectedCategoryName: string | null;
+  scopeSummary: string | null;
   transactionCount: number;
   amount: number;
   disabled: boolean;
@@ -15,6 +16,7 @@ export function TransactionBatchCategoryPanel({
   categories,
   selectedCategoryId,
   selectedCategoryName,
+  scopeSummary,
   transactionCount,
   amount,
   disabled,
@@ -29,6 +31,7 @@ export function TransactionBatchCategoryPanel({
           현재 필터 결과에서 카테고리를 정리할 수 있는 실지출 거래는 {transactionCount}건입니다. 같은 소비 묶음이 보이면 카테고리를 한 번에 맞춰 통계
           정확도를 빠르게 높일 수 있습니다.
         </p>
+        {scopeSummary ? <p className="mb-0 mt-2 text-secondary">{scopeSummary}</p> : null}
       </div>
       <form
         className="classification-action-row"

@@ -4,6 +4,7 @@ type TransactionBatchTagPanelProps = {
   tags: Array<{ id: string; name: string }>;
   selectedTagId: string;
   selectedTagName: string | null;
+  scopeSummary: string | null;
   transactionCount: number;
   amount: number;
   disabled: boolean;
@@ -15,6 +16,7 @@ export function TransactionBatchTagPanel({
   tags,
   selectedTagId,
   selectedTagName,
+  scopeSummary,
   transactionCount,
   amount,
   disabled,
@@ -29,6 +31,7 @@ export function TransactionBatchTagPanel({
           현재 필터 결과에서 실지출로 잡히는 거래는 {transactionCount}건입니다. 같은 맥락의 거래가 모여 있다면 태그를 한 번에 붙여 이후 검색과 분석
           흐름을 더 빠르게 만들 수 있습니다.
         </p>
+        {scopeSummary ? <p className="mb-0 mt-2 text-secondary">{scopeSummary}</p> : null}
       </div>
       <form
         className="classification-action-row"

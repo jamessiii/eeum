@@ -24,6 +24,10 @@ export function CategoriesPage() {
   const { addCategory, addTag, assignCategory, assignCategoryByMerchant, assignTag, assignTagByMerchant, state } = useAppState();
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
+  const peopleMap = new Map(scope.people.map((person) => [person.id, person.displayName || person.name]));
+  const accountMap = new Map(scope.accounts.map((account) => [account.id, account.alias || account.name]));
+  const cardMap = new Map(scope.cards.map((card) => [card.id, card.name]));
+  const transactionMap = new Map(scope.transactions.map((transaction) => [transaction.id, transaction]));
   const {
     recurringSuggestions,
     uncategorizedTransactions,
@@ -45,6 +49,26 @@ export function CategoriesPage() {
     });
   }
   const usedTagIds = new Set(scope.transactions.flatMap((transaction) => transaction.tagIds));
+  const getTransactionConnectionSummary = (transaction: { ownerPersonId: string | null; accountId: string | null; cardId: string | null }) => {
+    const parts = [
+      transaction.ownerPersonId ? `사용자 ${peopleMap.get(transaction.ownerPersonId) ?? "-"}` : null,
+      transaction.accountId ? `계좌 ${accountMap.get(transaction.accountId) ?? "-"}` : null,
+      transaction.cardId ? `카드 ${cardMap.get(transaction.cardId) ?? "-"}` : null,
+    ].filter(Boolean);
+
+    return parts.length ? parts.join(" · ") : "연결 정보 없음";
+  };
+  const recurringConnectionSummary = recurringSuggestions
+    .slice(0, 3)
+    .map((suggestion) => {
+      const referenceTransaction = suggestion.transactionIds
+        .map((transactionId) => transactionMap.get(transactionId))
+        .find((transaction): transaction is NonNullable<typeof transaction> => Boolean(transaction));
+
+      if (!referenceTransaction) return null;
+      return `${suggestion.merchantName}: ${getTransactionConnectionSummary(referenceTransaction)}`;
+    })
+    .filter(Boolean);
   const nextCategoryAction = recurringSuggestions.length
     ? {
         title: "지금 가장 먼저 할 일",
@@ -209,6 +233,9 @@ export function CategoriesPage() {
               <h2 className="section-title">반복 지출 카테고리 지정</h2>
             </div>
           </div>
+          {recurringConnectionSummary.length ? (
+            <p className="small text-secondary mb-3">{recurringConnectionSummary.join(" / ")}</p>
+          ) : null}
           <div className="review-list">
             {recurringSuggestions.map((suggestion, index) => (
               <article key={suggestion.merchantName} className="review-card" style={getMotionStyle(index)}>
@@ -292,6 +319,7 @@ export function CategoriesPage() {
                     <p className="mb-1 text-secondary">
                       {transaction.occurredAt.slice(0, 10)} · {formatCurrency(transaction.amount)}
                     </p>
+                    <p className="mb-1 text-secondary">{getTransactionConnectionSummary(transaction)}</p>
                     {transaction.description ? <p className="mb-0 text-secondary">{transaction.description}</p> : null}
                   </div>
                 </div>

@@ -20,6 +20,8 @@ interface TransactionInlineEditorProps {
   cards: Card[];
   saveDisabled: boolean;
   onDraftChange: (patch: Partial<TransactionEditDraft>) => void;
+  onAccountSelect: (accountId: string) => void;
+  onCardSelect: (cardId: string) => void;
   onSave: () => void;
   onCancel: () => void;
 }
@@ -31,6 +33,8 @@ export function TransactionInlineEditor({
   cards,
   saveDisabled,
   onDraftChange,
+  onAccountSelect,
+  onCardSelect,
   onSave,
   onCancel,
 }: TransactionInlineEditorProps) {
@@ -57,7 +61,7 @@ export function TransactionInlineEditor({
               </option>
             ))}
           </select>
-          <select className="form-select form-select-sm" value={draft.accountId} onChange={(event) => onDraftChange({ accountId: event.target.value })}>
+          <select className="form-select form-select-sm" value={draft.accountId} onChange={(event) => onAccountSelect(event.target.value)}>
             <option value="">계좌 연결 없음</option>
             {accounts.map((account) => (
               <option key={account.id} value={account.id}>
@@ -65,7 +69,7 @@ export function TransactionInlineEditor({
               </option>
             ))}
           </select>
-          <select className="form-select form-select-sm" value={draft.cardId} onChange={(event) => onDraftChange({ cardId: event.target.value })}>
+          <select className="form-select form-select-sm" value={draft.cardId} onChange={(event) => onCardSelect(event.target.value)}>
             <option value="">카드 연결 없음</option>
             {cards.map((card) => (
               <option key={card.id} value={card.id}>

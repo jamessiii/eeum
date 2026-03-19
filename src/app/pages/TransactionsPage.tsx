@@ -177,6 +177,12 @@ export function TransactionsPage() {
     sharedExpenseCount,
     internalTransferCount,
   });
+  const bulkScopeSummary =
+    [
+      activeOwnerName ? `사용자 ${activeOwnerName}` : null,
+      activeSourceTypeLabel ? `수단 ${activeSourceTypeLabel}` : null,
+      activeSearchQuery ? `검색 ${activeSearchQuery}` : null,
+    ].filter(Boolean).join(" · ") || null;
 
   useEffect(() => {
     const cleanup = searchParams.get("cleanup");
@@ -241,6 +247,57 @@ export function TransactionsPage() {
 
   const updateEditDraft = (patch: Partial<TransactionEditDraft>) => {
     setEditDraft((current) => ({ ...current, ...patch }));
+  };
+
+  const syncFormWithAccount = (form: HTMLFormElement, accountId: string) => {
+    const selectedAccount = accounts.find((account) => account.id === accountId);
+    if (!selectedAccount) return;
+
+    const sourceTypeField = form.elements.namedItem("sourceType") as HTMLSelectElement | null;
+    const ownerField = form.elements.namedItem("ownerPersonId") as HTMLSelectElement | null;
+    if (sourceTypeField) sourceTypeField.value = "account";
+    if (ownerField && selectedAccount.ownerPersonId) ownerField.value = selectedAccount.ownerPersonId;
+  };
+
+  const syncFormWithCard = (form: HTMLFormElement, cardId: string) => {
+    const selectedCard = cards.find((card) => card.id === cardId);
+    if (!selectedCard) return;
+
+    const sourceTypeField = form.elements.namedItem("sourceType") as HTMLSelectElement | null;
+    const ownerField = form.elements.namedItem("ownerPersonId") as HTMLSelectElement | null;
+    const accountField = form.elements.namedItem("accountId") as HTMLSelectElement | null;
+    if (sourceTypeField) sourceTypeField.value = "card";
+    if (ownerField && selectedCard.ownerPersonId) ownerField.value = selectedCard.ownerPersonId;
+    if (accountField && selectedCard.linkedAccountId) accountField.value = selectedCard.linkedAccountId;
+  };
+
+  const syncEditDraftWithAccount = (accountId: string) => {
+    const selectedAccount = accounts.find((account) => account.id === accountId);
+    if (!selectedAccount) {
+      updateEditDraft({ accountId });
+      return;
+    }
+
+    updateEditDraft({
+      sourceType: "account",
+      accountId,
+      ownerPersonId: selectedAccount.ownerPersonId ?? "",
+    });
+  };
+
+  const syncEditDraftWithCard = (cardId: string) => {
+    const selectedCard = cards.find((card) => card.id === cardId);
+    if (!selectedCard) {
+      updateEditDraft({ cardId });
+      return;
+    }
+
+    updateEditDraft({
+      sourceType: "card",
+      cardId,
+      ownerPersonId: selectedCard.ownerPersonId ?? "",
+      accountId: selectedCard.linkedAccountId ?? editDraft.accountId,
+    });
   };
 
   return (
@@ -345,7 +402,12 @@ export function TransactionsPage() {
               </option>
             ))}
           </select>
-          <select name="accountId" className="form-select" defaultValue="">
+          <select
+            name="accountId"
+            className="form-select"
+            defaultValue=""
+            onChange={(event) => syncFormWithAccount(event.currentTarget.form!, event.currentTarget.value)}
+          >
             <option value="">계좌 연결 없음</option>
             {accounts.map((account) => (
               <option key={account.id} value={account.id}>
@@ -353,7 +415,12 @@ export function TransactionsPage() {
               </option>
             ))}
           </select>
-          <select name="cardId" className="form-select" defaultValue="">
+          <select
+            name="cardId"
+            className="form-select"
+            defaultValue=""
+            onChange={(event) => syncFormWithCard(event.currentTarget.form!, event.currentTarget.value)}
+          >
             <option value="">카드 연결 없음</option>
             {cards.map((card) => (
               <option key={card.id} value={card.id}>
@@ -771,6 +838,7 @@ export function TransactionsPage() {
               tags={scope.tags}
               selectedTagId={bulkTagId}
               selectedTagName={selectedBulkTagName}
+              scopeSummary={bulkScopeSummary}
               transactionCount={taggableTransactions.length}
               amount={taggableAmount}
               disabled={!bulkTagId || !taggableTransactions.length}
@@ -790,6 +858,7 @@ export function TransactionsPage() {
               categories={scope.categories}
               selectedCategoryId={bulkCategoryId}
               selectedCategoryName={selectedBulkCategoryName}
+              scopeSummary={bulkScopeSummary}
               transactionCount={categorizableTransactions.length}
               amount={categorizableAmount}
               disabled={!bulkCategoryId || !categorizableTransactions.length}
@@ -883,6 +952,8 @@ export function TransactionsPage() {
                               cards={cards}
                               saveDisabled={!editDraft.occurredAt || !editDraft.merchantName.trim() || !editDraft.amount || Number(editDraft.amount) <= 0}
                               onDraftChange={updateEditDraft}
+                              onAccountSelect={syncEditDraftWithAccount}
+                              onCardSelect={syncEditDraftWithCard}
                               onSave={() => {
                                 updateTransactionDetails(workspaceId, transaction.id, {
                                   sourceType: editDraft.sourceType,
