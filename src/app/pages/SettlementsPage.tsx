@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { monthKey } from "../../shared/utils/date";
+import { getMonthlySharedSettlementSummary } from "../../domain/settlements/summary";
 import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { CompletionBanner } from "../components/CompletionBanner";
@@ -20,32 +21,16 @@ export function SettlementsPage() {
   const peopleMap = new Map(scope.people.map((person) => [person.id, person.name]));
 
   const currentMonth = monthKey(new Date());
-  const sharedTransactions = scope.transactions
-    .filter(
-      (transaction) =>
-        transaction.status === "active" &&
-        transaction.isSharedExpense &&
-        transaction.isExpenseImpact &&
-        monthKey(transaction.occurredAt) === currentMonth,
-    )
-    .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
+  const settlementSummary = getMonthlySharedSettlementSummary(scope.transactions, scope.people.length, currentMonth);
+  const sharedTransactions = settlementSummary.sharedTransactions;
 
-  const totalsByPerson = new Map<string, number>();
-  for (const transaction of sharedTransactions) {
-    const key = transaction.ownerPersonId ?? "shared";
-    totalsByPerson.set(key, (totalsByPerson.get(key) ?? 0) + transaction.amount);
-  }
+  const totalSharedExpense = settlementSummary.totalSharedExpense;
+  const splitTarget = settlementSummary.splitTarget;
 
-  const participantCount = Math.max(scope.people.length, 1);
-  const totalSharedExpense = [...totalsByPerson.values()].reduce((sum, amount) => sum + amount, 0);
-  const splitTarget = totalSharedExpense / participantCount;
-
-  const baseRows = [...totalsByPerson.entries()]
-    .map(([personId, amount]) => ({
-      personId,
-      name: peopleMap.get(personId) ?? "공동 계정",
-      amount,
-      delta: amount - splitTarget,
+  const baseRows = settlementSummary.baseRows
+    .map((row) => ({
+      ...row,
+      name: peopleMap.get(row.personId) ?? "공동 계정",
     }));
 
   const settlementHistory = [...scope.settlements]
