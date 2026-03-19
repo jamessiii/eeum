@@ -65,13 +65,13 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
       description: "개인지출과 공동지출을 나누려면 먼저 구성원을 등록해야 합니다.",
       targetPath: "/people",
       ctaLabel: "사람 추가하러 가기",
-      tips: ["배우자나 가족 구성원을 먼저 등록해보세요.", "구성원이 있어야 개인/공동 지출 분리가 쉬워집니다."],
+      tips: ["배우자나 가족 구성원을 먼저 등록해보세요.", "구성원이 있어야 개인·공동 지출 분리가 쉬워집니다."],
       completed: scope.people.length > 0,
     },
     {
       id: "assets",
       title: "계좌와 카드 등록",
-      description: "내부이체와 카드 결제 흐름을 구분하려면 자산 등록이 먼저 필요합니다.",
+      description: "이체와 카드 결제 흐름을 구분하려면 자산 등록이 먼저 필요합니다.",
       targetPath: "/accounts",
       ctaLabel: "자산 등록하러 가기",
       tips: ["계좌를 먼저 등록하고 카드 결제 계좌를 연결해보세요.", "생활비용 공동 계좌가 있으면 함께 추가해두세요."],
@@ -96,7 +96,7 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
       description: "중복, 환불, 내부이체, 공동지출 후보를 먼저 정리하면 분류와 통계가 훨씬 정확해집니다.",
       targetPath: "/reviews",
       ctaLabel: "검토함 열기",
-      tips: ["즉답 팝업 대신 검토함에서 같은 유형끼리 모아서 처리해보세요.", "내부이체와 환불 후보를 먼저 정리하면 과소비 오판이 크게 줄어듭니다."],
+      tips: ["비슷한 성격의 항목부터 검토함에서 묶어서 처리해보세요.", "내부이체와 환불 후보를 먼저 정리하면 과소비 오판이 줄어듭니다."],
       completed: hasTransactions ? health.openReviewCount === 0 : false,
     },
     {
@@ -110,7 +110,7 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
       ctaLabel: dominantSourceLabel && dominantSource ? `${dominantSourceLabel} 거래 보러 가기` : "거래 흐름 보러 가기",
       tips:
         dominantSourceLabel && hasDominantSourceConcentration
-          ? [`${dominantSourceLabel} 거래만 모아 보고 연결값이나 성격 구분이 어색한 항목부터 먼저 다듬어보세요.`, "수단 흐름이 안정되면 이후 검토와 분류도 훨씬 빨라집니다."]
+          ? [`${dominantSourceLabel} 거래만 모아 보고 연결값이 빠졌거나 성격 구분이 어색한 항목부터 먼저 살펴보세요.`, "수단 흐름을 먼저 잡아두면 이후 검토와 분류도 훨씬 빨라집니다."]
           : ["거래 수단 흐름은 비교적 고르게 들어와 있습니다.", "이제 검토함과 분류 화면 중심으로 계속 정리해보세요."],
       completed: hasTransactions ? !(dominantSourceLabel && hasDominantSourceConcentration) : false,
     },
@@ -153,7 +153,7 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
     {
       id: "dashboard",
       title: "진단 결과 확인",
-      description: "검토와 분류, 태그 정리, 기준선 설정이 끝났다면 이제 대시보드에서 이번 달 소비 문제와 저축 여력을 확인할 차례입니다.",
+      description: "검토, 분류, 태그 정리, 기준선 설정이 끝나면 이제 대시보드에서 이번 달 소비 문제와 저축 여력을 확인할 차례입니다.",
       targetPath: "/",
       ctaLabel: "대시보드 보러 가기",
       tips: ["상위 지출과 재무 코치 메모를 먼저 확인해보세요.", "공동지출이 있다면 정산 화면까지 이어서 보는 흐름이 좋습니다."],
