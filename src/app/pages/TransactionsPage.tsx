@@ -274,12 +274,13 @@ export function TransactionsPage() {
     const selectedAccount = accounts.find((account) => account.id === accountId);
     const sourceTypeField = form.elements.namedItem("sourceType") as HTMLSelectElement | null;
     const cardField = form.elements.namedItem("cardId") as HTMLSelectElement | null;
+    const ownerField = form.elements.namedItem("ownerPersonId") as HTMLSelectElement | null;
     if (!selectedAccount) {
       if (sourceTypeField?.value === "account") sourceTypeField.value = "manual";
+      if (ownerField) ownerField.value = "";
       return;
     }
 
-    const ownerField = form.elements.namedItem("ownerPersonId") as HTMLSelectElement | null;
     if (sourceTypeField) sourceTypeField.value = "account";
     if (ownerField) ownerField.value = selectedAccount.ownerPersonId ?? "";
     if (cardField) cardField.value = "";
@@ -292,6 +293,10 @@ export function TransactionsPage() {
     const accountField = form.elements.namedItem("accountId") as HTMLSelectElement | null;
     if (!selectedCard) {
       if (sourceTypeField?.value === "card") sourceTypeField.value = accountField?.value ? "account" : "manual";
+      if (ownerField) ownerField.value = accountField?.value
+        ? accounts.find((account) => account.id === accountField.value)?.ownerPersonId ?? ""
+        : "";
+      if (accountField && !accountField.value) accountField.value = "";
       return;
     }
 
