@@ -11,10 +11,10 @@ export function SettingsPage() {
   const profile = getWorkspaceScope(state, workspaceId).financialProfile;
   const hasBaseline = Boolean(profile?.monthlyNetIncome);
   const settingsNextAction = hasBaseline
-    ? { title: "기준값 설정이 끝났습니다", description: "이제 대시보드와 정산 화면에서 이번 달 해석을 바로 확인하면 됩니다.", to: "/", actionLabel: "대시보드 보기" }
+    ? { title: "기준값 설정이 끝났습니다", description: "이제 대시보드와 정산 화면에서 이번 달 흐름을 바로 확인하면 됩니다.", to: "/", actionLabel: "대시보드 보기" }
     : {
         title: "먼저 월수입과 목표 저축률만 채워 주세요",
-        description: "나머지 경고 기준은 나중에 조정해도 되니, 우선 진단이 돌아가게 최소 기준부터 넣는 편이 좋습니다.",
+        description: "나머지 경고 기준은 나중에 조정해도 되니, 우선 최소 기준부터 넣어 진단이 돌아가게 하면 됩니다.",
         to: "/transactions",
         actionLabel: "거래 화면 보기",
       };
@@ -29,8 +29,7 @@ export function SettingsPage() {
           </div>
         </div>
         <p className="text-secondary">
-          기준값이 있어야 지출률, 저축률, 과소비 경고가 제대로 동작합니다. 아직 정확한 금액이 아니어도 대략적인 값부터 넣고 나중에
-          조정해도 괜찮습니다.
+          기준값이 있어야 지출률, 저축률, 과소비 경고가 제대로 동작합니다. 정확한 금액이 아니어도 대략적인 값부터 넣고 나중에 조정해도 됩니다.
         </p>
         <div className="review-summary-panel mb-4">
           <div className="review-summary-copy">
@@ -117,7 +116,7 @@ export function SettingsPage() {
           <CompletionBanner
             className="mt-4"
             title="재무 기준선 설정이 끝났습니다"
-            description="이제 대시보드에서 지출률, 저축률, 고정지출 경고를 더 믿고 볼 수 있습니다. 거래 정리와 정산 화면까지 함께 보면 이번 달 흐름이 더 선명해집니다."
+            description="이제 대시보드에서 지출률, 저축률, 고정지출 경고를 더 믿고 볼 수 있습니다. 거래와 정산 화면까지 함께 보면 이번 달 흐름이 더 선명해집니다."
             actions={
               <>
                 <Link to="/" className="btn btn-outline-dark btn-sm">
@@ -143,13 +142,12 @@ export function SettingsPage() {
           </div>
         </div>
         <p className="text-secondary">
-          이 앱은 로컬 저장 구조이므로 백업 파일이 중요합니다. 다른 기기에서 이어서 쓰고 싶다면 내보내기와 가져오기를 기본 루틴처럼
-          사용하면 됩니다.
+          이 앱은 로컬 저장 구조라 백업 파일이 중요합니다. 다른 기기에서 이어서 쓰려면 내보내기와 가져오기를 기본 루틴처럼 쓰면 됩니다.
         </p>
         <div className="review-summary-panel mb-3">
           <div className="review-summary-copy">
             <strong>기기 이동 전에는 백업 파일을 먼저 받아 두는 편이 안전합니다</strong>
-            <p className="mb-0 text-secondary">현재 상태를 JSON으로 내려받아 두면 테스트용 초기화나 다른 기기 복원 전에 되돌아오기 쉬워집니다.</p>
+            <p className="mb-0 text-secondary">현재 상태를 JSON으로 내려받아 두면 초기화나 다른 기기 복원 전에 되돌아오기 쉬워집니다.</p>
           </div>
         </div>
         <div className="d-flex flex-wrap gap-2">
@@ -183,7 +181,7 @@ export function SettingsPage() {
           <EmptyStateCallout
             kicker="기준선 필요"
             title="먼저 월 수입을 입력해주세요"
-            description="지금은 기준선이 비어 있어서 저축률과 과소비 가이드가 약하게 동작합니다. 위 입력 폼부터 먼저 채워보세요."
+            description="지금은 기준선이 비어 있어서 저축률과 과소비 가이드가 약하게 동작합니다. 위 입력 폼부터 먼저 채워주세요."
           />
         ) : (
           <div className="guide-progress">

@@ -129,8 +129,7 @@ export function SettlementsPage() {
           </div>
         </div>
         <p className="text-secondary mb-0">
-          공동지출로 표시된 거래만 합산해서 각 사람이 얼마나 부담했는지 비교합니다. 이번 달 정산 후보를 보고 실제로 끝낸 정산은 아래
-          기록으로 남길 수 있습니다.
+          공동지출로 표시된 거래만 합산해서 각 사람이 얼마나 부담했는지 비교합니다. 이번 달 정산 후보를 보고, 끝낸 정산은 아래 기록으로 남길 수 있습니다.
         </p>
         <div className="review-summary-panel mt-4">
           <div className="review-summary-copy">
@@ -159,7 +158,7 @@ export function SettlementsPage() {
           <CompletionBanner
             className="mt-3"
             title="이번 달 정산 균형이 맞춰졌습니다"
-            description="공동지출은 있었지만 현재 남아 있는 정산 편차는 거의 없습니다. 거래 흐름과 완료 기록만 가볍게 확인하면 됩니다."
+            description="공동지출은 있었지만 남아 있는 정산 편차는 거의 없습니다. 거래 흐름과 완료 기록만 가볍게 확인하면 됩니다."
             actions={
               <>
                 <Link to="/transactions?nature=shared" className="btn btn-outline-primary btn-sm">
@@ -226,7 +225,7 @@ export function SettlementsPage() {
             <EmptyStateCallout
               kicker="정산 대기"
               title="아직 공동지출 데이터가 없습니다"
-              description="거래 입력이나 업로드 뒤에 공동지출 체크를 해두면 여기서 사람별 부담과 정산 후보를 계산해 보여줍니다."
+              description="거래 입력이나 업로드 뒤에 공동지출 체크를 해두면 여기서 사람별 부담과 정산 후보를 계산합니다."
             />
             </>
           ) : (

@@ -365,17 +365,16 @@ export function TransactionsPage() {
           </div>
         </div>
         <p className="text-secondary">
-          업로드로 들어오지 않은 거래나 빠진 항목은 여기서 직접 추가할 수 있습니다. 사용일과 결제일을 분리해서 넣어두면 카드 소비와
-          실제 현금흐름을 나눠서 볼 수 있습니다.
+          업로드로 들어오지 않은 거래나 빠진 항목은 여기서 직접 추가할 수 있습니다. 사용일과 결제일을 나눠 넣으면 카드 소비와 실제 현금흐름을 따로 보기 쉽습니다.
         </p>
         <div className="transaction-mode-grid mb-4">
           <article className="resource-card">
             <h3>실지출로 넣을 때</h3>
-            <p className="mb-0 text-secondary">생활비, 외식, 쇼핑처럼 실제 소비가 발생한 거래는 `지출 반영`을 켠 상태로 등록합니다.</p>
+            <p className="mb-0 text-secondary">생활비, 외식, 쇼핑처럼 실제 소비가 생긴 거래는 `지출 반영`을 켠 상태로 등록합니다.</p>
           </article>
           <article className="resource-card">
             <h3>공동지출일 때</h3>
-            <p className="mb-0 text-secondary">함께 부담할 거래라면 `공동지출`도 함께 켜두면 정산 화면에서 자동으로 계산됩니다.</p>
+            <p className="mb-0 text-secondary">함께 부담할 거래라면 `공동지출`도 함께 켜두면 정산 화면에서 자동 계산됩니다.</p>
           </article>
           <article className="resource-card">
             <h3>내부이체일 때</h3>
@@ -547,7 +546,7 @@ export function TransactionsPage() {
           <EmptyStateCallout
             kicker="거래 없음"
             title="아직 입력된 거래가 없습니다"
-            description="업로드 화면에서 엑셀을 가져오거나, 위 수동 입력 폼으로 첫 거래를 넣으면 검토와 통계가 시작됩니다."
+            description="업로드 화면에서 엑셀을 가져오거나, 위 입력 폼으로 첫 거래를 넣으면 검토와 통계가 시작됩니다."
             actions={
               <>
                 <Link to="/imports" className="btn btn-outline-primary btn-sm">
