@@ -20,15 +20,24 @@ function getAmountSpreadRate(amounts: number[]) {
   return (max - min) / average;
 }
 
+function isUncategorizedExpenseCandidate(transaction: Transaction) {
+  return (
+    transaction.status === "active" &&
+    transaction.isExpenseImpact &&
+    transaction.transactionType === "expense" &&
+    !transaction.categoryId
+  );
+}
+
+function isRecurringSuggestionCandidate(transaction: Transaction, categoryIds: Set<string>) {
+  if (!isUncategorizedExpenseCandidate(transaction)) return false;
+  if (transaction.categoryId && categoryIds.has(transaction.categoryId)) return false;
+  return true;
+}
+
 export function getUncategorizedTransactions(transactions: Transaction[]) {
   return transactions
-    .filter(
-      (transaction) =>
-        transaction.status === "active" &&
-        transaction.isExpenseImpact &&
-        transaction.transactionType === "expense" &&
-        !transaction.categoryId,
-    )
+    .filter(isUncategorizedExpenseCandidate)
     .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
 }
 
@@ -37,9 +46,7 @@ export function getRecurringMerchantSuggestions(transactions: Transaction[], cat
   const merchantMap = new Map<string, Transaction[]>();
 
   for (const transaction of transactions) {
-    if (transaction.status !== "active") continue;
-    if (!transaction.isExpenseImpact || transaction.transactionType !== "expense") continue;
-    if (transaction.categoryId && categoryIds.has(transaction.categoryId)) continue;
+    if (!isRecurringSuggestionCandidate(transaction, categoryIds)) continue;
     const key = transaction.merchantName.trim();
     if (!key) continue;
     merchantMap.set(key, [...(merchantMap.get(key) ?? []), transaction]);
