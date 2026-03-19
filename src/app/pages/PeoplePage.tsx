@@ -95,9 +95,14 @@ export function PeoplePage() {
             title="입력과 업로드에 연결할 사람을 먼저 등록해주세요"
             description="사람이 정리되어 있어야 계좌, 카드, 업로드 매핑이 자연스럽게 이어집니다."
             actions={
-              <Link to="/accounts" className="btn btn-outline-secondary btn-sm">
-                다음 단계 미리 보기
-              </Link>
+              <>
+                <Link to="/accounts" className="btn btn-outline-primary btn-sm">
+                  계좌 관리 보기
+                </Link>
+                <Link to="/imports" className="btn btn-outline-secondary btn-sm">
+                  업로드 흐름 보기
+                </Link>
+              </>
             }
           />
         ) : (

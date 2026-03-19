@@ -161,7 +161,7 @@ export function CategoriesPage() {
                 무태그 {untaggedExpenseCount}건 정리
               </Link>
             ) : null}
-            <Link to="/" className="btn btn-outline-dark btn-sm">
+            <Link to="/" className="btn btn-outline-secondary btn-sm">
               대시보드에서 결과 보기
             </Link>
           </div>
@@ -181,11 +181,11 @@ export function CategoriesPage() {
                 <Link to="/transactions" className="btn btn-outline-secondary btn-sm">
                   거래 화면 보기
                 </Link>
-                <Link to="/" className="btn btn-outline-dark btn-sm">
-                  대시보드 보기
-                </Link>
                 <Link to="/settlements" className="btn btn-outline-primary btn-sm">
                   정산 화면 보기
+                </Link>
+                <Link to="/" className="btn btn-outline-secondary btn-sm">
+                  대시보드 보기
                 </Link>
               </>
             }

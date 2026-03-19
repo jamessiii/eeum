@@ -129,9 +129,14 @@ export function CardsPage() {
             title="업로드 전에 카드를 먼저 등록해두면 좋습니다"
             description="카드사, 카드명, 결제 계좌가 먼저 잡혀 있어야 명세서 업로드 후 매핑 흐름이 매끄럽게 이어집니다."
             actions={
-              <Link to="/imports" className="btn btn-outline-primary btn-sm">
-                업로드 화면으로 이동
-              </Link>
+              <>
+                <Link to="/imports" className="btn btn-outline-primary btn-sm">
+                  업로드 화면 보기
+                </Link>
+                <Link to="/accounts" className="btn btn-outline-secondary btn-sm">
+                  계좌 관리 보기
+                </Link>
+              </>
             }
           />
         ) : (

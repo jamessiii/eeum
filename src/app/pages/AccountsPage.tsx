@@ -161,9 +161,14 @@ export function AccountsPage() {
             title="분석 전에 계좌를 먼저 등록해주세요"
             description="생활비, 카드결제, 급여통장처럼 역할이 다른 계좌를 먼저 구분해두면 업로드와 거래 분류가 훨씬 수월해집니다."
             actions={
-              <Link to="/cards" className="btn btn-outline-secondary btn-sm">
-                카드 관리로 이동
-              </Link>
+              <>
+                <Link to="/cards" className="btn btn-outline-primary btn-sm">
+                  카드 관리 보기
+                </Link>
+                <Link to="/imports" className="btn btn-outline-secondary btn-sm">
+                  업로드 흐름 보기
+                </Link>
+              </>
             }
           />
         ) : (
