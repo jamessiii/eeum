@@ -104,6 +104,12 @@ export function TransactionsPage() {
   const peopleMap = new Map(scope.people.map((person) => [person.id, person.displayName || person.name]));
   const accountMap = new Map(scope.accounts.map((account) => [account.id, account.alias || account.name]));
   const cardMap = new Map(scope.cards.map((card) => [card.id, card.name]));
+  const getTransactionOwnerLabel = (transaction: (typeof transactions)[number]) =>
+    transaction.ownerPersonId
+      ? peopleMap.get(transaction.ownerPersonId) ?? "-"
+      : transaction.accountId && scope.accounts.find((account) => account.id === transaction.accountId)?.isShared
+        ? "공동"
+        : "-";
   const people = scope.people;
   const cards = scope.cards;
   const accounts = scope.accounts;
@@ -1078,7 +1084,7 @@ export function TransactionsPage() {
                             connectionSummary={
                               [
                                 `수단 ${getSourceTypeLabel(transaction.sourceType)}`,
-                                transaction.ownerPersonId ? `사용자 ${peopleMap.get(transaction.ownerPersonId) ?? "-"}` : null,
+                                `사용자 ${getTransactionOwnerLabel(transaction)}`,
                                 transaction.accountId ? `계좌 ${accountMap.get(transaction.accountId) ?? "-"}` : null,
                                 transaction.cardId ? `카드 ${cardMap.get(transaction.cardId) ?? "-"}` : null,
                               ]
@@ -1149,7 +1155,7 @@ export function TransactionsPage() {
                             onRemoveTag={(tagId) => removeTag(workspaceId, transaction.id, tagId)}
                           />
                         </td>
-                        <td>{peopleMap.get(transaction.ownerPersonId ?? "") ?? "-"}</td>
+                        <td>{getTransactionOwnerLabel(transaction)}</td>
                         <td>
                           <TransactionCategoryEditor
                             transaction={transaction}

@@ -32,6 +32,14 @@ export function EmptyWorkspaceScreen() {
           : "거래 화면 보기"
     : "거래 화면 보기";
 
+  const commitPreviewAndMoveNext = () => {
+    if (!previewBundle) return;
+    commitImportedBundle(previewBundle, previewFileName);
+    setPreviewBundle(null);
+    setPreviewFileName("");
+    void navigate(previewPostImportPath);
+  };
+
   const handleStartEmptyWorkspace = () => {
     setStartMode("empty");
     try {
@@ -127,12 +135,7 @@ export function EmptyWorkspaceScreen() {
               <button
                 className="btn btn-primary"
                 disabled={isBusy}
-                onClick={() => {
-                  commitImportedBundle(previewBundle, previewFileName);
-                  setPreviewBundle(null);
-                  setPreviewFileName("");
-                  void navigate(previewPostImportPath);
-                }}
+                onClick={commitPreviewAndMoveNext}
               >
                 이 미리보기로 시작하고 {previewPostImportLabel}
               </button>

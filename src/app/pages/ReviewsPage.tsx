@@ -26,6 +26,25 @@ export function ReviewsPage() {
   const accountMap = new Map(scope.accounts.map((account) => [account.id, account.alias || account.name]));
   const cardMap = new Map(scope.cards.map((card) => [card.id, card.name]));
   const tags = new Map(scope.tags.map((item) => [item.id, item]));
+  const getTransactionConnectionMeta = (transaction: NonNullable<ReturnType<typeof transactions.get>>) => {
+    const parts = [
+      `수단 ${getSourceTypeLabel(transaction.sourceType)}`,
+      transaction.ownerPersonId
+        ? `사용자 ${peopleMap.get(transaction.ownerPersonId) ?? "-"}`
+        : transaction.accountId && scope.accounts.find((account) => account.id === transaction.accountId)?.isShared
+          ? "사용자 공동"
+          : "사용자 미지정",
+    ];
+
+    if (transaction.sourceType === "account" || transaction.sourceType === "card") {
+      parts.push(transaction.accountId ? `계좌 ${accountMap.get(transaction.accountId) ?? "-"}` : "계좌 미연결");
+    }
+    if (transaction.sourceType === "card") {
+      parts.push(transaction.cardId ? `카드 ${cardMap.get(transaction.cardId) ?? "-"}` : "카드 미연결");
+    }
+
+    return parts.join(" · ");
+  };
   const {
     openReviews: reviews,
     openReviewCount,
@@ -463,11 +482,7 @@ export function ReviewsPage() {
                     ) : null}
                     {primaryTransaction ? (
                       <div className="review-card-meta mb-2 text-secondary">
-                        <p className="mb-0">
-                        {primaryTransaction.ownerPersonId ? `사용자 ${peopleMap.get(primaryTransaction.ownerPersonId) ?? "-"}` : "사용자 미지정"} ·{" "}
-                        {primaryTransaction.accountId ? `계좌 ${accountMap.get(primaryTransaction.accountId) ?? "-"}` : "계좌 미연결"} ·{" "}
-                        {primaryTransaction.cardId ? `카드 ${cardMap.get(primaryTransaction.cardId) ?? "-"}` : "카드 미연결"}
-                        </p>
+                        <p className="mb-0">{getTransactionConnectionMeta(primaryTransaction)}</p>
                       </div>
                     ) : null}
                     {relatedTransactions.length ? (
