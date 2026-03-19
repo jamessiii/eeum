@@ -726,6 +726,14 @@ a {
   grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
 }
 
+.compact-summary-panel {
+  align-items: center;
+}
+
+.compact-action-row {
+  align-items: end;
+}
+
 .mini-breakdown-row,
 .resource-card {
   display: flex;
@@ -879,6 +887,21 @@ a {
   .review-summary-panel .btn,
   .review-card .btn {
     white-space: normal;
+  }
+
+  .compact-summary-panel,
+  .compact-action-row {
+    gap: 0.75rem;
+  }
+
+  .compact-summary-panel > .btn,
+  .compact-action-row > .btn {
+    width: 100%;
+  }
+
+  .review-card > .d-flex,
+  .review-summary-panel > .d-flex {
+    width: 100%;
   }
 
   .resource-card {

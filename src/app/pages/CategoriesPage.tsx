@@ -256,7 +256,7 @@ export function CategoriesPage() {
                   </span>
                 </div>
                 <form
-                  className="classification-action-row mt-3"
+                  className="classification-action-row compact-action-row mt-3"
                   onSubmit={(event) => {
                     event.preventDefault();
                     const form = event.currentTarget;
@@ -324,7 +324,7 @@ export function CategoriesPage() {
                   </div>
                 </div>
                 <form
-                  className="classification-action-row mt-3"
+                  className="classification-action-row compact-action-row mt-3"
                   onSubmit={(event) => {
                     event.preventDefault();
                     const form = event.currentTarget;

@@ -516,6 +516,18 @@ export function ImportsPage() {
             }
           />
         ) : (
+          <>
+            <div className="review-summary-panel mb-4">
+              <div className="review-summary-copy">
+                <strong>최근 업로드에서 바로 이어서 정리할 수 있습니다</strong>
+                <p className="mb-0 text-secondary">
+                  검토가 남아 있으면 리뷰로, 아니면 거래 정리 화면으로 바로 이동해서 업로드 직후 흐름을 이어가세요.
+                </p>
+              </div>
+              <Link to="/reviews" className="btn btn-outline-secondary btn-sm">
+                리뷰 화면 보기
+              </Link>
+            </div>
           <div className="review-list">
             {[...scope.imports]
               .sort((a, b) => b.importedAt.localeCompare(a.importedAt))
@@ -529,13 +541,21 @@ export function ImportsPage() {
                         {item.importedAt.slice(0, 19).replace("T", " ")} · 거래 {item.rowCount}건 · 검토 {item.reviewCount}건
                       </p>
                     </div>
-                    <Link to="/transactions" className="btn btn-sm btn-outline-primary">
+                    <div className="d-flex flex-wrap gap-2 justify-content-end">
+                      {item.reviewCount > 0 ? (
+                        <Link to="/reviews" className="btn btn-sm btn-outline-secondary">
+                          리뷰 보기
+                        </Link>
+                      ) : null}
+                      <Link to="/transactions" className="btn btn-sm btn-outline-primary">
                       거래 보기
-                    </Link>
+                      </Link>
+                    </div>
                   </div>
                 </article>
               ))}
           </div>
+          </>
         )}
       </section>
     </div>

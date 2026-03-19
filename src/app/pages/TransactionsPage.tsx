@@ -184,6 +184,17 @@ export function TransactionsPage() {
       activeSearchQuery ? `검색 ${activeSearchQuery}` : null,
     ].filter(Boolean).join(" · ") || null;
 
+  const activeFilterSummary =
+    [
+      filters.transactionType !== "all" ? `유형 ${filters.transactionType}` : null,
+      activeSourceTypeLabel ? `수단 ${activeSourceTypeLabel}` : null,
+      activeOwnerName ? `사용자 ${activeOwnerName}` : null,
+      filters.status !== "all" ? `상태 ${filters.status}` : null,
+      filters.nature !== "all" ? `정리 ${filters.nature}` : null,
+      filters.tagId !== "all" ? `태그 ${scope.tags.find((tag) => tag.id === filters.tagId)?.name ?? "-"}` : null,
+      activeSearchQuery ? `검색 ${activeSearchQuery}` : null,
+    ].filter(Boolean).join(" · ") || null;
+
   useEffect(() => {
     const cleanup = searchParams.get("cleanup");
     const nature = searchParams.get("nature");
@@ -768,6 +779,17 @@ export function TransactionsPage() {
                 현재 보이는 거래 {transactions.length}건 중 실지출 {activeExpenseCount}건, 미분류 {uncategorizedCount}건, 무태그 {untaggedCount}건입니다.
               </div>
             </div>
+              {activeFilterSummary ? (
+                <div className="review-summary-panel compact-summary-panel mb-3">
+                  <div className="review-summary-copy">
+                    <strong>현재 적용된 필터</strong>
+                    <p className="mb-0 text-secondary">{activeFilterSummary}</p>
+                  </div>
+                  <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setFilters(resetTransactionCleanupFilters)}>
+                    필터 초기화
+                  </button>
+                </div>
+              ) : null}
               <TransactionCleanupQuickActions
                 transactionCount={transactions.length}
                 activeExpenseCount={activeExpenseCount}
