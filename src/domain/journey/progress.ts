@@ -3,11 +3,23 @@ type JourneyStepLike = {
 };
 
 export function getJourneyProgress<TStep extends JourneyStepLike>(steps: TStep[]) {
-  const completedCount = steps.filter((step) => step.completed).length;
+  let completedCount = 0;
+  let nextStep: TStep | null = null;
+
+  for (const step of steps) {
+    if (step.completed) {
+      completedCount += 1;
+      continue;
+    }
+
+    if (!nextStep) {
+      nextStep = step;
+    }
+  }
+
   const totalCount = steps.length;
   const progress = totalCount ? completedCount / totalCount : 0;
-  const isReady = steps.every((step) => step.completed);
-  const nextStep = steps.find((step) => !step.completed) ?? null;
+  const isReady = completedCount === totalCount;
 
   return {
     completedCount,
