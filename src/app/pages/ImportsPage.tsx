@@ -107,6 +107,36 @@ export function ImportsPage() {
   const missingCardLinkCount = previewBundle?.cards.filter((card) => !card.linkedAccountId).length ?? 0;
   const previewExpenseAmount =
     previewBundle?.transactions.filter((transaction) => transaction.isExpenseImpact).reduce((sum, transaction) => sum + transaction.amount, 0) ?? 0;
+  const previewRemainingMappingCount = missingAccountOwnerCount + missingCardOwnerCount + missingCardLinkCount;
+  const previewNextAction = previewBundle
+    ? previewRemainingMappingCount > 0
+      ? {
+          title: `아직 ${previewRemainingMappingCount}개의 연결 확인이 남아 있습니다`,
+          description: "소유자 없는 계좌, 소유자 없는 카드, 결제 계좌가 비어 있는 카드만 먼저 채우면 거래 연결 해석이 훨씬 자연스럽습니다.",
+        }
+      : {
+          title: "지금 바로 가져와도 되는 상태입니다",
+          description: "사람, 계좌, 카드 연결이 모두 채워져 있어서 업로드 후 리뷰와 분류 화면으로 바로 이어가기 좋습니다.",
+        }
+    : null;
+  const previewPostImportPath = previewBundle
+    ? previewBundle.reviews.length > 0
+      ? "/reviews"
+      : previewBundle.transactions.some((transaction) => transaction.isExpenseImpact && !transaction.categoryId)
+        ? "/transactions?cleanup=uncategorized"
+        : previewBundle.transactions.some((transaction) => transaction.isExpenseImpact && transaction.tagIds.length === 0)
+          ? "/transactions?cleanup=untagged"
+          : "/transactions"
+    : "/transactions";
+  const previewPostImportLabel = previewBundle
+    ? previewBundle.reviews.length > 0
+      ? `리뷰 ${previewBundle.reviews.length}건 확인`
+      : previewBundle.transactions.some((transaction) => transaction.isExpenseImpact && !transaction.categoryId)
+        ? "미분류 거래 정리"
+        : previewBundle.transactions.some((transaction) => transaction.isExpenseImpact && transaction.tagIds.length === 0)
+          ? "무태그 거래 정리"
+          : "거래 화면으로 이동"
+    : "거래 화면으로 이동";
 
   return (
     <div className="page-stack">
@@ -192,6 +222,17 @@ export function ImportsPage() {
             가져오세요. 여기서 정리된 연결 정보가 거래 소유자와 카드 결제 계좌에도 같이 반영됩니다.
           </p>
 
+          {previewNextAction ? (
+            <div className="review-summary-panel mt-4">
+              <div className="review-summary-copy">
+                <strong>{previewNextAction.title}</strong>
+                <p className="mb-0 text-secondary">{previewNextAction.description}</p>
+              </div>
+              <Link to={previewPostImportPath} className="btn btn-outline-secondary btn-sm">
+                업로드 후 {previewPostImportLabel}
+              </Link>
+            </div>
+          ) : null}
           <div className="classification-flow-grid">
             <article className="stat-card">
               <span className="stat-label">거래</span>
@@ -433,18 +474,10 @@ export function ImportsPage() {
               className="btn btn-primary"
               type="button"
               onClick={() => {
-                const nextPath =
-                  previewBundle.reviews.length > 0
-                    ? "/reviews"
-                    : previewBundle.transactions.some((transaction) => transaction.isExpenseImpact && !transaction.categoryId)
-                      ? "/transactions?cleanup=uncategorized"
-                      : previewBundle.transactions.some((transaction) => transaction.isExpenseImpact && transaction.tagIds.length === 0)
-                        ? "/transactions?cleanup=untagged"
-                        : "/transactions";
                 commitImportedBundle(previewBundle, previewFileName);
                 setPreviewBundle(null);
                 setPreviewFileName("");
-                void navigate(nextPath);
+                void navigate(previewPostImportPath);
               }}
             >
               매핑 확인 후 가져오기

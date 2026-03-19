@@ -50,6 +50,14 @@ export function ReviewsPage() {
     activeTagId,
     activeSourceType,
   });
+  const hasActiveReviewFilters = activeFilter !== "all" || activeTagId !== "all" || activeSourceType !== "all";
+  const filteredReviewSummary = [
+    activeFilter !== "all" ? `유형 ${REVIEW_TYPE_LABELS[activeFilter]}` : null,
+    activeSourceType !== "all" ? `수단 ${getSourceTypeLabel(activeSourceType)}` : null,
+    activeTagId !== "all" ? `태그 ${tags.get(activeTagId)?.name ?? "-"}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
   const resolvedReviewTypeSummary = getSortedReviewTypeSummary(resolvedReviews);
   const nextReviewAction = uncategorizedCount
     ? {
@@ -223,6 +231,32 @@ export function ReviewsPage() {
         </div>
       ) : null}
 
+      {openReviewCount ? (
+        <div className="review-summary-panel mt-3">
+          <div className="review-summary-copy">
+            <strong>{hasActiveReviewFilters ? "지금 보는 리뷰 범위" : "전체 리뷰를 보고 있습니다"}</strong>
+            <p className="mb-0 text-secondary">
+              {hasActiveReviewFilters
+                ? `${filteredReviewSummary} 기준으로 ${filteredReviews.length}건을 추려서 보고 있습니다. 같은 맥락끼리 먼저 처리하면 판단이 더 빨라집니다.`
+                : `열린 리뷰 ${openReviewCount}건을 전체 기준으로 보고 있습니다. 유형이나 수단으로 좁히면 비슷한 항목을 연속으로 처리하기 좋습니다.`}
+            </p>
+          </div>
+          {hasActiveReviewFilters ? (
+            <div className="d-flex flex-wrap gap-2">
+              <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setActiveFilter("all")}>
+                유형 초기화
+              </button>
+              <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setActiveSourceType("all")}>
+                수단 초기화
+              </button>
+              <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setActiveTagId("all")}>
+                태그 초기화
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       {nextReviewAction ? (
         <NextStepCallout
           className="mt-3"
@@ -335,6 +369,31 @@ export function ReviewsPage() {
           kicker="검토 완료"
           title="열려 있는 검토 항목이 없습니다"
           description="중복, 환불, 내부이체, 공동지출 후보를 모두 정리했습니다. 이제 대시보드와 정산 화면의 수치를 더 믿고 볼 수 있습니다."
+        />
+      ) : !filteredReviews.length ? (
+        <EmptyStateCallout
+          kicker="필터 결과 없음"
+          title="지금 선택한 조건에 맞는 리뷰가 없습니다"
+          description={
+            hasActiveReviewFilters
+              ? `${filteredReviewSummary} 조건에서는 열린 리뷰가 없습니다. 필터를 풀고 다른 항목을 이어서 확인해 보세요.`
+              : "열린 리뷰가 없어서 여기에는 더 보여줄 항목이 없습니다."
+          }
+          actions={
+            hasActiveReviewFilters ? (
+              <button
+                className="btn btn-outline-secondary btn-sm"
+                type="button"
+                onClick={() => {
+                  setActiveFilter("all");
+                  setActiveTagId("all");
+                  setActiveSourceType("all");
+                }}
+              >
+                필터 전체 초기화
+              </button>
+            ) : undefined
+          }
         />
       ) : (
         <div className="review-list">
