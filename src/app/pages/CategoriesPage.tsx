@@ -4,7 +4,7 @@ import {
   getUncategorizedTransactions,
   type RecurringMerchantSuggestion,
 } from "../../domain/classification/suggestions";
-import { isActiveExpenseTransaction } from "../../domain/transactions/meta";
+import { getExpenseImpactStats } from "../../domain/transactions/expenseImpactStats";
 import { formatCurrency, formatPercent } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { CompletionBanner } from "../components/CompletionBanner";
@@ -28,8 +28,9 @@ export function CategoriesPage() {
   const uncategorizedTransactions = getUncategorizedTransactions(scope.transactions);
   const recurringSuggestions = getRecurringMerchantSuggestions(scope.transactions, scope.categories);
   const isCategoryCleanupComplete = recurringSuggestions.length === 0 && uncategorizedTransactions.length === 0;
-  const expenseTransactions = scope.transactions.filter(isActiveExpenseTransaction);
-  const untaggedExpenseCount = expenseTransactions.filter((item) => item.tagIds.length === 0).length;
+  const expenseStats = getExpenseImpactStats(scope.transactions);
+  const expenseTransactions = expenseStats.activeExpenseTransactions;
+  const untaggedExpenseCount = expenseStats.untaggedCount;
   const categorizedCount = expenseTransactions.filter((item) => item.categoryId).length;
   const classificationProgress = expenseTransactions.length ? categorizedCount / expenseTransactions.length : 0;
   const remainingWorkCount = recurringSuggestions.reduce((sum, suggestion) => sum + suggestion.transactionIds.length, 0) + uncategorizedTransactions.length;
