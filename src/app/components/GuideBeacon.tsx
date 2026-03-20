@@ -1,6 +1,4 @@
-import beaconVideoSrc from "../../beacon/beacon1.mp4";
-
-export type GuideBeaconVariant = "v1" | "v2" | "v3" | "v4" | "v5" | "v6" | "v7" | "v8";
+export type GuideBeaconVariant = "v1" | "v2" | "v3" | "v4" | "v5" | "v7" | "v8";
 export type GuideBeaconState = "hidden" | "entering" | "idle" | "exiting";
 
 type GuideBeaconProps = {
@@ -239,21 +237,6 @@ export function GuideBeacon({ variant = "v1", state = "idle", className }: Guide
           <path className="ai-sphere-v5-ribbon ai-sphere-v5-ribbon-d" d="M54 34C68 46 79 61 89 75C97 87 108 97 121 104C105 109 91 116 77 124C73 109 65 95 57 82C49 68 47 48 54 34Z" style={{ stroke: "url(#ai-sphere-ribbon-v5-a)" }} />
         </g>
       </svg>
-    );
-  }
-
-  if (variant === "v6") {
-    return (
-      <video
-        className={rootClassName}
-        src={beaconVideoSrc}
-        autoPlay
-        muted
-        loop
-        playsInline
-        preload="auto"
-        aria-hidden="true"
-      />
     );
   }
 
