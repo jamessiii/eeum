@@ -8,6 +8,7 @@ import { CategoriesPage } from "./CategoriesPage";
 import { PeoplePage } from "./PeoplePage";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
+import { useThemeMode } from "../useThemeMode";
 
 const SETTINGS_TABS = [
   { id: "profile", label: "기준값" },
@@ -27,6 +28,7 @@ function isSettingsTab(value: string | null): value is SettingsTabId {
 
 export function SettingsPage() {
   const { exportState, importState, resetApp, setFinancialProfile, state } = useAppState();
+  const { themeMode, toggleThemeMode } = useThemeMode();
   const [searchParams, setSearchParams] = useSearchParams();
   const workspaceId = state.activeWorkspaceId!;
   const profile = getWorkspaceScope(state, workspaceId).financialProfile;
@@ -102,6 +104,15 @@ export function SettingsPage() {
               </div>
             </div>
           )}
+          <div className="settings-compact-copy">
+            <p className="mb-2 text-secondary">앱 화면 테마</p>
+            <div className="d-flex flex-wrap gap-2">
+              <button type="button" className="theme-toggle-button" onClick={toggleThemeMode}>
+                <span className="theme-toggle-button-label">테마</span>
+                <strong>{themeMode === "dark" ? "Light" : "Dark"}</strong>
+              </button>
+            </div>
+          </div>
           <div className="d-flex justify-content-end">
             <button className="btn btn-outline-danger" onClick={() => void resetApp()}>
               전체 데이터 초기화

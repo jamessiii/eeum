@@ -9,6 +9,7 @@ import { LoadingScreen } from "./pages/LoadingScreen";
 import { AppStateProvider, useAppState } from "./state/AppStateProvider";
 import { getActiveWorkspace, getWorkspaceScope } from "./state/selectors";
 import { ToastProvider, useToast } from "./toast/ToastProvider";
+import { useThemeMode } from "./useThemeMode";
 
 const DashboardPage = lazy(() => import("./pages/DashboardPage").then((module) => ({ default: module.DashboardPage })));
 const TransactionsPage = lazy(() =>
@@ -20,10 +21,7 @@ const SettingsPage = lazy(() => import("./pages/SettingsPage").then((module) => 
 const DeveloperPage = lazy(() => import("./pages/DeveloperPage").then((module) => ({ default: module.DeveloperPage })));
 
 const DEVELOPER_MODE_KEY = "household-webapp.developer-mode";
-const THEME_STORAGE_KEY = "household-webapp.theme";
 const CREATE_WORKSPACE_OPTION = "__create_workspace__";
-
-type ThemeMode = "light" | "dark";
 
 type NavItem = {
   to: string;
@@ -73,30 +71,6 @@ function useDeveloperMode() {
   };
 
   return { isDeveloperModeUnlocked, registerUnlockTap, lockDeveloperMode };
-}
-
-function getPreferredTheme(): ThemeMode {
-  if (typeof window === "undefined") return "light";
-
-  const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
-  if (stored === "light" || stored === "dark") return stored;
-
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-}
-
-function useThemeMode() {
-  const [themeMode, setThemeMode] = useState<ThemeMode>(() => getPreferredTheme());
-
-  useEffect(() => {
-    document.documentElement.dataset.theme = themeMode;
-    document.body.dataset.theme = themeMode;
-    window.localStorage.setItem(THEME_STORAGE_KEY, themeMode);
-  }, [themeMode]);
-
-  return {
-    themeMode,
-    toggleThemeMode: () => setThemeMode((current) => (current === "dark" ? "light" : "dark")),
-  };
 }
 
 function AppTopNav({ isDeveloperModeUnlocked }: { isDeveloperModeUnlocked: boolean }) {
@@ -300,7 +274,7 @@ function WorkspaceNameDisplay({
 function AppFrame() {
   const { addPerson, createEmptyWorkspace, isReady, renameWorkspace, setActiveWorkspace, state } = useAppState();
   const { isDeveloperModeUnlocked, registerUnlockTap, lockDeveloperMode } = useDeveloperMode();
-  const { themeMode, toggleThemeMode } = useThemeMode();
+  useThemeMode();
   const [isTopbarCondensed, setIsTopbarCondensed] = useState(false);
   const [isEditingWorkspaceName, setIsEditingWorkspaceName] = useState(false);
   const [isCreateWorkspaceOpen, setIsCreateWorkspaceOpen] = useState(false);
@@ -529,10 +503,10 @@ function AppFrame() {
               거래 {headerSummary.transactionsCount}건 · 검토 {headerSummary.openReviewCount}건 · 사용자 {headerSummary.peopleCount}명
             </span>
           </div>
-          <div className="app-topbar-actions">
-            <select
-              className="form-select workspace-select"
-              value={activeWorkspace.id}
+            <div className="app-topbar-actions">
+              <select
+                className="form-select workspace-select"
+                value={activeWorkspace.id}
               onChange={(event) => {
                 if (event.target.value === CREATE_WORKSPACE_OPTION) {
                   setNewWorkspaceName("");
@@ -541,19 +515,15 @@ function AppFrame() {
                 }
                 setActiveWorkspace(event.target.value);
               }}
-            >
-              {state.workspaces.map((workspace) => (
+              >
+                {state.workspaces.map((workspace) => (
                 <option key={workspace.id} value={workspace.id}>
                   {workspace.name}
                 </option>
-              ))}
-              <option value={CREATE_WORKSPACE_OPTION}>+ 새 가계부 추가...</option>
-            </select>
-            <button type="button" className="theme-toggle-button" onClick={toggleThemeMode}>
-              <span className="theme-toggle-button-label">테마</span>
-              <strong>{themeMode === "dark" ? "Light" : "Dark"}</strong>
-            </button>
-          </div>
+                ))}
+                <option value={CREATE_WORKSPACE_OPTION}>+ 새 가계부 추가...</option>
+              </select>
+            </div>
           {isTopbarCondensed ? <AppTopNav isDeveloperModeUnlocked={isDeveloperModeUnlocked} /> : null}
         </div>
         {!isTopbarCondensed ? <AppTopNav isDeveloperModeUnlocked={isDeveloperModeUnlocked} /> : null}

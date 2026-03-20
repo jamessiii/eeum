@@ -1823,7 +1823,7 @@ label,
 }
 
 .app-topbar.condensed .workspace-select {
-  min-width: 10.5rem;
+  display: none;
 }
 
 .app-topbar.condensed .theme-toggle-button {
@@ -5335,8 +5335,6 @@ textarea:focus {
   }
 
   .floating-guide-panel {
-    right: 1.5rem;
-    bottom: 1.5rem;
     width: calc(100vw - 3rem);
     padding: 0.7rem 0.78rem;
     gap: 0.55rem;
