@@ -10,10 +10,14 @@ import { GuideBeaconScene } from "./GuideBeaconScene";
 import { matchesGuideTargetPath } from "./guidePathMatch";
 
 type GuideAnchorSide = "left" | "right";
+type PanelMorphState = "closed" | "opening" | "open" | "closing";
+type BeaconMorphState = "hidden" | "entering" | "idle" | "exiting";
 
 const GUIDE_ANCHOR_SIDE_KEY = "household-webapp.guide-anchor-side";
 const GUIDE_BEACON_EXIT_MS = 220;
 const GUIDE_BEACON_ENTER_MS = 700;
+const GUIDE_PANEL_MORPH_MS = 520;
+const GUIDE_BEACON_RETURN_MS = GUIDE_BEACON_ENTER_MS;
 
 export function AppGuidePanel({
   beaconState = "idle",
@@ -37,11 +41,13 @@ export function AppGuidePanel({
     return stored === "left" ? "left" : "right";
   });
   const [dragTargetSide, setDragTargetSide] = useState<GuideAnchorSide | null>(null);
-  const [overrideBeaconState, setOverrideBeaconState] = useState<"entering" | "idle" | "exiting" | null>(null);
+  const [overrideBeaconState, setOverrideBeaconState] = useState<BeaconMorphState | null>(null);
   const relocationTimersRef = useRef<number[]>([]);
+  const panelMorphTimersRef = useRef<number[]>([]);
   const dragStartXRef = useRef<number | null>(null);
   const isDraggingRef = useRef(false);
   const suppressClickRef = useRef(false);
+  const [panelMorphState, setPanelMorphState] = useState<PanelMorphState>(() => (forceCollapsed ? "closed" : "open"));
 
   const guide = useMemo(() => {
     if (!workspaceId) return null;
@@ -75,6 +81,8 @@ export function AppGuidePanel({
     return () => {
       relocationTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
       relocationTimersRef.current = [];
+      panelMorphTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
+      panelMorphTimersRef.current = [];
     };
   }, []);
 
@@ -84,6 +92,7 @@ export function AppGuidePanel({
   const activeBeaconState = overrideBeaconState ?? beaconState;
   const shouldRenderBeacon = showBeacon && activeBeaconState !== "hidden";
   const isRelocating = overrideBeaconState === "entering" || overrideBeaconState === "exiting";
+  const shouldRenderPanel = !isRelocating && panelMorphState !== "closed";
   const currentStep = guide.currentStep;
   const journeyProgress = getJourneyProgress(guide.steps);
   const completedSteps = journeyProgress.completedCount;
@@ -93,12 +102,79 @@ export function AppGuidePanel({
   const isCurrentStepActive = currentStep ? matchesGuideTargetPath(currentPath, currentStep.targetPath) : false;
   const floatingPanelStyle =
     anchorSide === "left"
-      ? { ...getMotionStyle(0), left: "1.6rem", right: "auto" }
-      : getMotionStyle(0);
+      ? { ...getMotionStyle(0), left: "2.5rem", right: "auto" }
+      : { ...getMotionStyle(0), right: "2.5rem" };
   const floatingFabStyle =
     anchorSide === "left"
       ? { left: "0.35rem", right: "auto", bottom: "0.2rem" }
       : undefined;
+
+  useEffect(() => {
+    if (isRelocating) {
+      setPanelMorphState("closed");
+      return;
+    }
+
+    if (isPanelCollapsed) {
+      if (panelMorphState === "closed") {
+        if (overrideBeaconState === "hidden") {
+          panelMorphTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
+          panelMorphTimersRef.current = [];
+          setOverrideBeaconState("entering");
+          panelMorphTimersRef.current = [
+            window.setTimeout(() => {
+              setOverrideBeaconState(null);
+            }, GUIDE_BEACON_ENTER_MS),
+          ];
+        }
+        return;
+      }
+
+      if (panelMorphState === "closing") return;
+
+      panelMorphTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
+      panelMorphTimersRef.current = [];
+      setPanelMorphState("closing");
+      setOverrideBeaconState("hidden");
+      panelMorphTimersRef.current = [
+        window.setTimeout(() => {
+          setPanelMorphState("closed");
+          setOverrideBeaconState("entering");
+        }, GUIDE_PANEL_MORPH_MS),
+        window.setTimeout(() => {
+          setOverrideBeaconState(null);
+        }, GUIDE_PANEL_MORPH_MS + GUIDE_BEACON_RETURN_MS),
+      ];
+      return;
+    }
+
+    if (panelMorphState === "open" || panelMorphState === "opening") return;
+
+    if (activeBeaconState === "hidden") {
+      panelMorphTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
+      panelMorphTimersRef.current = [];
+      setPanelMorphState("opening");
+      panelMorphTimersRef.current = [
+        window.setTimeout(() => {
+          setPanelMorphState("open");
+        }, GUIDE_PANEL_MORPH_MS),
+      ];
+      return;
+    }
+
+    panelMorphTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
+    panelMorphTimersRef.current = [];
+    setOverrideBeaconState("exiting");
+    panelMorphTimersRef.current = [
+      window.setTimeout(() => {
+        setOverrideBeaconState("hidden");
+        setPanelMorphState("opening");
+      }, GUIDE_BEACON_EXIT_MS),
+      window.setTimeout(() => {
+        setPanelMorphState("open");
+      }, GUIDE_BEACON_EXIT_MS + GUIDE_PANEL_MORPH_MS),
+    ];
+  }, [activeBeaconState, isPanelCollapsed, isRelocating, overrideBeaconState, panelMorphState]);
 
   const relocateBeacon = (targetSide: GuideAnchorSide) => {
     if (targetSide === anchorSide || isRelocating) return;
@@ -177,64 +253,67 @@ export function AppGuidePanel({
 
   return (
     <>
-      {!isPanelCollapsed && !isRelocating ? (
-        <section
-          className={`floating-guide-panel${anchorSide === "left" ? " is-left" : ""}`}
+      {shouldRenderPanel ? (
+        <div
+          className={`floating-guide-panel-shell floating-guide-panel-shell--${panelMorphState}${anchorSide === "left" ? " is-left" : ""}`}
           style={floatingPanelStyle}
           data-guide-anchor="panel"
         >
-          <div className="floating-guide-kicker-row">
-            <span className="section-kicker">플로팅 가이드</span>
-            <div className="floating-guide-kicker-actions">
-              <strong>
-                {completedSteps}/{totalSteps}
-              </strong>
-              <button
-                type="button"
-                className="floating-guide-toggle"
-                onClick={() => setIsCollapsed(true)}
-                aria-expanded="true"
-                aria-label="가이드 닫기"
-              >
-                닫기
-              </button>
-            </div>
-          </div>
-          <div className="guide-progress-bar" aria-hidden="true">
-            <div className="guide-progress-fill" style={{ width: `${journeyProgress.progress * 100}%` }} />
-          </div>
-          <div className="floating-guide-body">
-            <div>
-              <h3 className="guide-panel-title">{currentStep ? currentStep.title : "기본 준비가 완료되었습니다."}</h3>
-              <p className="guide-panel-copy">
-                {currentStep ? currentStep.tips[0] ?? currentStep.description : "이제 필요한 곳을 눌러서 바로 이어보면 됩니다."}
-              </p>
-              <div className="small text-secondary">
-                {currentStep
-                  ? upcomingSteps.length > 1
-                    ? `다음: ${upcomingSteps[1]?.title}`
-                    : `${formatPercent(journeyProgress.progress)} 진행`
-                  : "필요할 때 다시 열어보면 됩니다."}
+          <div className="floating-guide-panel-glow" aria-hidden="true" />
+          <section className="floating-guide-panel">
+            <div className="floating-guide-kicker-row">
+              <span className="section-kicker">플로팅 가이드</span>
+              <div className="floating-guide-kicker-actions">
+                <strong>
+                  {completedSteps}/{totalSteps}
+                </strong>
+                <button
+                  type="button"
+                  className="floating-guide-toggle"
+                  onClick={() => setIsCollapsed(true)}
+                  aria-expanded="true"
+                  aria-label="가이드 닫기"
+                >
+                  닫기
+                </button>
               </div>
             </div>
-            {currentStep ? (
-              <button
-                className={`btn ${isCurrentStepActive ? "btn-outline-light" : "btn-primary"} floating-guide-action`}
-                type="button"
-                onClick={() => navigate(currentStep.targetPath)}
-              >
-                {isCurrentStepActive ? "현재 단계 보기" : currentStep.ctaLabel}
-              </button>
-            ) : (
-              <span className="badge text-bg-success">기본 설정 완료</span>
-            )}
-          </div>
-        </section>
+            <div className="guide-progress-bar" aria-hidden="true">
+              <div className="guide-progress-fill" style={{ width: `${journeyProgress.progress * 100}%` }} />
+            </div>
+            <div className="floating-guide-body">
+              <div>
+                <h3 className="guide-panel-title">{currentStep ? currentStep.title : "기본 준비가 완료되었습니다."}</h3>
+                <p className="guide-panel-copy">
+                  {currentStep ? currentStep.tips[0] ?? currentStep.description : "이제 필요한 곳을 눌러서 바로 이어보면 됩니다."}
+                </p>
+                <div className="small text-secondary">
+                  {currentStep
+                    ? upcomingSteps.length > 1
+                      ? `다음: ${upcomingSteps[1]?.title}`
+                      : `${formatPercent(journeyProgress.progress)} 진행`
+                    : "필요할 때 다시 열어보면 됩니다."}
+                </div>
+              </div>
+              {currentStep ? (
+                <button
+                  className={`btn ${isCurrentStepActive ? "btn-outline-light" : "btn-primary"} floating-guide-action`}
+                  type="button"
+                  onClick={() => navigate(currentStep.targetPath)}
+                >
+                  {isCurrentStepActive ? "현재 단계 보기" : currentStep.ctaLabel}
+                </button>
+              ) : (
+                <span className="badge text-bg-success">기본 설정 완료</span>
+              )}
+            </div>
+          </section>
+        </div>
       ) : null}
       {shouldRenderBeacon ? (
         <button
           type="button"
-          className={`floating-guide-fab${isPanelCollapsed ? " collapsed" : ""}${anchorSide === "left" ? " is-left" : ""}`}
+          className={`floating-guide-fab${isPanelCollapsed ? " collapsed" : ""}${anchorSide === "left" ? " is-left" : ""}${panelMorphState === "opening" ? " is-morphing-out" : ""}${panelMorphState === "open" ? " is-hidden-by-panel" : ""}${panelMorphState === "closing" ? " is-morphing-in" : ""}`}
           data-guide-anchor="fab"
           style={floatingFabStyle}
           onPointerDown={handlePointerDown}
