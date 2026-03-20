@@ -1,9 +1,11 @@
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
+﻿import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { HashRouter, Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
+import type { CSSProperties } from "react";
 import { getWorkspaceHeaderSummary } from "../domain/workspace/summary";
 import { MotionProvider } from "./motion/MotionProvider";
+import { AppModal } from "./components/AppModal";
 import { AppGuidePanel } from "./components/AppGuidePanel";
-import { EmptyWorkspaceScreen } from "./pages/EmptyWorkspaceScreen";
+import { EmptyWorkspaceScreen, WORKSPACE_SETUP_KEY } from "./pages/EmptyWorkspaceScreen";
 import { LoadingScreen } from "./pages/LoadingScreen";
 import { AppStateProvider, useAppState } from "./state/AppStateProvider";
 import { getActiveWorkspace, getWorkspaceScope } from "./state/selectors";
@@ -20,6 +22,7 @@ const DeveloperPage = lazy(() => import("./pages/DeveloperPage").then((module) =
 
 const DEVELOPER_MODE_KEY = "household-webapp.developer-mode";
 const THEME_STORAGE_KEY = "household-webapp.theme";
+const CREATE_WORKSPACE_OPTION = "__create_workspace__";
 
 type ThemeMode = "light" | "dark";
 
@@ -31,7 +34,7 @@ type NavItem = {
 
 const baseNavItems: NavItem[] = [
   { to: "/", label: "대시보드", end: true },
-  { to: "/transactions", label: "거래" },
+  { to: "/transactions", label: "거래내역" },
   { to: "/imports", label: "업로드" },
   { to: "/reviews", label: "검토함" },
   { to: "/settings", label: "설정" },
@@ -59,7 +62,7 @@ function useDeveloperMode() {
       window.localStorage.setItem(DEVELOPER_MODE_KEY, "unlocked");
       setIsDeveloperModeUnlocked(true);
       setUnlockAttempts([]);
-      showToast("개발자 모드가 해금되었습니다.", "success");
+      showToast("개발자 모드가 잠금 해제되었습니다.", "success");
     }
   };
 
@@ -67,7 +70,7 @@ function useDeveloperMode() {
     window.localStorage.removeItem(DEVELOPER_MODE_KEY);
     setIsDeveloperModeUnlocked(false);
     setUnlockAttempts([]);
-    showToast("개발자 모드를 다시 숨겼습니다.", "info");
+    showToast("개발자 모드를 다시 잠갔습니다.", "info");
   };
 
   return { isDeveloperModeUnlocked, registerUnlockTap, lockDeveloperMode };
@@ -209,11 +212,180 @@ function AppRoutes({
   );
 }
 
+function EditIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
+      <path
+        d="M4 20l4.2-1 9.5-9.5-3.2-3.2L5 15.8 4 20zm12-15.4l3.2 3.2 1.1-1.1a1.5 1.5 0 000-2.1l-1.1-1.1a1.5 1.5 0 00-2.1 0L16 4.6z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+function WorkspaceNameEditor({
+  value,
+  onChange,
+  onSubmit,
+  onCancel,
+  inline = false,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onSubmit: () => void;
+  onCancel: () => void;
+  inline?: boolean;
+}) {
+  return (
+    <div className={`workspace-name-editor${inline ? " workspace-name-editor-inline" : ""}`}>
+      <input
+        autoFocus
+        className="form-control workspace-name-input"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onBlur={onSubmit}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            onSubmit();
+          }
+          if (event.key === "Escape") {
+            event.preventDefault();
+            onCancel();
+          }
+        }}
+      />
+    </div>
+  );
+}
+
+function WorkspaceNameDisplay({
+  name,
+  onUnlock,
+  onEdit,
+  className,
+  titleTag = "h2",
+}: {
+  name: string;
+  onUnlock: () => void;
+  onEdit: () => void;
+  className?: string;
+  titleTag?: "h2" | "strong";
+}) {
+  const content = titleTag === "strong" ? <strong>{name}</strong> : <h2 className="mb-0">{name}</h2>;
+
+  return (
+    <div className={`workspace-name-row${className ? ` ${className}` : ""}`}>
+      <button
+        type="button"
+        className="sidebar-brand-button workspace-name-trigger"
+        onClick={onUnlock}
+        onDoubleClick={onEdit}
+        title="5번 누르면 개발자 모드 해금, 더블클릭하면 이름 수정"
+      >
+        {content}
+      </button>
+      <button
+        type="button"
+        className="workspace-name-edit-button"
+        onClick={onEdit}
+        aria-label="가계부 이름 수정"
+        title="가계부 이름 수정"
+      >
+        <EditIcon />
+      </button>
+    </div>
+  );
+}
+
+function GuideArrivalCue({ onDone }: { onDone: () => void }) {
+  const [target, setTarget] = useState<{ x: number; y: number } | null>(null);
+  const [phase, setPhase] = useState<"gather" | "travel">("gather");
+
+  useEffect(() => {
+    let frameId = 0;
+    let attempts = 0;
+
+    const resolveTarget = () => {
+      const panel = document.querySelector<HTMLElement>('[data-guide-anchor="panel"]');
+      const fab = document.querySelector<HTMLElement>('[data-guide-anchor="fab"]');
+      const anchor = panel ?? fab;
+
+      if (!anchor) {
+        attempts += 1;
+        if (attempts < 20) {
+          frameId = window.requestAnimationFrame(resolveTarget);
+          return;
+        }
+        onDone();
+        return;
+      }
+
+      const rect = anchor.getBoundingClientRect();
+      setTarget({
+        x: rect.left + rect.width * 0.5,
+        y: rect.top + Math.min(rect.height * 0.42, 72),
+      });
+    };
+
+    frameId = window.requestAnimationFrame(resolveTarget);
+    return () => window.cancelAnimationFrame(frameId);
+  }, [onDone]);
+
+  useEffect(() => {
+    if (!target) return;
+
+    const travelTimer = window.setTimeout(() => setPhase("travel"), 720);
+    const doneTimer = window.setTimeout(onDone, 2280);
+    return () => {
+      window.clearTimeout(travelTimer);
+      window.clearTimeout(doneTimer);
+    };
+  }, [onDone, target]);
+
+  if (!target) return null;
+
+  return (
+    <div className="guide-arrival-overlay" aria-hidden="true">
+      <div
+        className={`guide-arrival-orb guide-arrival-orb-${phase}`}
+        style={
+          {
+            "--guide-target-x": `${target.x}px`,
+            "--guide-target-y": `${target.y}px`,
+          } as CSSProperties
+        }
+      >
+        <span className="guide-arrival-core" />
+        <span className="guide-arrival-particle particle-a" />
+        <span className="guide-arrival-particle particle-b" />
+        <span className="guide-arrival-particle particle-c" />
+        <span className="guide-arrival-particle particle-d" />
+        <span className="guide-arrival-particle particle-e" />
+      </div>
+      <span
+        className={`guide-arrival-target ${phase === "travel" ? "is-active" : ""}`}
+        style={
+          {
+            "--guide-target-x": `${target.x}px`,
+            "--guide-target-y": `${target.y}px`,
+          } as CSSProperties
+        }
+      />
+    </div>
+  );
+}
+
 function AppFrame() {
-  const { isReady, setActiveWorkspace, state } = useAppState();
+  const { addPerson, createEmptyWorkspace, isReady, renameWorkspace, setActiveWorkspace, state } = useAppState();
   const { isDeveloperModeUnlocked, registerUnlockTap, lockDeveloperMode } = useDeveloperMode();
   const { themeMode, toggleThemeMode } = useThemeMode();
   const [isTopbarCondensed, setIsTopbarCondensed] = useState(false);
+  const [isEditingWorkspaceName, setIsEditingWorkspaceName] = useState(false);
+  const [isCreateWorkspaceOpen, setIsCreateWorkspaceOpen] = useState(false);
+  const [newWorkspaceName, setNewWorkspaceName] = useState("");
+  const [workspaceNameDraft, setWorkspaceNameDraft] = useState("");
+  const [isGuideCueActive, setIsGuideCueActive] = useState(false);
 
   useEffect(() => {
     let frameId = 0;
@@ -239,11 +411,75 @@ function AppFrame() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!isEditingWorkspaceName && state.activeWorkspaceId) {
+      const currentWorkspace = state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId);
+      if (currentWorkspace) setWorkspaceNameDraft(currentWorkspace.name);
+    }
+  }, [isEditingWorkspaceName, state.activeWorkspaceId, state.workspaces]);
+
+  useEffect(() => {
+    if (!isReady || !state.activeWorkspaceId) return;
+
+    const pendingSetup = window.sessionStorage.getItem(WORKSPACE_SETUP_KEY);
+    if (!pendingSetup) return;
+
+    const activeWorkspace = state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId);
+    if (!activeWorkspace) return;
+
+    try {
+      const parsed = JSON.parse(pendingSetup) as { workspaceName?: string; personName?: string };
+      const personName = parsed.personName?.trim();
+      if (personName) {
+        addPerson(activeWorkspace.id, { name: personName, displayName: personName, role: "owner" });
+      }
+      window.setTimeout(() => setIsGuideCueActive(true), 180);
+    } catch {
+      return;
+    } finally {
+      window.sessionStorage.removeItem(WORKSPACE_SETUP_KEY);
+    }
+  }, [addPerson, isReady, state.activeWorkspaceId, state.workspaces]);
+
   if (!isReady) return <LoadingScreen />;
   if (!state.workspaces.length) return <EmptyWorkspaceScreen />;
 
   const activeWorkspace = getActiveWorkspace(state);
   if (!activeWorkspace) return <EmptyWorkspaceScreen />;
+
+  const openWorkspaceNameEditor = () => {
+    setWorkspaceNameDraft(activeWorkspace.name);
+    setIsEditingWorkspaceName(true);
+  };
+
+  const closeWorkspaceNameEditor = () => {
+    setWorkspaceNameDraft(activeWorkspace.name);
+    setIsEditingWorkspaceName(false);
+  };
+
+  const submitWorkspaceName = () => {
+    const trimmedName = workspaceNameDraft.trim();
+    if (!trimmedName) {
+      closeWorkspaceNameEditor();
+      return;
+    }
+    if (trimmedName !== activeWorkspace.name) {
+      renameWorkspace(activeWorkspace.id, trimmedName);
+    }
+    setIsEditingWorkspaceName(false);
+  };
+
+  const closeCreateWorkspaceModal = () => {
+    setIsCreateWorkspaceOpen(false);
+    setNewWorkspaceName("");
+  };
+
+  const submitCreateWorkspace = () => {
+    const trimmedName = newWorkspaceName.trim();
+    createEmptyWorkspace(trimmedName || undefined);
+    closeCreateWorkspaceModal();
+  };
+
   const scope = getWorkspaceScope(state, activeWorkspace.id);
   const headerSummary = getWorkspaceHeaderSummary({
     imports: scope.imports,
@@ -260,10 +496,10 @@ function AppFrame() {
         : "text-bg-secondary";
   const workspaceBadgeLabel =
     activeWorkspace.source === "demo"
-      ? "?뚯뒪??紐⑤뱶"
+      ? "데모"
       : activeWorkspace.source === "imported"
-        ? "?낅줈???곗씠??"
-        : "鍮?紐⑤뱶";
+        ? "업로드됨"
+        : "빈 작업공간";
 
   return (
     <div className="app-shell">
@@ -274,12 +510,28 @@ function AppFrame() {
             <button type="button" className="sidebar-brand-button" onClick={registerUnlockTap}>
               <h1>가계부 웹앱</h1>
             </button>
-            <p className="sidebar-copy">빠르게 기록하고 바로 정리하는 흐름입니다.</p>
+            <p className="sidebar-copy">빠르게 기록하고 자연스럽게 정리하는 생활 가계부입니다.</p>
           </div>
           <div className="app-topbar-compact-header">
             <span className="section-kicker">Current Workspace</span>
             <div className="app-topbar-workspace-row">
-              <strong>{activeWorkspace.name}</strong>
+              {isEditingWorkspaceName ? (
+                <WorkspaceNameEditor
+                  value={workspaceNameDraft}
+                  onChange={setWorkspaceNameDraft}
+                  onSubmit={submitWorkspaceName}
+                  onCancel={closeWorkspaceNameEditor}
+                  inline
+                />
+              ) : (
+                <WorkspaceNameDisplay
+                  name={activeWorkspace.name}
+                  onUnlock={registerUnlockTap}
+                  onEdit={openWorkspaceNameEditor}
+                  className="workspace-name-row-inline"
+                  titleTag="strong"
+                />
+              )}
               <span className={`badge ${workspaceBadgeClass}`}>{workspaceBadgeLabel}</span>
             </div>
             <span className="app-topbar-compact-meta">
@@ -290,13 +542,21 @@ function AppFrame() {
             <select
               className="form-select workspace-select"
               value={activeWorkspace.id}
-              onChange={(event) => setActiveWorkspace(event.target.value)}
+              onChange={(event) => {
+                if (event.target.value === CREATE_WORKSPACE_OPTION) {
+                  setNewWorkspaceName("");
+                  setIsCreateWorkspaceOpen(true);
+                  return;
+                }
+                setActiveWorkspace(event.target.value);
+              }}
             >
               {state.workspaces.map((workspace) => (
                 <option key={workspace.id} value={workspace.id}>
                   {workspace.name}
                 </option>
               ))}
+              <option value={CREATE_WORKSPACE_OPTION}>+ 새 가계부 추가...</option>
             </select>
             <button type="button" className="theme-toggle-button" onClick={toggleThemeMode}>
               <span className="theme-toggle-button-label">테마</span>
@@ -311,10 +571,23 @@ function AppFrame() {
       <div className="app-main">
         <section className="app-header">
           <div className="app-header-copy">
-            <span className="section-kicker">활성 워크스페이스</span>
-            <h2 className="mb-0">{activeWorkspace.name}</h2>
+            <span className="section-kicker">활성 작업공간</span>
+            {isEditingWorkspaceName ? (
+              <WorkspaceNameEditor
+                value={workspaceNameDraft}
+                onChange={setWorkspaceNameDraft}
+                onSubmit={submitWorkspaceName}
+                onCancel={closeWorkspaceNameEditor}
+              />
+            ) : (
+              <WorkspaceNameDisplay
+                name={activeWorkspace.name}
+                onUnlock={registerUnlockTap}
+                onEdit={openWorkspaceNameEditor}
+              />
+            )}
             <p className="app-header-meta">
-              거래 {headerSummary.transactionsCount}건 · 검토 {headerSummary.openReviewCount}건 · 사용자 {headerSummary.peopleCount}명            
+              거래 {headerSummary.transactionsCount}건 · 검토 {headerSummary.openReviewCount}건 · 사용자 {headerSummary.peopleCount}명
               {latestImport ? ` · 최근 업로드 ${latestImport.importedAt.slice(0, 10)}` : ""}
             </p>
           </div>
@@ -328,10 +601,10 @@ function AppFrame() {
             }`}
           >
             {activeWorkspace.source === "demo"
-              ? "테스트 모드"
+              ? "데모"
               : activeWorkspace.source === "imported"
-                ? "업로드 데이터"
-                : "빈 모드"}
+                ? "업로드됨"
+                : "빈 작업공간"}
           </span>
         </section>
 
@@ -339,14 +612,47 @@ function AppFrame() {
           <AppGuidePanel />
           <div className="route-stage">
             <div className="route-page">
-              <AppRoutes
-                isDeveloperModeUnlocked={isDeveloperModeUnlocked}
-                lockDeveloperMode={lockDeveloperMode}
-              />
+              <AppRoutes isDeveloperModeUnlocked={isDeveloperModeUnlocked} lockDeveloperMode={lockDeveloperMode} />
             </div>
           </div>
         </main>
       </div>
+
+      <AppModal
+        open={isCreateWorkspaceOpen}
+        title="새 가계부 추가"
+        description="새 워크스페이스 이름을 입력하면 비어 있는 가계부가 바로 생성됩니다."
+        onClose={closeCreateWorkspaceModal}
+      >
+        <form
+          className="profile-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            submitCreateWorkspace();
+          }}
+        >
+          <label style={{ gridColumn: "1 / -1" }}>
+            가계부 이름
+            <input
+              autoFocus
+              className="form-control"
+              value={newWorkspaceName}
+              onChange={(event) => setNewWorkspaceName(event.target.value)}
+              placeholder="예: 2026 우리집 가계부"
+            />
+          </label>
+          <div className="d-flex justify-content-end gap-2" style={{ gridColumn: "1 / -1" }}>
+            <button type="button" className="btn btn-outline-secondary" onClick={closeCreateWorkspaceModal}>
+              취소
+            </button>
+            <button className="btn btn-primary" type="submit">
+              생성
+            </button>
+          </div>
+        </form>
+      </AppModal>
+
+      {isGuideCueActive ? <GuideArrivalCue onDone={() => setIsGuideCueActive(false)} /> : null}
     </div>
   );
 }

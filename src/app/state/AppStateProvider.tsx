@@ -56,6 +56,7 @@ type SettlementInput = {
 type Action =
   | { type: "hydrate"; payload: AppState }
   | { type: "setActiveWorkspace"; payload: string }
+  | { type: "renameWorkspace"; payload: { workspaceId: string; name: string } }
   | { type: "mergeBundle"; payload: WorkspaceBundle }
   | { type: "reset" }
   | { type: "replaceState"; payload: AppState }
@@ -444,6 +445,13 @@ function reducer(state: AppState, action: Action): AppState {
       return action.payload;
     case "setActiveWorkspace":
       return { ...state, activeWorkspaceId: action.payload };
+    case "renameWorkspace":
+      return {
+        ...state,
+        workspaces: state.workspaces.map((workspace) =>
+          workspace.id === action.payload.workspaceId ? { ...workspace, name: action.payload.name } : workspace,
+        ),
+      };
     case "mergeBundle":
       return mergeWorkspaceBundle(state, action.payload);
     case "reset":
@@ -799,6 +807,7 @@ interface AppStateContextValue {
   previewWorkbookImport: (file: File) => Promise<WorkspaceBundle>;
   commitImportedBundle: (bundle: WorkspaceBundle, fileName: string) => void;
   setActiveWorkspace: (workspaceId: string) => void;
+  renameWorkspace: (workspaceId: string, name: string) => void;
   resetApp: () => Promise<void>;
   exportState: () => void;
   importState: (file: File) => Promise<void>;
@@ -917,6 +926,12 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         if (workspace) {
           showToast(`${workspace.name}로 전환했습니다.`, "info");
         }
+      },
+      renameWorkspace(workspaceId, name) {
+        const trimmedName = name.trim();
+        if (!trimmedName) return;
+        dispatch({ type: "renameWorkspace", payload: { workspaceId, name: trimmedName } });
+        showToast(`"${trimmedName}" 이름으로 변경했습니다.`, "success");
       },
       async resetApp() {
         await clearAppState();

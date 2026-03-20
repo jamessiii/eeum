@@ -1,147 +1,178 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { WorkspaceBundle } from "../../shared/types/models";
+import { GuideBeacon } from "../components/GuideBeacon";
 import { useAppState } from "../state/AppStateProvider";
 
-function getNextPath(bundle: WorkspaceBundle) {
-  if (bundle.reviews.length > 0) return "/reviews";
-  if (bundle.transactions.some((transaction) => transaction.isExpenseImpact && !transaction.categoryId)) {
-    return "/transactions?cleanup=uncategorized";
-  }
-  return "/transactions";
-}
+export const WORKSPACE_SETUP_KEY = "household-webapp.workspace-setup";
 
-function getNextLabel(bundle: WorkspaceBundle) {
-  if (bundle.reviews.length > 0) return `검토 ${bundle.reviews.length}건 확인`;
-  if (bundle.transactions.some((transaction) => transaction.isExpenseImpact && !transaction.categoryId)) {
-    return "미분류 거래 정리";
-  }
-  return "거래 화면 보기";
-}
+type SetupPhase = "intro" | "workspace" | "person" | "creating";
 
 export function EmptyWorkspaceScreen() {
-  const { commitImportedBundle, createDemoWorkspace, createEmptyWorkspace, previewWorkbookImport } = useAppState();
   const navigate = useNavigate();
-  const [previewBundle, setPreviewBundle] = useState<WorkspaceBundle | null>(null);
-  const [previewFileName, setPreviewFileName] = useState("");
-  const [isPreparingPreview, setIsPreparingPreview] = useState(false);
-  const [startMode, setStartMode] = useState<"empty" | "demo" | null>(null);
-  const isBusy = isPreparingPreview || startMode !== null;
+  const { createEmptyWorkspace } = useAppState();
+  const [workspaceName, setWorkspaceName] = useState("");
+  const [personName, setPersonName] = useState("");
+  const [phase, setPhase] = useState<SetupPhase>("intro");
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [introIndex, setIntroIndex] = useState(0);
+  const workspaceInputRef = useRef<HTMLInputElement | null>(null);
+  const personInputRef = useRef<HTMLInputElement | null>(null);
+  const trimmedWorkspaceName = workspaceName.trim();
+  const trimmedPersonName = personName.trim();
+  const introLines = ["안녕하세요.", "더욱 간편해진 가계관리.", "지금 바로 시작하겠습니다."];
 
-  const handleCommitPreview = () => {
-    if (!previewBundle) return;
-    commitImportedBundle(previewBundle, previewFileName);
-    const nextPath = getNextPath(previewBundle);
-    setPreviewBundle(null);
-    setPreviewFileName("");
-    void navigate(nextPath);
+  const moveToPhase = (nextPhase: SetupPhase) => {
+    if (isTransitioning) return;
+    setIsTransitioning(true);
+    window.setTimeout(() => {
+      setPhase(nextPhase);
+      setIsTransitioning(false);
+    }, 220);
   };
 
+  useEffect(() => {
+    if (phase === "workspace") {
+      window.requestAnimationFrame(() => workspaceInputRef.current?.focus());
+    }
+
+    if (phase === "person") {
+      window.requestAnimationFrame(() => personInputRef.current?.focus());
+    }
+  }, [phase]);
+
+  useEffect(() => {
+    if (phase !== "creating") return;
+
+    const timer = window.setTimeout(() => {
+      window.sessionStorage.setItem(
+        WORKSPACE_SETUP_KEY,
+        JSON.stringify({
+          workspaceName: trimmedWorkspaceName,
+          personName: trimmedPersonName,
+        }),
+      );
+      createEmptyWorkspace(trimmedWorkspaceName);
+      void navigate("/", { replace: true });
+    }, 2400);
+
+    return () => window.clearTimeout(timer);
+  }, [createEmptyWorkspace, navigate, phase, trimmedPersonName, trimmedWorkspaceName]);
+
   return (
-    <main className="container py-5">
-      <section className="hero-panel shadow-sm">
-        <span className="hero-kicker">Household Web App</span>
-        <h1>가계부를 시작합니다</h1>
-        <p className="hero-copy">빈 워크스페이스로 시작하거나, 데모를 보거나, 거래 파일을 업로드해서 바로 이어갈 수 있습니다.</p>
+    <main className="empty-workspace-shell">
+      <div className="empty-workspace-ambient empty-workspace-ambient-left" aria-hidden="true" />
+      <div className="empty-workspace-ambient empty-workspace-ambient-right" aria-hidden="true" />
 
-        <div className="d-flex flex-wrap gap-3 mt-4">
-          <label className={`btn btn-primary btn-lg${isBusy ? " disabled" : ""}`} aria-disabled={isBusy}>
-            파일 업로드
-            <input
-              hidden
-              type="file"
-              accept=".xlsx,.xls"
-              disabled={isBusy}
-              onChange={async (event) => {
-                const file = event.target.files?.[0];
-                if (!file) return;
-                setIsPreparingPreview(true);
-                try {
-                  const bundle = await previewWorkbookImport(file);
-                  setPreviewBundle(bundle);
-                  setPreviewFileName(file.name);
-                } finally {
-                  setIsPreparingPreview(false);
-                  event.currentTarget.value = "";
-                }
-              }}
-            />
-          </label>
-          <button
-            className="btn btn-outline-primary btn-lg"
-            disabled={isBusy}
-            onClick={() => {
-              setStartMode("empty");
-              try {
-                createEmptyWorkspace();
-                void navigate("/people");
-              } finally {
-                setStartMode(null);
+      {phase === "intro" ? (
+        <button
+          type="button"
+          className={`empty-workspace-intro-text${isTransitioning ? " is-transitioning" : ""}`}
+          onClick={() => {
+            if (isTransitioning) return;
+            setIsTransitioning(true);
+            window.setTimeout(() => {
+              if (introIndex >= introLines.length - 1) {
+                setPhase("workspace");
+              } else {
+                setIntroIndex((current) => current + 1);
               }
-            }}
-          >
-            빈 가계부로 시작
-          </button>
-          <button
-            className="btn btn-outline-secondary btn-lg"
-            disabled={isBusy}
-            onClick={async () => {
-              setStartMode("demo");
-              try {
-                await createDemoWorkspace();
-                await navigate("/");
-              } finally {
-                setStartMode(null);
-              }
-            }}
-          >
-            데모 보기
-          </button>
-        </div>
-
-        {isPreparingPreview ? <p className="text-secondary mt-3 mb-0">업로드 미리보기를 준비하고 있습니다.</p> : null}
-        {startMode === "empty" ? <p className="text-secondary mt-3 mb-0">새 워크스페이스를 만드는 중입니다.</p> : null}
-        {startMode === "demo" ? <p className="text-secondary mt-3 mb-0">데모 데이터를 준비하는 중입니다.</p> : null}
-
-        {previewBundle ? (
-          <div className="card shadow-sm mt-4 text-start">
-            <div className="section-head">
-              <div>
-                <span className="section-kicker">업로드 미리보기</span>
-                <h2 className="section-title">{previewFileName}</h2>
+              setIsTransitioning(false);
+            }, 460);
+          }}
+        >
+          {introIndex === 0 ? (
+            <div className="empty-workspace-orb-test" aria-hidden="true">
+              <div className="ai-sphere-stage guide-beacon-scene guide-beacon-scene--delayed">
+                <GuideBeacon variant="v1" state="entering" />
               </div>
             </div>
-            <div className="stats-grid">
-              <article className="stat-card">
-                <span className="stat-label">거래</span>
-                <strong>{previewBundle.transactions.length}건</strong>
-              </article>
-              <article className="stat-card">
-                <span className="stat-label">검토</span>
-                <strong>{previewBundle.reviews.length}건</strong>
-              </article>
-              <article className="stat-card">
-                <span className="stat-label">사용자</span>
-                <strong>{previewBundle.people.length}명</strong>
-              </article>
-              <article className="stat-card">
-                <span className="stat-label">계좌/카드</span>
-                <strong>
-                  {previewBundle.accounts.length} / {previewBundle.cards.length}
-                </strong>
-              </article>
-            </div>
-            <div className="action-row mt-4">
-              <button className="btn btn-primary" type="button" onClick={handleCommitPreview}>
-                {getNextLabel(previewBundle)}
-              </button>
-              <button className="btn btn-outline-secondary" type="button" onClick={() => setPreviewBundle(null)}>
-                미리보기 닫기
-              </button>
-            </div>
+          ) : null}
+          <div className="empty-workspace-intro-lines" aria-label={introLines[introIndex]}>
+            <span
+              key={introLines[introIndex]}
+              className={`empty-workspace-intro-line is-active${introIndex === 0 ? " is-delayed" : ""}`}
+            >
+              {introLines[introIndex]}
+            </span>
           </div>
-        ) : null}
-      </section>
+        </button>
+      ) : phase === "workspace" || phase === "person" ? (
+        <section
+          className={`empty-workspace-onboarding${isTransitioning ? " is-transitioning" : ""}`}
+          aria-labelledby="empty-workspace-title"
+        >
+          {phase === "workspace" ? (
+            <form
+              className="empty-workspace-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (!trimmedWorkspaceName) return;
+                moveToPhase("person");
+              }}
+            >
+              <span className="hero-kicker">Step 1</span>
+              <h1 id="empty-workspace-title">가계부 이름을 입력하세요.</h1>
+              <input
+                ref={workspaceInputRef}
+                className="form-control empty-workspace-input"
+                value={workspaceName}
+                onChange={(event) => setWorkspaceName(event.target.value)}
+                placeholder="예: 2026 우리집 가계부"
+                maxLength={40}
+              />
+              <div className="empty-workspace-helper-row">
+                <p className="empty-workspace-helper" />
+                <button className="btn btn-primary empty-workspace-start-button" type="submit" disabled={!trimmedWorkspaceName}>
+                  다음
+                </button>
+              </div>
+            </form>
+          ) : null}
+
+          {phase === "person" ? (
+            <form
+              className="empty-workspace-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (!trimmedPersonName) return;
+                moveToPhase("creating");
+              }}
+            >
+              <span className="hero-kicker">Step 2</span>
+              <h1 id="empty-workspace-title">사용자 이름을 입력하세요.</h1>
+              <input
+                ref={personInputRef}
+                className="form-control empty-workspace-input"
+                value={personName}
+                onChange={(event) => setPersonName(event.target.value)}
+                placeholder="예: 지민"
+                maxLength={24}
+              />
+              <div className="empty-workspace-helper-row">
+                <button
+                  type="button"
+                  className="btn empty-workspace-back-button"
+                  onClick={() => moveToPhase("workspace")}
+                >
+                  이전
+                </button>
+                <button className="btn btn-primary empty-workspace-start-button" type="submit" disabled={!trimmedPersonName}>
+                  시작하기
+                </button>
+              </div>
+            </form>
+          ) : null}
+
+        </section>
+      ) : null}
+
+      {phase === "creating" ? (
+        <div className="empty-workspace-intro-text empty-workspace-start-text" aria-live="polite">
+          <div className="empty-workspace-intro-lines" aria-label="지금 바로 시작합니다.">
+            <span className="empty-workspace-intro-line is-active">지금 바로 시작합니다.</span>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

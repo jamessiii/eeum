@@ -45,9 +45,9 @@ export function AppGuidePanel() {
   return (
     <>
       {!isCollapsed ? (
-        <section className="floating-guide-panel" style={getMotionStyle(0)}>
+        <section className="floating-guide-panel" style={getMotionStyle(0)} data-guide-anchor="panel">
           <div className="floating-guide-kicker-row">
-            <span className="section-kicker">플로우 가이드</span>
+            <span className="section-kicker">플로팅 가이드</span>
             <div className="floating-guide-kicker-actions">
               <strong>
                 {completedSteps}/{totalSteps}
@@ -68,16 +68,16 @@ export function AppGuidePanel() {
           </div>
           <div className="floating-guide-body">
             <div>
-              <h3 className="guide-panel-title">{currentStep ? currentStep.title : "기본 준비가 끝났습니다."}</h3>
+              <h3 className="guide-panel-title">{currentStep ? currentStep.title : "기본 준비가 완료되었습니다."}</h3>
               <p className="guide-panel-copy">
-                {currentStep ? currentStep.tips[0] ?? currentStep.description : "이제 필요한 화면만 열어보면 됩니다."}
+                {currentStep ? currentStep.tips[0] ?? currentStep.description : "이제 필요한 화면만 이어서 보면 됩니다."}
               </p>
               <div className="small text-secondary">
                 {currentStep
                   ? upcomingSteps.length > 1
                     ? `다음: ${upcomingSteps[1]?.title}`
                     : `${formatPercent(journeyProgress.progress)} 진행`
-                  : "필요할 때만 다시 열면 됩니다."}
+                  : "필요할 때 다시 열어보면 됩니다."}
               </div>
             </div>
             {currentStep ? (
@@ -89,7 +89,7 @@ export function AppGuidePanel() {
                 {isCurrentStepActive ? "현재 단계 보기" : currentStep.ctaLabel}
               </button>
             ) : (
-              <span className="badge text-bg-success">기본 흐름 완료</span>
+              <span className="badge text-bg-success">기본 설정 완료</span>
             )}
           </div>
         </section>
@@ -97,14 +97,14 @@ export function AppGuidePanel() {
       <button
         type="button"
         className={`floating-guide-fab${isCollapsed ? " collapsed" : ""}`}
+        data-guide-anchor="fab"
         onClick={() => setIsCollapsed((current) => !current)}
         aria-expanded={!isCollapsed}
         aria-label={isCollapsed ? "가이드 열기" : "가이드 닫기"}
       >
         <span className="floating-guide-fab-icon" aria-hidden="true">
-          {isCollapsed ? "◎" : "×"}
+          {isCollapsed ? "?" : "X"}
         </span>
-        <span className="floating-guide-fab-label">{isCollapsed ? "가이드" : "닫기"}</span>
       </button>
     </>
   );
