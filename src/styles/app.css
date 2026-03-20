@@ -5335,7 +5335,7 @@ textarea:focus {
   }
 
   .floating-guide-panel {
-    width: calc(100vw - 3rem);
+    width: min(24rem, calc(100vw - 5rem));
     padding: 0.7rem 0.78rem;
     gap: 0.55rem;
     border-radius: 1rem;
