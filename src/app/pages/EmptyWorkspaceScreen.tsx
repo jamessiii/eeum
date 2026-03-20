@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { GuideBeacon } from "../components/GuideBeacon";
+import { GuideBeaconScene } from "../components/GuideBeaconScene";
 import { useAppState } from "../state/AppStateProvider";
 
 export const WORKSPACE_SETUP_KEY = "household-webapp.workspace-setup";
+export const ONBOARDING_COMPLETE_KEY = "household-webapp.onboarding-complete";
 
 type SetupPhase = "intro" | "workspace" | "person" | "creating";
+type CreatingStage = "idle" | "text-fading" | "beacon-exiting";
 
 export function EmptyWorkspaceScreen() {
   const navigate = useNavigate();
@@ -15,11 +17,13 @@ export function EmptyWorkspaceScreen() {
   const [phase, setPhase] = useState<SetupPhase>("intro");
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [introIndex, setIntroIndex] = useState(0);
+  const [creatingStage, setCreatingStage] = useState<CreatingStage>("idle");
   const workspaceInputRef = useRef<HTMLInputElement | null>(null);
   const personInputRef = useRef<HTMLInputElement | null>(null);
+  const transitionTimersRef = useRef<number[]>([]);
   const trimmedWorkspaceName = workspaceName.trim();
   const trimmedPersonName = personName.trim();
-  const introLines = ["안녕하세요.", "더욱 간편해진 가계관리.", "지금 바로 시작하겠습니다."];
+  const introLines = ["흩어졌던 것들이", "하나의 이야기로 남습니다"];
 
   const moveToPhase = (nextPhase: SetupPhase) => {
     if (isTransitioning) return;
@@ -27,7 +31,7 @@ export function EmptyWorkspaceScreen() {
     window.setTimeout(() => {
       setPhase(nextPhase);
       setIsTransitioning(false);
-    }, 220);
+    }, 1320);
   };
 
   useEffect(() => {
@@ -38,12 +42,33 @@ export function EmptyWorkspaceScreen() {
     if (phase === "person") {
       window.requestAnimationFrame(() => personInputRef.current?.focus());
     }
+
+    if (phase === "creating") {
+      setCreatingStage("idle");
+    }
   }, [phase]);
 
   useEffect(() => {
-    if (phase !== "creating") return;
+    return () => {
+      transitionTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
+      transitionTimersRef.current = [];
+    };
+  }, []);
 
-    const timer = window.setTimeout(() => {
+  const finalizeOnboarding = () => {
+    transitionTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
+    transitionTimersRef.current = [];
+
+    const textFadeDuration = 920;
+    const beaconExitDelayAfterText = 1000;
+    const beaconExitDuration = 620;
+    const navigateDelayAfterExit = 2000;
+
+    const textFadeTimer = window.setTimeout(
+      () => setCreatingStage("beacon-exiting"),
+      textFadeDuration + beaconExitDelayAfterText,
+    );
+    const finishTimer = window.setTimeout(() => {
       window.sessionStorage.setItem(
         WORKSPACE_SETUP_KEY,
         JSON.stringify({
@@ -51,17 +76,28 @@ export function EmptyWorkspaceScreen() {
           personName: trimmedPersonName,
         }),
       );
+      window.sessionStorage.setItem(ONBOARDING_COMPLETE_KEY, "true");
       createEmptyWorkspace(trimmedWorkspaceName);
       void navigate("/", { replace: true });
-    }, 2400);
+    }, textFadeDuration + beaconExitDelayAfterText + beaconExitDuration + navigateDelayAfterExit);
 
-    return () => window.clearTimeout(timer);
-  }, [createEmptyWorkspace, navigate, phase, trimmedPersonName, trimmedWorkspaceName]);
+    transitionTimersRef.current = [textFadeTimer, finishTimer];
+  };
 
   return (
-    <main className="empty-workspace-shell">
+    <main className={`empty-workspace-shell${phase === "creating" && creatingStage === "beacon-exiting" ? " is-finishing" : ""}`}>
       <div className="empty-workspace-ambient empty-workspace-ambient-left" aria-hidden="true" />
       <div className="empty-workspace-ambient empty-workspace-ambient-right" aria-hidden="true" />
+
+      {phase === "intro" ? (
+        <div className="empty-workspace-orb-test" aria-hidden="true">
+          <GuideBeaconScene
+            variant="v7"
+            state={introIndex === 0 ? "entering" : "idle"}
+            mode={introIndex === 0 ? "intro" : "default"}
+          />
+        </div>
+      ) : null}
 
       {phase === "intro" ? (
         <button
@@ -77,16 +113,9 @@ export function EmptyWorkspaceScreen() {
                 setIntroIndex((current) => current + 1);
               }
               setIsTransitioning(false);
-            }, 460);
+            }, 920);
           }}
         >
-          {introIndex === 0 ? (
-            <div className="empty-workspace-orb-test" aria-hidden="true">
-              <div className="ai-sphere-stage guide-beacon-scene guide-beacon-scene--delayed">
-                <GuideBeacon variant="v1" state="entering" />
-              </div>
-            </div>
-          ) : null}
           <div className="empty-workspace-intro-lines" aria-label={introLines[introIndex]}>
             <span
               key={introLines[introIndex]}
@@ -98,6 +127,7 @@ export function EmptyWorkspaceScreen() {
         </button>
       ) : phase === "workspace" || phase === "person" ? (
         <section
+          key={phase}
           className={`empty-workspace-onboarding${isTransitioning ? " is-transitioning" : ""}`}
           aria-labelledby="empty-workspace-title"
         >
@@ -111,13 +141,13 @@ export function EmptyWorkspaceScreen() {
               }}
             >
               <span className="hero-kicker">Step 1</span>
-              <h1 id="empty-workspace-title">가계부 이름을 입력하세요.</h1>
+              <h1 id="empty-workspace-title">이야기의 이름을 입력해주세요.</h1>
               <input
                 ref={workspaceInputRef}
                 className="form-control empty-workspace-input"
                 value={workspaceName}
                 onChange={(event) => setWorkspaceName(event.target.value)}
-                placeholder="예: 2026 우리집 가계부"
+                placeholder="예: 2026 우리집 이야기"
                 maxLength={40}
               />
               <div className="empty-workspace-helper-row">
@@ -135,11 +165,12 @@ export function EmptyWorkspaceScreen() {
               onSubmit={(event) => {
                 event.preventDefault();
                 if (!trimmedPersonName) return;
+                setCreatingStage("idle");
                 moveToPhase("creating");
               }}
             >
               <span className="hero-kicker">Step 2</span>
-              <h1 id="empty-workspace-title">사용자 이름을 입력하세요.</h1>
+              <h1 id="empty-workspace-title">이야기의 주인공은</h1>
               <input
                 ref={personInputRef}
                 className="form-control empty-workspace-input"
@@ -162,16 +193,30 @@ export function EmptyWorkspaceScreen() {
               </div>
             </form>
           ) : null}
-
         </section>
       ) : null}
 
       {phase === "creating" ? (
-        <div className="empty-workspace-intro-text empty-workspace-start-text" aria-live="polite">
+        <div className="empty-workspace-orb-test" aria-hidden="true">
+          <GuideBeaconScene variant="v7" state={creatingStage === "beacon-exiting" ? "exiting" : "idle"} />
+        </div>
+      ) : null}
+
+      {phase === "creating" ? (
+        <button
+          type="button"
+          className={`empty-workspace-intro-text empty-workspace-start-text${creatingStage !== "idle" ? " is-transitioning" : ""}`}
+          aria-live="polite"
+          onClick={() => {
+            if (creatingStage !== "idle") return;
+            setCreatingStage("text-fading");
+            finalizeOnboarding();
+          }}
+        >
           <div className="empty-workspace-intro-lines" aria-label="지금 바로 시작합니다.">
             <span className="empty-workspace-intro-line is-active">지금 바로 시작합니다.</span>
           </div>
-        </div>
+        </button>
       ) : null}
     </main>
   );

@@ -156,6 +156,10 @@ a {
   overflow: hidden;
 }
 
+.empty-workspace-shell.is-finishing {
+  animation: empty-workspace-scene-fade 1400ms ease forwards 620ms;
+}
+
 .empty-workspace-ambient {
   position: absolute;
   border-radius: 999px;
@@ -194,14 +198,14 @@ a {
     var(--app-panel-strong);
   box-shadow: var(--app-shadow-strong);
   backdrop-filter: blur(24px);
-  animation: onboarding-panel-enter 560ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: onboarding-panel-enter 1680ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .empty-workspace-intro-text {
   position: relative;
   z-index: 1;
-  width: min(64rem, 100%);
-  min-height: min(30rem, 74vh);
+  width: 100%;
+  min-height: 100vh;
   padding: 0;
   border: 0;
   background: transparent;
@@ -222,8 +226,8 @@ a {
   position: absolute;
   left: 50%;
   top: calc(50% - 8.2rem);
-  width: 14rem;
-  height: 14rem;
+  width: 13.2rem;
+  height: 13.2rem;
   transform: translate(-50%, -50%);
   pointer-events: none;
 }
@@ -242,12 +246,859 @@ a {
   overflow: visible;
 }
 
+video.ai-sphere-preview {
+  display: block;
+  object-fit: contain;
+  mix-blend-mode: multiply;
+  filter: contrast(1.18) saturate(1.08);
+  background: transparent;
+}
+
 .guide-beacon-scene {
   --guide-beacon-entry-delay: 0s;
 }
 
-.guide-beacon-scene--delayed {
+.guide-beacon-scene--intro {
   --guide-beacon-entry-delay: 2s;
+}
+
+.guide-beacon-scene--floating {
+  --guide-beacon-entry-delay: 0s;
+  --guide-beacon-fresh-core-delay: 0.34s;
+}
+
+.guide-beacon--hidden {
+  opacity: 0;
+}
+
+.guide-beacon--v4.guide-beacon--hidden .ai-sphere-v4-halo,
+.guide-beacon--v4.guide-beacon--hidden .ai-sphere-v4-shell-fill,
+.guide-beacon--v4.guide-beacon--hidden .ai-sphere-v4-shell-glow,
+.guide-beacon--v4.guide-beacon--hidden .ai-sphere-v4-shell,
+.guide-beacon--v4.guide-beacon--hidden .ai-sphere-v4-ribbons,
+.guide-beacon--v4.guide-beacon--hidden .ai-sphere-v4-flare {
+  animation: none !important;
+  opacity: 0;
+}
+
+.guide-beacon--v5.guide-beacon--hidden .ai-sphere-v5-halo,
+.guide-beacon--v5.guide-beacon--hidden .ai-sphere-v5-shell-fill,
+.guide-beacon--v5.guide-beacon--hidden .ai-sphere-v5-shell-glow,
+.guide-beacon--v5.guide-beacon--hidden .ai-sphere-v5-shell,
+.guide-beacon--v5.guide-beacon--hidden .ai-sphere-v5-ribbons {
+  animation: none !important;
+  opacity: 0;
+}
+
+.guide-beacon--v7.guide-beacon--hidden .ai-sphere-v7-halo,
+.guide-beacon--v7.guide-beacon--hidden .ai-sphere-v7-core,
+.guide-beacon--v7.guide-beacon--hidden .ai-sphere-v7-ring-glow,
+.guide-beacon--v7.guide-beacon--hidden .ai-sphere-v7-ring-outer,
+.guide-beacon--v7.guide-beacon--hidden .ai-sphere-v7-ring-inner,
+.guide-beacon--v7.guide-beacon--hidden .ai-sphere-v7-ring-mid,
+.guide-beacon--v7.guide-beacon--hidden .ai-sphere-v7-pulse {
+  animation: none !important;
+  opacity: 0;
+}
+
+.guide-beacon--v8.guide-beacon--hidden .ai-sphere-v8-glow,
+.guide-beacon--v8.guide-beacon--hidden .ai-sphere-v8-core-group,
+.guide-beacon--v8.guide-beacon--hidden .ai-sphere-v8-energy-wrap {
+  animation: none !important;
+  opacity: 0;
+}
+
+.guide-beacon--v4.guide-beacon--entering .ai-sphere-v4-halo {
+  opacity: 0;
+  animation: ai-sphere-v4-halo-enter 900ms ease-out calc(var(--guide-beacon-entry-delay) + 0.18s) forwards;
+}
+
+.guide-beacon--v4.guide-beacon--entering .ai-sphere-v4-shell-fill,
+.guide-beacon--v4.guide-beacon--entering .ai-sphere-v4-shell-glow,
+.guide-beacon--v4.guide-beacon--entering .ai-sphere-v4-shell {
+  opacity: 0;
+  animation: ai-sphere-v4-shell-enter 980ms cubic-bezier(0.16, 0.92, 0.22, 1) calc(var(--guide-beacon-entry-delay) + 0.26s) forwards;
+}
+
+.guide-beacon--v4.guide-beacon--entering .ai-sphere-v4-ribbons {
+  opacity: 0;
+  animation:
+    ai-sphere-v4-ribbons-enter 1080ms ease-out calc(var(--guide-beacon-entry-delay) + 0.34s) forwards,
+    ai-sphere-v4-ribbons-float 7.2s ease-in-out calc(var(--guide-beacon-entry-delay) + 1.44s) infinite;
+}
+
+.guide-beacon--v4.guide-beacon--entering .ai-sphere-v4-ribbons-secondary {
+  animation:
+    ai-sphere-v4-ribbons-enter 1120ms ease-out calc(var(--guide-beacon-entry-delay) + 0.4s) forwards,
+    ai-sphere-v4-ribbons-float-reverse 8.4s ease-in-out calc(var(--guide-beacon-entry-delay) + 1.52s) infinite;
+}
+
+.guide-beacon--v4.guide-beacon--entering .ai-sphere-v4-flare {
+  opacity: 0;
+  animation:
+    ai-sphere-v4-flare-enter 980ms ease-out calc(var(--guide-beacon-entry-delay) + 0.42s) forwards,
+    ai-sphere-v4-flare-pulse 3.2s ease-in-out calc(var(--guide-beacon-entry-delay) + 1.5s) infinite;
+}
+
+.guide-beacon--v5.guide-beacon--entering .ai-sphere-v5-halo {
+  opacity: 0;
+  animation: ai-sphere-v4-halo-enter 900ms ease-out calc(var(--guide-beacon-entry-delay) + 0.18s) forwards;
+}
+
+.guide-beacon--v5.guide-beacon--entering .ai-sphere-v5-shell-fill,
+.guide-beacon--v5.guide-beacon--entering .ai-sphere-v5-shell-glow,
+.guide-beacon--v5.guide-beacon--entering .ai-sphere-v5-shell {
+  opacity: 0;
+  animation: ai-sphere-v4-shell-enter 980ms cubic-bezier(0.16, 0.92, 0.22, 1) calc(var(--guide-beacon-entry-delay) + 0.26s) forwards;
+}
+
+.guide-beacon--v5.guide-beacon--entering .ai-sphere-v5-ribbons {
+  opacity: 0;
+  animation:
+    ai-sphere-v4-ribbons-enter 1080ms ease-out calc(var(--guide-beacon-entry-delay) + 0.34s) forwards,
+    ai-sphere-v4-ribbons-float 7.8s ease-in-out calc(var(--guide-beacon-entry-delay) + 1.44s) infinite;
+}
+
+.guide-beacon--v5.guide-beacon--entering .ai-sphere-v5-ribbons-secondary {
+  animation:
+    ai-sphere-v4-ribbons-enter 1120ms ease-out calc(var(--guide-beacon-entry-delay) + 0.4s) forwards,
+    ai-sphere-v4-ribbons-float-reverse 9.4s ease-in-out calc(var(--guide-beacon-entry-delay) + 1.52s) infinite;
+}
+
+.guide-beacon--v7.guide-beacon--entering .ai-sphere-v7-halo {
+  opacity: 0;
+  animation: ai-sphere-v4-halo-enter 760ms ease-out calc(var(--guide-beacon-entry-delay) + 0.12s) forwards;
+}
+
+.guide-beacon--v7.guide-beacon--entering .ai-sphere-v7-core,
+.guide-beacon--v7.guide-beacon--entering .ai-sphere-v7-ring-glow {
+  opacity: 0;
+  animation:
+    ai-sphere-v4-shell-enter 860ms cubic-bezier(0.16, 0.92, 0.22, 1) calc(var(--guide-beacon-entry-delay) + 0.18s) forwards,
+    ai-sphere-v7-breathe 3.4s ease-in-out calc(var(--guide-beacon-entry-delay) + 1.08s) infinite;
+}
+
+.guide-beacon--v7.guide-beacon--entering .ai-sphere-v7-ring-outer {
+  opacity: 0;
+  animation:
+    ai-sphere-v4-shell-enter 860ms cubic-bezier(0.16, 0.92, 0.22, 1) calc(var(--guide-beacon-entry-delay) + 0.18s) forwards,
+    ai-sphere-v7-breathe 3.4s ease-in-out calc(var(--guide-beacon-entry-delay) + 1.08s) infinite,
+    ai-sphere-v7-ring-drift-outer 4.9s ease-in-out calc(var(--guide-beacon-entry-delay) + 1.18s) infinite;
+}
+
+.guide-beacon--v7.guide-beacon--entering .ai-sphere-v7-ring-inner {
+  opacity: 0;
+  animation:
+    ai-sphere-v4-shell-enter 860ms cubic-bezier(0.16, 0.92, 0.22, 1) calc(var(--guide-beacon-entry-delay) + 0.18s) forwards,
+    ai-sphere-v7-breathe 3.4s ease-in-out calc(var(--guide-beacon-entry-delay) + 1.24s) infinite,
+    ai-sphere-v7-ring-drift-inner 5.6s ease-in-out calc(var(--guide-beacon-entry-delay) + 1.34s) infinite;
+}
+
+.guide-beacon--v7.guide-beacon--entering .ai-sphere-v7-ring-mid {
+  opacity: 0;
+  animation:
+    ai-sphere-v4-shell-enter 860ms cubic-bezier(0.16, 0.92, 0.22, 1) calc(var(--guide-beacon-entry-delay) + 0.18s) forwards,
+    ai-sphere-v7-breathe 3.4s ease-in-out calc(var(--guide-beacon-entry-delay) + 1.16s) infinite,
+    ai-sphere-v7-ring-drift-mid 5.2s ease-in-out calc(var(--guide-beacon-entry-delay) + 1.28s) infinite;
+}
+
+.guide-beacon--v7.guide-beacon--entering .ai-sphere-v7-pulse-a {
+  animation: ai-sphere-core-ring-pulse 3.8s ease-out calc(var(--guide-beacon-entry-delay) + 1.16s) infinite;
+}
+
+.guide-beacon--v7.guide-beacon--entering .ai-sphere-v7-pulse-b {
+  animation: ai-sphere-core-ring-pulse 3.8s ease-out calc(var(--guide-beacon-entry-delay) + 2.28s) infinite;
+}
+
+.guide-beacon--v8.guide-beacon--entering .ai-sphere-v8-glow {
+  opacity: 0;
+  animation: ai-sphere-v4-halo-enter 820ms ease-out calc(var(--guide-beacon-entry-delay) + 0.1s) forwards;
+}
+
+.guide-beacon--v8.guide-beacon--entering .ai-sphere-v8-core-group {
+  opacity: 0;
+  animation:
+    ai-sphere-v4-shell-enter 920ms cubic-bezier(0.16, 0.92, 0.22, 1) calc(var(--guide-beacon-entry-delay) + 0.16s) forwards,
+    ai-sphere-v8-core-pulse 2.8s ease-in-out calc(var(--guide-beacon-entry-delay) + 1.08s) infinite;
+}
+
+.guide-beacon--v8.guide-beacon--entering .ai-sphere-v8-energy-wrap {
+  opacity: 0;
+  animation:
+    ai-sphere-v4-ribbons-enter 960ms ease-out calc(var(--guide-beacon-entry-delay) + 0.2s) forwards,
+    ai-sphere-v8-energy-pulse 4.2s ease-in-out calc(var(--guide-beacon-entry-delay) + 1.1s) infinite;
+}
+
+.guide-beacon-scene--floating .guide-beacon--v7.guide-beacon--entering .ai-sphere-v7-halo {
+  animation-duration: 260ms;
+  animation-delay: var(--guide-beacon-fresh-core-delay);
+}
+
+.guide-beacon-scene--floating .guide-beacon--v7.guide-beacon--entering .ai-sphere-v7-core,
+.guide-beacon-scene--floating .guide-beacon--v7.guide-beacon--entering .ai-sphere-v7-ring-glow {
+  animation-duration: 320ms, 3.4s;
+  animation-delay: calc(var(--guide-beacon-fresh-core-delay) + 0.06s), calc(var(--guide-beacon-fresh-core-delay) + 0.42s);
+}
+
+.guide-beacon-scene--floating .guide-beacon--v7.guide-beacon--entering .ai-sphere-v7-ring-outer {
+  animation-duration: 320ms, 3.4s, 4.9s;
+  animation-delay:
+    calc(var(--guide-beacon-fresh-core-delay) + 0.06s),
+    calc(var(--guide-beacon-fresh-core-delay) + 0.42s),
+    calc(var(--guide-beacon-fresh-core-delay) + 0.5s);
+}
+
+.guide-beacon-scene--floating .guide-beacon--v7.guide-beacon--entering .ai-sphere-v7-ring-inner {
+  animation-duration: 320ms, 3.4s, 5.6s;
+  animation-delay:
+    calc(var(--guide-beacon-fresh-core-delay) + 0.06s),
+    calc(var(--guide-beacon-fresh-core-delay) + 0.48s),
+    calc(var(--guide-beacon-fresh-core-delay) + 0.58s);
+}
+
+.guide-beacon-scene--floating .guide-beacon--v7.guide-beacon--entering .ai-sphere-v7-ring-mid {
+  animation-duration: 320ms, 3.4s, 5.2s;
+  animation-delay:
+    calc(var(--guide-beacon-fresh-core-delay) + 0.06s),
+    calc(var(--guide-beacon-fresh-core-delay) + 0.45s),
+    calc(var(--guide-beacon-fresh-core-delay) + 0.54s);
+}
+
+.guide-beacon-scene--floating .guide-beacon--v7.guide-beacon--entering .ai-sphere-v7-pulse-a {
+  animation-delay: calc(var(--guide-beacon-fresh-core-delay) + 0.54s);
+}
+
+.guide-beacon-scene--floating .guide-beacon--v7.guide-beacon--entering .ai-sphere-v7-pulse-b {
+  animation-delay: calc(var(--guide-beacon-fresh-core-delay) + 1.1s);
+}
+
+.guide-beacon-scene--floating .guide-beacon--v8.guide-beacon--entering .ai-sphere-v8-glow {
+  animation-duration: 280ms;
+  animation-delay: var(--guide-beacon-fresh-core-delay);
+}
+
+.guide-beacon-scene--floating .guide-beacon--v8.guide-beacon--entering .ai-sphere-v8-core-group {
+  animation-duration: 340ms, 2.8s;
+  animation-delay: calc(var(--guide-beacon-fresh-core-delay) + 0.04s), calc(var(--guide-beacon-fresh-core-delay) + 0.42s);
+}
+
+.guide-beacon-scene--floating .guide-beacon--v8.guide-beacon--entering .ai-sphere-v8-energy-wrap {
+  animation-duration: 380ms, 4.2s;
+  animation-delay: calc(var(--guide-beacon-fresh-core-delay) + 0.08s), calc(var(--guide-beacon-fresh-core-delay) + 0.46s);
+}
+
+.guide-beacon-scene--floating .guide-beacon--v4.guide-beacon--entering .ai-sphere-v4-halo {
+  animation-duration: 300ms;
+  animation-delay: var(--guide-beacon-fresh-core-delay);
+}
+
+.guide-beacon-scene--floating .guide-beacon--v4.guide-beacon--entering .ai-sphere-v4-shell-fill,
+.guide-beacon-scene--floating .guide-beacon--v4.guide-beacon--entering .ai-sphere-v4-shell-glow,
+.guide-beacon-scene--floating .guide-beacon--v4.guide-beacon--entering .ai-sphere-v4-shell {
+  animation-duration: 360ms;
+  animation-delay: calc(var(--guide-beacon-fresh-core-delay) + 0.05s);
+}
+
+.guide-beacon-scene--floating .guide-beacon--v4.guide-beacon--entering .ai-sphere-v4-ribbons {
+  animation-duration: 420ms, 7.2s;
+  animation-delay: calc(var(--guide-beacon-fresh-core-delay) + 0.1s), calc(var(--guide-beacon-fresh-core-delay) + 0.54s);
+}
+
+.guide-beacon-scene--floating .guide-beacon--v4.guide-beacon--entering .ai-sphere-v4-ribbons-secondary {
+  animation-duration: 460ms, 8.4s;
+  animation-delay: calc(var(--guide-beacon-fresh-core-delay) + 0.14s), calc(var(--guide-beacon-fresh-core-delay) + 0.58s);
+}
+
+.guide-beacon-scene--floating .guide-beacon--v4.guide-beacon--entering .ai-sphere-v4-flare {
+  animation-duration: 340ms, 3.2s;
+  animation-delay: calc(var(--guide-beacon-fresh-core-delay) + 0.12s), calc(var(--guide-beacon-fresh-core-delay) + 0.58s);
+}
+
+.guide-beacon-scene--floating .guide-beacon--v5.guide-beacon--entering .ai-sphere-v5-halo {
+  animation-duration: 300ms;
+  animation-delay: var(--guide-beacon-fresh-core-delay);
+}
+
+.guide-beacon-scene--floating .guide-beacon--v5.guide-beacon--entering .ai-sphere-v5-shell-fill,
+.guide-beacon-scene--floating .guide-beacon--v5.guide-beacon--entering .ai-sphere-v5-shell-glow,
+.guide-beacon-scene--floating .guide-beacon--v5.guide-beacon--entering .ai-sphere-v5-shell {
+  animation-duration: 360ms;
+  animation-delay: calc(var(--guide-beacon-fresh-core-delay) + 0.05s);
+}
+
+.guide-beacon-scene--floating .guide-beacon--v5.guide-beacon--entering .ai-sphere-v5-ribbons {
+  animation-duration: 420ms, 7.8s;
+  animation-delay: calc(var(--guide-beacon-fresh-core-delay) + 0.1s), calc(var(--guide-beacon-fresh-core-delay) + 0.54s);
+}
+
+.guide-beacon-scene--floating .guide-beacon--v5.guide-beacon--entering .ai-sphere-v5-ribbons-secondary {
+  animation-duration: 460ms, 9.4s;
+  animation-delay: calc(var(--guide-beacon-fresh-core-delay) + 0.14s), calc(var(--guide-beacon-fresh-core-delay) + 0.58s);
+}
+
+.guide-beacon--v4.guide-beacon--idle .ai-sphere-v4-halo,
+.guide-beacon--v4.guide-beacon--idle .ai-sphere-v4-shell-fill,
+.guide-beacon--v4.guide-beacon--idle .ai-sphere-v4-shell-glow,
+.guide-beacon--v4.guide-beacon--idle .ai-sphere-v4-shell,
+.guide-beacon--v4.guide-beacon--idle .ai-sphere-v4-ribbons,
+.guide-beacon--v4.guide-beacon--idle .ai-sphere-v4-flare {
+  opacity: 1;
+}
+
+.guide-beacon--v4.guide-beacon--idle .ai-sphere-v4-ribbons {
+  animation: ai-sphere-v4-ribbons-float 7.2s ease-in-out infinite;
+}
+
+.guide-beacon--v4.guide-beacon--idle .ai-sphere-v4-ribbons-secondary {
+  animation: ai-sphere-v4-ribbons-float-reverse 8.4s ease-in-out infinite;
+}
+
+.guide-beacon--v4.guide-beacon--idle .ai-sphere-v4-flare {
+  animation: ai-sphere-v4-flare-pulse 3.2s ease-in-out infinite;
+}
+
+.guide-beacon--v5.guide-beacon--idle .ai-sphere-v5-halo,
+.guide-beacon--v5.guide-beacon--idle .ai-sphere-v5-shell-fill,
+.guide-beacon--v5.guide-beacon--idle .ai-sphere-v5-shell-glow,
+.guide-beacon--v5.guide-beacon--idle .ai-sphere-v5-shell,
+.guide-beacon--v5.guide-beacon--idle .ai-sphere-v5-ribbons {
+  opacity: 1;
+}
+
+.guide-beacon--v5.guide-beacon--idle .ai-sphere-v5-ribbons {
+  animation: ai-sphere-v4-ribbons-float 7.8s ease-in-out infinite;
+}
+
+.guide-beacon--v5.guide-beacon--idle .ai-sphere-v5-ribbons-secondary {
+  animation: ai-sphere-v4-ribbons-float-reverse 9.4s ease-in-out infinite;
+}
+
+.guide-beacon--v7.guide-beacon--idle .ai-sphere-v7-halo,
+.guide-beacon--v7.guide-beacon--idle .ai-sphere-v7-core,
+.guide-beacon--v7.guide-beacon--idle .ai-sphere-v7-ring-glow,
+.guide-beacon--v7.guide-beacon--idle .ai-sphere-v7-ring-outer,
+.guide-beacon--v7.guide-beacon--idle .ai-sphere-v7-ring-inner,
+.guide-beacon--v7.guide-beacon--idle .ai-sphere-v7-ring-mid,
+.guide-beacon--v7.guide-beacon--idle .ai-sphere-v7-pulse {
+  opacity: 1;
+}
+
+.guide-beacon--v7.guide-beacon--idle .ai-sphere-v7-core,
+.guide-beacon--v7.guide-beacon--idle .ai-sphere-v7-ring-glow {
+  animation: ai-sphere-v7-breathe 3.4s ease-in-out infinite;
+}
+
+.guide-beacon--v7.guide-beacon--idle .ai-sphere-v7-ring-outer {
+  animation:
+    ai-sphere-v7-breathe 3.4s ease-in-out -1.2s infinite,
+    ai-sphere-v7-ring-drift-outer 4.9s ease-in-out -2.1s infinite;
+}
+
+.guide-beacon--v7.guide-beacon--idle .ai-sphere-v7-ring-inner {
+  animation:
+    ai-sphere-v7-breathe 3.4s ease-in-out -2s infinite,
+    ai-sphere-v7-ring-drift-inner 5.6s ease-in-out -0.9s infinite;
+}
+
+.guide-beacon--v7.guide-beacon--idle .ai-sphere-v7-ring-mid {
+  animation:
+    ai-sphere-v7-breathe 3.4s ease-in-out -1.5s infinite,
+    ai-sphere-v7-ring-drift-mid 5.2s ease-in-out -1.7s infinite;
+}
+
+.guide-beacon--v7.guide-beacon--idle .ai-sphere-v7-pulse-a {
+  animation: ai-sphere-core-ring-pulse 3.8s ease-out -0.9s infinite;
+}
+
+.guide-beacon--v7.guide-beacon--idle .ai-sphere-v7-pulse-b {
+  animation: ai-sphere-core-ring-pulse 3.8s ease-out -2.2s infinite;
+}
+
+.guide-beacon--v8.guide-beacon--idle .ai-sphere-v8-glow,
+.guide-beacon--v8.guide-beacon--idle .ai-sphere-v8-core-group,
+.guide-beacon--v8.guide-beacon--idle .ai-sphere-v8-energy-wrap {
+  opacity: 1;
+}
+
+.guide-beacon--v8.guide-beacon--idle .ai-sphere-v8-core-group {
+  animation: ai-sphere-v8-core-pulse 2.8s ease-in-out infinite;
+}
+
+.guide-beacon--v8.guide-beacon--idle .ai-sphere-v8-energy-wrap {
+  animation: ai-sphere-v8-energy-pulse 4.2s ease-in-out infinite;
+}
+
+.guide-beacon--v4.guide-beacon--exiting .ai-sphere-v4-halo {
+  animation: ai-sphere-v4-halo-exit 240ms ease-in 80ms forwards;
+}
+
+.guide-beacon--v4.guide-beacon--exiting .ai-sphere-v4-shell-fill,
+.guide-beacon--v4.guide-beacon--exiting .ai-sphere-v4-shell-glow,
+.guide-beacon--v4.guide-beacon--exiting .ai-sphere-v4-shell,
+.guide-beacon--v4.guide-beacon--exiting .ai-sphere-v4-ribbons,
+.guide-beacon--v4.guide-beacon--exiting .ai-sphere-v4-flare {
+  animation: ai-sphere-v4-shell-exit 220ms ease-in forwards;
+}
+
+.guide-beacon--v5.guide-beacon--exiting .ai-sphere-v5-halo {
+  animation: ai-sphere-v4-halo-exit 240ms ease-in 80ms forwards;
+}
+
+.guide-beacon--v5.guide-beacon--exiting .ai-sphere-v5-shell-fill,
+.guide-beacon--v5.guide-beacon--exiting .ai-sphere-v5-shell-glow,
+.guide-beacon--v5.guide-beacon--exiting .ai-sphere-v5-shell,
+.guide-beacon--v5.guide-beacon--exiting .ai-sphere-v5-ribbons {
+  animation: ai-sphere-v4-shell-exit 220ms ease-in forwards;
+}
+
+.guide-beacon--v7.guide-beacon--exiting .ai-sphere-v7-halo {
+  animation: ai-sphere-v4-halo-exit 220ms ease-in 70ms forwards;
+}
+
+.guide-beacon--v7.guide-beacon--exiting .ai-sphere-v7-core,
+.guide-beacon--v7.guide-beacon--exiting .ai-sphere-v7-ring-glow,
+.guide-beacon--v7.guide-beacon--exiting .ai-sphere-v7-ring-outer,
+.guide-beacon--v7.guide-beacon--exiting .ai-sphere-v7-ring-inner,
+.guide-beacon--v7.guide-beacon--exiting .ai-sphere-v7-ring-mid,
+.guide-beacon--v7.guide-beacon--exiting .ai-sphere-v7-pulse {
+  animation: ai-sphere-v4-shell-exit 200ms ease-in forwards;
+}
+
+.guide-beacon--v8.guide-beacon--exiting .ai-sphere-v8-glow {
+  animation: ai-sphere-v4-halo-exit 220ms ease-in 70ms forwards;
+}
+
+.guide-beacon--v8.guide-beacon--exiting .ai-sphere-v8-core-group,
+.guide-beacon--v8.guide-beacon--exiting .ai-sphere-v8-energy-wrap {
+  animation: ai-sphere-v4-shell-exit 200ms ease-in forwards;
+}
+
+.ai-sphere-v4-halo {
+  opacity: 0.9;
+}
+
+.ai-sphere-v4-shell-fill {
+  fill-opacity: 0.42;
+}
+
+.ai-sphere-v4-shell-glow {
+  fill: none;
+  stroke-width: 2.8;
+  stroke-opacity: 0.62;
+}
+
+.ai-sphere-v4-shell {
+  fill: none;
+  stroke-width: 1.7;
+  stroke-opacity: 0.98;
+}
+
+.ai-sphere-v4-ribbons {
+  transform-origin: 80px 80px;
+}
+
+.ai-sphere-v4-ribbon {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 6.8;
+  opacity: 0.96;
+  filter: url(#ai-sphere-ribbon-v4-glow);
+}
+
+.ai-sphere-v4-ribbon-a,
+.ai-sphere-v4-ribbon-d {
+  stroke-width: 7.4;
+}
+
+.ai-sphere-v4-ribbon-b,
+.ai-sphere-v4-ribbon-e {
+  stroke-width: 5.9;
+  opacity: 0.78;
+}
+
+.ai-sphere-v4-ribbon-c,
+.ai-sphere-v4-ribbon-f {
+  stroke-width: 4.8;
+  opacity: 0.64;
+}
+
+.ai-sphere-v4-flare {
+  fill: rgba(232, 242, 255, 0.88);
+  filter: blur(1px);
+}
+
+.ai-sphere-v5-halo {
+  opacity: 0.82;
+}
+
+.ai-sphere-v5-shell-fill {
+  fill-opacity: 0.24;
+}
+
+.ai-sphere-v5-shell-glow {
+  fill: none;
+  stroke-width: 2.1;
+  stroke-opacity: 0.34;
+}
+
+.ai-sphere-v5-shell {
+  fill: none;
+  stroke-width: 1.35;
+  stroke-opacity: 0.88;
+}
+
+.ai-sphere-v5-ribbons {
+  transform-origin: 80px 80px;
+}
+
+.ai-sphere-v5-ribbon {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.98;
+  filter: url(#ai-sphere-ribbon-v5-glow);
+}
+
+.ai-sphere-v5-ribbon-a,
+.ai-sphere-v5-ribbon-c {
+  stroke-width: 5.1;
+}
+
+.ai-sphere-v5-ribbon-b,
+.ai-sphere-v5-ribbon-d {
+  stroke-width: 3.9;
+  opacity: 0.78;
+}
+
+.ai-sphere-v7-halo {
+  opacity: 0.94;
+  transform-origin: 80px 80px;
+  transform-box: view-box;
+}
+
+.ai-sphere-v7-core {
+  opacity: 0.92;
+  transform-origin: 80px 80px;
+  transform-box: view-box;
+}
+
+.ai-sphere-v7-ring-glow {
+  fill: none;
+  stroke-width: 1.3;
+  stroke-opacity: 0.42;
+  transform-origin: 80px 80px;
+  transform-box: view-box;
+}
+
+.ai-sphere-v7-ring-outer {
+  fill: none;
+  stroke-width: 0.78;
+  stroke-opacity: 0.98;
+  transform-origin: 80px 80px;
+  transform-box: view-box;
+}
+
+.ai-sphere-v7-ring-inner {
+  fill: none;
+  stroke-width: 0.52;
+  stroke-opacity: 0.9;
+  transform-origin: 80px 80px;
+  transform-box: view-box;
+}
+
+.ai-sphere-v7-ring-mid {
+  fill: none;
+  stroke-width: 0.62;
+  stroke-opacity: 0.94;
+  transform-origin: 80px 80px;
+  transform-box: view-box;
+}
+
+.ai-sphere-v7-pulse {
+  fill: none;
+  stroke: rgba(16, 96, 255, 0.56);
+  stroke-width: 1.04;
+  opacity: 0;
+  transform-origin: 80px 80px;
+  transform-box: view-box;
+}
+
+.ai-sphere-v8-glow {
+  opacity: 0.94;
+}
+
+.ai-sphere-v8-core {
+  opacity: 0.96;
+}
+
+.ai-sphere-v8-core-flare {
+  fill: rgba(246, 255, 255, 0.96);
+  filter: blur(2.2px);
+}
+
+.ai-sphere-v8-energy {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.92;
+}
+
+.ai-sphere-v8-energy-a,
+.ai-sphere-v8-energy-b {
+  stroke-width: 6.2;
+}
+
+.ai-sphere-v8-energy-c,
+.ai-sphere-v8-energy-d {
+  stroke-width: 4.6;
+  opacity: 0.72;
+}
+
+.guide-beacon--v3.guide-beacon--hidden .ai-sphere-v3-halo,
+.guide-beacon--v3.guide-beacon--hidden .ai-sphere-v3-echo,
+.guide-beacon--v3.guide-beacon--hidden .ai-sphere-v3-drift-wrap,
+.guide-beacon--v3.guide-beacon--hidden .ai-sphere-v3-core,
+.guide-beacon--v3.guide-beacon--hidden .ai-sphere-v3-pulse {
+  animation: none !important;
+}
+
+.guide-beacon--v3.guide-beacon--hidden .ai-sphere-v3-halo,
+.guide-beacon--v3.guide-beacon--hidden .ai-sphere-v3-echo,
+.guide-beacon--v3.guide-beacon--hidden .ai-sphere-v3-pulse {
+  opacity: 0;
+}
+
+.guide-beacon--v3.guide-beacon--hidden .ai-sphere-v3-drift-wrap {
+  opacity: 0;
+}
+
+.guide-beacon--v3.guide-beacon--hidden .ai-sphere-v3-core {
+  transform: scale(0.015);
+}
+
+.guide-beacon--v3.guide-beacon--entering .ai-sphere-v3-halo {
+  opacity: 0;
+  animation: ai-sphere-v1-halo-enter 780ms ease-out calc(var(--guide-beacon-entry-delay) + 0.44s) forwards;
+}
+
+.guide-beacon-scene--floating .guide-beacon--v3.guide-beacon--entering .ai-sphere-v3-halo {
+  animation-duration: 260ms;
+  animation-delay: var(--guide-beacon-fresh-core-delay);
+}
+
+.guide-beacon--v3.guide-beacon--entering .ai-sphere-v3-drift-wrap {
+  opacity: 0;
+  animation:
+    ai-sphere-v1-core-enter 1080ms cubic-bezier(0.18, 0.92, 0.28, 1) calc(var(--guide-beacon-entry-delay) + 0.44s) forwards,
+    ai-sphere-core-tuned-drift 3.35s ease-in-out calc(var(--guide-beacon-entry-delay) + 1.78s) infinite;
+}
+
+.guide-beacon-scene--floating .guide-beacon--v3.guide-beacon--entering .ai-sphere-v3-drift-wrap {
+  animation-duration: 360ms, 3.35s;
+  animation-delay: var(--guide-beacon-fresh-core-delay), calc(var(--guide-beacon-fresh-core-delay) + 0.45s);
+}
+
+.guide-beacon--v3.guide-beacon--entering .ai-sphere-v3-core {
+  animation:
+    ai-sphere-v1-core-pop 1080ms cubic-bezier(0.16, 0.96, 0.24, 1) calc(var(--guide-beacon-entry-delay) + 0.44s) forwards,
+    ai-sphere-core-tuned-breathe 2.45s ease-in-out calc(var(--guide-beacon-entry-delay) + 1.8s) infinite;
+}
+
+.guide-beacon-scene--floating .guide-beacon--v3.guide-beacon--entering .ai-sphere-v3-core {
+  animation-duration: 360ms, 2.45s;
+  animation-delay: var(--guide-beacon-fresh-core-delay), calc(var(--guide-beacon-fresh-core-delay) + 0.46s);
+}
+
+.guide-beacon--v3.guide-beacon--entering .ai-sphere-v3-echo {
+  animation: ai-sphere-v1-echo 4.8s ease-out calc(var(--guide-beacon-entry-delay) - 0.94s) infinite;
+}
+
+.guide-beacon-scene--floating .guide-beacon--v3.guide-beacon--entering .ai-sphere-v3-echo {
+  animation-delay: 0.02s;
+}
+
+.guide-beacon-scene--floating .guide-beacon--v3.guide-beacon--exiting .ai-sphere-v3-halo {
+  animation-duration: 207ms;
+  animation-delay: 87ms;
+}
+
+.guide-beacon-scene--floating .guide-beacon--v3.guide-beacon--exiting .ai-sphere-v3-drift-wrap {
+  animation-duration: 140ms;
+}
+
+.guide-beacon-scene--floating .guide-beacon--v3.guide-beacon--exiting .ai-sphere-v3-core {
+  animation-duration: 140ms;
+}
+
+.guide-beacon-scene--floating .guide-beacon--v3.guide-beacon--exiting .ai-sphere-v3-echo,
+.guide-beacon-scene--floating .guide-beacon--v3.guide-beacon--exiting .ai-sphere-v3-pulse {
+  animation-duration: 120ms;
+  animation-delay: 87ms;
+}
+
+.guide-beacon--v3.guide-beacon--idle .ai-sphere-v3-halo,
+.guide-beacon--v3.guide-beacon--idle .ai-sphere-v3-drift-wrap,
+.guide-beacon--v3.guide-beacon--idle .ai-sphere-v3-core {
+  opacity: 1;
+}
+
+.guide-beacon--v3.guide-beacon--idle .ai-sphere-v3-drift-wrap {
+  animation: ai-sphere-core-tuned-drift 3.35s ease-in-out infinite;
+}
+
+.guide-beacon--v3.guide-beacon--idle .ai-sphere-v3-core {
+  animation: ai-sphere-core-tuned-breathe 2.45s ease-in-out infinite;
+}
+
+.guide-beacon--v3.guide-beacon--idle .ai-sphere-v3-echo {
+  animation: ai-sphere-v1-echo 4.8s ease-out infinite;
+}
+
+.guide-beacon--v3.guide-beacon--exiting .ai-sphere-v3-halo {
+  opacity: 1;
+  animation: ai-sphere-v1-halo-exit 620ms ease-in 260ms forwards;
+}
+
+.guide-beacon--v3.guide-beacon--exiting .ai-sphere-v3-drift-wrap {
+  opacity: 1;
+  animation: ai-sphere-v1-core-exit 420ms ease-in forwards;
+}
+
+.guide-beacon--v3.guide-beacon--exiting .ai-sphere-v3-core {
+  animation: ai-sphere-v1-core-pop-exit 420ms cubic-bezier(0.55, 0.08, 0.8, 0.28) forwards;
+}
+
+.guide-beacon--v3.guide-beacon--exiting .ai-sphere-v3-echo,
+.guide-beacon--v3.guide-beacon--exiting .ai-sphere-v3-pulse {
+  animation: ai-sphere-v1-signal-exit 360ms ease-in 260ms forwards;
+}
+
+.guide-beacon--v3 .ai-sphere-v3-pulse {
+  stroke-opacity: 0.68;
+  stroke-width: 1.85;
+}
+
+.ai-sphere-v3-core-bloom {
+  opacity: 0.96;
+  filter: blur(6.2px);
+}
+
+.ai-sphere-v3-core {
+  filter: drop-shadow(0 0 1.15rem rgba(102, 125, 255, 0.48));
+}
+
+.ai-sphere-v3-core-cloud {
+  opacity: 0.96;
+}
+
+.ai-sphere-v3-core-cloud-piece {
+  opacity: 0.98;
+}
+
+.ai-sphere-v3-core-cloud-piece-b,
+.ai-sphere-v3-core-cloud-piece-c,
+.ai-sphere-v3-core-cloud-piece-d {
+  opacity: 0.88;
+}
+
+.ai-sphere-v3-core-flare {
+  opacity: 0.96;
+  filter: blur(1.8px);
+}
+
+.guide-beacon--v3 .ai-sphere-v3-halo {
+  fill: none;
+}
+
+.guide-beacon--v3 .ai-sphere-v3-echo {
+  stroke: rgba(171, 191, 255, 0.56);
+}
+
+.guide-beacon--v3 .ai-sphere-core-pulse-blue.ai-sphere-v3-pulse {
+  stroke: rgba(92, 118, 255, 0.36);
+  stroke-width: 1.45;
+  stroke-opacity: 0.54;
+}
+
+.guide-beacon--v3 .ai-sphere-core-pulse-blue.ai-sphere-v3-pulse.pulse-e {
+  stroke: rgba(92, 118, 255, 0.3);
+  stroke-opacity: 0.48;
+}
+
+.guide-beacon--v3 .ai-sphere-core-pulse-blue.ai-sphere-v3-pulse.pulse-c {
+  stroke: rgba(92, 118, 255, 0.32);
+  stroke-opacity: 0.5;
+}
+
+.guide-beacon--v3 .ai-sphere-core-pulse-plum.ai-sphere-v3-pulse {
+  stroke: rgba(155, 94, 255, 0.52);
+}
+
+.guide-beacon--v3 .ai-sphere-core-pulse-tuned.ai-sphere-v3-pulse:not(.ai-sphere-core-pulse-blue):not(.ai-sphere-core-pulse-plum) {
+  stroke: rgba(233, 240, 255, 0.58);
+}
+
+.guide-beacon--v3.guide-beacon--entering .pulse-a {
+  animation-delay: calc(var(--guide-beacon-entry-delay) - 0.98s);
+}
+
+.guide-beacon-scene--floating .guide-beacon--v3.guide-beacon--entering .pulse-a {
+  animation-delay: 0.013s;
+}
+
+.guide-beacon--v3.guide-beacon--entering .pulse-b {
+  animation-delay: calc(var(--guide-beacon-entry-delay) + 0.06s);
+}
+
+.guide-beacon-scene--floating .guide-beacon--v3.guide-beacon--entering .pulse-b {
+  animation-delay: 0.06s;
+}
+
+.guide-beacon--v3.guide-beacon--entering .pulse-c {
+  animation-delay: calc(var(--guide-beacon-entry-delay) - 0.68s);
+}
+
+.guide-beacon-scene--floating .guide-beacon--v3.guide-beacon--entering .pulse-c {
+  animation-delay: 0.087s;
+}
+
+.guide-beacon--v3.guide-beacon--entering .pulse-e {
+  animation-delay: calc(var(--guide-beacon-entry-delay) + 0.82s);
+}
+
+.guide-beacon-scene--floating .guide-beacon--v3.guide-beacon--entering .pulse-e {
+  animation-delay: 0.18s;
+}
+
+.guide-beacon--v3.guide-beacon--entering .pulse-f {
+  animation-delay: calc(var(--guide-beacon-entry-delay) - 0.38s);
+}
+
+.guide-beacon-scene--floating .guide-beacon--v3.guide-beacon--entering .pulse-f {
+  animation-delay: 0.127s;
+}
+
+.guide-beacon--v1.guide-beacon--hidden .ai-sphere-v1-halo,
+.guide-beacon--v1.guide-beacon--hidden .ai-sphere-v1-echo,
+.guide-beacon--v1.guide-beacon--hidden .ai-sphere-core-tuned-drift-wrap,
+.guide-beacon--v1.guide-beacon--hidden .ai-sphere-core-tuned,
+.guide-beacon--v1.guide-beacon--hidden .ai-sphere-core-pulse-tuned {
+  animation: none !important;
+}
+
+.guide-beacon--v1.guide-beacon--hidden .ai-sphere-v1-halo,
+.guide-beacon--v1.guide-beacon--hidden .ai-sphere-v1-echo,
+.guide-beacon--v1.guide-beacon--hidden .ai-sphere-core-pulse-tuned {
+  opacity: 0;
+}
+
+.guide-beacon--v1.guide-beacon--hidden .ai-sphere-core-tuned-drift-wrap {
+  opacity: 0;
+}
+
+.guide-beacon--v1.guide-beacon--hidden .ai-sphere-core-tuned {
+  transform: scale(0.015);
 }
 
 .guide-beacon--v1.guide-beacon--entering .ai-sphere-v1-halo {
@@ -255,21 +1106,59 @@ a {
   animation: ai-sphere-v1-halo-enter 780ms ease-out calc(var(--guide-beacon-entry-delay) + 0.44s) forwards;
 }
 
+.guide-beacon-scene--floating .guide-beacon--v1.guide-beacon--entering .ai-sphere-v1-halo {
+  animation-duration: 260ms;
+  animation-delay: var(--guide-beacon-fresh-core-delay);
+}
+
 .guide-beacon--v1.guide-beacon--entering .ai-sphere-core-tuned-drift-wrap {
   opacity: 0;
   animation:
-    ai-sphere-v1-core-enter 760ms cubic-bezier(0.18, 0.92, 0.28, 1) calc(var(--guide-beacon-entry-delay) + 0.44s) forwards,
-    ai-sphere-core-tuned-drift 3.35s ease-in-out calc(var(--guide-beacon-entry-delay) + 1.46s) infinite;
+    ai-sphere-v1-core-enter 1080ms cubic-bezier(0.18, 0.92, 0.28, 1) calc(var(--guide-beacon-entry-delay) + 0.44s) forwards,
+    ai-sphere-core-tuned-drift 3.35s ease-in-out calc(var(--guide-beacon-entry-delay) + 1.78s) infinite;
+}
+
+.guide-beacon-scene--floating .guide-beacon--v1.guide-beacon--entering .ai-sphere-core-tuned-drift-wrap {
+  animation-duration: 360ms, 3.35s;
+  animation-delay: var(--guide-beacon-fresh-core-delay), calc(var(--guide-beacon-fresh-core-delay) + 0.45s);
 }
 
 .guide-beacon--v1.guide-beacon--entering .ai-sphere-core-tuned {
   animation:
-    ai-sphere-v1-core-pop 760ms cubic-bezier(0.16, 0.96, 0.24, 1) calc(var(--guide-beacon-entry-delay) + 0.44s) forwards,
-    ai-sphere-core-tuned-breathe 2.45s ease-in-out calc(var(--guide-beacon-entry-delay) + 1.48s) infinite;
+    ai-sphere-v1-core-pop 1080ms cubic-bezier(0.16, 0.96, 0.24, 1) calc(var(--guide-beacon-entry-delay) + 0.44s) forwards,
+    ai-sphere-core-tuned-breathe 2.45s ease-in-out calc(var(--guide-beacon-entry-delay) + 1.8s) infinite;
+}
+
+.guide-beacon-scene--floating .guide-beacon--v1.guide-beacon--entering .ai-sphere-core-tuned {
+  animation-duration: 360ms, 2.45s;
+  animation-delay: var(--guide-beacon-fresh-core-delay), calc(var(--guide-beacon-fresh-core-delay) + 0.46s);
 }
 
 .guide-beacon--v1.guide-beacon--entering .ai-sphere-v1-echo {
   animation: ai-sphere-v1-echo 4.8s ease-out calc(var(--guide-beacon-entry-delay) - 0.94s) infinite;
+}
+
+.guide-beacon-scene--floating .guide-beacon--v1.guide-beacon--entering .ai-sphere-v1-echo {
+  animation-delay: 0.02s;
+}
+
+.guide-beacon-scene--floating .guide-beacon--v1.guide-beacon--exiting .ai-sphere-v1-halo {
+  animation-duration: 207ms;
+  animation-delay: 87ms;
+}
+
+.guide-beacon-scene--floating .guide-beacon--v1.guide-beacon--exiting .ai-sphere-core-tuned-drift-wrap {
+  animation-duration: 140ms;
+}
+
+.guide-beacon-scene--floating .guide-beacon--v1.guide-beacon--exiting .ai-sphere-core-tuned {
+  animation-duration: 140ms;
+}
+
+.guide-beacon-scene--floating .guide-beacon--v1.guide-beacon--exiting .ai-sphere-v1-echo,
+.guide-beacon-scene--floating .guide-beacon--v1.guide-beacon--exiting .ai-sphere-core-pulse-tuned {
+  animation-duration: 120ms;
+  animation-delay: 87ms;
 }
 
 .guide-beacon--v1.guide-beacon--idle .ai-sphere-v1-halo,
@@ -310,28 +1199,48 @@ a {
 }
 
 .guide-beacon--v1 .ai-sphere-core-pulse-tuned {
-  filter: blur(0.45px);
-  stroke-opacity: 0.84;
+  filter: blur(0.18px);
+  stroke-opacity: 0.94;
 }
 
 .guide-beacon--v1.guide-beacon--entering .pulse-a {
   animation-delay: calc(var(--guide-beacon-entry-delay) - 0.98s);
 }
 
+.guide-beacon-scene--floating .guide-beacon--v1.guide-beacon--entering .pulse-a {
+  animation-delay: 0.013s;
+}
+
 .guide-beacon--v1.guide-beacon--entering .pulse-b {
   animation-delay: calc(var(--guide-beacon-entry-delay) + 0.06s);
+}
+
+.guide-beacon-scene--floating .guide-beacon--v1.guide-beacon--entering .pulse-b {
+  animation-delay: 0.06s;
 }
 
 .guide-beacon--v1.guide-beacon--entering .pulse-c {
   animation-delay: calc(var(--guide-beacon-entry-delay) - 0.68s);
 }
 
+.guide-beacon-scene--floating .guide-beacon--v1.guide-beacon--entering .pulse-c {
+  animation-delay: 0.087s;
+}
+
 .guide-beacon--v1.guide-beacon--entering .pulse-e {
   animation-delay: calc(var(--guide-beacon-entry-delay) + 0.82s);
 }
 
+.guide-beacon-scene--floating .guide-beacon--v1.guide-beacon--entering .pulse-e {
+  animation-delay: 0.18s;
+}
+
 .guide-beacon--v1.guide-beacon--entering .pulse-f {
   animation-delay: calc(var(--guide-beacon-entry-delay) - 0.38s);
+}
+
+.guide-beacon-scene--floating .guide-beacon--v1.guide-beacon--entering .pulse-f {
+  animation-delay: 0.127s;
 }
 
 .ai-sphere-core {
@@ -342,7 +1251,7 @@ a {
 
 .ai-sphere-core-pulse {
   fill: none;
-  stroke: rgba(255, 255, 255, 0.52);
+  stroke: rgba(255, 255, 255, 0.68);
   stroke-width: 1.45;
   transform-box: fill-box;
   transform-origin: center;
@@ -355,7 +1264,7 @@ a {
 }
 
 .ai-sphere-core-pulse-blue {
-  stroke: rgba(133, 156, 255, 0.46);
+  stroke: rgba(133, 156, 255, 0.66);
   stroke-width: 1.7;
 }
 
@@ -368,7 +1277,7 @@ a {
 }
 
 .ai-sphere-core-pulse-plum {
-  stroke: rgba(176, 128, 255, 0.42);
+  stroke: rgba(176, 128, 255, 0.6);
   stroke-width: 1.6;
 }
 
@@ -377,18 +1286,18 @@ a {
 }
 
 .ai-sphere-core-tuned {
-  filter: drop-shadow(0 0 0.45rem rgba(214, 226, 255, 0.3));
+  filter: drop-shadow(0 0 0.45rem rgba(214, 226, 255, 0.42));
 }
 
 .ai-sphere-v1-halo {
-  fill: rgba(127, 151, 255, 0.1);
+  fill: rgba(127, 151, 255, 0.16);
   transform-box: fill-box;
   transform-origin: center;
 }
 
 .ai-sphere-v1-echo {
   fill: none;
-  stroke: rgba(206, 220, 255, 0.28);
+  stroke: rgba(206, 220, 255, 0.4);
   stroke-width: 1.15;
   opacity: 0;
   transform-box: fill-box;
@@ -480,50 +1389,51 @@ a {
 .empty-workspace-intro-line {
   display: block;
   opacity: 0;
-  color: #3f4756;
-  font-size: clamp(2.3rem, 5vw, 4.4rem);
+  color: #596170;
+  font-size: clamp(1.85rem, 4.1vw, 3.45rem);
   font-weight: 500;
   line-height: 1.08;
-  letter-spacing: 0.015em;
+  letter-spacing: 0.04em;
 }
 
 .empty-workspace-intro-line.is-active {
   opacity: 1;
-  animation: intro-line-enter 760ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: intro-line-enter 1520ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .empty-workspace-intro-line.is-active.is-delayed {
   opacity: 0;
-  animation: intro-line-enter-delayed 1280ms cubic-bezier(0.2, 0.9, 0.24, 1) 2s forwards;
+  animation: intro-line-enter-delayed 2560ms cubic-bezier(0.2, 0.9, 0.24, 1) 3.7s forwards;
 }
 
 .empty-workspace-onboarding h1 {
-  margin: 0.75rem 0 0;
+  margin: 0.75rem 0 0.65rem;
   font-size: clamp(1.35rem, 2.3vw, 1.9rem);
-  font-weight: 800;
-  letter-spacing: -0.05em;
+  font-weight: 500;
+  color: #596170;
+  letter-spacing: 0.04em;
 }
 
 .empty-workspace-intro-text.is-transitioning {
   opacity: 0;
   transform: translateY(8px) scale(0.985);
-  transition: opacity 460ms ease, transform 460ms ease;
+  transition: opacity 920ms ease, transform 920ms ease;
 }
 
 .empty-workspace-onboarding.is-transitioning {
   opacity: 0;
   transform: translateY(8px) scale(0.985);
-  transition: opacity 220ms ease, transform 220ms ease;
+  transition: opacity 660ms ease, transform 660ms ease;
 }
 
 .empty-workspace-start-text {
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .empty-workspace-form {
   margin-top: 1.25rem;
   display: grid;
-  gap: 0.8rem;
+  gap: 1rem;
 }
 
 .empty-workspace-form.is-starting {
@@ -674,6 +1584,26 @@ label,
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   min-height: 100vh;
+}
+
+.app-shell.is-onboarding-entering .app-topbar,
+.app-shell.is-onboarding-entering .app-header,
+.app-shell.is-onboarding-entering .app-main {
+  opacity: 0;
+  transform: translateY(18px);
+  animation: app-onboarding-enter 1500ms cubic-bezier(0.2, 0.9, 0.24, 1) forwards;
+}
+
+.app-shell.is-onboarding-entering .app-topbar {
+  animation-delay: 180ms;
+}
+
+.app-shell.is-onboarding-entering .app-header {
+  animation-delay: 420ms;
+}
+
+.app-shell.is-onboarding-entering .app-main {
+  animation-delay: 680ms;
 }
 
 .app-topbar {
@@ -2352,7 +3282,7 @@ textarea:focus {
 .floating-guide-panel {
   position: fixed;
   right: 1.6rem;
-  bottom: 5.9rem;
+  bottom: 10.8rem;
   z-index: 45;
   display: grid;
   gap: 0.9rem;
@@ -2368,6 +3298,10 @@ textarea:focus {
   animation: floating-guide-enter 320ms cubic-bezier(0.22, 1, 0.36, 1);
   transform-origin: bottom right;
   transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+}
+
+.floating-guide-panel.is-left {
+  transform-origin: bottom left;
 }
 
 .floating-guide-panel:hover {
@@ -2426,48 +3360,91 @@ textarea:focus {
 
 .floating-guide-fab {
   position: fixed;
-  right: 1.6rem;
-  bottom: 1.6rem;
+  right: 0.35rem;
+  bottom: 0.2rem;
   z-index: 46;
   display: inline-grid;
   place-items: center;
-  width: 3.4rem;
-  height: 3.4rem;
+  width: 9.3rem;
+  height: 9.3rem;
   padding: 0;
-  border: 1px solid rgba(37, 99, 235, 0.16);
+  border: 0;
   border-radius: 999px;
-  background:
-    radial-gradient(circle at top left, rgba(59, 130, 246, 0.18), transparent 58%),
-    var(--app-panel);
-  color: var(--app-text);
-  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.18);
-  backdrop-filter: blur(16px);
-  transition:
-    transform 180ms ease,
-    border-color 220ms ease,
-    box-shadow 220ms ease,
-    background 220ms ease;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  backdrop-filter: none;
+  touch-action: none;
+  cursor: grab;
+  transition: transform 180ms ease, filter 220ms ease;
+}
+
+.floating-guide-fab:active {
+  cursor: grabbing;
 }
 
 .floating-guide-fab:hover,
 .floating-guide-fab:focus-visible {
   transform: translateY(-2px);
-  border-color: rgba(37, 99, 235, 0.28);
-  box-shadow: 0 24px 46px rgba(15, 23, 42, 0.22);
+  filter: drop-shadow(0 16px 28px rgba(15, 23, 42, 0.18));
 }
 
-.floating-guide-fab-icon {
+.floating-guide-fab-beacon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2rem;
-  height: 2rem;
+  width: 9.3rem;
+  height: 9.3rem;
+}
+
+.floating-guide-fab-beacon .ai-sphere-stage,
+.floating-guide-fab-beacon .guide-beacon {
+  width: 100%;
+  height: 100%;
+}
+
+.floating-guide-drop-targets {
+  position: fixed;
+  inset: 0;
+  z-index: 44;
+  pointer-events: none;
+}
+
+.floating-guide-drop-target {
+  position: fixed;
+  bottom: 2.55rem;
+  width: 5.1rem;
+  height: 5.1rem;
+  padding: 0;
   border-radius: 999px;
-  background: linear-gradient(135deg, var(--app-primary), var(--app-primary-strong));
-  color: white;
-  font-size: 0.95rem;
+  border: 1px dashed color-mix(in srgb, var(--app-line-strong) 72%, var(--app-line));
+  background: color-mix(in srgb, var(--app-panel-strong) 52%, transparent);
+  color: color-mix(in srgb, var(--app-muted) 82%, transparent);
+  font-size: 0.8rem;
   font-weight: 700;
-  box-shadow: 0 10px 20px rgba(37, 99, 235, 0.24);
+  display: grid;
+  place-items: center;
+  text-align: center;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(14px);
+  opacity: 0.56;
+  transform: scale(0.96);
+  transition: transform 180ms ease, opacity 180ms ease, border-color 180ms ease, color 180ms ease;
+}
+
+.floating-guide-drop-target.left {
+  left: calc(0.35rem + 2.35rem);
+}
+
+.floating-guide-drop-target.right {
+  right: calc(0.35rem + 2.35rem);
+}
+
+.floating-guide-drop-target.active {
+  opacity: 0.9;
+  transform: scale(1);
+  border-color: color-mix(in srgb, var(--app-primary) 54%, white);
+  color: var(--app-text);
 }
 
 .guide-arrival-overlay {
@@ -3359,22 +4336,30 @@ textarea:focus {
 }
 
 @keyframes ai-sphere-v1-core-enter {
-  from {
+  0% {
     opacity: 0;
   }
 
-  to {
+  38% {
+    opacity: 0;
+  }
+
+  100% {
     opacity: 1;
   }
 }
 
 @keyframes ai-sphere-v1-core-pop {
   0% {
-    transform: scale(0.06);
+    transform: scale(0.015);
+  }
+
+  30% {
+    transform: scale(0.015);
   }
 
   72% {
-    transform: scale(1.08);
+    transform: scale(1.1);
   }
 
   100% {
@@ -3423,6 +4408,229 @@ textarea:focus {
   to {
     opacity: 0;
     transform: scale(0.86);
+  }
+}
+
+@keyframes empty-workspace-scene-fade {
+  from {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0;
+    filter: blur(10px);
+    transform: scale(1.012);
+  }
+}
+
+@keyframes app-onboarding-enter {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ai-sphere-v4-halo-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.52);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes ai-sphere-v4-shell-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.62);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes ai-sphere-v4-ribbons-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.84) rotate(-10deg);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes ai-sphere-v4-ribbons-float {
+  0%,
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+
+  30% {
+    transform: rotate(14deg) scale(1.02);
+  }
+
+  62% {
+    transform: rotate(-9deg) scale(0.985);
+  }
+}
+
+@keyframes ai-sphere-v4-ribbons-float-reverse {
+  0%,
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+
+  36% {
+    transform: rotate(-16deg) scale(1.015);
+  }
+
+  70% {
+    transform: rotate(11deg) scale(0.99);
+  }
+}
+
+@keyframes ai-sphere-v4-flare-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.35);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes ai-sphere-v4-flare-pulse {
+  0%,
+  100% {
+    opacity: 0.82;
+    transform: scale(0.92);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.14);
+  }
+}
+
+@keyframes ai-sphere-v4-halo-exit {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(0.68);
+  }
+}
+
+@keyframes ai-sphere-v4-shell-exit {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(0.58);
+  }
+}
+
+@keyframes ai-sphere-v7-breathe {
+  0%,
+  100% {
+    transform: scale(0.988);
+  }
+
+  50% {
+    transform: scale(1.022);
+  }
+}
+
+@keyframes ai-sphere-v7-ring-drift-outer {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+
+  28% {
+    transform: translate(0.9px, -1.1px);
+  }
+
+  62% {
+    transform: translate(-0.8px, 0.7px);
+  }
+}
+
+@keyframes ai-sphere-v7-ring-drift-inner {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+
+  34% {
+    transform: translate(-1px, 0.85px);
+  }
+
+  70% {
+    transform: translate(0.75px, -0.95px);
+  }
+}
+
+@keyframes ai-sphere-v7-ring-drift-mid {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+
+  30% {
+    transform: translate(0.7px, 0.95px);
+  }
+
+  66% {
+    transform: translate(-0.85px, -0.65px);
+  }
+}
+
+@keyframes ai-sphere-v8-core-pulse {
+  0%,
+  100% {
+    transform: scale(0.96);
+    opacity: 0.92;
+  }
+
+  50% {
+    transform: scale(1.04);
+    opacity: 1;
+  }
+}
+
+@keyframes ai-sphere-v8-energy-pulse {
+  0%,
+  100% {
+    transform: scale(0.98);
+    opacity: 0.82;
+  }
+
+  50% {
+    transform: scale(1.03);
+    opacity: 1;
   }
 }
 

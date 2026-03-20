@@ -1,11 +1,10 @@
 ﻿import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { HashRouter, Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
-import type { CSSProperties } from "react";
 import { getWorkspaceHeaderSummary } from "../domain/workspace/summary";
 import { MotionProvider } from "./motion/MotionProvider";
 import { AppModal } from "./components/AppModal";
 import { AppGuidePanel } from "./components/AppGuidePanel";
-import { EmptyWorkspaceScreen, WORKSPACE_SETUP_KEY } from "./pages/EmptyWorkspaceScreen";
+import { EmptyWorkspaceScreen, ONBOARDING_COMPLETE_KEY, WORKSPACE_SETUP_KEY } from "./pages/EmptyWorkspaceScreen";
 import { LoadingScreen } from "./pages/LoadingScreen";
 import { AppStateProvider, useAppState } from "./state/AppStateProvider";
 import { getActiveWorkspace, getWorkspaceScope } from "./state/selectors";
@@ -298,84 +297,6 @@ function WorkspaceNameDisplay({
   );
 }
 
-function GuideArrivalCue({ onDone }: { onDone: () => void }) {
-  const [target, setTarget] = useState<{ x: number; y: number } | null>(null);
-  const [phase, setPhase] = useState<"gather" | "travel">("gather");
-
-  useEffect(() => {
-    let frameId = 0;
-    let attempts = 0;
-
-    const resolveTarget = () => {
-      const panel = document.querySelector<HTMLElement>('[data-guide-anchor="panel"]');
-      const fab = document.querySelector<HTMLElement>('[data-guide-anchor="fab"]');
-      const anchor = panel ?? fab;
-
-      if (!anchor) {
-        attempts += 1;
-        if (attempts < 20) {
-          frameId = window.requestAnimationFrame(resolveTarget);
-          return;
-        }
-        onDone();
-        return;
-      }
-
-      const rect = anchor.getBoundingClientRect();
-      setTarget({
-        x: rect.left + rect.width * 0.5,
-        y: rect.top + Math.min(rect.height * 0.42, 72),
-      });
-    };
-
-    frameId = window.requestAnimationFrame(resolveTarget);
-    return () => window.cancelAnimationFrame(frameId);
-  }, [onDone]);
-
-  useEffect(() => {
-    if (!target) return;
-
-    const travelTimer = window.setTimeout(() => setPhase("travel"), 720);
-    const doneTimer = window.setTimeout(onDone, 2280);
-    return () => {
-      window.clearTimeout(travelTimer);
-      window.clearTimeout(doneTimer);
-    };
-  }, [onDone, target]);
-
-  if (!target) return null;
-
-  return (
-    <div className="guide-arrival-overlay" aria-hidden="true">
-      <div
-        className={`guide-arrival-orb guide-arrival-orb-${phase}`}
-        style={
-          {
-            "--guide-target-x": `${target.x}px`,
-            "--guide-target-y": `${target.y}px`,
-          } as CSSProperties
-        }
-      >
-        <span className="guide-arrival-core" />
-        <span className="guide-arrival-particle particle-a" />
-        <span className="guide-arrival-particle particle-b" />
-        <span className="guide-arrival-particle particle-c" />
-        <span className="guide-arrival-particle particle-d" />
-        <span className="guide-arrival-particle particle-e" />
-      </div>
-      <span
-        className={`guide-arrival-target ${phase === "travel" ? "is-active" : ""}`}
-        style={
-          {
-            "--guide-target-x": `${target.x}px`,
-            "--guide-target-y": `${target.y}px`,
-          } as CSSProperties
-        }
-      />
-    </div>
-  );
-}
-
 function AppFrame() {
   const { addPerson, createEmptyWorkspace, isReady, renameWorkspace, setActiveWorkspace, state } = useAppState();
   const { isDeveloperModeUnlocked, registerUnlockTap, lockDeveloperMode } = useDeveloperMode();
@@ -385,7 +306,12 @@ function AppFrame() {
   const [isCreateWorkspaceOpen, setIsCreateWorkspaceOpen] = useState(false);
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [workspaceNameDraft, setWorkspaceNameDraft] = useState("");
-  const [isGuideCueActive, setIsGuideCueActive] = useState(false);
+  const [guideBeaconState, setGuideBeaconState] = useState<"hidden" | "entering" | "idle">("hidden");
+  const [isGuideBeaconMounted, setIsGuideBeaconMounted] = useState(false);
+  const [guidePanelExpandSignal, setGuidePanelExpandSignal] = useState(0);
+  const [isGuidePanelForceCollapsed, setIsGuidePanelForceCollapsed] = useState(true);
+  const [isOnboardingEntering, setIsOnboardingEntering] = useState(false);
+  const hasPlayedGuideBeaconIntroRef = useRef(false);
 
   useEffect(() => {
     let frameId = 0;
@@ -419,27 +345,92 @@ function AppFrame() {
   }, [isEditingWorkspaceName, state.activeWorkspaceId, state.workspaces]);
 
   useEffect(() => {
-    if (!isReady || !state.activeWorkspaceId) return;
+    if (state.workspaces.length) return;
+    hasPlayedGuideBeaconIntroRef.current = false;
+    setIsGuideBeaconMounted(false);
+    setGuideBeaconState("hidden");
+    setIsGuidePanelForceCollapsed(true);
+  }, [state.workspaces.length]);
 
-    const pendingSetup = window.sessionStorage.getItem(WORKSPACE_SETUP_KEY);
-    if (!pendingSetup) return;
+  useEffect(() => {
+    if (!isReady || !state.activeWorkspaceId) return;
 
     const activeWorkspace = state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId);
     if (!activeWorkspace) return;
 
+    const pendingSetup = window.sessionStorage.getItem(WORKSPACE_SETUP_KEY);
     try {
-      const parsed = JSON.parse(pendingSetup) as { workspaceName?: string; personName?: string };
-      const personName = parsed.personName?.trim();
-      if (personName) {
-        addPerson(activeWorkspace.id, { name: personName, displayName: personName, role: "owner" });
+      if (pendingSetup) {
+        const parsed = JSON.parse(pendingSetup) as { workspaceName?: string; personName?: string };
+        const personName = parsed.personName?.trim();
+        if (personName) {
+          addPerson(activeWorkspace.id, { name: personName, displayName: personName, role: "owner" });
+        }
       }
-      window.setTimeout(() => setIsGuideCueActive(true), 180);
     } catch {
       return;
     } finally {
-      window.sessionStorage.removeItem(WORKSPACE_SETUP_KEY);
+      if (pendingSetup) {
+        window.sessionStorage.removeItem(WORKSPACE_SETUP_KEY);
+      }
     }
   }, [addPerson, isReady, state.activeWorkspaceId, state.workspaces]);
+
+  useEffect(() => {
+    if (!isReady || !state.activeWorkspaceId) return;
+    if (hasPlayedGuideBeaconIntroRef.current) return;
+
+    hasPlayedGuideBeaconIntroRef.current = true;
+    setIsGuideBeaconMounted(false);
+    setGuideBeaconState("hidden");
+    setIsGuidePanelForceCollapsed(true);
+
+    let frameA = 0;
+    let frameB = 0;
+    const timers: number[] = [];
+
+    frameA = window.requestAnimationFrame(() => {
+      frameB = window.requestAnimationFrame(() => {
+        timers.push(
+          window.setTimeout(() => {
+            setIsGuideBeaconMounted(true);
+            setGuideBeaconState("entering");
+          }, 1000),
+        );
+        timers.push(
+          window.setTimeout(() => {
+            setGuideBeaconState("idle");
+          }, 2900),
+        );
+        timers.push(
+          window.setTimeout(() => {
+            setGuidePanelExpandSignal((current) => current + 1);
+            setIsGuidePanelForceCollapsed(false);
+          }, 3900),
+        );
+      });
+    });
+
+    return () => {
+      if (frameA) window.cancelAnimationFrame(frameA);
+      if (frameB) window.cancelAnimationFrame(frameB);
+      timers.forEach((timerId) => window.clearTimeout(timerId));
+    };
+  }, [isReady, state.activeWorkspaceId]);
+
+  useEffect(() => {
+    if (!isReady || !state.activeWorkspaceId) return;
+    const didCompleteOnboarding = window.sessionStorage.getItem(ONBOARDING_COMPLETE_KEY) === "true";
+    if (!didCompleteOnboarding) return;
+
+    setIsOnboardingEntering(true);
+    window.sessionStorage.removeItem(ONBOARDING_COMPLETE_KEY);
+    const timerId = window.setTimeout(() => {
+      setIsOnboardingEntering(false);
+    }, 1400);
+
+    return () => window.clearTimeout(timerId);
+  }, [isReady, state.activeWorkspaceId]);
 
   if (!isReady) return <LoadingScreen />;
   if (!state.workspaces.length) return <EmptyWorkspaceScreen />;
@@ -499,10 +490,10 @@ function AppFrame() {
       ? "데모"
       : activeWorkspace.source === "imported"
         ? "업로드됨"
-        : "빈 작업공간";
+        : "빈 가계부";
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell${isOnboardingEntering ? " is-onboarding-entering" : ""}`}>
       <header className={`app-topbar${isTopbarCondensed ? " condensed" : ""}`}>
         <div className="app-topbar-main">
           <div className="app-brand-block">
@@ -513,7 +504,7 @@ function AppFrame() {
             <p className="sidebar-copy">빠르게 기록하고 자연스럽게 정리하는 생활 가계부입니다.</p>
           </div>
           <div className="app-topbar-compact-header">
-            <span className="section-kicker">Current Workspace</span>
+            <span className="section-kicker">현재 가계부</span>
             <div className="app-topbar-workspace-row">
               {isEditingWorkspaceName ? (
                 <WorkspaceNameEditor
@@ -571,7 +562,7 @@ function AppFrame() {
       <div className="app-main">
         <section className="app-header">
           <div className="app-header-copy">
-            <span className="section-kicker">활성 작업공간</span>
+            <span className="section-kicker">현재 가계부</span>
             {isEditingWorkspaceName ? (
               <WorkspaceNameEditor
                 value={workspaceNameDraft}
@@ -604,12 +595,17 @@ function AppFrame() {
               ? "데모"
               : activeWorkspace.source === "imported"
                 ? "업로드됨"
-                : "빈 작업공간"}
+                : "빈 가계부"}
           </span>
         </section>
 
         <main className="app-content">
-          <AppGuidePanel />
+          <AppGuidePanel
+            beaconState={guideBeaconState}
+            showBeacon={isGuideBeaconMounted}
+            expandSignal={guidePanelExpandSignal}
+            forceCollapsed={isGuidePanelForceCollapsed}
+          />
           <div className="route-stage">
             <div className="route-page">
               <AppRoutes isDeveloperModeUnlocked={isDeveloperModeUnlocked} lockDeveloperMode={lockDeveloperMode} />
@@ -621,7 +617,7 @@ function AppFrame() {
       <AppModal
         open={isCreateWorkspaceOpen}
         title="새 가계부 추가"
-        description="새 워크스페이스 이름을 입력하면 비어 있는 가계부가 바로 생성됩니다."
+        description="새 가계부 이름을 입력하면 비어 있는 가계부가 바로 생성됩니다."
         onClose={closeCreateWorkspaceModal}
       >
         <form
@@ -652,7 +648,6 @@ function AppFrame() {
         </form>
       </AppModal>
 
-      {isGuideCueActive ? <GuideArrivalCue onDone={() => setIsGuideCueActive(false)} /> : null}
     </div>
   );
 }
