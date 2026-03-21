@@ -1,9 +1,6 @@
-import { Link, useSearchParams } from "react-router-dom";
-import { formatCurrency, formatPercent } from "../../shared/utils/format";
-import { CompletionBanner } from "../components/CompletionBanner";
-import { EmptyStateCallout } from "../components/EmptyStateCallout";
-import { AccountsPage } from "./AccountsPage";
-import { CardsPage } from "./CardsPage";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { formatPercent } from "../../shared/utils/format";
 import { CategoriesPage } from "./CategoriesPage";
 import { PeoplePage } from "./PeoplePage";
 import { useAppState } from "../state/AppStateProvider";
@@ -13,38 +10,182 @@ import { useThemeMode } from "../useThemeMode";
 const SETTINGS_TABS = [
   { id: "profile", label: "기본값" },
   { id: "people", label: "사용자" },
-  { id: "accounts", label: "계좌" },
-  { id: "cards", label: "카드" },
   { id: "categories", label: "카테고리" },
-  { id: "backup", label: "백업" },
-  { id: "app", label: "앱 관리" },
 ] as const;
 
 type SettingsTabId = (typeof SETTINGS_TABS)[number]["id"];
+
+type ProfileDraftState = {
+  targetSavingsRate: string;
+  warningSpendRate: string;
+  warningFixedCostRate: string;
+};
+
+type EditableProfileField = keyof ProfileDraftState;
 
 function isSettingsTab(value: string | null): value is SettingsTabId {
   return SETTINGS_TABS.some((tab) => tab.id === value);
 }
 
+function createProfileDraft(profile: ReturnType<typeof getWorkspaceScope>["financialProfile"]): ProfileDraftState {
+  return {
+    targetSavingsRate: String(Math.round((profile?.targetSavingsRate ?? 0) * 100)),
+    warningSpendRate: String(Math.round((profile?.warningSpendRate ?? 0) * 100)),
+    warningFixedCostRate: String(Math.round((profile?.warningFixedCostRate ?? 0) * 100)),
+  };
+}
+
+function hasNumericValue(value: string) {
+  return value.trim() !== "" && !Number.isNaN(Number(value));
+}
+
+function formatDraftPercent(value: string) {
+  if (!hasNumericValue(value)) return "입력 필요";
+  return formatPercent(Number(value) / 100);
+}
+
 export function SettingsPage() {
-  const { exportState, importState, resetApp, setFinancialProfile, state } = useAppState();
+  const { exportState, importState, setFinancialProfile, state } = useAppState();
   const { themeMode, toggleThemeMode } = useThemeMode();
   const [searchParams, setSearchParams] = useSearchParams();
   const workspaceId = state.activeWorkspaceId!;
   const profile = getWorkspaceScope(state, workspaceId).financialProfile;
-  const currentTab = isSettingsTab(searchParams.get("tab")) ? searchParams.get("tab") : "profile";
-  const hasBaseline = Boolean(profile?.monthlyNetIncome);
+  const requestedTab = searchParams.get("tab");
+  const currentTab =
+    requestedTab === "accounts" || requestedTab === "cards" || requestedTab === "backup" || requestedTab === "app"
+      ? "profile"
+      : isSettingsTab(requestedTab)
+        ? requestedTab
+        : "profile";
+  const [profileDraft, setProfileDraft] = useState<ProfileDraftState>(() => createProfileDraft(profile));
+  const [activeProfileField, setActiveProfileField] = useState<EditableProfileField | null>(null);
+
+  useEffect(() => {
+    setProfileDraft(createProfileDraft(profile));
+    setActiveProfileField(null);
+  }, [workspaceId, profile?.targetSavingsRate, profile?.warningSpendRate, profile?.warningFixedCostRate]);
+
+  const persistProfileDraft = (nextDraft: ProfileDraftState) => {
+    setFinancialProfile(workspaceId, {
+      monthlyNetIncome: profile?.monthlyNetIncome ?? 0,
+      targetSavingsRate: Number(nextDraft.targetSavingsRate || 0) / 100,
+      warningSpendRate: Number(nextDraft.warningSpendRate || 0) / 100,
+      warningFixedCostRate: Number(nextDraft.warningFixedCostRate || 0) / 100,
+    });
+  };
+
+  const updateProfileDraft = (field: EditableProfileField, value: string) => {
+    setProfileDraft((current) => ({ ...current, [field]: value }));
+  };
+
+  const commitProfileDraft = () => {
+    persistProfileDraft(profileDraft);
+    setActiveProfileField(null);
+  };
+
+  const resetProfileField = (field: EditableProfileField) => {
+    const initialDraft = createProfileDraft(profile);
+    setProfileDraft((current) => ({ ...current, [field]: initialDraft[field] }));
+    setActiveProfileField(null);
+  };
+
+  const profileCards: Array<{
+    key: EditableProfileField;
+    title: string;
+    preview: string;
+    placeholder: string;
+  }> = [
+    {
+      key: "targetSavingsRate",
+      title: "목표 저축률",
+      preview: formatDraftPercent(profileDraft.targetSavingsRate),
+      placeholder: "20",
+    },
+    {
+      key: "warningSpendRate",
+      title: "지출 경고 기준",
+      preview: formatDraftPercent(profileDraft.warningSpendRate),
+      placeholder: "80",
+    },
+    {
+      key: "warningFixedCostRate",
+      title: "고정지출 경고 기준",
+      preview: formatDraftPercent(profileDraft.warningFixedCostRate),
+      placeholder: "55",
+    },
+  ];
+
   const renderTabContent = () => {
     if (currentTab === "people") return <PeoplePage embedded />;
-    if (currentTab === "accounts") return <AccountsPage embedded />;
-    if (currentTab === "cards") return <CardsPage embedded />;
     if (currentTab === "categories") return <CategoriesPage embedded />;
 
-    if (currentTab === "backup") {
-      return (
-        <section className="settings-section-block">
-          <div className="settings-compact-copy">
-            <p className="text-secondary mb-0">현재 가계부 데이터를 JSON 파일로 내보내거나 다시 불러옵니다.</p>
+    return (
+      <section className="settings-section-block">
+        <div className="settings-summary-row">
+          {profileCards.map((card) => (
+            <article key={card.key} className="resource-card settings-profile-card">
+              <h3>{card.title}</h3>
+              {activeProfileField === card.key ? (
+                <div className="settings-profile-display-row is-editing">
+                  <label className="settings-profile-input is-inline-edit">
+                    <span className="visually-hidden">{card.title}</span>
+                    <input
+                      autoFocus
+                      name={card.key}
+                      type="number"
+                      inputMode="numeric"
+                      min="0"
+                      className="form-control"
+                      value={profileDraft[card.key]}
+                      placeholder={card.placeholder}
+                      onChange={(event) => updateProfileDraft(card.key, event.target.value)}
+                      onBlur={commitProfileDraft}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          commitProfileDraft();
+                        }
+
+                        if (event.key === "Escape") {
+                          event.preventDefault();
+                          resetProfileField(card.key);
+                        }
+                      }}
+                    />
+                    <span className="settings-profile-input-suffix">%</span>
+                  </label>
+                  <button
+                    type="button"
+                    className="board-case-edit-button settings-profile-edit-button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={commitProfileDraft}
+                    aria-label="Save setting"
+                  >
+                    ✓
+                  </button>
+                </div>
+              ) : (
+                <div className="settings-profile-display-row">
+                  <p className="settings-profile-value-static">{card.preview}</p>
+                  <button
+                    type="button"
+                    className="board-case-edit-button settings-profile-edit-button"
+                    onClick={() => setActiveProfileField(card.key)}
+                    aria-label="Edit setting"
+                  >
+                    ✎
+                  </button>
+                </div>
+              )}
+            </article>
+          ))}
+        </div>
+
+        <article className="resource-card settings-panel-card">
+          <div>
+            <span className="section-kicker">백업</span>
+            <h3 className="mb-1">데이터 내보내기와 가져오기</h3>
+            <p className="mb-0 text-secondary">현재 가계부의 데이터를 JSON 파일로 저장하거나 다시 불러옵니다.</p>
           </div>
           <div className="d-flex flex-wrap gap-2">
             <button className="btn btn-primary" onClick={() => exportState()}>
@@ -64,124 +205,21 @@ export function SettingsPage() {
               />
             </label>
           </div>
-        </section>
-      );
-    }
+        </article>
 
-    if (currentTab === "app") {
-      return (
-        <section className="settings-section-block">
-          {!profile?.monthlyNetIncome ? (
-            <EmptyStateCallout
-              kicker="기준값 필요"
-              title="먼저 월 수입 기준값을 입력해주세요"
-              description="기준값이 있어야 진단과 안내가 더 정확해집니다."
-            />
-          ) : (
-            <div className="settings-compact-copy">
-              <p className="mb-2 text-secondary">현재 기준값 요약</p>
-              <div className="resource-grid">
-                <article className="resource-card">
-                  <h3>월 수입</h3>
-                  <p className="mb-0 text-secondary">{formatCurrency(profile.monthlyNetIncome)}</p>
-                </article>
-                <article className="resource-card">
-                  <h3>지출 경고 기준</h3>
-                  <p className="mb-0 text-secondary">{formatPercent(profile.warningSpendRate)}</p>
-                </article>
-              </div>
-            </div>
-          )}
-          <div className="settings-compact-copy">
-            <p className="mb-2 text-secondary">테마 전환</p>
-            <div className="d-flex flex-wrap gap-2">
-              <button type="button" className="theme-toggle-button" onClick={toggleThemeMode}>
-                <span className="theme-toggle-button-label">테마</span>
-                <strong>{themeMode === "dark" ? "Light" : "Dark"}</strong>
-              </button>
-            </div>
+        <article className="resource-card settings-panel-card">
+          <div>
+            <span className="section-kicker">앱 관리</span>
+            <h3 className="mb-1">테마</h3>
+            <p className="mb-0 text-secondary">앱에서 사용할 기본 테마를 전환합니다.</p>
           </div>
-          <div className="d-flex justify-content-end">
-            <button className="btn btn-outline-danger" onClick={() => void resetApp()}>
-              전체 데이터 초기화
+          <div className="d-flex flex-wrap gap-2">
+            <button type="button" className="theme-toggle-button" onClick={toggleThemeMode}>
+              <span className="theme-toggle-button-label">테마</span>
+              <strong>{themeMode === "dark" ? "Light" : "Dark"}</strong>
             </button>
           </div>
-        </section>
-      );
-    }
-
-    return (
-      <section className="settings-section-block">
-        <div className="settings-summary-row">
-          <article className="resource-card">
-            <h3>월 수입</h3>
-            <p className="mb-0 text-secondary">{hasBaseline ? formatCurrency(profile?.monthlyNetIncome ?? 0) : "아직 입력 전"}</p>
-          </article>
-          <article className="resource-card">
-            <h3>목표 저축률</h3>
-            <p className="mb-0 text-secondary">{hasBaseline ? formatPercent(profile?.targetSavingsRate ?? 0) : "입력 필요"}</p>
-          </article>
-          <article className="resource-card">
-            <h3>지출 경고 기준</h3>
-            <p className="mb-0 text-secondary">{hasBaseline ? formatPercent(profile?.warningSpendRate ?? 0) : "입력 필요"}</p>
-          </article>
-          <article className="resource-card">
-            <h3>고정지출 경고 기준</h3>
-            <p className="mb-0 text-secondary">{hasBaseline ? formatPercent(profile?.warningFixedCostRate ?? 0) : "입력 필요"}</p>
-          </article>
-        </div>
-        <form
-          className="profile-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const formData = new FormData(event.currentTarget);
-            setFinancialProfile(workspaceId, {
-              monthlyNetIncome: Number(formData.get("monthlyNetIncome") || 0),
-              targetSavingsRate: Number(formData.get("targetSavingsRate") || 0) / 100,
-              warningSpendRate: Number(formData.get("warningSpendRate") || 0) / 100,
-              warningFixedCostRate: Number(formData.get("warningFixedCostRate") || 0) / 100,
-            });
-          }}
-        >
-          <label>
-            <span>월 수입</span>
-            <input name="monthlyNetIncome" type="number" className="form-control" defaultValue={profile?.monthlyNetIncome ?? 0} />
-          </label>
-          <label>
-            <span>목표 저축률 (%)</span>
-            <input name="targetSavingsRate" type="number" className="form-control" defaultValue={Math.round((profile?.targetSavingsRate ?? 0) * 100)} />
-          </label>
-          <label>
-            <span>지출 경고 기준 (%)</span>
-            <input name="warningSpendRate" type="number" className="form-control" defaultValue={Math.round((profile?.warningSpendRate ?? 0) * 100)} />
-          </label>
-          <label>
-            <span>고정지출 경고 기준 (%)</span>
-            <input
-              name="warningFixedCostRate"
-              type="number"
-              className="form-control"
-              defaultValue={Math.round((profile?.warningFixedCostRate ?? 0) * 100)}
-            />
-          </label>
-          <div className="d-flex justify-content-end" style={{ gridColumn: "1 / -1" }}>
-            <button className="btn btn-primary" type="submit">
-              기준값 저장
-            </button>
-          </div>
-        </form>
-        {hasBaseline ? (
-          <CompletionBanner
-            className="mt-4"
-            title="기준값 설정이 준비됐습니다"
-            description="이제 거래 화면과 대시보드에서 기준 대비 소비 흐름을 더 자연스럽게 볼 수 있습니다."
-            actions={
-              <Link to="/transactions" className="btn btn-outline-secondary btn-sm">
-                거래 보기
-              </Link>
-            }
-          />
-        ) : null}
+        </article>
       </section>
     );
   };

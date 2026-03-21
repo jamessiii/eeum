@@ -25,6 +25,8 @@ export interface Person {
   role: "owner" | "member";
   memo: string;
   isActive: boolean;
+  sortOrder?: number;
+  isHidden?: boolean;
 }
 
 export interface Account {
@@ -39,6 +41,8 @@ export interface Account {
   usageType: "daily" | "salary" | "shared" | "card_payment" | "savings" | "investment" | "loan" | "other";
   isShared: boolean;
   memo: string;
+  sortOrder?: number;
+  isHidden?: boolean;
 }
 
 export interface Card {
@@ -51,6 +55,8 @@ export interface Card {
   linkedAccountId: ID | null;
   cardType: "credit" | "check" | "debit" | "prepaid" | "other";
   memo: string;
+  sortOrder?: number;
+  isHidden?: boolean;
 }
 
 export interface Category {

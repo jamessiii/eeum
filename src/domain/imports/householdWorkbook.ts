@@ -26,6 +26,12 @@ function maskText(value: string) {
   return trimmed.length <= 4 ? trimmed : trimmed.slice(-4);
 }
 
+function extractCardNumberMasked(value: string) {
+  const digits = value.replace(/\D+/g, "");
+  if (digits.length < 4) return "";
+  return digits.slice(-4);
+}
+
 function guessIssuer(cardName: string) {
   const normalized = cardName.toUpperCase();
   if (normalized.includes("현대") || normalized.includes("HYUNDAI")) return "현대카드";
@@ -259,7 +265,7 @@ export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundl
       ownerPersonId: owner?.id ?? null,
       name: normalized,
       issuerName: issuerOverride ?? guessIssuer(normalized),
-      cardNumberMasked: maskText(normalized),
+      cardNumberMasked: extractCardNumberMasked(normalized),
       linkedAccountId: null,
       cardType: "credit",
       memo: "",

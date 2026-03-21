@@ -8,7 +8,7 @@ type DeveloperPageProps = {
 };
 
 export function DeveloperPage({ onLockDeveloperMode }: DeveloperPageProps) {
-  const { createDemoWorkspace, createEmptyWorkspace, state } = useAppState();
+  const { createDemoWorkspace, createEmptyWorkspace, resetApp, state } = useAppState();
   const [isCreatingWorkspace, setIsCreatingWorkspace] = useState(false);
   const activeWorkspace = getActiveWorkspace(state);
   const scope = activeWorkspace ? getWorkspaceScope(state, activeWorkspace.id) : null;
@@ -46,17 +46,13 @@ export function DeveloperPage({ onLockDeveloperMode }: DeveloperPageProps) {
           </button>
         </div>
         <p className="text-secondary mb-4">
-          테스트 워크스페이스 생성과 현재 상태 확인을 빠르게 할 수 있습니다. 잠금 해제 뒤에만 메뉴가 노출됩니다.
+          테스트용 워크스페이스 생성과 현재 상태 확인을 빠르게 할 수 있습니다. 개발자 모드가 열려 있을 때만 보이는 화면입니다.
         </p>
         <div className="d-flex flex-wrap gap-2 mb-4">
           <button className="btn btn-outline-primary" disabled={isCreatingWorkspace} onClick={handleCreateEmptyWorkspace}>
             빈 워크스페이스 추가
           </button>
-          <button
-            className="btn btn-outline-secondary"
-            disabled={isCreatingWorkspace}
-            onClick={() => void handleCreateDemoWorkspace()}
-          >
+          <button className="btn btn-outline-secondary" disabled={isCreatingWorkspace} onClick={() => void handleCreateDemoWorkspace()}>
             테스트 워크스페이스 추가
           </button>
         </div>
@@ -79,6 +75,19 @@ export function DeveloperPage({ onLockDeveloperMode }: DeveloperPageProps) {
             <strong>{summary.categories}</strong>
           </article>
         </div>
+      </section>
+
+      <section className="card shadow-sm">
+        <div className="section-head">
+          <div>
+            <span className="section-kicker">위험 작업</span>
+            <h2 className="section-title">데이터 초기화</h2>
+          </div>
+        </div>
+        <p className="text-secondary mb-4">앱 전체 데이터를 초기화하는 개발자 전용 작업입니다.</p>
+        <button className="btn btn-outline-danger" onClick={() => void resetApp()}>
+          전체 데이터 초기화
+        </button>
       </section>
 
       <section className="card shadow-sm">

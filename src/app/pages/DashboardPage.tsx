@@ -1,10 +1,10 @@
 import { Link } from "react-router-dom";
 import { getWorkspaceInsights } from "../../domain/insights/workspaceInsights";
+import { getSourceTypeLabel } from "../../domain/transactions/sourceTypes";
 import { formatCurrency, formatPercent } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { useAppState } from "../state/AppStateProvider";
 import { CompletionBanner } from "../components/CompletionBanner";
-import { SourceBreakdownSection } from "../components/SourceBreakdownSection";
 import { getWorkspaceScope } from "../state/selectors";
 
 function toneClass(tone: "stable" | "caution" | "warning") {
@@ -16,6 +16,10 @@ export function DashboardPage() {
   const workspaceId = state.activeWorkspaceId!;
   const insights = getWorkspaceInsights(state, workspaceId);
   const scope = getWorkspaceScope(state, workspaceId);
+  const dominantCategory = insights.topCategories[0] ?? null;
+  const dominantCategoryShare =
+    dominantCategory && insights.expense > 0 ? Math.round((dominantCategory.amount / insights.expense) * 100) : null;
+  const dominantSource = insights.sourceBreakdown[0] ?? null;
   const activePeopleCount = scope.people.filter((person) => person.isActive).length;
   const ownedAccountCount = scope.accounts.filter((account) => account.ownerPersonId || account.isShared).length;
   const linkedCardCount = scope.cards.filter((card) => card.ownerPersonId && card.linkedAccountId).length;
@@ -86,20 +90,48 @@ export function DashboardPage() {
           </article>
         </div>
 
-        <div className="coach-box mt-4">
-          <h3>이번 달 메모</h3>
-          <p className="mb-0">{insights.coaching}</p>
-        </div>
+        {insights.nextSteps.length || dominantCategory || dominantSource ? (
+          <div className="dashboard-action-panel mt-4">
+            <div className="dashboard-action-panel-copy">
+              <h3>지금 하면 좋은 일</h3>
+              <p className="mb-0 text-secondary">우선순위가 높은 정리 항목만 간단히 모아두었습니다.</p>
+            </div>
+            {insights.nextSteps.length ? (
+              <ul className="next-step-list">
+                {insights.nextSteps.map((step) => (
+                  <li key={step}>{step}</li>
+                ))}
+              </ul>
+            ) : null}
+            {dominantCategory || dominantSource ? (
+              <div className="dashboard-action-hints">
+                <strong>진단 힌트</strong>
+                {dominantCategory ? (
+                  <p className="mb-0 text-secondary">
+                    가장 큰 지출 원인은 {dominantCategory.categoryName}
+                    {dominantCategoryShare !== null ? `로, 이번 달 소비의 ${dominantCategoryShare}%를 차지합니다.` : "입니다."}
+                  </p>
+                ) : null}
+                {dominantSource ? (
+                  <p className="mb-0 text-secondary">
+                    주요 결제 경로는 {getSourceTypeLabel(dominantSource.sourceType)}이며, 이번 달 거래 {dominantSource.count}건과 소비 반영{" "}
+                    {formatCurrency(dominantSource.expenseAmount)}이 잡혀 있습니다.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         {insights.isDiagnosisReady ? (
           <CompletionBanner
             className="mt-4"
             title="대시보드 해석 준비가 끝났습니다"
-            description="검토와 분류, 기준선 설정이 마무리되어 이번 달 흐름을 안정적으로 볼 수 있습니다."
+            description="검토와 분류, 기준값 설정이 마무리되어 이번 달 흐름을 안정적으로 볼 수 있습니다."
             actions={
               <>
                 <Link to="/transactions" className="btn btn-outline-secondary btn-sm">
-                  거래 화면 보기
+                  카드내역 보기
                 </Link>
                 <Link to="/imports" className="btn btn-outline-secondary btn-sm">
                   업로드 기록 보기
@@ -125,7 +157,7 @@ export function DashboardPage() {
                 : "기본 연결 설정이 모두 준비되었습니다"}
             </strong>
             <p className="mb-0 text-secondary">
-              {foundationRemainingCount ? "사용자, 계좌, 카드 연결만 먼저 맞추면 됩니다." : "이제 거래와 대시보드 흐름에 집중하면 됩니다."}
+              {foundationRemainingCount ? "사용자, 계좌, 카드 연결만 먼저 맞추면 됩니다." : "이제 거래와 대시보드 흐름을 집중해서 보면 됩니다."}
             </p>
           </div>
           <Link to={peopleSetupRemaining ? "/people" : unmappedAccountCount > 0 ? "/accounts" : "/cards"} className="btn btn-outline-primary btn-sm">
@@ -150,7 +182,7 @@ export function DashboardPage() {
             <span className={`badge ${unmappedAccountCount ? "text-bg-warning" : "text-bg-success"}`}>
               {unmappedAccountCount ? `${unmappedAccountCount}개 미연결` : "준비 완료"}
             </span>
-            <p className="mb-0 text-secondary">{unmappedAccountCount ? "소유자 없는 계좌가 남아 있습니다." : "계좌 정보가 준비되었습니다."}</p>
+            <p className="mb-0 text-secondary">{unmappedAccountCount ? "소유자가 없는 계좌가 남아 있습니다." : "계좌 정보가 준비되었습니다."}</p>
             <Link to="/accounts" className="btn btn-outline-primary btn-sm mt-3">
               계좌 관리
             </Link>
@@ -161,53 +193,13 @@ export function DashboardPage() {
             <span className={`badge ${unmappedCardCount ? "text-bg-warning" : "text-bg-success"}`}>
               {unmappedCardCount ? `${unmappedCardCount}개 미연결` : "준비 완료"}
             </span>
-            <p className="mb-0 text-secondary">{unmappedCardCount ? "카드 연결 정보가 덜 정리됐습니다." : "카드 정보가 준비되었습니다."}</p>
+            <p className="mb-0 text-secondary">{unmappedCardCount ? "카드 연결 정보가 덜 정리되었습니다." : "카드 정보가 준비되었습니다."}</p>
             <Link to="/cards" className="btn btn-outline-primary btn-sm mt-3">
               카드 관리
             </Link>
           </article>
         </div>
       </section>
-
-      <div className="page-grid">
-        <section className="card shadow-sm" style={getMotionStyle(2)}>
-          <div className="section-head">
-            <div>
-              <span className="section-kicker">다음 행동</span>
-              <h2 className="section-title">지금 하면 좋은 일</h2>
-            </div>
-          </div>
-          <ul className="next-step-list">
-            {insights.nextSteps.map((step) => (
-              <li key={step}>{step}</li>
-            ))}
-          </ul>
-        </section>
-
-        <section className="card shadow-sm" style={getMotionStyle(3)}>
-          <div className="section-head">
-            <div>
-              <span className="section-kicker">상위 지출</span>
-              <h2 className="section-title">문제 가능성이 큰 영역</h2>
-            </div>
-          </div>
-          <div className="mini-breakdown-list">
-            {insights.topCategories.map((item, index) => (
-              <div key={item.categoryName} className="mini-breakdown-row" style={getMotionStyle(index + 4)}>
-                <span>{item.categoryName}</span>
-                <strong>{formatCurrency(item.amount)}</strong>
-              </div>
-            ))}
-            {!insights.topCategories.length ? <div className="text-secondary">아직 분석 가능한 지출 데이터가 충분하지 않습니다.</div> : null}
-          </div>
-
-          <SourceBreakdownSection
-            items={insights.sourceBreakdown}
-            emptyMessage="아직 수단별 흐름을 보여줄 만큼 거래 데이터가 충분하지 않습니다."
-            motionStartIndex={8}
-          />
-        </section>
-      </div>
     </div>
   );
 }

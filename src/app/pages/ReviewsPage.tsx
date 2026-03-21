@@ -207,7 +207,7 @@ export function ReviewsPage() {
                   필터 초기화
                 </button>
                 <Link className="btn btn-outline-primary btn-sm" to="/transactions">
-                  거래 보기
+                  카드내역 보기
                 </Link>
               </>
             ) : undefined
@@ -260,7 +260,7 @@ export function ReviewsPage() {
                     {REVIEW_ACTION_LABELS[review.reviewType] ?? "적용"}
                   </button>
                   <Link className="btn btn-sm btn-outline-primary" to={getReviewTransactionLink(review.reviewType)}>
-                    거래 보기
+                    카드내역 보기
                   </Link>
                   <button className="btn btn-sm btn-outline-secondary" onClick={() => dismissReview(review.id)}>
                     보류

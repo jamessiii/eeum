@@ -8,8 +8,8 @@ type BoardCaseProps = {
   embedded?: boolean;
 };
 
-type BoardCaseSectionProps = HTMLAttributes<HTMLElement> & {
-  title: string;
+type BoardCaseSectionProps = Omit<HTMLAttributes<HTMLElement>, "title"> & {
+  title: ReactNode;
   meta?: string;
   action?: ReactNode;
   children: ReactNode;
@@ -37,7 +37,7 @@ export function BoardCaseSection({ title, meta, action, children, className = ""
     <section className={mergedClassName} {...props}>
       <div className="board-case-section-head">
         <div className="board-case-section-title-row">
-          <h3>{title}</h3>
+          {title}
           {action ? <div className="board-case-section-action">{action}</div> : null}
         </div>
         {meta ? <p>{meta}</p> : null}

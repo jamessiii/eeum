@@ -20,6 +20,7 @@ export function TransactionCategoryEditor({
   const categoryMap = useMemo(() => new Map(categories.map((category) => [category.id, category])), [categories]);
   const leafCategories = useMemo(() => getLeafCategories(categories), [categories]);
   const [draftValue, setDraftValue] = useState(categoryName ?? "");
+  const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const skipNextBlurCommitRef = useRef(false);
   const listId = `transaction-category-options-${transaction.id}`;
@@ -87,25 +88,49 @@ export function TransactionCategoryEditor({
     return <div>{categoryName ?? "미분류"}</div>;
   }
 
+  const resolvedDraftCategoryId = resolveCategoryId(draftValue);
+  const isCategoryFilled = resolvedDraftCategoryId !== null && resolvedDraftCategoryId !== "";
+  const tone = isCategoryFilled
+    ? {
+        borderColor: "rgba(96, 165, 250, 0.98)",
+        background: "rgba(219, 234, 254, 0.92)",
+        ringColor: "rgba(59, 130, 246, 0.2)",
+      }
+    : {
+        borderColor: "rgba(249, 115, 22, 0.98)",
+        background: "rgba(255, 237, 213, 0.92)",
+        ringColor: "rgba(249, 115, 22, 0.2)",
+      };
+
   return (
     <div>
       <input
         ref={inputRef}
         className="form-control form-control-sm"
-        style={{ maxWidth: 180 }}
+        style={{
+          width: "100%",
+          minWidth: 0,
+          borderWidth: "1.5px",
+          borderColor: tone.borderColor,
+          background: tone.background,
+          boxShadow: isFocused ? `0 0 0 0.22rem ${tone.ringColor}` : `0 0 0 0.08rem ${tone.ringColor}`,
+        }}
         list={listId}
         value={draftValue}
-        placeholder="카테고리 입력"
         data-transaction-grid-editor="true"
         onChange={(event) => setDraftValue(event.target.value)}
         onBlur={() => {
+          setIsFocused(false);
           if (skipNextBlurCommitRef.current) {
             skipNextBlurCommitRef.current = false;
             return;
           }
           commitCategoryChange();
         }}
-        onFocus={(event) => event.currentTarget.select()}
+        onFocus={(event) => {
+          setIsFocused(true);
+          event.currentTarget.select();
+        }}
         onKeyDown={(event) => {
           if (event.key === "Enter") {
             event.preventDefault();

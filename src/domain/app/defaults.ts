@@ -4,7 +4,7 @@ import { createId } from "../../shared/utils/id";
 
 export function createEmptyState(): AppState {
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     activeWorkspaceId: null,
     workspaces: [],
     financialProfiles: [],
@@ -52,7 +52,7 @@ export function createStarterCategories(workspaceId: string): Category[] {
     { name: "의료/건강", fixedOrVariable: "variable", necessity: "essential" },
     { name: "가족/관계", fixedOrVariable: "variable", necessity: "discretionary" },
     { name: "세금/공과", fixedOrVariable: "fixed", necessity: "essential" },
-    { name: "기부", fixedOrVariable: "variable", necessity: "discretionary" },
+    { name: "기부금", fixedOrVariable: "variable", necessity: "discretionary" },
   ] as const;
 
   const groupRecords = groups.map((group, index) => ({
@@ -85,7 +85,8 @@ export function createStarterCategories(workspaceId: string): Category[] {
     { name: "추가 지출", parentName: "생활비", fixedOrVariable: "variable", necessity: "discretionary" },
     { name: "의류", parentName: "생활비", fixedOrVariable: "variable", necessity: "discretionary" },
     { name: "회사 식대", parentName: "식비", fixedOrVariable: "variable", necessity: "essential" },
-    { name: "일반 교통", parentName: "교통/차량", fixedOrVariable: "variable", necessity: "essential" },
+    { name: "식비", parentName: "식비", fixedOrVariable: "variable", necessity: "essential" },
+    { name: "교통비", parentName: "교통/차량", fixedOrVariable: "variable", necessity: "essential" },
     { name: "주유비", parentName: "교통/차량", fixedOrVariable: "variable", necessity: "essential" },
     { name: "통행료/하이패스", parentName: "교통/차량", fixedOrVariable: "variable", necessity: "essential" },
     { name: "자동차 리스", parentName: "교통/차량", fixedOrVariable: "fixed", necessity: "essential" },
@@ -93,9 +94,9 @@ export function createStarterCategories(workspaceId: string): Category[] {
     { name: "가족 활동", parentName: "가족/관계", fixedOrVariable: "variable", necessity: "discretionary" },
     { name: "데이트/여행", parentName: "가족/관계", fixedOrVariable: "variable", necessity: "discretionary" },
     { name: "경조사", parentName: "가족/관계", fixedOrVariable: "variable", necessity: "essential" },
-    { name: "용돈", parentName: "가족/관계", fixedOrVariable: "variable", necessity: "discretionary" },
-    { name: "세금", parentName: "세금/공과", fixedOrVariable: "fixed", necessity: "essential" },
-    { name: "기부금", parentName: "기부", fixedOrVariable: "variable", necessity: "discretionary" },
+    { name: "개인지출", parentName: "가족/관계", fixedOrVariable: "variable", necessity: "discretionary" },
+    { name: "공과금", parentName: "세금/공과", fixedOrVariable: "fixed", necessity: "essential" },
+    { name: "기부금", parentName: "기부금", fixedOrVariable: "variable", necessity: "discretionary" },
   ] as const;
 
   return [

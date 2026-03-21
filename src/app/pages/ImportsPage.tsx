@@ -9,6 +9,12 @@ function normalizeCardKey(value: string) {
   return value.replace(/\s+/g, "").trim().toLowerCase();
 }
 
+function getVisibleCardIdentifier(cardNumberMasked: string) {
+  const trimmed = cardNumberMasked.trim();
+  if (!trimmed) return "";
+  return /\d/.test(trimmed) ? trimmed : "";
+}
+
 function getPostImportPath(bundle: WorkspaceBundle) {
   if (bundle.reviews.length > 0) return "/reviews";
   if (bundle.transactions.some((transaction) => transaction.isExpenseImpact && !transaction.categoryId)) {
@@ -22,7 +28,7 @@ function getPostImportLabel(bundle: WorkspaceBundle) {
   if (bundle.transactions.some((transaction) => transaction.isExpenseImpact && !transaction.categoryId)) {
     return "미분류 거래 정리";
   }
-  return "거래 화면 보기";
+  return "카드내역 보기";
 }
 
 export function ImportsPage() {
@@ -38,13 +44,14 @@ export function ImportsPage() {
   const recentImports = [...scope.imports].sort((a, b) => b.importedAt.localeCompare(a.importedAt));
 
   const previewCardMatches = (previewBundle?.cards ?? []).map((card) => {
+    const previewCardIdentifier = getVisibleCardIdentifier(card.cardNumberMasked);
     const matchedCard =
       scope.cards.find(
         (existing) =>
           existing.issuerName === card.issuerName &&
-          existing.cardNumberMasked &&
-          card.cardNumberMasked &&
-          normalizeCardKey(existing.cardNumberMasked) === normalizeCardKey(card.cardNumberMasked),
+          getVisibleCardIdentifier(existing.cardNumberMasked) &&
+          previewCardIdentifier &&
+          normalizeCardKey(getVisibleCardIdentifier(existing.cardNumberMasked)) === normalizeCardKey(previewCardIdentifier),
       ) ??
       scope.cards.find((existing) => normalizeCardKey(existing.name) === normalizeCardKey(card.name));
 
@@ -58,13 +65,14 @@ export function ImportsPage() {
   const commitPreview = () => {
     if (!previewBundle || !selectedImportOwnerId) return;
     const renamedCards = previewBundle.cards.map((card) => {
+      const previewCardIdentifier = getVisibleCardIdentifier(card.cardNumberMasked);
       const matchedCard =
         scope.cards.find(
           (existing) =>
             existing.issuerName === card.issuerName &&
-            existing.cardNumberMasked &&
-            card.cardNumberMasked &&
-            normalizeCardKey(existing.cardNumberMasked) === normalizeCardKey(card.cardNumberMasked),
+            getVisibleCardIdentifier(existing.cardNumberMasked) &&
+            previewCardIdentifier &&
+            normalizeCardKey(getVisibleCardIdentifier(existing.cardNumberMasked)) === normalizeCardKey(previewCardIdentifier),
         ) ??
         scope.cards.find((existing) => normalizeCardKey(existing.name) === normalizeCardKey(card.name));
 
@@ -104,7 +112,7 @@ export function ImportsPage() {
         <div className="section-head">
           <div>
             <span className="section-kicker">업로드 센터</span>
-            <h2 className="section-title">거래 파일 가져오기</h2>
+            <h2 className="section-title">카드 명세서 가져오기</h2>
           </div>
         </div>
         <p className="text-secondary">
@@ -292,7 +300,7 @@ export function ImportsPage() {
                     </p>
                   </div>
                   <Link className="btn btn-outline-secondary btn-sm" to={item.reviewCount > 0 ? "/reviews" : "/transactions"}>
-                    {item.reviewCount > 0 ? "검토 보기" : "거래 보기"}
+                    {item.reviewCount > 0 ? "검토 보기" : "카드내역 보기"}
                   </Link>
                 </div>
               </article>

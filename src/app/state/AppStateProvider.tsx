@@ -14,12 +14,12 @@ import { createId } from "../../shared/utils/id";
 import { useToast } from "../toast/ToastProvider";
 import { getWorkspaceScope } from "./selectors";
 
-type PersonDraft = Pick<Person, "name" | "displayName" | "role" | "memo" | "isActive">;
+type PersonDraft = Pick<Person, "name" | "displayName" | "role" | "memo" | "isActive" | "sortOrder" | "isHidden">;
 type AccountDraft = Pick<
   Account,
-  "ownerPersonId" | "name" | "alias" | "institutionName" | "accountNumberMasked" | "accountType" | "usageType" | "isShared" | "memo"
+  "ownerPersonId" | "name" | "alias" | "institutionName" | "accountNumberMasked" | "accountType" | "usageType" | "isShared" | "memo" | "sortOrder" | "isHidden"
 >;
-type CardDraft = Pick<Card, "ownerPersonId" | "name" | "issuerName" | "cardNumberMasked" | "linkedAccountId" | "cardType" | "memo">;
+type CardDraft = Pick<Card, "ownerPersonId" | "name" | "issuerName" | "cardNumberMasked" | "linkedAccountId" | "cardType" | "memo" | "sortOrder" | "isHidden">;
 type CategoryDraft = Pick<
   Category,
   "name" | "categoryType" | "parentCategoryId" | "sortOrder" | "isHidden" | "direction" | "fixedOrVariable" | "necessity" | "budgetable" | "reportable"
@@ -68,10 +68,16 @@ type Action =
   | { type: "applyReviewSuggestion"; payload: { reviewId: string } }
   | { type: "addPerson"; payload: { workspaceId: string; values: PersonDraft } }
   | { type: "updatePerson"; payload: { workspaceId: string; personId: string; values: PersonDraft } }
+  | { type: "deletePerson"; payload: { workspaceId: string; personId: string } }
+  | { type: "movePerson"; payload: { workspaceId: string; personId: string; targetIndex: number } }
   | { type: "addAccount"; payload: { workspaceId: string; values: AccountDraft } }
   | { type: "updateAccount"; payload: { workspaceId: string; accountId: string; values: AccountDraft } }
+  | { type: "deleteAccount"; payload: { workspaceId: string; accountId: string } }
+  | { type: "moveAccount"; payload: { workspaceId: string; accountId: string; targetOwnerPersonId: string | null; targetIndex: number } }
   | { type: "addCard"; payload: { workspaceId: string; values: CardDraft } }
   | { type: "updateCard"; payload: { workspaceId: string; cardId: string; values: CardDraft } }
+  | { type: "deleteCard"; payload: { workspaceId: string; cardId: string } }
+  | { type: "moveCard"; payload: { workspaceId: string; cardId: string; targetOwnerPersonId: string | null; targetIndex: number } }
   | { type: "addCategory"; payload: { workspaceId: string; values: CategoryDraft } }
   | { type: "updateCategory"; payload: { workspaceId: string; categoryId: string; values: CategoryDraft } }
   | { type: "deleteCategory"; payload: { workspaceId: string; categoryId: string } }
@@ -130,6 +136,8 @@ function createPersonDraft(input: string | Partial<PersonDraft>): PersonDraft {
       role: "member",
       memo: "",
       isActive: true,
+      sortOrder: 0,
+      isHidden: false,
     };
   }
 
@@ -142,6 +150,8 @@ function createPersonDraft(input: string | Partial<PersonDraft>): PersonDraft {
     role: input.role === "owner" ? "owner" : "member",
     memo: String(input.memo ?? "").trim(),
     isActive: input.isActive ?? true,
+    sortOrder: input.sortOrder ?? 0,
+    isHidden: input.isHidden ?? false,
   };
 }
 
@@ -157,6 +167,8 @@ function createAccountDraft(input: string | Partial<AccountDraft>, institutionNa
       usageType: "daily",
       isShared: false,
       memo: "",
+      sortOrder: 0,
+      isHidden: false,
     };
   }
 
@@ -172,6 +184,8 @@ function createAccountDraft(input: string | Partial<AccountDraft>, institutionNa
     usageType: isShared ? "shared" : input.usageType ?? "daily",
     isShared,
     memo: String(input.memo ?? "").trim(),
+    sortOrder: input.sortOrder ?? 0,
+    isHidden: input.isHidden ?? false,
   };
 }
 
@@ -185,6 +199,8 @@ function createCardDraft(input: string | Partial<CardDraft>, issuerName?: string
       linkedAccountId: null,
       cardType: "credit",
       memo: "",
+      sortOrder: 0,
+      isHidden: false,
     };
   }
 
@@ -196,6 +212,8 @@ function createCardDraft(input: string | Partial<CardDraft>, issuerName?: string
     linkedAccountId: input.linkedAccountId ?? null,
     cardType: input.cardType ?? "credit",
     memo: String(input.memo ?? "").trim(),
+    sortOrder: input.sortOrder ?? 0,
+    isHidden: input.isHidden ?? false,
   };
 }
 
@@ -230,25 +248,31 @@ function createCategoryDraft(input: string | Partial<CategoryDraft>, parentCateg
 }
 
 function normalizeAppState(rawState: AppState): AppState {
-  return {
+  const normalizedState = {
     ...rawState,
-    schemaVersion: Math.max(rawState.schemaVersion ?? 0, 3),
+    schemaVersion: Math.max(rawState.schemaVersion ?? 0, 4),
     people: rawState.people.map((person) => ({
       ...person,
       displayName: person.displayName ?? person.name,
       memo: person.memo ?? "",
       isActive: person.isActive ?? true,
+      sortOrder: person.sortOrder ?? 0,
+      isHidden: person.isHidden ?? false,
     })),
     accounts: rawState.accounts.map((account) => ({
       ...account,
       alias: account.alias ?? "",
       usageType: account.usageType ?? (account.isShared ? "shared" : "daily"),
       memo: account.memo ?? "",
+      sortOrder: account.sortOrder ?? 0,
+      isHidden: account.isHidden ?? false,
     })),
     cards: rawState.cards.map((card) => ({
       ...card,
       cardType: card.cardType ?? "credit",
       memo: card.memo ?? "",
+      sortOrder: card.sortOrder ?? 0,
+      isHidden: card.isHidden ?? false,
     })),
     categories: rawState.categories.map((category) => ({
       ...category,
@@ -263,10 +287,198 @@ function normalizeAppState(rawState: AppState): AppState {
       reportable: category.reportable ?? true,
     })),
   };
+
+  return normalizeCategoryStructure(normalizedState);
 }
 
 function normalizeKey(value: string) {
   return value.trim().toLowerCase();
+}
+
+function resolveCategoryRemap(categoryId: string, remapMap: Map<string, string>) {
+  let resolvedId = categoryId;
+  const visited = new Set<string>();
+
+  while (remapMap.has(resolvedId) && !visited.has(resolvedId)) {
+    visited.add(resolvedId);
+    resolvedId = remapMap.get(resolvedId) ?? resolvedId;
+  }
+
+  return resolvedId;
+}
+
+function chooseCanonicalCategory(categories: Category[]) {
+  return [...categories].sort((left, right) => {
+    if (left.isHidden !== right.isHidden) return Number(left.isHidden) - Number(right.isHidden);
+    if (left.sortOrder !== right.sortOrder) return left.sortOrder - right.sortOrder;
+    return left.id.localeCompare(right.id);
+  })[0];
+}
+
+function normalizeCategoryStructure(state: AppState): AppState {
+  if (!state.categories.length) return state;
+
+  let categoriesChanged = false;
+  const remappedCategoryIds = new Map<string, string>();
+  const normalizedCategories: Category[] = [];
+  const workspaceIds = Array.from(new Set(state.categories.map((category) => category.workspaceId)));
+
+  for (const workspaceId of workspaceIds) {
+    const hadInvalidRootGroup = state.categories.some(
+      (category) => category.workspaceId === workspaceId && category.categoryType === "group" && category.parentCategoryId !== null,
+    );
+    let workspaceCategories = state.categories
+      .filter((category) => category.workspaceId === workspaceId)
+      .map((category) =>
+        category.categoryType === "group" && category.parentCategoryId !== null
+          ? { ...category, parentCategoryId: null }
+          : category,
+      );
+
+    if (hadInvalidRootGroup) {
+      categoriesChanged = true;
+    }
+
+    const starterGroups = createStarterCategories(workspaceId).filter((category) => category.categoryType === "group");
+    const fallbackGroupTemplate =
+      starterGroups.find((category) => normalizeKey(category.name) === normalizeKey("생활비")) ?? starterGroups[0] ?? null;
+    const fallbackGroupName = fallbackGroupTemplate?.name ?? "생활비";
+
+    const ensureFallbackGroup = () => {
+      const existingFallbackGroup = workspaceCategories.find(
+        (category) => category.categoryType === "group" && normalizeKey(category.name) === normalizeKey(fallbackGroupName),
+      );
+      if (existingFallbackGroup) return existingFallbackGroup;
+
+      const rootGroups = workspaceCategories.filter((category) => category.categoryType === "group");
+      const nextGroup: Category = {
+        id: createId("category"),
+        workspaceId,
+        name: fallbackGroupName,
+        categoryType: "group",
+        parentCategoryId: null,
+        sortOrder: rootGroups.length,
+        isHidden: false,
+        direction: fallbackGroupTemplate?.direction ?? "expense",
+        fixedOrVariable: fallbackGroupTemplate?.fixedOrVariable ?? "variable",
+        necessity: fallbackGroupTemplate?.necessity ?? "discretionary",
+        budgetable: fallbackGroupTemplate?.budgetable ?? true,
+        reportable: fallbackGroupTemplate?.reportable ?? true,
+      };
+
+      workspaceCategories = [...workspaceCategories, nextGroup];
+      categoriesChanged = true;
+      return nextGroup;
+    };
+
+    const isValidGroupId = (groupId: string | null) =>
+      Boolean(groupId && workspaceCategories.some((category) => category.categoryType === "group" && category.id === groupId));
+
+    const orphanLeafCategories = workspaceCategories.filter(
+      (category) => category.categoryType === "category" && !isValidGroupId(category.parentCategoryId),
+    );
+
+    orphanLeafCategories.forEach((orphanCategory) => {
+      const normalizedName = normalizeKey(orphanCategory.name);
+      const directMatches = workspaceCategories.filter(
+        (category) =>
+          category.id !== orphanCategory.id &&
+          category.categoryType === "category" &&
+          isValidGroupId(category.parentCategoryId) &&
+          normalizeKey(category.name) === normalizedName,
+      );
+
+      if (directMatches.length === 1) {
+        remappedCategoryIds.set(orphanCategory.id, directMatches[0].id);
+        categoriesChanged = true;
+        return;
+      }
+
+      const fallbackGroup = ensureFallbackGroup();
+      const fallbackMatch = workspaceCategories.find(
+        (category) =>
+          category.id !== orphanCategory.id &&
+          category.categoryType === "category" &&
+          category.parentCategoryId === fallbackGroup.id &&
+          normalizeKey(category.name) === normalizedName,
+      );
+
+      if (fallbackMatch) {
+        remappedCategoryIds.set(orphanCategory.id, fallbackMatch.id);
+        categoriesChanged = true;
+        return;
+      }
+
+      workspaceCategories = workspaceCategories.map((category) =>
+        category.id === orphanCategory.id ? { ...category, parentCategoryId: fallbackGroup.id } : category,
+      );
+      categoriesChanged = true;
+    });
+
+    const leafBuckets = new Map<string, Category[]>();
+    workspaceCategories.forEach((category) => {
+      if (category.categoryType !== "category" || !isValidGroupId(category.parentCategoryId)) return;
+      const key = `${category.parentCategoryId}::${normalizeKey(category.name)}`;
+      const bucket = leafBuckets.get(key) ?? [];
+      bucket.push(category);
+      leafBuckets.set(key, bucket);
+    });
+
+    leafBuckets.forEach((bucket) => {
+      if (bucket.length < 2) return;
+      const canonicalCategory = chooseCanonicalCategory(bucket);
+      bucket.forEach((category) => {
+        if (category.id === canonicalCategory.id) return;
+        remappedCategoryIds.set(category.id, canonicalCategory.id);
+        categoriesChanged = true;
+      });
+    });
+
+    workspaceCategories = workspaceCategories.filter((category) => resolveCategoryRemap(category.id, remappedCategoryIds) === category.id);
+
+    const siblingBuckets = new Map<string, Category[]>();
+    workspaceCategories.forEach((category) => {
+      const key = category.parentCategoryId ?? "__root__";
+      const bucket = siblingBuckets.get(key) ?? [];
+      bucket.push(category);
+      siblingBuckets.set(key, bucket);
+    });
+
+    const reorderedWorkspaceCategories = Array.from(siblingBuckets.values()).flatMap((bucket) =>
+      bucket
+        .sort((left, right) => left.sortOrder - right.sortOrder)
+        .map((category, index) => (category.sortOrder === index ? category : { ...category, sortOrder: index })),
+    );
+
+    if (
+      !categoriesChanged &&
+      reorderedWorkspaceCategories.some((category) => {
+        const current = workspaceCategories.find((item) => item.id === category.id);
+        return current ? current.sortOrder !== category.sortOrder : false;
+      })
+    ) {
+      categoriesChanged = true;
+    }
+
+    normalizedCategories.push(...reorderedWorkspaceCategories);
+  }
+
+  if (!categoriesChanged && !remappedCategoryIds.size) return state;
+
+  let transactionsChanged = false;
+  const normalizedTransactions = state.transactions.map((transaction) => {
+    if (!transaction.categoryId) return transaction;
+    const resolvedCategoryId = resolveCategoryRemap(transaction.categoryId, remappedCategoryIds);
+    if (resolvedCategoryId === transaction.categoryId) return transaction;
+    transactionsChanged = true;
+    return { ...transaction, categoryId: resolvedCategoryId };
+  });
+
+  return {
+    ...state,
+    categories: normalizedCategories,
+    transactions: transactionsChanged ? normalizedTransactions : state.transactions,
+  };
 }
 
 function rebaseImportedBundleIntoWorkspace(state: AppState, workspaceId: string, bundle: WorkspaceBundle): WorkspaceBundle {
@@ -523,6 +735,42 @@ function reorderCategories(
     .concat(reorderedSiblingMap.get(categoryId) ?? []);
 }
 
+function reorderItemsByGroup<T extends { id: string; sortOrder?: number; ownerPersonId?: string | null }>(
+  items: T[],
+  itemId: string,
+  targetOwnerPersonId: string | null,
+  targetIndex: number,
+) {
+  const movingItem = items.find((item) => item.id === itemId);
+  if (!movingItem) return items;
+
+  const baseItems = items.filter((item) => item.id !== itemId);
+  const destinationSiblings = baseItems
+    .filter((item) => (item.ownerPersonId ?? null) === targetOwnerPersonId)
+    .sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0));
+  const clampedTargetIndex = Math.max(0, Math.min(targetIndex, destinationSiblings.length));
+  const reorderedSiblings = [
+    ...destinationSiblings.slice(0, clampedTargetIndex),
+    { ...movingItem, ownerPersonId: targetOwnerPersonId, sortOrder: clampedTargetIndex },
+    ...destinationSiblings.slice(clampedTargetIndex),
+  ].map((item, index) => ({ ...item, sortOrder: index }));
+  const reorderedSiblingMap = new Map(reorderedSiblings.map((item) => [item.id, item]));
+
+  return baseItems.map((item) => reorderedSiblingMap.get(item.id) ?? item).concat(reorderedSiblingMap.get(itemId) ?? []);
+}
+
+function reorderPeople(people: Person[], personId: string, targetIndex: number) {
+  const movingPerson = people.find((person) => person.id === personId);
+  if (!movingPerson) return people;
+  const basePeople = people.filter((person) => person.id !== personId).sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0));
+  const clampedTargetIndex = Math.max(0, Math.min(targetIndex, basePeople.length));
+  return [
+    ...basePeople.slice(0, clampedTargetIndex),
+    movingPerson,
+    ...basePeople.slice(clampedTargetIndex),
+  ].map((person, index) => ({ ...person, sortOrder: index }));
+}
+
 function resetCategoriesToDefaults(categories: Category[], workspaceId: string) {
   const workspaceCategories = categories.filter((category) => category.workspaceId === workspaceId);
   const otherCategories = categories.filter((category) => category.workspaceId !== workspaceId);
@@ -626,11 +874,11 @@ function reducer(state: AppState, action: Action): AppState {
         ),
       };
     case "mergeBundle":
-      return mergeWorkspaceBundle(state, action.payload);
+      return normalizeCategoryStructure(mergeWorkspaceBundle(state, action.payload));
     case "reset":
       return createEmptyState();
     case "replaceState":
-      return action.payload;
+      return normalizeCategoryStructure(action.payload);
     case "resolveReview":
       return {
         ...state,
@@ -659,6 +907,10 @@ function reducer(state: AppState, action: Action): AppState {
             id: createId("person"),
             workspaceId: action.payload.workspaceId,
             ...action.payload.values,
+            sortOrder:
+              action.payload.values.sortOrder ??
+              state.people.filter((person) => person.workspaceId === action.payload.workspaceId).length,
+            isHidden: action.payload.values.isHidden ?? false,
           },
         ],
       };
@@ -671,6 +923,54 @@ function reducer(state: AppState, action: Action): AppState {
             : person,
         ),
       };
+    case "deletePerson":
+      return {
+        ...state,
+        people: state.people.filter(
+          (person) => !(person.workspaceId === action.payload.workspaceId && person.id === action.payload.personId),
+        ),
+        accounts: state.accounts.filter(
+          (account) => !(account.workspaceId === action.payload.workspaceId && account.ownerPersonId === action.payload.personId),
+        ),
+        cards: state.cards.filter(
+          (card) => !(card.workspaceId === action.payload.workspaceId && card.ownerPersonId === action.payload.personId),
+        ),
+        transactions: state.transactions.map((transaction) =>
+          transaction.workspaceId !== action.payload.workspaceId || transaction.ownerPersonId !== action.payload.personId
+            ? transaction
+            : {
+                ...transaction,
+                ownerPersonId: null,
+                accountId:
+                  transaction.accountId &&
+                  state.accounts.some(
+                    (account) =>
+                      account.workspaceId === action.payload.workspaceId &&
+                      account.id === transaction.accountId &&
+                      account.ownerPersonId === action.payload.personId,
+                  )
+                    ? null
+                    : transaction.accountId,
+                cardId:
+                  transaction.cardId &&
+                  state.cards.some(
+                    (card) =>
+                      card.workspaceId === action.payload.workspaceId &&
+                      card.id === transaction.cardId &&
+                      card.ownerPersonId === action.payload.personId,
+                  )
+                    ? null
+                    : transaction.cardId,
+              },
+        ),
+      };
+    case "movePerson":
+      return {
+        ...state,
+        people: state.people
+          .filter((person) => person.workspaceId !== action.payload.workspaceId)
+          .concat(reorderPeople(state.people.filter((person) => person.workspaceId === action.payload.workspaceId), action.payload.personId, action.payload.targetIndex)),
+      };
     case "addAccount":
       return {
         ...state,
@@ -680,6 +980,14 @@ function reducer(state: AppState, action: Action): AppState {
             id: createId("account"),
             workspaceId: action.payload.workspaceId,
             ...action.payload.values,
+            sortOrder:
+              action.payload.values.sortOrder ??
+              state.accounts.filter(
+                (account) =>
+                  account.workspaceId === action.payload.workspaceId &&
+                  (account.ownerPersonId ?? null) === (action.payload.values.ownerPersonId ?? null),
+              ).length,
+            isHidden: action.payload.values.isHidden ?? false,
           },
         ],
       };
@@ -702,6 +1010,42 @@ function reducer(state: AppState, action: Action): AppState {
             : transaction,
         ),
       };
+    case "deleteAccount":
+      return {
+        ...state,
+        accounts: state.accounts.filter(
+          (account) => !(account.workspaceId === action.payload.workspaceId && account.id === action.payload.accountId),
+        ),
+        cards: state.cards.map((card) =>
+          card.workspaceId === action.payload.workspaceId && card.linkedAccountId === action.payload.accountId
+            ? { ...card, linkedAccountId: null }
+            : card,
+        ),
+        transactions: state.transactions.map((transaction) =>
+          transaction.workspaceId !== action.payload.workspaceId
+            ? transaction
+            : {
+                ...transaction,
+                accountId: transaction.accountId === action.payload.accountId ? null : transaction.accountId,
+                fromAccountId: transaction.fromAccountId === action.payload.accountId ? null : transaction.fromAccountId,
+                toAccountId: transaction.toAccountId === action.payload.accountId ? null : transaction.toAccountId,
+              },
+        ),
+      };
+    case "moveAccount":
+      return {
+        ...state,
+        accounts: state.accounts
+          .filter((account) => account.workspaceId !== action.payload.workspaceId)
+          .concat(
+            reorderItemsByGroup(
+              state.accounts.filter((account) => account.workspaceId === action.payload.workspaceId),
+              action.payload.accountId,
+              action.payload.targetOwnerPersonId,
+              action.payload.targetIndex,
+            ),
+          ),
+      };
     case "addCard":
       return {
         ...state,
@@ -711,6 +1055,14 @@ function reducer(state: AppState, action: Action): AppState {
             id: createId("card"),
             workspaceId: action.payload.workspaceId,
             ...action.payload.values,
+            sortOrder:
+              action.payload.values.sortOrder ??
+              state.cards.filter(
+                (card) =>
+                  card.workspaceId === action.payload.workspaceId &&
+                  (card.ownerPersonId ?? null) === (action.payload.values.ownerPersonId ?? null),
+              ).length,
+            isHidden: action.payload.values.isHidden ?? false,
           },
         ],
       };
@@ -732,8 +1084,34 @@ function reducer(state: AppState, action: Action): AppState {
             : transaction,
         ),
       };
-    case "addCategory":
+    case "deleteCard":
       return {
+        ...state,
+        cards: state.cards.filter(
+          (card) => !(card.workspaceId === action.payload.workspaceId && card.id === action.payload.cardId),
+        ),
+        transactions: state.transactions.map((transaction) =>
+          transaction.workspaceId === action.payload.workspaceId && transaction.cardId === action.payload.cardId
+            ? { ...transaction, cardId: null }
+            : transaction,
+        ),
+      };
+    case "moveCard":
+      return {
+        ...state,
+        cards: state.cards
+          .filter((card) => card.workspaceId !== action.payload.workspaceId)
+          .concat(
+            reorderItemsByGroup(
+              state.cards.filter((card) => card.workspaceId === action.payload.workspaceId),
+              action.payload.cardId,
+              action.payload.targetOwnerPersonId,
+              action.payload.targetIndex,
+            ),
+          ),
+      };
+    case "addCategory":
+      return normalizeCategoryStructure({
         ...state,
         categories: [
           ...state.categories,
@@ -747,16 +1125,16 @@ function reducer(state: AppState, action: Action): AppState {
             ),
           },
         ],
-      };
+      });
     case "updateCategory":
-      return {
+      return normalizeCategoryStructure({
         ...state,
         categories: state.categories.map((category) =>
           category.workspaceId === action.payload.workspaceId && category.id === action.payload.categoryId
             ? { ...category, ...action.payload.values }
             : category,
         ),
-      };
+      });
     case "deleteCategory": {
       const target = state.categories.find(
         (category) => category.workspaceId === action.payload.workspaceId && category.id === action.payload.categoryId,
@@ -791,7 +1169,7 @@ function reducer(state: AppState, action: Action): AppState {
       };
     }
     case "moveCategory":
-      return {
+      return normalizeCategoryStructure({
         ...state,
         categories: state.categories.some(
           (category) => category.workspaceId === action.payload.workspaceId && category.id === action.payload.categoryId,
@@ -806,12 +1184,12 @@ function reducer(state: AppState, action: Action): AppState {
               ),
             ]
           : state.categories,
-      };
+      });
     case "resetCategoriesToDefaults":
-      return {
+      return normalizeCategoryStructure({
         ...state,
         categories: resetCategoriesToDefaults(state.categories, action.payload.workspaceId),
-      };
+      });
     case "addTag":
       return {
         ...state,
@@ -1052,10 +1430,16 @@ interface AppStateContextValue {
   applyReviewSuggestion: (reviewId: string) => void;
   addPerson: (workspaceId: string, input: string | Partial<PersonDraft>) => void;
   updatePerson: (workspaceId: string, personId: string, input: Partial<PersonDraft>) => void;
+  deletePerson: (workspaceId: string, personId: string) => void;
+  movePerson: (workspaceId: string, personId: string, targetIndex: number) => void;
   addAccount: (workspaceId: string, input: string | Partial<AccountDraft>, institutionName?: string) => void;
   updateAccount: (workspaceId: string, accountId: string, input: Partial<AccountDraft>) => void;
+  deleteAccount: (workspaceId: string, accountId: string) => void;
+  moveAccount: (workspaceId: string, accountId: string, targetOwnerPersonId: string | null, targetIndex: number) => void;
   addCard: (workspaceId: string, input: string | Partial<CardDraft>, issuerName?: string) => void;
   updateCard: (workspaceId: string, cardId: string, input: Partial<CardDraft>) => void;
+  deleteCard: (workspaceId: string, cardId: string) => void;
+  moveCard: (workspaceId: string, cardId: string, targetOwnerPersonId: string | null, targetIndex: number) => void;
   addCategory: (workspaceId: string, input: string | Partial<CategoryDraft>, parentCategoryId?: string | null) => void;
   updateCategory: (workspaceId: string, categoryId: string, input: Partial<CategoryDraft>) => void;
   deleteCategory: (workspaceId: string, categoryId: string) => void;
@@ -1236,6 +1620,15 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         dispatch({ type: "updatePerson", payload: { workspaceId, personId, values } });
         showToast(`${values.displayName || values.name} 정보를 저장했습니다.`, "success");
       },
+      deletePerson(workspaceId, personId) {
+        const current = state.people.find((item) => item.workspaceId === workspaceId && item.id === personId);
+        if (!current) return;
+        dispatch({ type: "deletePerson", payload: { workspaceId, personId } });
+        showToast(`${current.displayName || current.name} 사용자를 삭제했습니다.`, "success");
+      },
+      movePerson(workspaceId, personId, targetIndex) {
+        dispatch({ type: "movePerson", payload: { workspaceId, personId, targetIndex } });
+      },
       addAccount(workspaceId, input, institutionName) {
         const values = createAccountDraft(input, institutionName);
         dispatch({ type: "addAccount", payload: { workspaceId, values } });
@@ -1248,6 +1641,15 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         dispatch({ type: "updateAccount", payload: { workspaceId, accountId, values } });
         showToast(`${values.alias || values.name} 계좌 정보를 저장했습니다.`, "success");
       },
+      deleteAccount(workspaceId, accountId) {
+        const current = state.accounts.find((item) => item.workspaceId === workspaceId && item.id === accountId);
+        if (!current) return;
+        dispatch({ type: "deleteAccount", payload: { workspaceId, accountId } });
+        showToast(`${current.alias || current.name} 계좌를 삭제했습니다.`, "success");
+      },
+      moveAccount(workspaceId, accountId, targetOwnerPersonId, targetIndex) {
+        dispatch({ type: "moveAccount", payload: { workspaceId, accountId, targetOwnerPersonId, targetIndex } });
+      },
       addCard(workspaceId, input, issuerName) {
         const values = createCardDraft(input, issuerName);
         dispatch({ type: "addCard", payload: { workspaceId, values } });
@@ -1259,6 +1661,15 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         const values = createCardDraft({ ...current, ...input });
         dispatch({ type: "updateCard", payload: { workspaceId, cardId, values } });
         showToast(`${values.name} 카드 정보를 저장했습니다.`, "success");
+      },
+      deleteCard(workspaceId, cardId) {
+        const current = state.cards.find((item) => item.workspaceId === workspaceId && item.id === cardId);
+        if (!current) return;
+        dispatch({ type: "deleteCard", payload: { workspaceId, cardId } });
+        showToast(`${current.name} 카드를 삭제했습니다.`, "success");
+      },
+      moveCard(workspaceId, cardId, targetOwnerPersonId, targetIndex) {
+        dispatch({ type: "moveCard", payload: { workspaceId, cardId, targetOwnerPersonId, targetIndex } });
       },
       addCategory(workspaceId, input, parentCategoryId = null) {
         const values = createCategoryDraft(input, parentCategoryId);

@@ -31,7 +31,7 @@ type NavItem = {
 
 const baseNavItems: NavItem[] = [
   { to: "/", label: "대시보드", end: true },
-  { to: "/transactions", label: "거래내역" },
+  { to: "/transactions", label: "카드내역" },
   { to: "/imports", label: "업로드" },
   { to: "/reviews", label: "검토함" },
   { to: "/settings", label: "설정" },
@@ -40,7 +40,7 @@ const baseNavItems: NavItem[] = [
 
 function useDeveloperMode() {
   const [isDeveloperModeUnlocked, setIsDeveloperModeUnlocked] = useState(false);
-  const [unlockAttempts, setUnlockAttempts] = useState<number[]>([]);
+  const [, setUnlockAttempts] = useState<number[]>([]);
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -50,17 +50,19 @@ function useDeveloperMode() {
 
   const registerUnlockTap = () => {
     if (isDeveloperModeUnlocked) return;
-
     const now = Date.now();
-    const nextAttempts = [...unlockAttempts.filter((attempt) => now - attempt < 1800), now];
-    setUnlockAttempts(nextAttempts);
+    setUnlockAttempts((current) => {
+      const nextAttempts = [...current.filter((attempt) => now - attempt < 3000), now];
 
-    if (nextAttempts.length >= 5) {
-      window.localStorage.setItem(DEVELOPER_MODE_KEY, "unlocked");
-      setIsDeveloperModeUnlocked(true);
-      setUnlockAttempts([]);
-      showToast("개발자 모드가 잠금 해제되었습니다.", "success");
-    }
+      if (nextAttempts.length >= 5) {
+        window.localStorage.setItem(DEVELOPER_MODE_KEY, "unlocked");
+        setIsDeveloperModeUnlocked(true);
+        showToast("개발자 모드가 잠금 해제되었습니다.", "success");
+        return [];
+      }
+
+      return nextAttempts;
+    });
   };
 
   const lockDeveloperMode = () => {
@@ -73,7 +75,13 @@ function useDeveloperMode() {
   return { isDeveloperModeUnlocked, registerUnlockTap, lockDeveloperMode };
 }
 
-function AppTopNav({ isDeveloperModeUnlocked }: { isDeveloperModeUnlocked: boolean }) {
+function AppTopNav({
+  isDeveloperModeUnlocked,
+  onSettingsTap,
+}: {
+  isDeveloperModeUnlocked: boolean;
+  onSettingsTap: () => void;
+}) {
   const location = useLocation();
   const navRef = useRef<HTMLElement | null>(null);
   const linkRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
@@ -142,6 +150,7 @@ function AppTopNav({ isDeveloperModeUnlocked }: { isDeveloperModeUnlocked: boole
           to={item.to}
           end={item.end}
           className="nav-link"
+          onClick={item.to === "/settings" ? onSettingsTap : undefined}
         >
           {item.label}
         </NavLink>
@@ -163,8 +172,8 @@ function AppRoutes({
         <Route path="/" element={<DashboardPage />} />
         <Route path="/transactions" element={<TransactionsPage />} />
         <Route path="/people" element={<Navigate to="/settings?tab=people" replace />} />
-        <Route path="/accounts" element={<Navigate to="/settings?tab=accounts" replace />} />
-        <Route path="/cards" element={<Navigate to="/settings?tab=cards" replace />} />
+        <Route path="/accounts" element={<Navigate to="/settings?tab=people" replace />} />
+        <Route path="/cards" element={<Navigate to="/settings?tab=people" replace />} />
         <Route path="/categories" element={<Navigate to="/settings?tab=categories" replace />} />
         <Route path="/imports" element={<ImportsPage />} />
         <Route path="/reviews" element={<ReviewsPage />} />
@@ -234,13 +243,11 @@ function WorkspaceNameEditor({
 
 function WorkspaceNameDisplay({
   name,
-  onUnlock,
   onEdit,
   className,
   titleTag = "h2",
 }: {
   name: string;
-  onUnlock: () => void;
   onEdit: () => void;
   className?: string;
   titleTag?: "h2" | "strong";
@@ -252,9 +259,8 @@ function WorkspaceNameDisplay({
       <button
         type="button"
         className="sidebar-brand-button workspace-name-trigger"
-        onClick={onUnlock}
         onDoubleClick={onEdit}
-        title="5번 누르면 개발자 모드 해금, 더블클릭하면 이름 수정"
+        title="더블클릭하면 이름 수정"
       >
         {content}
       </button>
@@ -469,7 +475,7 @@ function AppFrame() {
         <div className="app-topbar-main">
           <div className="app-brand-block">
             <span className="sidebar-kicker">Household Web App</span>
-            <button type="button" className="sidebar-brand-button" onClick={registerUnlockTap}>
+            <button type="button" className="sidebar-brand-button">
               <h1>가계부 웹앱</h1>
             </button>
             <p className="sidebar-copy">빠르게 기록하고 자연스럽게 정리하는 생활 가계부입니다.</p>
@@ -488,7 +494,6 @@ function AppFrame() {
               ) : (
                 <WorkspaceNameDisplay
                   name={activeWorkspace.name}
-                  onUnlock={registerUnlockTap}
                   onEdit={openWorkspaceNameEditor}
                   className="workspace-name-row-inline"
                   titleTag="strong"
@@ -497,7 +502,7 @@ function AppFrame() {
               <span className={`badge ${workspaceBadgeClass}`}>{workspaceBadgeLabel}</span>
             </div>
             <span className="app-topbar-compact-meta">
-              거래 {headerSummary.transactionsCount}건 · 검토 {headerSummary.openReviewCount}건 · 사용자 {headerSummary.peopleCount}명
+              카드내역 {headerSummary.transactionsCount}건 · 검토 {headerSummary.openReviewCount}건 · 사용자 {headerSummary.peopleCount}명
             </span>
           </div>
             <div className="app-topbar-actions">
@@ -521,7 +526,7 @@ function AppFrame() {
                 <option value={CREATE_WORKSPACE_OPTION}>+ 새 가계부 추가...</option>
               </select>
             </div>
-          <AppTopNav isDeveloperModeUnlocked={isDeveloperModeUnlocked} />
+          <AppTopNav isDeveloperModeUnlocked={isDeveloperModeUnlocked} onSettingsTap={registerUnlockTap} />
         </div>
       </header>
 

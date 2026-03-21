@@ -9,10 +9,6 @@ import { getCategoryGroups, getChildCategories, getHiddenCategories } from "../.
 import { getMotionStyle } from "../../shared/utils/motion";
 import type { Category } from "../../shared/types/models";
 
-type GroupDraftState = {
-  name: string;
-};
-
 type CategoryDraftState = {
   name: string;
   fixedOrVariable: Category["fixedOrVariable"];
@@ -22,7 +18,6 @@ type DragItem =
   | { categoryId: string; categoryType: "group"; isHidden: boolean }
   | { categoryId: string; categoryType: "category"; parentCategoryId: string | null; isHidden: boolean };
 
-const EMPTY_GROUP_DRAFT: GroupDraftState = { name: "" };
 const EMPTY_CATEGORY_DRAFT: CategoryDraftState = {
   name: "",
   fixedOrVariable: "variable",
@@ -30,16 +25,20 @@ const EMPTY_CATEGORY_DRAFT: CategoryDraftState = {
 
 let transparentDragImage: HTMLCanvasElement | null = null;
 
-function createGroupDraft(category?: Category | null): GroupDraftState {
-  return { name: category?.name ?? "" };
-}
-
 function createCategoryDraft(category?: Category | null): CategoryDraftState {
   if (!category) return EMPTY_CATEGORY_DRAFT;
   return {
     name: category.name,
     fixedOrVariable: category.fixedOrVariable,
   };
+}
+
+function createSequentialLabel(baseLabel: string, existingLabels: string[]) {
+  const normalizedLabels = new Set(existingLabels.map((label) => label.trim()).filter(Boolean));
+  if (!normalizedLabels.has(baseLabel)) return baseLabel;
+  let suffix = 2;
+  while (normalizedLabels.has(`${baseLabel} ${suffix}`)) suffix += 1;
+  return `${baseLabel} ${suffix}`;
 }
 
 function getInsertIndexByHorizontalPointer(event: React.DragEvent<HTMLElement>, baseIndex: number) {
@@ -71,11 +70,11 @@ export function CategoriesPage({ embedded = false }: { embedded?: boolean }) {
   const hiddenCategories = useMemo(() => getHiddenCategories(scope.categories), [scope.categories]);
   const suppressClickRef = useRef(false);
 
-  const [isCreateGroupModalOpen, setIsCreateGroupModalOpen] = useState(false);
-  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [inlineEditingGroupId, setInlineEditingGroupId] = useState<string | null>(null);
+  const [pendingInlineGroupName, setPendingInlineGroupName] = useState<string | null>(null);
   const [createChildGroupId, setCreateChildGroupId] = useState<string | null>(null);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
-  const [groupDraft, setGroupDraft] = useState<GroupDraftState>(EMPTY_GROUP_DRAFT);
+  const [inlineGroupName, setInlineGroupName] = useState("");
   const [categoryDraft, setCategoryDraft] = useState<CategoryDraftState>(EMPTY_CATEGORY_DRAFT);
   const [dragItem, setDragItem] = useState<DragItem | null>(null);
   const [activeDropZone, setActiveDropZone] = useState<"hide" | "delete" | null>(null);
@@ -89,7 +88,6 @@ export function CategoriesPage({ embedded = false }: { embedded?: boolean }) {
   const [pendingDeleteCategoryId, setPendingDeleteCategoryId] = useState<string | null>(null);
   const [isResetDefaultsModalOpen, setIsResetDefaultsModalOpen] = useState(false);
 
-  const editingGroup = editingGroupId ? categoryMap.get(editingGroupId) ?? null : null;
   const editingCategory = editingCategoryId ? categoryMap.get(editingCategoryId) ?? null : null;
   const createChildGroup = createChildGroupId ? categoryMap.get(createChildGroupId) ?? null : null;
   const pendingDeleteCategory = pendingDeleteCategoryId ? categoryMap.get(pendingDeleteCategoryId) ?? null : null;
@@ -150,21 +148,43 @@ export function CategoriesPage({ embedded = false }: { embedded?: boolean }) {
     dragGhostRef.current.classList.toggle("is-drop-target-delete", activeDropZone === "delete");
   }, [activeDropZone]);
 
-  const openCreateGroupModal = () => {
-    setGroupDraft(EMPTY_GROUP_DRAFT);
-    setIsCreateGroupModalOpen(true);
+  const createGroupSection = () => {
+    const name = createSequentialLabel("새 그룹", groups.map((group) => group.name));
+    addCategory(workspaceId, { name, categoryType: "group", isHidden: false });
+    setPendingInlineGroupName(name);
   };
 
-  const openEditGroupModal = (group: Category) => {
-    setGroupDraft(createGroupDraft(group));
-    setEditingGroupId(group.id);
+  const startInlineGroupEdit = (group: Category) => {
+    setInlineEditingGroupId(group.id);
+    setInlineGroupName(group.name);
   };
 
-  const closeGroupModal = () => {
-    setIsCreateGroupModalOpen(false);
-    setEditingGroupId(null);
-    setGroupDraft(EMPTY_GROUP_DRAFT);
+  const stopInlineGroupEdit = () => {
+    setInlineEditingGroupId(null);
+    setInlineGroupName("");
   };
+
+  const submitInlineGroupEdit = () => {
+    if (!inlineEditingGroupId) return;
+    const targetGroup = categoryMap.get(inlineEditingGroupId);
+    const name = inlineGroupName.trim();
+    if (!targetGroup || !name) {
+      stopInlineGroupEdit();
+      return;
+    }
+    if (name !== targetGroup.name) {
+      updateCategory(workspaceId, targetGroup.id, { name });
+    }
+    stopInlineGroupEdit();
+  };
+
+  useEffect(() => {
+    if (!pendingInlineGroupName) return;
+    const createdGroup = groups.find((group) => group.name === pendingInlineGroupName);
+    if (!createdGroup) return;
+    startInlineGroupEdit(createdGroup);
+    setPendingInlineGroupName(null);
+  }, [groups, pendingInlineGroupName]);
 
   const openCreateChildModal = (group: Category) => {
     setCategoryDraft(EMPTY_CATEGORY_DRAFT);
@@ -324,9 +344,6 @@ export function CategoriesPage({ embedded = false }: { embedded?: boolean }) {
             <button type="button" className="board-case-action-button" onClick={() => setIsResetDefaultsModalOpen(true)}>
               기본값 초기화
             </button>
-            <button type="button" className="board-case-action-button is-strong" onClick={openCreateGroupModal}>
-              그룹 추가
-            </button>
           </>
         }
       >
@@ -336,7 +353,7 @@ export function CategoriesPage({ embedded = false }: { embedded?: boolean }) {
             title="먼저 카테고리 그룹을 만들어주세요"
             description="생활비 같은 상위 그룹을 만들고, 그 아래에 실제 거래가 매핑되는 하위 카테고리를 추가하면 됩니다."
             actions={
-              <button type="button" className="btn btn-primary btn-sm" onClick={openCreateGroupModal}>
+              <button type="button" className="btn btn-primary btn-sm" onClick={createGroupSection}>
                 그룹 만들기
               </button>
             }
@@ -345,14 +362,38 @@ export function CategoriesPage({ embedded = false }: { embedded?: boolean }) {
           <div className="board-case-stack">
             {groups.map((group, groupIndex) => {
               const childCategories = getChildCategories(scope.categories, group.id);
+              const isInlineEditing = inlineEditingGroupId === group.id;
               return (
                 <BoardCaseSection
                   key={group.id}
-                  title={group.name}
+                  title={
+                    isInlineEditing ? (
+                      <input
+                        className="board-case-title-input"
+                        value={inlineGroupName}
+                        onChange={(event) => setInlineGroupName(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            submitInlineGroupEdit();
+                          }
+                          if (event.key === "Escape") {
+                            event.preventDefault();
+                            stopInlineGroupEdit();
+                          }
+                        }}
+                        onBlur={submitInlineGroupEdit}
+                        aria-label={`${group.name} 그룹 이름`}
+                        autoFocus
+                      />
+                    ) : (
+                      <h3>{group.name}</h3>
+                    )
+                  }
                   meta={`카테고리 ${childCategories.length}개`}
                   className={`category-case-section${getDragStateClassName(group.id)}`}
                   style={getMotionStyle(groupIndex + 2)}
-                  draggable
+                  draggable={!isInlineEditing}
                   onDragStart={(event) => startDrag({ categoryId: group.id, categoryType: "group", isHidden: false }, event)}
                   onDragEnd={resetDragState}
                   onDragOver={(event) => {
@@ -361,8 +402,20 @@ export function CategoriesPage({ embedded = false }: { embedded?: boolean }) {
                   }}
                   onDrop={(event) => handleGroupDrop(event, groupIndex)}
                   action={
-                    <button type="button" className="board-case-edit-button" onClick={() => openEditGroupModal(group)} aria-label={`${group.name} 그룹 수정`}>
-                      ✎
+                    <button
+                      type="button"
+                      className="board-case-edit-button"
+                      onMouseDown={isInlineEditing ? (event) => event.preventDefault() : undefined}
+                      onClick={() => {
+                        if (isInlineEditing) {
+                          submitInlineGroupEdit();
+                          return;
+                        }
+                        startInlineGroupEdit(group);
+                      }}
+                      aria-label={isInlineEditing ? `${group.name} 그룹 이름 저장` : `${group.name} 그룹 이름 수정`}
+                    >
+                      {isInlineEditing ? "✓" : "✎"}
                     </button>
                   }
                 >
@@ -434,7 +487,7 @@ export function CategoriesPage({ embedded = false }: { embedded?: boolean }) {
           </div>
         )}
 
-        <button type="button" className="category-case-group-add" onClick={openCreateGroupModal}>
+        <button type="button" className="category-case-group-add" onClick={createGroupSection}>
           <span>+</span>
           <strong>새 그룹 추가</strong>
         </button>
@@ -572,45 +625,6 @@ export function CategoriesPage({ embedded = false }: { embedded?: boolean }) {
             </button>
           </div>
         ) : null}
-      </AppModal>
-
-      <AppModal
-        open={isCreateGroupModalOpen || Boolean(editingGroup)}
-        title={editingGroup ? "카테고리 그룹 수정" : "카테고리 그룹 추가"}
-        description={editingGroup ? "부모 그룹 이름을 수정합니다." : "생활비 같은 상위 그룹을 먼저 만듭니다."}
-        onClose={closeGroupModal}
-      >
-        <form
-          className="profile-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const name = groupDraft.name.trim();
-            if (!name) return;
-
-            if (editingGroup) {
-              updateCategory(workspaceId, editingGroup.id, { name });
-            } else {
-              addCategory(workspaceId, { name, categoryType: "group", isHidden: false });
-            }
-
-            closeGroupModal();
-          }}
-        >
-          <label style={{ gridColumn: "1 / -1" }}>
-            그룹 이름
-            <input
-              className="form-control"
-              value={groupDraft.name}
-              onChange={(event) => setGroupDraft({ name: event.target.value })}
-              placeholder="예: 생활비"
-            />
-          </label>
-          <div className="d-flex justify-content-end" style={{ gridColumn: "1 / -1" }}>
-            <button className="btn btn-primary" type="submit">
-              저장
-            </button>
-          </div>
-        </form>
       </AppModal>
 
       <AppModal

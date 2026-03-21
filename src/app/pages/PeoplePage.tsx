@@ -1,10 +1,14 @@
-import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
+﻿import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { Link } from "react-router-dom";
+import { useEffect } from "react";
+import { useRef } from "react";
+import { createPortal } from "react-dom";
 import { getAccountUsageSummary, getCardUsageSummary, getPersonUsageSummary } from "../../domain/assets/usageSummary";
 import { getActiveTransactions } from "../../domain/transactions/meta";
 import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { AppModal } from "../components/AppModal";
+import { BoardCase } from "../components/BoardCase";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
@@ -26,6 +30,31 @@ const ACCOUNT_USAGE_OPTIONS = [
   { value: "investment", label: "투자" },
   { value: "loan", label: "대출 관리" },
   { value: "other", label: "기타" },
+] as const;
+
+const ACCOUNT_USAGE_FORM_OPTIONS = ACCOUNT_USAGE_OPTIONS.filter((option) => option.value !== "shared");
+
+const FINANCIAL_INSTITUTION_OPTIONS = [
+  "KB국민은행",
+  "신한은행",
+  "하나은행",
+  "우리은행",
+  "NH농협은행",
+  "IBK기업은행",
+  "카카오뱅크",
+  "토스뱅크",
+  "케이뱅크",
+  "SC제일은행",
+  "수협은행",
+  "새마을금고",
+  "신협",
+  "우체국",
+  "부산은행",
+  "대구은행",
+  "광주은행",
+  "전북은행",
+  "제주은행",
+  "직접입력",
 ] as const;
 
 const CARD_TYPE_OPTIONS = [
@@ -68,6 +97,11 @@ type PersonCardDraftState = {
   memo: string;
 };
 
+type DragItem =
+  | { id: string; itemType: "person"; ownerPersonId: null; isHidden: boolean }
+  | { id: string; itemType: "account"; ownerPersonId: string | null; isHidden: boolean }
+  | { id: string; itemType: "card"; ownerPersonId: string | null; isHidden: boolean };
+
 const EMPTY_PERSON_DRAFT: PersonDraftState = {
   name: "",
   displayName: "",
@@ -98,8 +132,54 @@ const EMPTY_PERSON_CARD_DRAFT: PersonCardDraftState = {
   memo: "",
 };
 
+let transparentDragImage: HTMLCanvasElement | null = null;
+
+function getInsertIndexByHorizontalPointer(event: React.DragEvent<HTMLElement>, baseIndex: number) {
+  const rect = event.currentTarget.getBoundingClientRect();
+  return event.clientX > rect.left + rect.width / 2 ? baseIndex + 1 : baseIndex;
+}
+
+function getInsertIndexByVerticalPointer(event: React.DragEvent<HTMLElement>, baseIndex: number) {
+  const rect = event.currentTarget.getBoundingClientRect();
+  return event.clientY > rect.top + rect.height / 2 ? baseIndex + 1 : baseIndex;
+}
+
+function getTransparentDragImage() {
+  if (typeof document === "undefined") return null;
+  if (!transparentDragImage) {
+    transparentDragImage = document.createElement("canvas");
+    transparentDragImage.width = 1;
+    transparentDragImage.height = 1;
+  }
+  return transparentDragImage;
+}
+
 function getPersonRoleLabel(role: "owner" | "member") {
   return role === "owner" ? "기본 사용자" : "구성원";
+}
+
+function getCardAccountLabel(cardType: PersonCardDraftState["cardType"]) {
+  return cardType === "credit" ? "납부계좌" : "연결계좌";
+}
+
+function getVisibleCardIdentifier(cardNumberMasked: string) {
+  const trimmed = cardNumberMasked.trim();
+  if (!trimmed) return "";
+  return /\d/.test(trimmed) ? trimmed : "";
+}
+
+function getVisibleAccountUsageType(usageType: AccountUsageType, isShared?: boolean) {
+  if (isShared || usageType === "shared") return "other" satisfies AccountUsageType;
+  return usageType;
+}
+
+function getFinancialInstitutionOptions(currentValue?: string) {
+  const normalizedCurrentValue = currentValue?.trim() ?? "";
+  if (!normalizedCurrentValue) return FINANCIAL_INSTITUTION_OPTIONS;
+  if (FINANCIAL_INSTITUTION_OPTIONS.includes(normalizedCurrentValue as (typeof FINANCIAL_INSTITUTION_OPTIONS)[number])) {
+    return FINANCIAL_INSTITUTION_OPTIONS;
+  }
+  return [normalizedCurrentValue, ...FINANCIAL_INSTITUTION_OPTIONS];
 }
 
 function createDraftFromPerson(person?: {
@@ -140,13 +220,13 @@ function createDraftFromAccount(account?: {
   if (!account) return EMPTY_PERSON_ACCOUNT_DRAFT;
   return {
     name: account.name,
-    alias: account.alias,
+    alias: account.alias || account.name,
     institutionName: account.institutionName,
     accountNumberMasked: account.accountNumberMasked,
     ownerPersonId: account.ownerPersonId ?? "",
     accountType: account.accountType,
-    usageType: account.isShared ? "shared" : account.usageType,
-    isShared: account.isShared,
+    usageType: getVisibleAccountUsageType(account.usageType, account.isShared),
+    isShared: false,
     memo: account.memo,
   };
 }
@@ -173,15 +253,16 @@ function createDraftFromCard(card?: {
 }
 
 function normalizeAccountDraftValues(draft: PersonAccountDraftState) {
+  const accountLabel = draft.alias.trim() || draft.name.trim();
   return {
-    ownerPersonId: draft.isShared ? null : draft.ownerPersonId || null,
-    name: draft.name.trim(),
-    alias: draft.alias.trim(),
+    ownerPersonId: draft.ownerPersonId || null,
+    name: accountLabel,
+    alias: accountLabel,
     institutionName: draft.institutionName.trim(),
     accountNumberMasked: draft.accountNumberMasked.trim(),
     accountType: draft.accountType,
-    usageType: draft.isShared ? "shared" : draft.usageType,
-    isShared: draft.isShared,
+    usageType: getVisibleAccountUsageType(draft.usageType),
+    isShared: false,
     memo: draft.memo.trim(),
   };
 }
@@ -198,32 +279,65 @@ function normalizeCardDraftValues(draft: PersonCardDraftState) {
   };
 }
 
+function createSequentialLabel(baseLabel: string, existingLabels: string[]) {
+  const normalizedLabels = new Set(existingLabels.map((label) => label.trim()).filter(Boolean));
+  if (!normalizedLabels.has(baseLabel)) return baseLabel;
+  let suffix = 2;
+  while (normalizedLabels.has(`${baseLabel} ${suffix}`)) suffix += 1;
+  return `${baseLabel} ${suffix}`;
+}
+
 export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
-  const { addAccount, addPerson, state, updateAccount, updateCard, updatePerson } = useAppState();
+  const { addAccount, addPerson, deleteAccount, deleteCard, deletePerson, moveAccount, moveCard, movePerson, state, updateAccount, updateCard, updatePerson } =
+    useAppState();
   const [expandedPersonId, setExpandedPersonId] = useState<string | null>(null);
+  const [inlineEditingPersonId, setInlineEditingPersonId] = useState<string | null>(null);
+  const [inlinePersonName, setInlinePersonName] = useState("");
+  const [pendingInlinePersonName, setPendingInlinePersonName] = useState<string | null>(null);
+  const [dragItem, setDragItem] = useState<DragItem | null>(null);
+  const [activeDropZone, setActiveDropZone] = useState<"hide" | "delete" | null>(null);
+  const [activeCardLinkTargetId, setActiveCardLinkTargetId] = useState<string | null>(null);
+  const [linkedAccountFlash, setLinkedAccountFlash] = useState<{ cardId: string; sequence: number } | null>(null);
+  const [isDragOverlayVisible, setIsDragOverlayVisible] = useState(false);
+  const [isDragOverlayActive, setIsDragOverlayActive] = useState(false);
+  const [isHiddenPanelOpen, setIsHiddenPanelOpen] = useState(false);
+  const [pendingDeleteItem, setPendingDeleteItem] = useState<{ itemType: DragItem["itemType"]; id: string } | null>(null);
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [accountOwnerPersonId, setAccountOwnerPersonId] = useState<string | null>(null);
   const [accountDraft, setAccountDraft] = useState<PersonAccountDraftState>(EMPTY_PERSON_ACCOUNT_DRAFT);
-  const [createDraft, setCreateDraft] = useState<PersonDraftState>(EMPTY_PERSON_DRAFT);
   const [editDraft, setEditDraft] = useState<PersonDraftState>(EMPTY_PERSON_DRAFT);
   const [editAccountDraft, setEditAccountDraft] = useState<PersonAccountDraftState>(EMPTY_PERSON_ACCOUNT_DRAFT);
   const [editCardDraft, setEditCardDraft] = useState<PersonCardDraftState>(EMPTY_PERSON_CARD_DRAFT);
+  const dragOverlayTimeoutRef = useRef<number | null>(null);
+  const dragOverlayEnterTimeoutRef = useRef<number | null>(null);
+  const linkedAccountFlashTimeoutRef = useRef<number | null>(null);
+  const linkedAccountFlashSequenceRef = useRef(0);
+  const dragGhostRef = useRef<HTMLElement | null>(null);
+  const dragGhostOffsetRef = useRef({ x: 0, y: 0 });
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
-  const people = scope.people;
-  const activePeople = scope.people.filter((person) => person.isActive);
+  const allPeople = scope.people;
+  const people = scope.people.filter((person) => !person.isHidden);
+  const hiddenPeople = scope.people.filter((person) => person.isHidden);
+  const hiddenAccounts = scope.accounts.filter((account) => account.isHidden && !account.isShared);
+  const hiddenCards = scope.cards.filter((card) => card.isHidden);
   const transactions = getActiveTransactions(scope.transactions);
   const personNameMap = new Map(scope.people.map((person) => [person.id, person.displayName || person.name]));
   const accountNameMap = new Map(scope.accounts.map((account) => [account.id, account.alias || account.name]));
-  const editingPerson = useMemo(() => people.find((person) => person.id === editingPersonId) ?? null, [people, editingPersonId]);
+  const editingPerson = useMemo(() => allPeople.find((person) => person.id === editingPersonId) ?? null, [allPeople, editingPersonId]);
   const editingAccount = useMemo(
     () => scope.accounts.find((account) => account.id === editingAccountId) ?? null,
     [scope.accounts, editingAccountId],
   );
   const editingCard = useMemo(() => scope.cards.find((card) => card.id === editingCardId) ?? null, [scope.cards, editingCardId]);
+  const activeCardLinkMessage = useMemo(() => {
+    if (!activeCardLinkTargetId) return "";
+    const targetCard = scope.cards.find((card) => card.id === activeCardLinkTargetId);
+    if (!targetCard) return "";
+    return `${getCardAccountLabel(targetCard.cardType)}로 연결`;
+  }, [activeCardLinkTargetId, scope.cards]);
 
   const normalizeDraftValues = (draft: PersonDraftState) => {
     const name = draft.name.trim();
@@ -237,11 +351,301 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   };
 
   const accountsByPersonId = new Map(
-    scope.people.map((person) => [person.id, scope.accounts.filter((account) => account.ownerPersonId === person.id)]),
+    scope.people.map((person) => [person.id, scope.accounts.filter((account) => account.ownerPersonId === person.id && !account.isHidden)]),
   );
   const cardsByPersonId = new Map(
-    scope.people.map((person) => [person.id, scope.cards.filter((card) => card.ownerPersonId === person.id)]),
+    scope.people.map((person) => [person.id, scope.cards.filter((card) => card.ownerPersonId === person.id && !card.isHidden)]),
   );
+
+  const createPersonSection = () => {
+    const displayName = createSequentialLabel(
+      "새 사용자",
+      people.map((person) => person.displayName || person.name),
+    );
+    addPerson(workspaceId, {
+      name: displayName,
+      displayName,
+      role: people.length ? "member" : "owner",
+      memo: "",
+      isActive: true,
+    });
+    setPendingInlinePersonName(displayName);
+  };
+
+  const startInlinePersonEdit = (person: { id: string; name: string; displayName: string }) => {
+    setInlineEditingPersonId(person.id);
+    setInlinePersonName(person.displayName || person.name);
+  };
+
+  const stopInlinePersonEdit = () => {
+    setInlineEditingPersonId(null);
+    setInlinePersonName("");
+  };
+
+  const submitInlinePersonEdit = (person: { id: string; name: string; displayName: string }) => {
+    const name = inlinePersonName.trim();
+    if (!name) {
+      stopInlinePersonEdit();
+      return;
+    }
+
+    const syncOriginalName = !person.displayName.trim() || person.displayName === person.name;
+    const nextName = syncOriginalName ? name : person.name;
+    const nextDisplayName = name;
+
+    if (nextName !== person.name || nextDisplayName !== person.displayName) {
+      updatePerson(workspaceId, person.id, {
+        name: nextName,
+        displayName: nextDisplayName,
+      });
+    }
+
+    stopInlinePersonEdit();
+  };
+
+  useEffect(() => {
+    if (!pendingInlinePersonName) return;
+    const createdPerson = people.find((person) => (person.displayName || person.name) === pendingInlinePersonName);
+    if (!createdPerson) return;
+    startInlinePersonEdit(createdPerson);
+    setPendingInlinePersonName(null);
+  }, [pendingInlinePersonName, people]);
+
+  useEffect(() => {
+    if (dragItem) {
+      if (dragOverlayTimeoutRef.current) {
+        window.clearTimeout(dragOverlayTimeoutRef.current);
+        dragOverlayTimeoutRef.current = null;
+      }
+      if (dragOverlayEnterTimeoutRef.current) {
+        window.clearTimeout(dragOverlayEnterTimeoutRef.current);
+        dragOverlayEnterTimeoutRef.current = null;
+      }
+      setIsDragOverlayVisible(true);
+      setIsDragOverlayActive(false);
+      dragOverlayEnterTimeoutRef.current = window.setTimeout(() => {
+        setIsDragOverlayActive(true);
+        dragOverlayEnterTimeoutRef.current = null;
+      }, 32);
+      return;
+    }
+
+    setIsDragOverlayActive(false);
+    setActiveCardLinkTargetId(null);
+    dragOverlayTimeoutRef.current = window.setTimeout(() => {
+      setIsDragOverlayVisible(false);
+      dragOverlayTimeoutRef.current = null;
+    }, 540);
+
+    return () => {
+      if (dragOverlayTimeoutRef.current) {
+        window.clearTimeout(dragOverlayTimeoutRef.current);
+        dragOverlayTimeoutRef.current = null;
+      }
+      if (dragOverlayEnterTimeoutRef.current) {
+        window.clearTimeout(dragOverlayEnterTimeoutRef.current);
+        dragOverlayEnterTimeoutRef.current = null;
+      }
+    };
+  }, [dragItem]);
+
+  useEffect(() => {
+    if (!dragItem || !dragGhostRef.current) return;
+
+    const handleDragOver = (event: DragEvent) => {
+      if (!dragGhostRef.current) return;
+      dragGhostRef.current.style.left = `${event.clientX - dragGhostOffsetRef.current.x}px`;
+      dragGhostRef.current.style.top = `${event.clientY - dragGhostOffsetRef.current.y}px`;
+    };
+
+    window.addEventListener("dragover", handleDragOver, true);
+    return () => window.removeEventListener("dragover", handleDragOver, true);
+  }, [dragItem]);
+
+  useEffect(() => {
+    if (!dragGhostRef.current) return;
+    dragGhostRef.current.classList.toggle("is-drop-target-hide", activeDropZone === "hide");
+    dragGhostRef.current.classList.toggle("is-drop-target-delete", activeDropZone === "delete");
+  }, [activeDropZone]);
+
+  useEffect(() => {
+    if (!dragGhostRef.current) return;
+    dragGhostRef.current.classList.toggle("is-account-link-ready", dragItem?.itemType === "account" && Boolean(activeCardLinkTargetId));
+    if (activeCardLinkMessage) {
+      dragGhostRef.current.setAttribute("data-link-message", activeCardLinkMessage);
+    } else {
+      dragGhostRef.current.removeAttribute("data-link-message");
+    }
+  }, [activeCardLinkMessage, activeCardLinkTargetId, dragItem]);
+
+  useEffect(() => {
+    return () => {
+      if (linkedAccountFlashTimeoutRef.current) {
+        window.clearTimeout(linkedAccountFlashTimeoutRef.current);
+        linkedAccountFlashTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  const resetDragState = () => {
+    if (dragGhostRef.current) {
+      dragGhostRef.current.remove();
+      dragGhostRef.current = null;
+    }
+    setDragItem(null);
+    setActiveDropZone(null);
+    setActiveCardLinkTargetId(null);
+  };
+
+  const applyHiddenState = (item: DragItem, isHidden: boolean) => {
+    if (item.itemType === "person") {
+      updatePerson(workspaceId, item.id, { isHidden });
+      return;
+    }
+    if (item.itemType === "account") {
+      updateAccount(workspaceId, item.id, { isHidden });
+      return;
+    }
+    updateCard(workspaceId, item.id, { isHidden });
+  };
+
+  const requestDeleteItem = (item: DragItem) => {
+    setPendingDeleteItem({ itemType: item.itemType, id: item.id });
+  };
+
+  const startDrag = (item: DragItem, event: React.DragEvent<HTMLElement>) => {
+    event.stopPropagation();
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", item.id);
+    const sourceElement = event.currentTarget as HTMLElement;
+    const dragImage = getTransparentDragImage();
+    if (dragImage) {
+      event.dataTransfer.setDragImage(dragImage, 0, 0);
+    }
+    if (dragGhostRef.current) {
+      dragGhostRef.current.remove();
+      dragGhostRef.current = null;
+    }
+
+    const sourceRect = sourceElement.getBoundingClientRect();
+    dragGhostOffsetRef.current = {
+      x: event.clientX - sourceRect.left,
+      y: event.clientY - sourceRect.top,
+    };
+
+    const ghostElement = sourceElement.cloneNode(true) as HTMLElement;
+    ghostElement.classList.add("category-drag-ghost");
+    ghostElement.style.position = "fixed";
+    ghostElement.style.left = `${event.clientX - dragGhostOffsetRef.current.x}px`;
+    ghostElement.style.top = `${event.clientY - dragGhostOffsetRef.current.y}px`;
+    ghostElement.style.width = `${sourceRect.width}px`;
+    ghostElement.style.minWidth = `${sourceRect.width}px`;
+    ghostElement.style.maxWidth = `${sourceRect.width}px`;
+    ghostElement.style.pointerEvents = "none";
+    ghostElement.style.margin = "0";
+    ghostElement.style.opacity = "1";
+    ghostElement.style.transform = "none";
+    ghostElement.style.filter = "none";
+    ghostElement.style.zIndex = "9999";
+    document.body.appendChild(ghostElement);
+    dragGhostRef.current = ghostElement;
+
+    setDragItem(item);
+  };
+
+  const handlePersonDrop = (event: React.DragEvent<HTMLElement>, personIndex: number) => {
+    if (!dragItem || dragItem.itemType !== "person") return;
+    event.preventDefault();
+    const targetIndex = getInsertIndexByVerticalPointer(event, personIndex);
+    if (dragItem.isHidden) {
+      applyHiddenState(dragItem, false);
+    }
+    movePerson(workspaceId, dragItem.id, targetIndex);
+    resetDragState();
+  };
+
+  const handlePersonAppendDrop = (event: React.DragEvent<HTMLElement>, itemCount: number) => {
+    if (!dragItem || dragItem.itemType !== "person") return;
+    if (event.target !== event.currentTarget) return;
+    event.preventDefault();
+    if (dragItem.isHidden) {
+      applyHiddenState(dragItem, false);
+    }
+    movePerson(workspaceId, dragItem.id, itemCount);
+    resetDragState();
+  };
+
+  const handleAccountDrop = (event: React.DragEvent<HTMLElement>, ownerPersonId: string, accountIndex: number) => {
+    if (!dragItem || dragItem.itemType !== "account" || dragItem.ownerPersonId !== ownerPersonId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const targetIndex = getInsertIndexByHorizontalPointer(event, accountIndex);
+    if (dragItem.isHidden) {
+      applyHiddenState(dragItem, false);
+    }
+    moveAccount(workspaceId, dragItem.id, ownerPersonId, targetIndex);
+    resetDragState();
+  };
+
+  const handleAccountAppendDrop = (event: React.DragEvent<HTMLElement>, ownerPersonId: string, itemCount: number) => {
+    if (!dragItem || dragItem.itemType !== "account" || dragItem.ownerPersonId !== ownerPersonId) return;
+    if (event.target !== event.currentTarget) return;
+    event.preventDefault();
+    if (dragItem.isHidden) {
+      applyHiddenState(dragItem, false);
+    }
+    moveAccount(workspaceId, dragItem.id, ownerPersonId, itemCount);
+    resetDragState();
+  };
+
+  const handleCardDrop = (event: React.DragEvent<HTMLElement>, ownerPersonId: string, cardIndex: number) => {
+    if (!dragItem || dragItem.itemType !== "card" || dragItem.ownerPersonId !== ownerPersonId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const targetIndex = getInsertIndexByHorizontalPointer(event, cardIndex);
+    if (dragItem.isHidden) {
+      applyHiddenState(dragItem, false);
+    }
+    moveCard(workspaceId, dragItem.id, ownerPersonId, targetIndex);
+    resetDragState();
+  };
+
+  const handleCardAppendDrop = (event: React.DragEvent<HTMLElement>, ownerPersonId: string, itemCount: number) => {
+    if (!dragItem || dragItem.itemType !== "card" || dragItem.ownerPersonId !== ownerPersonId) return;
+    if (event.target !== event.currentTarget) return;
+    event.preventDefault();
+    if (dragItem.isHidden) {
+      applyHiddenState(dragItem, false);
+    }
+    moveCard(workspaceId, dragItem.id, ownerPersonId, itemCount);
+    resetDragState();
+  };
+
+  const handleAccountLinkDrop = (event: React.DragEvent<HTMLElement>, cardId: string, ownerPersonId: string) => {
+    if (!dragItem || dragItem.itemType !== "account" || dragItem.ownerPersonId !== ownerPersonId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (dragItem.isHidden) {
+      applyHiddenState(dragItem, false);
+    }
+    updateCard(workspaceId, cardId, { linkedAccountId: dragItem.id });
+    linkedAccountFlashSequenceRef.current += 1;
+    const nextSequence = linkedAccountFlashSequenceRef.current;
+    setLinkedAccountFlash({ cardId, sequence: nextSequence });
+    if (linkedAccountFlashTimeoutRef.current) {
+      window.clearTimeout(linkedAccountFlashTimeoutRef.current);
+    }
+    linkedAccountFlashTimeoutRef.current = window.setTimeout(() => {
+      setLinkedAccountFlash((current) => (current?.cardId === cardId && current.sequence === nextSequence ? null : current));
+      linkedAccountFlashTimeoutRef.current = null;
+    }, 2000);
+    resetDragState();
+  };
+
+  const getDragStateClassName = (id: string) =>
+    `${dragItem?.id === id ? " is-dragging" : ""}${dragItem?.id === id && activeDropZone === "hide" ? " is-drop-target-hide" : ""}${
+      dragItem?.id === id && activeDropZone === "delete" ? " is-drop-target-delete" : ""
+    }`;
 
   const openPersonAccountModal = (personId: string) => {
     setAccountOwnerPersonId(personId);
@@ -260,18 +664,420 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   ) => {
     setter((current) => {
       const next = { ...current, ...patch };
-      if (next.isShared) {
-        next.ownerPersonId = "";
-        next.usageType = "shared";
-      } else {
-        if (!next.ownerPersonId && fallbackOwnerPersonId) next.ownerPersonId = fallbackOwnerPersonId;
-        if (next.usageType === "shared") next.usageType = "daily";
-      }
+      next.isShared = false;
+      if (!next.ownerPersonId && fallbackOwnerPersonId) next.ownerPersonId = fallbackOwnerPersonId;
+      if (next.usageType === "shared") next.usageType = "other";
       return next;
     });
   };
 
   const accountOwner = accountOwnerPersonId ? people.find((person) => person.id === accountOwnerPersonId) ?? null : null;
+  const pendingDeletePerson = pendingDeleteItem?.itemType === "person" ? allPeople.find((person) => person.id === pendingDeleteItem.id) ?? null : null;
+  const pendingDeleteAccount = pendingDeleteItem?.itemType === "account" ? scope.accounts.find((account) => account.id === pendingDeleteItem.id) ?? null : null;
+  const pendingDeleteCard = pendingDeleteItem?.itemType === "card" ? scope.cards.find((card) => card.id === pendingDeleteItem.id) ?? null : null;
+  const embeddedSections = people.map((person) => ({
+    id: person.id,
+    title: person.displayName || person.name,
+    subtitle: person.name !== person.displayName ? person.name : getPersonRoleLabel(person.role),
+    person,
+    usage: getPersonUsageSummary(transactions, person.id),
+    linkedAccounts: accountsByPersonId.get(person.id) ?? [],
+    linkedCards: cardsByPersonId.get(person.id) ?? [],
+  }));
+  const embeddedPeopleSection = (
+    <>
+      <BoardCase
+      embedded
+      title="사용자"
+      description="사용자별 계좌와 카드를 같은 보드 형식에서 관리합니다."
+      actions={
+        <button
+          type="button"
+          className={`board-case-action-button${isHiddenPanelOpen ? " is-active" : ""}`}
+          onClick={() => setIsHiddenPanelOpen((current) => !current)}
+        >
+          숨김 {hiddenPeople.length + hiddenAccounts.length + hiddenCards.length}
+        </button>
+      }
+    >
+      {!embeddedSections.length ? (
+        <EmptyStateCallout
+          kicker="첫 단계"
+          title="입력과 업로드에 연결할 사용자를 먼저 등록해주세요"
+          description="사용자가 정리되어 있어야 계좌와 카드 관리가 자연스럽게 이어집니다."
+        />
+      ) : (
+        <div
+          className="board-case-stack"
+          onDragOver={(event) => {
+            if (dragItem?.itemType !== "person") return;
+            event.preventDefault();
+          }}
+          onDrop={(event) => handlePersonAppendDrop(event, embeddedSections.length)}
+        >
+          {embeddedSections.map((section, index) => {
+            const isInlineEditing = inlineEditingPersonId === section.person.id;
+            return (
+              <section
+                key={section.id}
+                className={`board-case-section category-case-section people-case-section${getDragStateClassName(section.id)}`}
+                style={getMotionStyle(index + 2)}
+                draggable={!isInlineEditing}
+                onDragStart={(event) => startDrag({ id: section.person.id, itemType: "person", ownerPersonId: null, isHidden: false }, event)}
+                onDragEnd={resetDragState}
+                onDragOver={(event) => {
+                  if (dragItem?.itemType !== "person") return;
+                  event.preventDefault();
+                }}
+                onDrop={(event) => handlePersonDrop(event, index)}
+              >
+                <div className="board-case-section-head">
+                  <div className="board-case-section-title-row">
+                    <div className="people-section-heading">
+                      {isInlineEditing ? (
+                        <input
+                          className="board-case-title-input"
+                          value={inlinePersonName}
+                          onChange={(event) => setInlinePersonName(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              submitInlinePersonEdit(section.person);
+                            }
+                            if (event.key === "Escape") {
+                              event.preventDefault();
+                              stopInlinePersonEdit();
+                            }
+                          }}
+                          onBlur={() => submitInlinePersonEdit(section.person)}
+                          aria-label={`${section.title} 사용자 이름`}
+                          autoFocus
+                        />
+                      ) : (
+                        <h3>{section.title}</h3>
+                      )}
+                      <span className="people-role-pill">{getPersonRoleLabel(section.person.role)}</span>
+                    </div>
+                    <div className="board-case-section-action">
+                      <button
+                        type="button"
+                        className="board-case-edit-button"
+                        onMouseDown={isInlineEditing ? (event) => event.preventDefault() : undefined}
+                        onClick={() => {
+                          if (isInlineEditing) {
+                            submitInlinePersonEdit(section.person);
+                            return;
+                          }
+                          startInlinePersonEdit(section.person);
+                        }}
+                        aria-label={isInlineEditing ? `${section.title} 사용자 이름 저장` : `${section.title} 사용자 이름 수정`}
+                      >
+                        {isInlineEditing ? "✓" : "✎"}
+                      </button>
+                    </div>
+                  </div>
+                  <p>{`계좌 ${section.linkedAccounts.length}개 · 카드 ${section.linkedCards.length}개`}</p>
+                </div>
+                <div className="board-case-section-body">
+                <div className="people-subboard">
+                  <div className="people-subboard-head">
+                    <div>
+                      <span className="section-kicker">사용자 하위 자산</span>
+                      <h4>계좌</h4>
+                    </div>
+                  </div>
+                  <div
+                    className="category-case-grid"
+                    onDragOver={(event) => {
+                      if (dragItem?.itemType !== "account" || dragItem.ownerPersonId !== section.person.id) return;
+                      event.preventDefault();
+                    }}
+                    onDrop={(event) => handleAccountAppendDrop(event, section.person.id, section.linkedAccounts.length)}
+                  >
+                    {section.linkedAccounts.map((account) => {
+                      const usageLabel =
+                        ACCOUNT_USAGE_OPTIONS.find((option) => option.value === getVisibleAccountUsageType(account.usageType, account.isShared))?.label ??
+                        "기타";
+                       return (
+                        <article
+                         key={account.id}
+                         className={`category-case-card people-board-card${getDragStateClassName(account.id)}`}
+                         draggable
+                         onDragStart={(event) => startDrag({ id: account.id, itemType: "account", ownerPersonId: account.ownerPersonId ?? null, isHidden: false }, event)}
+                         onDragEnd={resetDragState}
+                         onDragOver={(event) => {
+                           if (dragItem?.itemType !== "account" || dragItem.ownerPersonId !== section.person.id) return;
+                           event.preventDefault();
+                           event.stopPropagation();
+                         }}
+                         onDrop={(event) => handleAccountDrop(event, section.person.id, section.linkedAccounts.indexOf(account))}
+                       >
+                        <button
+                          type="button"
+                          className="board-case-edit-button category-case-card-edit"
+                          onClick={() => {
+                            setEditingAccountId(account.id);
+                            setEditAccountDraft(createDraftFromAccount(account));
+                          }}
+                          aria-label={`${account.alias || account.name} 계좌 수정`}
+                        >
+                          ✎
+                        </button>
+                         <div className="category-case-card-copy people-board-card-copy">
+                           <strong>{account.alias || account.name}</strong>
+                           <span>{account.institutionName || "직접 입력"}</span>
+                           <span>{account.accountNumberMasked || "계좌번호 미입력"}</span>
+                          </div>
+                         <div className="category-case-pill">{usageLabel}</div>
+                        </article>
+                      );
+                    })}
+                   <button
+                     type="button"
+                     className="category-case-add-card people-board-add-card"
+                     onClick={() => openPersonAccountModal(section.person.id)}
+                     aria-label={`${section.title} 계좌 추가`}
+                   >
+                    <span className="category-case-add-plus">+</span>
+                    <strong>계좌 추가</strong>
+                  </button>
+                  </div>
+                </div>
+
+                <div className="people-subboard">
+                  <div className="people-subboard-head">
+                    <div>
+                      <span className="section-kicker">업로드 기반 자산</span>
+                      <h4>카드</h4>
+                    </div>
+                  </div>
+                  <div
+                    className="category-case-grid"
+                    onDragOver={(event) => {
+                      if (!dragItem || dragItem.ownerPersonId !== section.person.id) return;
+                      if (dragItem.itemType === "account") {
+                        event.preventDefault();
+                        if (event.target === event.currentTarget) setActiveCardLinkTargetId(null);
+                        return;
+                      }
+                      if (dragItem.itemType !== "card") return;
+                      event.preventDefault();
+                    }}
+                    onDrop={(event) => handleCardAppendDrop(event, section.person.id, section.linkedCards.length)}
+                  >
+                    {section.linkedCards.map((card) => {
+                      const cardAccountLabel = getCardAccountLabel(card.cardType);
+                      const linkedAccountName = card.linkedAccountId ? accountNameMap.get(card.linkedAccountId) ?? "없음" : "없음";
+                      const cardIdentifier = getVisibleCardIdentifier(card.cardNumberMasked);
+                      const isActiveCardLinkTarget = activeCardLinkTargetId === card.id && dragItem?.itemType === "account";
+                      const isLinkedAccountFlashing = linkedAccountFlash?.cardId === card.id;
+                      const linkedAccountFlashKey = isLinkedAccountFlashing ? linkedAccountFlash.sequence : 0;
+                        return (
+                        <article
+                          key={card.id}
+                          className={`category-case-card people-board-card${
+                            dragItem?.itemType === "account" && dragItem.ownerPersonId === section.person.id ? " is-account-link-target" : ""
+                          }${isActiveCardLinkTarget ? " is-account-link-active" : ""}${getDragStateClassName(card.id)}`}
+                          draggable
+                          onDragStart={(event) => startDrag({ id: card.id, itemType: "card", ownerPersonId: card.ownerPersonId ?? null, isHidden: false }, event)}
+                          onDragEnd={resetDragState}
+                          onDragEnter={() => {
+                            if (dragItem?.itemType !== "account" || dragItem.ownerPersonId !== section.person.id) return;
+                            setActiveCardLinkTargetId(card.id);
+                          }}
+                          onDragOver={(event) => {
+                            if (
+                              !dragItem ||
+                              (dragItem.itemType !== "card" && dragItem.itemType !== "account") ||
+                              dragItem.ownerPersonId !== section.person.id
+                            ) {
+                              return;
+                            }
+                            event.preventDefault();
+                            event.stopPropagation();
+                            if (dragItem.itemType === "account") {
+                              setActiveCardLinkTargetId(card.id);
+                            }
+                          }}
+                          onDragLeave={() => {
+                            if (activeCardLinkTargetId !== card.id) return;
+                            setActiveCardLinkTargetId((current) => (current === card.id ? null : current));
+                          }}
+                          onDrop={(event) => {
+                            if (dragItem?.itemType === "account") {
+                              handleAccountLinkDrop(event, card.id, section.person.id);
+                              return;
+                            }
+                            handleCardDrop(event, section.person.id, section.linkedCards.indexOf(card));
+                          }}
+                        >
+                        <button
+                          type="button"
+                          className="board-case-edit-button category-case-card-edit"
+                          onClick={() => {
+                            setEditingCardId(card.id);
+                            setEditCardDraft(createDraftFromCard(card));
+                          }}
+                          aria-label={`${card.name} 카드 수정`}
+                        >
+                          ✎
+                        </button>
+                        <div className="category-case-card-copy people-board-card-copy">
+                          <strong>{card.name}</strong>
+                          <span>{`${card.issuerName || "카드사 미확인"}${cardIdentifier ? ` (${cardIdentifier})` : ""}`}</span>
+                          <span className="people-linked-account-row">
+                            <span
+                              key={`${card.id}-${linkedAccountFlashKey}`}
+                              className={`people-linked-account-line${isLinkedAccountFlashing ? " is-flashing" : ""}`}
+                            >
+                              <span className="people-linked-account-label">{cardAccountLabel}</span>
+                              <span className="people-linked-account-value">{linkedAccountName}</span>
+                            </span>
+                            {isLinkedAccountFlashing ? <span className="people-linked-account-status">연결됨</span> : null}
+                          </span>
+                        </div>
+                        <div className="category-case-pill">
+                          {CARD_TYPE_OPTIONS.find((option) => option.value === card.cardType)?.label ?? "기타"}
+                        </div>
+                      </article>
+                    );
+                  })}
+                  {!section.linkedCards.length ? (
+                    <article className="category-case-add-card people-board-empty-card">
+                      <strong>아직 연결된 카드가 없습니다</strong>
+                      <span>카드 명세서를 업로드하면 자동 생성되고 여기서 소유자와 결제 계좌를 조정할 수 있습니다.</span>
+                    </article>
+                  ) : null}
+                </div>
+              </div>
+
+                   {section.person.memo ? <div className="compact-note">{section.person.memo}</div> : null}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      )}
+
+      <button
+        type="button"
+        className="category-case-group-add"
+        onClick={createPersonSection}
+      >
+        <span>+</span>
+        <strong>새 사용자 추가</strong>
+      </button>
+    </BoardCase>
+
+    {isHiddenPanelOpen ? (
+      <aside className="category-hidden-panel">
+        <div className="category-hidden-panel-head">
+          <div>
+            <span className="section-kicker">숨김 보관함</span>
+            <h3>숨긴 사용자 자산</h3>
+          </div>
+          <button type="button" className="board-case-edit-button" onClick={() => setIsHiddenPanelOpen(false)} aria-label="숨김 패널 닫기">
+            ×
+          </button>
+        </div>
+        <p className="text-secondary mb-3">원래 사용자 보드로 다시 드래그하면 복원됩니다.</p>
+
+        {hiddenPeople.length ? (
+          <div className="category-hidden-list mb-3">
+            {hiddenPeople.map((person) => (
+              <article
+                key={person.id}
+                className={`category-hidden-card${getDragStateClassName(person.id)}`}
+                draggable
+                onDragStart={(event) => startDrag({ id: person.id, itemType: "person", ownerPersonId: null, isHidden: true }, event)}
+                onDragEnd={resetDragState}
+              >
+                <strong>{person.displayName || person.name}</strong>
+                <span>사용자</span>
+              </article>
+            ))}
+          </div>
+        ) : null}
+
+        {hiddenAccounts.length ? (
+          <div className="category-hidden-list mb-3">
+            {hiddenAccounts.map((account) => (
+              <article
+                key={account.id}
+                className={`category-hidden-card${getDragStateClassName(account.id)}`}
+                draggable
+                onDragStart={(event) => startDrag({ id: account.id, itemType: "account", ownerPersonId: account.ownerPersonId ?? null, isHidden: true }, event)}
+                onDragEnd={resetDragState}
+              >
+                <strong>{account.alias || account.name}</strong>
+                <span>계좌 · {account.ownerPersonId ? personNameMap.get(account.ownerPersonId) ?? "사용자 없음" : "소유자 없음"}</span>
+              </article>
+            ))}
+          </div>
+        ) : null}
+
+        {hiddenCards.length ? (
+          <div className="category-hidden-list">
+            {hiddenCards.map((card) => (
+              <article
+                key={card.id}
+                className={`category-hidden-card${getDragStateClassName(card.id)}`}
+                draggable
+                onDragStart={(event) => startDrag({ id: card.id, itemType: "card", ownerPersonId: card.ownerPersonId ?? null, isHidden: true }, event)}
+                onDragEnd={resetDragState}
+              >
+                <strong>{card.name}</strong>
+                <span>카드 · {card.ownerPersonId ? personNameMap.get(card.ownerPersonId) ?? "사용자 없음" : "소유자 없음"}</span>
+              </article>
+            ))}
+          </div>
+        ) : null}
+
+        {!hiddenPeople.length && !hiddenAccounts.length && !hiddenCards.length ? <p className="text-secondary mb-0">숨긴 항목이 없습니다.</p> : null}
+      </aside>
+    ) : null}
+
+      {isDragOverlayVisible && typeof document !== "undefined"
+      ? createPortal(
+          <>
+            <div
+              className={`category-side-zone category-side-zone-left${isDragOverlayActive ? " is-visible" : ""}${activeDropZone === "hide" ? " is-active" : ""}`}
+              onDragOver={(event) => {
+                event.preventDefault();
+                setActiveDropZone("hide");
+              }}
+              onDragLeave={() => setActiveDropZone((current) => (current === "hide" ? null : current))}
+              onDrop={(event) => {
+                event.preventDefault();
+                if (!dragItem) return;
+                applyHiddenState(dragItem, true);
+                resetDragState();
+              }}
+            >
+              <span>숨기기</span>
+            </div>
+            <div
+              className={`category-side-zone category-side-zone-right${isDragOverlayActive ? " is-visible" : ""}${activeDropZone === "delete" ? " is-active" : ""}`}
+              onDragOver={(event) => {
+                event.preventDefault();
+                setActiveDropZone("delete");
+              }}
+              onDragLeave={() => setActiveDropZone((current) => (current === "delete" ? null : current))}
+              onDrop={(event) => {
+                event.preventDefault();
+                if (!dragItem) return;
+                requestDeleteItem(dragItem);
+                resetDragState();
+              }}
+            >
+              <span>삭제</span>
+            </div>
+          </>,
+          document.body,
+        )
+      : null}
+    </>
+  );
 
   return (
     <div className={embedded ? "" : "page-stack"}>
@@ -285,10 +1091,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
             <button
               type="button"
               className="btn btn-primary"
-              onClick={() => {
-                setCreateDraft(EMPTY_PERSON_DRAFT);
-                setIsCreateModalOpen(true);
-              }}
+              onClick={createPersonSection}
             >
               사용자 등록
             </button>
@@ -299,7 +1102,10 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
         </section>
       ) : null}
 
-      <section className={embedded ? "" : "card shadow-sm"} style={getMotionStyle(embedded ? 0 : 1)}>
+      {embedded ? (
+        embeddedPeopleSection
+      ) : (
+        <section className="card shadow-sm" style={getMotionStyle(1)}>
         <div className="section-head">
           <div>
             <span className="section-kicker">구성원 목록</span>
@@ -421,12 +1227,13 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                           {linkedAccounts.map((account) => {
                             const usageSummary = getAccountUsageSummary(transactions, account.id);
                             const usageLabel =
-                              ACCOUNT_USAGE_OPTIONS.find((option) => option.value === (account.isShared ? "shared" : account.usageType))
+                              ACCOUNT_USAGE_OPTIONS.find((option) => option.value === getVisibleAccountUsageType(account.usageType, account.isShared))
                                 ?.label ?? "기타";
                             return (
                               <article key={account.id} className="person-asset-card">
                                 <strong>{account.alias || account.name}</strong>
                                 <span>{account.institutionName || "직접 입력"}</span>
+                                <span>{account.accountNumberMasked || "계좌번호 미입력"}</span>
                                 <span className="small text-secondary">{usageLabel}</span>
                                 <span className="small text-secondary">지출 {formatCurrency(usageSummary.expenseAmount)}</span>
                                 <button
@@ -477,8 +1284,12 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                           {linkedCards.map((card) => {
                             const usageSummary = getCardUsageSummary(transactions, card.id);
                             const linkedAccountName = card.linkedAccountId
-                              ? accountNameMap.get(card.linkedAccountId) ?? "연결 계좌 없음"
-                              : "연결 계좌 없음";
+                              ? accountNameMap.get(card.linkedAccountId) ?? "없음"
+                              : "없음";
+                            const cardAccountLabel = getCardAccountLabel(card.cardType);
+                            const cardIdentifier = getVisibleCardIdentifier(card.cardNumberMasked);
+                            const isLinkedAccountFlashing = linkedAccountFlash?.cardId === card.id;
+                            const linkedAccountFlashKey = isLinkedAccountFlashing ? linkedAccountFlash.sequence : 0;
                             return (
                               <article key={card.id} className="resource-card compact-resource-card">
                                 <div className="compact-card-summary">
@@ -487,10 +1298,21 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                                       <span className="badge text-bg-secondary">
                                         {CARD_TYPE_OPTIONS.find((option) => option.value === card.cardType)?.label ?? "기타"}
                                       </span>
-                                      <span className="compact-card-caption">{card.issuerName || "카드사 미확인"}</span>
+                                      <span className="compact-card-caption">{`${card.issuerName || "카드사 미확인"}${cardIdentifier ? ` (${cardIdentifier})` : ""}`}</span>
                                     </div>
                                     <h3 className="mb-1">{card.name}</h3>
-                                    <p className="mb-1 text-secondary">결제 계좌 {linkedAccountName}</p>
+                                    <p className="mb-1 text-secondary">
+                                      <span className="people-linked-account-row">
+                                        <span
+                                          key={`${card.id}-${linkedAccountFlashKey}`}
+                                          className={`people-linked-account-line${isLinkedAccountFlashing ? " is-flashing" : ""}`}
+                                        >
+                                          <span className="people-linked-account-label">{cardAccountLabel}</span>
+                                          <span className="people-linked-account-value">{linkedAccountName}</span>
+                                        </span>
+                                        {isLinkedAccountFlashing ? <span className="people-linked-account-status">연결됨</span> : null}
+                                      </span>
+                                    </p>
                                     <p className="mb-0 text-secondary">사용 {formatCurrency(usageSummary.expenseAmount)}</p>
                                   </div>
                                   <div className="compact-card-actions">
@@ -524,59 +1346,44 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
             })}
           </div>
         )}
-      </section>
+        </section>
+      )}
 
       <AppModal
-        open={isCreateModalOpen}
-        title="사용자 등록"
-        description="이름과 표시 이름만 먼저 맞춰두면 연결 흐름이 훨씬 자연스러워집니다."
-        onClose={() => setIsCreateModalOpen(false)}
+        open={Boolean(pendingDeleteItem)}
+        title="항목 삭제"
+        description={
+          pendingDeletePerson
+            ? `${pendingDeletePerson.displayName || pendingDeletePerson.name} 사용자와 연결된 계좌/카드도 함께 삭제됩니다.`
+            : pendingDeleteAccount
+              ? `${pendingDeleteAccount.alias || pendingDeleteAccount.name} 계좌를 삭제합니다.`
+              : pendingDeleteCard
+                ? `${pendingDeleteCard.name} 카드를 삭제합니다.`
+                : ""
+        }
+        onClose={() => setPendingDeleteItem(null)}
       >
-        <form
-          className="profile-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const values = normalizeDraftValues(createDraft);
-            if (!values.name) return;
-            addPerson(workspaceId, values);
-            setIsCreateModalOpen(false);
-            setCreateDraft(EMPTY_PERSON_DRAFT);
-          }}
-        >
-          <label>
-            이름
-            <input className="form-control" value={createDraft.name} onChange={(event) => setCreateDraft((current) => ({ ...current, name: event.target.value }))} />
-          </label>
-          <label>
-            표시 이름
-            <input className="form-control" value={createDraft.displayName} onChange={(event) => setCreateDraft((current) => ({ ...current, displayName: event.target.value }))} />
-          </label>
-          <label>
-            역할
-            <select className="form-select" value={createDraft.role} onChange={(event) => setCreateDraft((current) => ({ ...current, role: event.target.value === "owner" ? "owner" : "member" }))}>
-              <option value="owner">기본 사용자</option>
-              <option value="member">구성원</option>
-            </select>
-          </label>
-          <label className="compact-check">
-            <span className="fw-semibold">현재 사용 중</span>
-            <input
-              type="checkbox"
-              className="form-check-input mt-0"
-              checked={createDraft.isActive}
-              onChange={(event) => setCreateDraft((current) => ({ ...current, isActive: event.target.checked }))}
-            />
-          </label>
-          <label style={{ gridColumn: "1 / -1" }}>
-            메모
-            <textarea className="form-control" rows={3} value={createDraft.memo} onChange={(event) => setCreateDraft((current) => ({ ...current, memo: event.target.value }))} />
-          </label>
-          <div className="d-flex justify-content-end" style={{ gridColumn: "1 / -1" }}>
-            <button className="btn btn-primary" type="submit">
-              저장
-            </button>
-          </div>
-        </form>
+        <div className="d-flex justify-content-end gap-2">
+          <button type="button" className="btn btn-outline-secondary" onClick={() => setPendingDeleteItem(null)}>
+            취소
+          </button>
+          <button
+            type="button"
+            className="btn btn-danger"
+            onClick={() => {
+              if (pendingDeletePerson) {
+                deletePerson(workspaceId, pendingDeletePerson.id);
+              } else if (pendingDeleteAccount) {
+                deleteAccount(workspaceId, pendingDeleteAccount.id);
+              } else if (pendingDeleteCard) {
+                deleteCard(workspaceId, pendingDeleteCard.id);
+              }
+              setPendingDeleteItem(null);
+            }}
+          >
+            삭제
+          </button>
+        </div>
       </AppModal>
 
       <AppModal
@@ -598,35 +1405,25 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
           >
             <label>
               계좌 이름
-              <input className="form-control" value={accountDraft.name} onChange={(event) => patchAccountDraft({ name: event.target.value }, setAccountDraft, accountOwnerPersonId)} />
-            </label>
-            <label>
-              표시명
               <input className="form-control" value={accountDraft.alias} onChange={(event) => patchAccountDraft({ alias: event.target.value }, setAccountDraft, accountOwnerPersonId)} />
             </label>
             <label>
               금융기관
-              <input className="form-control" value={accountDraft.institutionName} onChange={(event) => patchAccountDraft({ institutionName: event.target.value }, setAccountDraft, accountOwnerPersonId)} />
+              <select
+                className="form-select"
+                value={accountDraft.institutionName}
+                onChange={(event) => patchAccountDraft({ institutionName: event.target.value }, setAccountDraft, accountOwnerPersonId)}
+              >
+                {getFinancialInstitutionOptions(accountDraft.institutionName).map((institutionName) => (
+                  <option key={institutionName} value={institutionName}>
+                    {institutionName === "직접입력" ? "직접 입력" : institutionName}
+                  </option>
+                ))}
+              </select>
             </label>
             <label>
               계좌 번호
               <input className="form-control" value={accountDraft.accountNumberMasked} onChange={(event) => patchAccountDraft({ accountNumberMasked: event.target.value }, setAccountDraft, accountOwnerPersonId)} />
-            </label>
-            <label>
-              소유자
-              <select
-                className="form-select"
-                value={accountDraft.ownerPersonId}
-                disabled={accountDraft.isShared}
-                onChange={(event) => patchAccountDraft({ ownerPersonId: event.target.value }, setAccountDraft, accountOwnerPersonId)}
-              >
-                <option value="">공동 또는 미지정</option>
-                {activePeople.map((person) => (
-                  <option key={person.id} value={person.id}>
-                    {person.displayName || person.name}
-                  </option>
-                ))}
-              </select>
             </label>
             <label>
               계좌 유형
@@ -652,25 +1449,15 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
               용도
               <select
                 className="form-select"
-                value={accountDraft.isShared ? "shared" : accountDraft.usageType}
-                disabled={accountDraft.isShared}
+                value={accountDraft.usageType}
                 onChange={(event) => patchAccountDraft({ usageType: event.target.value as AccountUsageType }, setAccountDraft, accountOwnerPersonId)}
               >
-                {ACCOUNT_USAGE_OPTIONS.map((option) => (
+                {ACCOUNT_USAGE_FORM_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
                 ))}
               </select>
-            </label>
-            <label className="compact-check">
-              <span className="fw-semibold">공동 자금 계좌</span>
-              <input
-                type="checkbox"
-                className="form-check-input mt-0"
-                checked={accountDraft.isShared}
-                onChange={(event) => patchAccountDraft({ isShared: event.target.checked }, setAccountDraft, accountOwnerPersonId)}
-              />
             </label>
             <label style={{ gridColumn: "1 / -1" }}>
               메모
@@ -766,38 +1553,25 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
           >
             <label>
               계좌 이름
-              <input className="form-control" value={editAccountDraft.name} onChange={(event) => patchAccountDraft({ name: event.target.value }, setEditAccountDraft, editingAccount.ownerPersonId)} />
-            </label>
-            <label>
-              표시명
               <input className="form-control" value={editAccountDraft.alias} onChange={(event) => patchAccountDraft({ alias: event.target.value }, setEditAccountDraft, editingAccount.ownerPersonId)} />
             </label>
             <label>
               금융기관
-              <input className="form-control" value={editAccountDraft.institutionName} onChange={(event) => patchAccountDraft({ institutionName: event.target.value }, setEditAccountDraft, editingAccount.ownerPersonId)} />
+              <select
+                className="form-select"
+                value={editAccountDraft.institutionName}
+                onChange={(event) => patchAccountDraft({ institutionName: event.target.value }, setEditAccountDraft, editingAccount.ownerPersonId)}
+              >
+                {getFinancialInstitutionOptions(editAccountDraft.institutionName).map((institutionName) => (
+                  <option key={institutionName} value={institutionName}>
+                    {institutionName === "직접입력" ? "직접 입력" : institutionName}
+                  </option>
+                ))}
+              </select>
             </label>
             <label>
               계좌 번호
               <input className="form-control" value={editAccountDraft.accountNumberMasked} onChange={(event) => patchAccountDraft({ accountNumberMasked: event.target.value }, setEditAccountDraft, editingAccount.ownerPersonId)} />
-            </label>
-            <label>
-              소유자
-              <select
-                className="form-select"
-                value={editAccountDraft.ownerPersonId}
-                disabled={editAccountDraft.isShared}
-                onChange={(event) => patchAccountDraft({ ownerPersonId: event.target.value }, setEditAccountDraft, editingAccount.ownerPersonId)}
-              >
-                <option value="">공동 또는 미지정</option>
-                {scope.people
-                  .filter((person) => person.isActive || person.id === editingAccount.ownerPersonId)
-                  .map((person) => (
-                    <option key={person.id} value={person.id}>
-                      {person.displayName || person.name}
-                      {!person.isActive ? " (보관)" : ""}
-                    </option>
-                  ))}
-              </select>
             </label>
             <label>
               계좌 유형
@@ -823,25 +1597,15 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
               용도
               <select
                 className="form-select"
-                value={editAccountDraft.isShared ? "shared" : editAccountDraft.usageType}
-                disabled={editAccountDraft.isShared}
+                value={editAccountDraft.usageType}
                 onChange={(event) => patchAccountDraft({ usageType: event.target.value as AccountUsageType }, setEditAccountDraft, editingAccount.ownerPersonId)}
               >
-                {ACCOUNT_USAGE_OPTIONS.map((option) => (
+                {ACCOUNT_USAGE_FORM_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
                 ))}
               </select>
-            </label>
-            <label className="compact-check">
-              <span className="fw-semibold">공동 자금 계좌</span>
-              <input
-                type="checkbox"
-                className="form-check-input mt-0"
-                checked={editAccountDraft.isShared}
-                onChange={(event) => patchAccountDraft({ isShared: event.target.checked }, setEditAccountDraft, editingAccount.ownerPersonId)}
-              />
             </label>
             <label style={{ gridColumn: "1 / -1" }}>
               메모
@@ -886,28 +1650,13 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
               <input className="form-control" value={editCardDraft.issuerName} onChange={(event) => setEditCardDraft((current) => ({ ...current, issuerName: event.target.value }))} />
             </label>
             <label>
-              소유자
-              <select className="form-select" value={editCardDraft.ownerPersonId} onChange={(event) => setEditCardDraft((current) => ({ ...current, ownerPersonId: event.target.value }))}>
-                <option value="">미지정</option>
-                {scope.people
-                  .filter((person) => person.isActive || person.id === editingCard.ownerPersonId)
-                  .map((person) => (
-                    <option key={person.id} value={person.id}>
-                      {person.displayName || person.name}
-                      {!person.isActive ? " (보관)" : ""}
-                    </option>
-                  ))}
-              </select>
-            </label>
-            <label>
-              연결 계좌
+              {getCardAccountLabel(editCardDraft.cardType)}
               <select className="form-select" value={editCardDraft.linkedAccountId} onChange={(event) => setEditCardDraft((current) => ({ ...current, linkedAccountId: event.target.value }))}>
                 <option value="">연결 안 함</option>
-                {scope.accounts.map((account) => (
+                {scope.accounts.filter((account) => !account.isShared).map((account) => (
                   <option key={account.id} value={account.id}>
                     {account.alias || account.name}
-                    {account.ownerPersonId ? ` · ${personNameMap.get(account.ownerPersonId) ?? "미지정"}` : ""}
-                    {account.isShared ? " (공동)" : ""}
+                    {account.ownerPersonId ? ` · ${personNameMap.get(account.ownerPersonId) ?? "사용자 없음"}` : ""}
                   </option>
                 ))}
               </select>
@@ -921,10 +1670,6 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                   </option>
                 ))}
               </select>
-            </label>
-            <label>
-              카드 표시값
-              <input className="form-control" value={editCardDraft.cardNumberMasked} onChange={(event) => setEditCardDraft((current) => ({ ...current, cardNumberMasked: event.target.value }))} />
             </label>
             <label style={{ gridColumn: "1 / -1" }}>
               메모
