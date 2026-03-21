@@ -101,7 +101,6 @@ body {
 .quick-add-card,
 .review-card,
 .app-topbar-main,
-.app-top-nav,
 .floating-guide-panel,
 .app-modal-dialog,
 .guide-panel,
@@ -356,7 +355,8 @@ textarea:focus {
 }
 
 .app-top-nav {
-  background: var(--app-panel) !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 .app-top-nav .nav-link {

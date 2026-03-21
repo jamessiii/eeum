@@ -41,6 +41,7 @@ function findCategoryId(categories: WorkspaceBundle["categories"], name: string)
     "개인지출": "개인 지출",
     "생활비": "추가 지출",
     "데이트/여행경비": "데이트/여행",
+    "교통비": "일반 교통",
     "하이패스": "통행료/하이패스",
     "주담대": "주택담보대출",
     "식대(회사)": "회사 식대",
@@ -57,9 +58,9 @@ function inferCategoryIdFromMerchant(categories: WorkspaceBundle["categories"], 
   const normalizedMerchantName = normalizeText(merchantName).toUpperCase();
 
   const categoryRules: Array<{ categoryName: string; pattern: RegExp }> = [
-    { categoryName: "\uAD50\uD1B5\uBE44", pattern: /KTX|SRT|\uCF54\uB808\uC77C|\uCCA0\uB3C4\uC2B9\uCC28\uAD8C|\uD2F0\uBA38\uB2C8|\uC9C0\uD558\uCCA0|\uBC84\uC2A4|\uD0DD\uC2DC/u },
+    { categoryName: "\uC77C\uBC18 \uAD50\uD1B5", pattern: /KTX|SRT|\uCF54\uB808\uC77C|\uCCA0\uB3C4\uC2B9\uCC28\uAD8C|\uD2F0\uBA38\uB2C8|\uC9C0\uD558\uCCA0|\uBC84\uC2A4|\uD0DD\uC2DC/u },
     { categoryName: "\uD1B5\uC2E0\uBE44", pattern: /KT|SKT|LGU\+|\uD1B5\uC2E0|\uC778\uD130\uB137/u },
-    { categoryName: "\uC77C\uBC18 \uC2DD\uBE44", pattern: /\uCE74\uD398|\uCEE4\uD53C|\uC2DD\uB2F9|\uC678\uC2DD|\uBC30\uB2EC|\uB9E5\uB3C4\uB0A0\uB4DC|\uC2A4\uD0C0\uBC85\uC2A4|\uC2E0\uC120\uAD6C\uC774/u },
+    { categoryName: "\uD68C\uC0AC \uC2DD\uB300", pattern: /\uCE74\uD398|\uCEE4\uD53C|\uC2DD\uB2F9|\uC678\uC2DD|\uBC30\uB2EC|\uB9E5\uB3C4\uB0A0\uB4DC|\uC2A4\uD0C0\uBC85\uC2A4|\uC2E0\uC120\uAD6C\uC774/u },
     { categoryName: "\uC0DD\uD544\uD488", pattern: /\uCFE0\uD321|\uB124\uC774\uBC84\uD398\uC774|\uC774\uB9C8\uD2B8|\uD648\uD50C\uB7EC\uC2A4|\uB2E4\uC774\uC18C|GS25|CU|\uC138\uBE10\uC77C\uB808\uBE10/u },
   ];
 

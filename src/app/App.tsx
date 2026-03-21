@@ -275,7 +275,6 @@ function AppFrame() {
   const { addPerson, createEmptyWorkspace, isReady, renameWorkspace, setActiveWorkspace, state } = useAppState();
   const { isDeveloperModeUnlocked, registerUnlockTap, lockDeveloperMode } = useDeveloperMode();
   useThemeMode();
-  const [isTopbarCondensed, setIsTopbarCondensed] = useState(false);
   const [isEditingWorkspaceName, setIsEditingWorkspaceName] = useState(false);
   const [isCreateWorkspaceOpen, setIsCreateWorkspaceOpen] = useState(false);
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
@@ -292,7 +291,6 @@ function AppFrame() {
 
     const syncTopbar = () => {
       frameId = 0;
-      setIsTopbarCondensed(window.scrollY > 24);
     };
 
     const handleScroll = () => {
@@ -452,7 +450,6 @@ function AppFrame() {
     transactions: scope.transactions,
     peopleCount: scope.people.length,
   });
-  const latestImport = headerSummary.latestImport;
   const workspaceBadgeClass =
     activeWorkspace.source === "demo"
       ? "text-bg-info"
@@ -468,7 +465,7 @@ function AppFrame() {
 
   return (
     <div className={`app-shell${isOnboardingEntering ? " is-onboarding-entering" : ""}`}>
-      <header className={`app-topbar${isTopbarCondensed ? " condensed" : ""}`}>
+      <header className="app-topbar condensed">
         <div className="app-topbar-main">
           <div className="app-brand-block">
             <span className="sidebar-kicker">Household Web App</span>
@@ -524,51 +521,11 @@ function AppFrame() {
                 <option value={CREATE_WORKSPACE_OPTION}>+ 새 가계부 추가...</option>
               </select>
             </div>
-          {isTopbarCondensed ? <AppTopNav isDeveloperModeUnlocked={isDeveloperModeUnlocked} /> : null}
+          <AppTopNav isDeveloperModeUnlocked={isDeveloperModeUnlocked} />
         </div>
-        {!isTopbarCondensed ? <AppTopNav isDeveloperModeUnlocked={isDeveloperModeUnlocked} /> : null}
       </header>
 
       <div className="app-main">
-        <section className="app-header">
-          <div className="app-header-copy">
-            <span className="section-kicker">현재 가계부</span>
-            {isEditingWorkspaceName ? (
-              <WorkspaceNameEditor
-                value={workspaceNameDraft}
-                onChange={setWorkspaceNameDraft}
-                onSubmit={submitWorkspaceName}
-                onCancel={closeWorkspaceNameEditor}
-              />
-            ) : (
-              <WorkspaceNameDisplay
-                name={activeWorkspace.name}
-                onUnlock={registerUnlockTap}
-                onEdit={openWorkspaceNameEditor}
-              />
-            )}
-            <p className="app-header-meta">
-              거래 {headerSummary.transactionsCount}건 · 검토 {headerSummary.openReviewCount}건 · 사용자 {headerSummary.peopleCount}명
-              {latestImport ? ` · 최근 업로드 ${latestImport.importedAt.slice(0, 10)}` : ""}
-            </p>
-          </div>
-          <span
-            className={`badge ${
-              activeWorkspace.source === "demo"
-                ? "text-bg-info"
-                : activeWorkspace.source === "imported"
-                  ? "text-bg-success"
-                  : "text-bg-secondary"
-            }`}
-          >
-            {activeWorkspace.source === "demo"
-              ? "데모"
-              : activeWorkspace.source === "imported"
-                ? "업로드됨"
-                : "빈 가계부"}
-          </span>
-        </section>
-
         <main className="app-content">
           <AppGuidePanel
             beaconState={guideBeaconState}

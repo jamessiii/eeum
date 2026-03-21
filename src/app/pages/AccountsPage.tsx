@@ -93,7 +93,7 @@ function normalizeDraftValues(draft: AccountDraftState) {
   };
 }
 
-export function AccountsPage() {
+export function AccountsPage({ embedded = false }: { embedded?: boolean }) {
   const { addAccount, state, updateAccount } = useAppState();
   const [expandedAccountId, setExpandedAccountId] = useState<string | null>(null);
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
@@ -144,17 +144,19 @@ export function AccountsPage() {
   };
 
   return (
-    <div className="page-stack">
-      <section className="card shadow-sm" style={getMotionStyle(0)}>
-        <div className="section-head">
-          <div>
-            <span className="section-kicker">자산 관리</span>
-            <h2 className="section-title">계좌</h2>
+    <div className={embedded ? "" : "page-stack"}>
+      {!embedded ? (
+        <section className="card shadow-sm" style={getMotionStyle(0)}>
+          <div className="section-head">
+            <div>
+              <span className="section-kicker">자산 관리</span>
+              <h2 className="section-title">계좌</h2>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      ) : null}
 
-      <section className="card shadow-sm" style={getMotionStyle(1)}>
+      <section className={embedded ? "" : "card shadow-sm"} style={getMotionStyle(embedded ? 0 : 1)}>
         <div className="section-head">
           <div>
             <span className="section-kicker">계좌 목록</span>

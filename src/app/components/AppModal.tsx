@@ -1,4 +1,5 @@
 import type { PropsWithChildren, ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 type AppModalProps = PropsWithChildren<{
   open: boolean;
@@ -11,7 +12,7 @@ type AppModalProps = PropsWithChildren<{
 export function AppModal({ open, title, description, footer, onClose, children }: AppModalProps) {
   if (!open) return null;
 
-  return (
+  const modal = (
     <div className="app-modal-backdrop" role="presentation" onClick={onClose}>
       <section
         className="app-modal-dialog"
@@ -34,4 +35,10 @@ export function AppModal({ open, title, description, footer, onClose, children }
       </section>
     </div>
   );
+
+  if (typeof document === "undefined") {
+    return modal;
+  }
+
+  return createPortal(modal, document.body);
 }

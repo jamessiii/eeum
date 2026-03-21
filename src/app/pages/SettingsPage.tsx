@@ -11,7 +11,7 @@ import { getWorkspaceScope } from "../state/selectors";
 import { useThemeMode } from "../useThemeMode";
 
 const SETTINGS_TABS = [
-  { id: "profile", label: "기준값" },
+  { id: "profile", label: "기본값" },
   { id: "people", label: "사용자" },
   { id: "accounts", label: "계좌" },
   { id: "cards", label: "카드" },
@@ -34,22 +34,15 @@ export function SettingsPage() {
   const profile = getWorkspaceScope(state, workspaceId).financialProfile;
   const currentTab = isSettingsTab(searchParams.get("tab")) ? searchParams.get("tab") : "profile";
   const hasBaseline = Boolean(profile?.monthlyNetIncome);
-
   const renderTabContent = () => {
-    if (currentTab === "people") return <PeoplePage />;
-    if (currentTab === "accounts") return <AccountsPage />;
-    if (currentTab === "cards") return <CardsPage />;
-    if (currentTab === "categories") return <CategoriesPage />;
+    if (currentTab === "people") return <PeoplePage embedded />;
+    if (currentTab === "accounts") return <AccountsPage embedded />;
+    if (currentTab === "cards") return <CardsPage embedded />;
+    if (currentTab === "categories") return <CategoriesPage embedded />;
 
     if (currentTab === "backup") {
       return (
-        <section className="card shadow-sm">
-          <div className="section-head">
-            <div>
-              <span className="section-kicker">백업 / 복원</span>
-              <h2 className="section-title">데이터 백업</h2>
-            </div>
-          </div>
+        <section className="settings-section-block">
           <div className="settings-compact-copy">
             <p className="text-secondary mb-0">현재 가계부 데이터를 JSON 파일로 내보내거나 다시 불러옵니다.</p>
           </div>
@@ -77,17 +70,11 @@ export function SettingsPage() {
 
     if (currentTab === "app") {
       return (
-        <section className="card shadow-sm">
-          <div className="section-head">
-            <div>
-              <span className="section-kicker">앱 관리</span>
-              <h2 className="section-title">앱 상태와 테마</h2>
-            </div>
-          </div>
+        <section className="settings-section-block">
           {!profile?.monthlyNetIncome ? (
             <EmptyStateCallout
               kicker="기준값 필요"
-              title="먼저 월 수입 기준을 입력해 주세요"
+              title="먼저 월 수입 기준값을 입력해주세요"
               description="기준값이 있어야 진단과 안내가 더 정확해집니다."
             />
           ) : (
@@ -124,13 +111,7 @@ export function SettingsPage() {
     }
 
     return (
-      <section className="card shadow-sm">
-        <div className="section-head">
-          <div>
-            <span className="section-kicker">재무 기준값</span>
-            <h2 className="section-title">월 수입과 경고 기준</h2>
-          </div>
-        </div>
+      <section className="settings-section-block">
         <div className="settings-summary-row">
           <article className="resource-card">
             <h3>월 수입</h3>
@@ -193,7 +174,7 @@ export function SettingsPage() {
           <CompletionBanner
             className="mt-4"
             title="기준값 설정이 준비됐습니다"
-            description="이제 거래 화면과 대시보드에서 기준 대비 현황을 더 자연스럽게 볼 수 있습니다."
+            description="이제 거래 화면과 대시보드에서 기준 대비 소비 흐름을 더 자연스럽게 볼 수 있습니다."
             actions={
               <Link to="/transactions" className="btn btn-outline-secondary btn-sm">
                 거래 보기
@@ -207,27 +188,28 @@ export function SettingsPage() {
 
   return (
     <div className="page-stack">
-      <section className="card shadow-sm settings-shell-card">
-        <div className="section-head">
+      <section className="settings-shell-card card shadow-sm">
+        <div className="settings-shell-header">
           <div>
             <span className="section-kicker">설정</span>
-            <h2 className="section-title">기본 설정</h2>
+            <h2 className="section-title settings-shell-title">설정</h2>
+          </div>
+          <div className="settings-tab-strip">
+            {SETTINGS_TABS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                className={`settings-tab-button${currentTab === tab.id ? " active" : ""}`}
+                onClick={() => setSearchParams(tab.id === "profile" ? {} : { tab: tab.id })}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
         </div>
-        <div className="settings-tab-strip">
-          {SETTINGS_TABS.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              className={`settings-tab-button${currentTab === tab.id ? " active" : ""}`}
-              onClick={() => setSearchParams(tab.id === "profile" ? {} : { tab: tab.id })}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        <div className="settings-shell-divider" />
+        <div className="settings-shell-body">{renderTabContent()}</div>
       </section>
-      {renderTabContent()}
     </div>
   );
 }

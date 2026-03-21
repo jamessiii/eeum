@@ -76,6 +76,7 @@ type Action =
   | { type: "updateCategory"; payload: { workspaceId: string; categoryId: string; values: CategoryDraft } }
   | { type: "deleteCategory"; payload: { workspaceId: string; categoryId: string } }
   | { type: "moveCategory"; payload: { workspaceId: string; categoryId: string; targetParentCategoryId: string | null; targetIndex: number } }
+  | { type: "resetCategoriesToDefaults"; payload: { workspaceId: string } }
   | { type: "addTag"; payload: { workspaceId: string; name: string } }
   | { type: "setFinancialProfile"; payload: { workspaceId: string; values: FinancialProfileInput } }
   | { type: "addSettlement"; payload: SettlementInput }
@@ -522,6 +523,95 @@ function reorderCategories(
     .concat(reorderedSiblingMap.get(categoryId) ?? []);
 }
 
+function resetCategoriesToDefaults(categories: Category[], workspaceId: string) {
+  const workspaceCategories = categories.filter((category) => category.workspaceId === workspaceId);
+  const otherCategories = categories.filter((category) => category.workspaceId !== workspaceId);
+  const starterCategories = createStarterCategories(workspaceId);
+  const starterGroupNameById = new Map(
+    starterCategories.filter((category) => category.categoryType === "group").map((category) => [category.id, category.name]),
+  );
+
+  const existingGroupsByName = new Map(
+    workspaceCategories
+      .filter((category) => category.categoryType === "group")
+      .map((category) => [normalizeKey(category.name), category]),
+  );
+  const existingChildrenByKey = new Map(
+    workspaceCategories
+      .filter((category) => category.categoryType === "category")
+      .map((category) => {
+        const parent = workspaceCategories.find((item) => item.id === category.parentCategoryId);
+        return [`${normalizeKey(parent?.name ?? "")}::${normalizeKey(category.name)}`, category] as const;
+      }),
+  );
+
+  const matchedCategoryIds = new Set<string>();
+  const defaultGroupIdByName = new Map<string, string>();
+
+  const mergedDefaultCategories = starterCategories.map((starterCategory) => {
+    if (starterCategory.categoryType === "group") {
+      const matched = existingGroupsByName.get(normalizeKey(starterCategory.name));
+      const nextCategory = matched
+        ? {
+            ...matched,
+            name: starterCategory.name,
+            parentCategoryId: null,
+            sortOrder: starterCategory.sortOrder,
+            isHidden: false,
+            direction: starterCategory.direction,
+            fixedOrVariable: starterCategory.fixedOrVariable,
+            necessity: starterCategory.necessity,
+            budgetable: starterCategory.budgetable,
+            reportable: starterCategory.reportable,
+          }
+        : starterCategory;
+      matchedCategoryIds.add(nextCategory.id);
+      defaultGroupIdByName.set(starterCategory.name, nextCategory.id);
+      return nextCategory;
+    }
+
+    const parentName = starterGroupNameById.get(starterCategory.parentCategoryId ?? "") ?? "";
+    const matched = existingChildrenByKey.get(`${normalizeKey(parentName)}::${normalizeKey(starterCategory.name)}`);
+    const nextCategory = matched
+      ? {
+          ...matched,
+          name: starterCategory.name,
+          parentCategoryId: defaultGroupIdByName.get(parentName) ?? matched.parentCategoryId,
+          sortOrder: starterCategory.sortOrder,
+          isHidden: false,
+          direction: starterCategory.direction,
+          fixedOrVariable: starterCategory.fixedOrVariable,
+          necessity: starterCategory.necessity,
+          budgetable: starterCategory.budgetable,
+          reportable: starterCategory.reportable,
+        }
+      : {
+          ...starterCategory,
+          parentCategoryId: defaultGroupIdByName.get(parentName) ?? starterCategory.parentCategoryId,
+        };
+    matchedCategoryIds.add(nextCategory.id);
+    return nextCategory;
+  });
+
+  const customCategories = workspaceCategories.filter((category) => !matchedCategoryIds.has(category.id));
+  const siblingBuckets = new Map<string, Category[]>();
+
+  [...mergedDefaultCategories, ...customCategories].forEach((category) => {
+    const key = category.parentCategoryId ?? "__root__";
+    const bucket = siblingBuckets.get(key) ?? [];
+    bucket.push(category);
+    siblingBuckets.set(key, bucket);
+  });
+
+  const normalizedWorkspaceCategories = Array.from(siblingBuckets.values()).flatMap((bucket) =>
+    bucket
+      .sort((left, right) => left.sortOrder - right.sortOrder)
+      .map((category, index) => ({ ...category, sortOrder: index })),
+  );
+
+  return [...otherCategories, ...normalizedWorkspaceCategories];
+}
+
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case "hydrate":
@@ -716,6 +806,11 @@ function reducer(state: AppState, action: Action): AppState {
               ),
             ]
           : state.categories,
+      };
+    case "resetCategoriesToDefaults":
+      return {
+        ...state,
+        categories: resetCategoriesToDefaults(state.categories, action.payload.workspaceId),
       };
     case "addTag":
       return {
@@ -965,6 +1060,7 @@ interface AppStateContextValue {
   updateCategory: (workspaceId: string, categoryId: string, input: Partial<CategoryDraft>) => void;
   deleteCategory: (workspaceId: string, categoryId: string) => void;
   moveCategory: (workspaceId: string, categoryId: string, targetParentCategoryId: string | null, targetIndex: number) => void;
+  resetCategoriesToDefaults: (workspaceId: string) => void;
   addTag: (workspaceId: string, name: string) => void;
   setFinancialProfile: (workspaceId: string, values: FinancialProfileInput) => void;
   addSettlement: (input: SettlementInput) => void;
@@ -1186,6 +1282,10 @@ export function AppStateProvider({ children }: PropsWithChildren) {
       },
       moveCategory(workspaceId, categoryId, targetParentCategoryId, targetIndex) {
         dispatch({ type: "moveCategory", payload: { workspaceId, categoryId, targetParentCategoryId, targetIndex } });
+      },
+      resetCategoriesToDefaults(workspaceId) {
+        dispatch({ type: "resetCategoriesToDefaults", payload: { workspaceId } });
+        showToast("기본 카테고리 구조로 초기화했습니다.", "success");
       },
       addTag(workspaceId, name) {
         dispatch({ type: "addTag", payload: { workspaceId, name } });

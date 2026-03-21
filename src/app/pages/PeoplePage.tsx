@@ -198,7 +198,7 @@ function normalizeCardDraftValues(draft: PersonCardDraftState) {
   };
 }
 
-export function PeoplePage() {
+export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   const { addAccount, addPerson, state, updateAccount, updateCard, updatePerson } = useAppState();
   const [expandedPersonId, setExpandedPersonId] = useState<string | null>(null);
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
@@ -274,30 +274,32 @@ export function PeoplePage() {
   const accountOwner = accountOwnerPersonId ? people.find((person) => person.id === accountOwnerPersonId) ?? null : null;
 
   return (
-    <div className="page-stack">
-      <section className="card shadow-sm" style={getMotionStyle(0)}>
-        <div className="section-head">
-          <div>
-            <span className="section-kicker">구성원 중심 관리</span>
-            <h2 className="section-title">사용자</h2>
+    <div className={embedded ? "" : "page-stack"}>
+      {!embedded ? (
+        <section className="card shadow-sm" style={getMotionStyle(0)}>
+          <div className="section-head">
+            <div>
+              <span className="section-kicker">구성원 중심 관리</span>
+              <h2 className="section-title">사용자</h2>
+            </div>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                setCreateDraft(EMPTY_PERSON_DRAFT);
+                setIsCreateModalOpen(true);
+              }}
+            >
+              사용자 등록
+            </button>
           </div>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => {
-              setCreateDraft(EMPTY_PERSON_DRAFT);
-              setIsCreateModalOpen(true);
-            }}
-          >
-            사용자 등록
-          </button>
-        </div>
-        <p className="mb-0 text-secondary">
-          계좌와 카드는 전역 탭 대신 각 사용자 아래에서 관리합니다. 카드는 업로드 중 자동 생성되고 여기서 소유자와 연결 계좌를 보정합니다.
-        </p>
-      </section>
+          <p className="mb-0 text-secondary">
+            계좌와 카드는 전역 탭 대신 각 사용자 아래에서 관리합니다. 카드는 업로드 중 자동 생성되고 여기서 소유자와 연결 계좌를 보정합니다.
+          </p>
+        </section>
+      ) : null}
 
-      <section className="card shadow-sm" style={getMotionStyle(1)}>
+      <section className={embedded ? "" : "card shadow-sm"} style={getMotionStyle(embedded ? 0 : 1)}>
         <div className="section-head">
           <div>
             <span className="section-kicker">구성원 목록</span>

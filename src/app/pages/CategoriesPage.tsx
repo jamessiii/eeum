@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { getCategoryGroups, getChildCategories, getHiddenCategories } from "../../domain/categories/meta";
-import { getMotionStyle } from "../../shared/utils/motion";
-import type { Category } from "../../shared/types/models";
+import { BoardCase, BoardCaseSection } from "../components/BoardCase";
 import { AppModal } from "../components/AppModal";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
+import { getCategoryGroups, getChildCategories, getHiddenCategories } from "../../domain/categories/meta";
+import { getMotionStyle } from "../../shared/utils/motion";
+import type { Category } from "../../shared/types/models";
 
 type GroupDraftState = {
   name: string;
@@ -26,6 +27,7 @@ const EMPTY_CATEGORY_DRAFT: CategoryDraftState = {
   name: "",
   fixedOrVariable: "variable",
 };
+
 let transparentDragImage: HTMLCanvasElement | null = null;
 
 function createGroupDraft(category?: Category | null): GroupDraftState {
@@ -60,8 +62,8 @@ function getTransparentDragImage() {
   return transparentDragImage;
 }
 
-export function CategoriesPage() {
-  const { addCategory, deleteCategory, moveCategory, state, updateCategory } = useAppState();
+export function CategoriesPage({ embedded = false }: { embedded?: boolean }) {
+  const { addCategory, deleteCategory, moveCategory, resetCategoriesToDefaults, state, updateCategory } = useAppState();
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const categoryMap = useMemo(() => new Map(scope.categories.map((category) => [category.id, category])), [scope.categories]);
@@ -85,6 +87,7 @@ export function CategoriesPage() {
   const dragGhostOffsetRef = useRef({ x: 0, y: 0 });
   const [isHiddenPanelOpen, setIsHiddenPanelOpen] = useState(false);
   const [pendingDeleteCategoryId, setPendingDeleteCategoryId] = useState<string | null>(null);
+  const [isResetDefaultsModalOpen, setIsResetDefaultsModalOpen] = useState(false);
 
   const editingGroup = editingGroupId ? categoryMap.get(editingGroupId) ?? null : null;
   const editingCategory = editingCategoryId ? categoryMap.get(editingCategoryId) ?? null : null;
@@ -234,11 +237,13 @@ export function CategoriesPage() {
       dragGhostRef.current.remove();
       dragGhostRef.current = null;
     }
+
     const sourceRect = sourceElement.getBoundingClientRect();
     dragGhostOffsetRef.current = {
       x: event.clientX - sourceRect.left,
       y: event.clientY - sourceRect.top,
     };
+
     const ghostElement = sourceElement.cloneNode(true) as HTMLElement;
     ghostElement.classList.add("category-drag-ghost");
     ghostElement.style.position = "fixed";
@@ -259,6 +264,7 @@ export function CategoriesPage() {
     ghostElement.style.containIntrinsicSize = "auto";
     document.body.appendChild(ghostElement);
     dragGhostRef.current = ghostElement;
+
     setDragItem(item);
   };
 
@@ -273,11 +279,7 @@ export function CategoriesPage() {
     resetDragState();
   };
 
-  const handleCategoryDrop = (
-    event: React.DragEvent<HTMLElement>,
-    groupId: string,
-    categoryIndex: number,
-  ) => {
+  const handleCategoryDrop = (event: React.DragEvent<HTMLElement>, groupId: string, categoryIndex: number) => {
     if (!dragItem || dragItem.categoryType !== "category") return;
     event.preventDefault();
     const targetIndex = getInsertIndexByHorizontalPointer(event, categoryIndex);
@@ -299,41 +301,40 @@ export function CategoriesPage() {
     resetDragState();
   };
 
+  const getDragStateClassName = (categoryId: string) =>
+    `${dragItem?.categoryId === categoryId ? " is-dragging" : ""}${
+      dragItem?.categoryId === categoryId && activeDropZone === "hide" ? " is-drop-target-hide" : ""
+    }${dragItem?.categoryId === categoryId && activeDropZone === "delete" ? " is-drop-target-delete" : ""}`;
+
   return (
-    <div className="page-stack">
-      <section className="card shadow-sm" style={getMotionStyle(0)}>
-        <div className="section-head">
-          <div>
-            <span className="section-kicker">카테고리 구조</span>
-            <h2 className="section-title">카테고리 탭</h2>
-          </div>
-          <div className="d-flex gap-2">
-            <button type="button" className="btn btn-outline-secondary" onClick={() => setIsHiddenPanelOpen((current) => !current)}>
-              숨김 항목 {hiddenCategories.length}
+    <div className={embedded ? "" : "page-stack"}>
+      <BoardCase
+        embedded={embedded}
+        title="카테고리"
+        description="그룹과 하위 카테고리를 같은 보드 포맷에서 관리합니다. 드래그 앤 드롭, 숨기기, 삭제, 기본값 초기화는 그대로 유지됩니다."
+        actions={
+          <>
+            <button
+              type="button"
+              className={`board-case-action-button${isHiddenPanelOpen ? " is-active" : ""}`}
+              onClick={() => setIsHiddenPanelOpen((current) => !current)}
+            >
+              숨김 {hiddenCategories.length}
             </button>
-          </div>
-        </div>
-        <p className="mb-0 text-secondary">
-          그룹과 하위 카테고리를 직접 배치합니다. 왼쪽은 숨기기, 오른쪽은 삭제 영역입니다. 숨긴 카테고리는 보관함에서 다시 꺼낼 수 있습니다.
-        </p>
-      </section>
-
-      <section className="card shadow-sm" style={getMotionStyle(1)}>
-        <div className="section-head">
-          <div>
-            <span className="section-kicker">보드 관리</span>
-            <h2 className="section-title">그룹과 하위 카테고리</h2>
-          </div>
-          <span className="badge text-bg-dark">
-            그룹 {groups.length}개 · 카테고리 {scope.categories.filter((category) => category.categoryType === "category" && !category.isHidden).length}개
-          </span>
-        </div>
-
+            <button type="button" className="board-case-action-button" onClick={() => setIsResetDefaultsModalOpen(true)}>
+              기본값 초기화
+            </button>
+            <button type="button" className="board-case-action-button is-strong" onClick={openCreateGroupModal}>
+              그룹 추가
+            </button>
+          </>
+        }
+      >
         {!groups.length ? (
           <EmptyStateCallout
             kicker="첫 구조"
-            title="먼저 카테고리 그룹을 만들어 주세요"
-            description="생활비, 식비처럼 상위 그룹을 만들고 그 안에 하위 카테고리를 쌓는 구조로 시작합니다."
+            title="먼저 카테고리 그룹을 만들어주세요"
+            description="생활비 같은 상위 그룹을 만들고, 그 아래에 실제 거래가 매핑되는 하위 카테고리를 추가하면 됩니다."
             actions={
               <button type="button" className="btn btn-primary btn-sm" onClick={openCreateGroupModal}>
                 그룹 만들기
@@ -341,13 +342,15 @@ export function CategoriesPage() {
             }
           />
         ) : (
-          <div className="category-board-stack">
+          <div className="board-case-stack">
             {groups.map((group, groupIndex) => {
               const childCategories = getChildCategories(scope.categories, group.id);
               return (
-                <section
+                <BoardCaseSection
                   key={group.id}
-                  className={`category-group-board${dragItem?.categoryId === group.id ? " is-dragging" : ""}${dragItem?.categoryId === group.id && activeDropZone === "hide" ? " is-drop-target-hide" : ""}${dragItem?.categoryId === group.id && activeDropZone === "delete" ? " is-drop-target-delete" : ""}`}
+                  title={group.name}
+                  meta={`카테고리 ${childCategories.length}개`}
+                  className={`category-case-section${getDragStateClassName(group.id)}`}
                   style={getMotionStyle(groupIndex + 2)}
                   draggable
                   onDragStart={(event) => startDrag({ categoryId: group.id, categoryType: "group", isHidden: false }, event)}
@@ -357,19 +360,14 @@ export function CategoriesPage() {
                     event.preventDefault();
                   }}
                   onDrop={(event) => handleGroupDrop(event, groupIndex)}
-                >
-                  <div className="category-group-head">
-                    <div>
-                      <h3>{group.name}</h3>
-                      <p>하위 카테고리 {childCategories.length}개</p>
-                    </div>
-                    <button type="button" className="category-board-icon-button" onClick={() => openEditGroupModal(group)} aria-label={`${group.name} 그룹 수정`}>
-                      <span draggable={false}>✎</span>
+                  action={
+                    <button type="button" className="board-case-edit-button" onClick={() => openEditGroupModal(group)} aria-label={`${group.name} 그룹 수정`}>
+                      ✎
                     </button>
-                  </div>
-
+                  }
+                >
                   <div
-                    className="category-child-grid"
+                    className="category-case-grid"
                     onDragOver={(event) => {
                       if (dragItem?.categoryType !== "category") return;
                       event.preventDefault();
@@ -379,7 +377,7 @@ export function CategoriesPage() {
                     {childCategories.map((category, categoryIndex) => (
                       <article
                         key={category.id}
-                        className={`category-child-tile${dragItem?.categoryId === category.id ? " is-dragging" : ""}${dragItem?.categoryId === category.id && activeDropZone === "hide" ? " is-drop-target-hide" : ""}${dragItem?.categoryId === category.id && activeDropZone === "delete" ? " is-drop-target-delete" : ""}`}
+                        className={`category-case-card${getDragStateClassName(category.id)}`}
                         draggable
                         onDragStart={(event) =>
                           startDrag(
@@ -406,57 +404,59 @@ export function CategoriesPage() {
                       >
                         <button
                           type="button"
-                          className="category-board-icon-button category-child-edit"
+                          className="board-case-edit-button category-case-card-edit"
                           onClick={(event) => {
                             event.stopPropagation();
                             openEditCategoryModal(category);
                           }}
                           aria-label={`${category.name} 카테고리 수정`}
                         >
-                          <span draggable={false}>✎</span>
+                          ✎
                         </button>
-                        <strong>{category.name}</strong>
-                        <span>{category.fixedOrVariable === "fixed" ? "고정" : "변동"}</span>
+                        <div className="category-case-card-copy">
+                          <strong>{category.name}</strong>
+                          <span>{category.fixedOrVariable === "fixed" ? "고정 지출" : "변동 지출"}</span>
+                        </div>
+                        <div className={`category-case-pill${category.fixedOrVariable === "fixed" ? " is-fixed" : ""}`}>
+                          {category.fixedOrVariable === "fixed" ? "고정" : "변동"}
+                        </div>
                       </article>
                     ))}
 
-                    <button
-                      type="button"
-                      className="category-child-tile category-child-tile-add"
-                      onClick={() => openCreateChildModal(group)}
-                    >
-                      <span className="category-child-plus">+</span>
+                    <button type="button" className="category-case-add-card" onClick={() => openCreateChildModal(group)}>
+                      <span className="category-case-add-plus">+</span>
+                      <strong>{group.name}에 추가</strong>
                     </button>
                   </div>
-                </section>
+                </BoardCaseSection>
               );
             })}
           </div>
         )}
 
-        <button type="button" className="category-group-add-board" onClick={openCreateGroupModal}>
+        <button type="button" className="category-case-group-add" onClick={openCreateGroupModal}>
           <span>+</span>
           <strong>새 그룹 추가</strong>
         </button>
-      </section>
+      </BoardCase>
 
       {isHiddenPanelOpen ? (
         <aside className="category-hidden-panel">
           <div className="category-hidden-panel-head">
             <div>
               <span className="section-kicker">숨김 보관함</span>
-              <h3>숨김 카테고리</h3>
+              <h3>숨긴 카테고리</h3>
             </div>
-            <button type="button" className="category-board-icon-button" onClick={() => setIsHiddenPanelOpen(false)} aria-label="숨김 패널 닫기">
-              <span draggable={false}>✕</span>
+            <button type="button" className="board-case-edit-button" onClick={() => setIsHiddenPanelOpen(false)} aria-label="숨김 패널 닫기">
+              ×
             </button>
           </div>
-          <p className="text-secondary mb-3">여기서 카드를 메인 보드로 드래그하면 다시 사용할 수 있습니다.</p>
+          <p className="text-secondary mb-3">여기서 메인 보드로 다시 드래그하면 숨김이 해제됩니다.</p>
           <div className="category-hidden-list">
             {hiddenCategories.map((category) => (
               <article
                 key={category.id}
-                className={`category-hidden-card${dragItem?.categoryId === category.id ? " is-dragging" : ""}${dragItem?.categoryId === category.id && activeDropZone === "hide" ? " is-drop-target-hide" : ""}${dragItem?.categoryId === category.id && activeDropZone === "delete" ? " is-drop-target-delete" : ""}`}
+                className={`category-hidden-card${getDragStateClassName(category.id)}`}
                 draggable
                 onDragStart={(event) =>
                   startDrag(
@@ -523,6 +523,29 @@ export function CategoriesPage() {
         : null}
 
       <AppModal
+        open={isResetDefaultsModalOpen}
+        title="기본 카테고리 초기화"
+        description="기본 카테고리 구조를 다시 맞춥니다. 기존 거래에 연결된 카테고리는 유지하고, 기본 카테고리는 복구되며 커스텀 카테고리는 그대로 남겨둡니다."
+        onClose={() => setIsResetDefaultsModalOpen(false)}
+      >
+        <div className="d-flex justify-content-end gap-2">
+          <button type="button" className="btn btn-outline-secondary" onClick={() => setIsResetDefaultsModalOpen(false)}>
+            취소
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => {
+              resetCategoriesToDefaults(workspaceId);
+              setIsResetDefaultsModalOpen(false);
+            }}
+          >
+            초기화
+          </button>
+        </div>
+      </AppModal>
+
+      <AppModal
         open={Boolean(pendingDeleteCategory)}
         title="카테고리 삭제 확인"
         description={
@@ -554,7 +577,7 @@ export function CategoriesPage() {
       <AppModal
         open={isCreateGroupModalOpen || Boolean(editingGroup)}
         title={editingGroup ? "카테고리 그룹 수정" : "카테고리 그룹 추가"}
-        description={editingGroup ? "부모 그룹 이름을 수정합니다." : "생활비, 식비처럼 상위 그룹을 먼저 만듭니다."}
+        description={editingGroup ? "부모 그룹 이름을 수정합니다." : "생활비 같은 상위 그룹을 먼저 만듭니다."}
         onClose={closeGroupModal}
       >
         <form

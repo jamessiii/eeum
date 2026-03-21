@@ -70,7 +70,7 @@ function normalizeDraftValues(draft: CardDraftState) {
   };
 }
 
-export function CardsPage() {
+export function CardsPage({ embedded = false }: { embedded?: boolean }) {
   const { addCard, state, updateCard } = useAppState();
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
@@ -103,20 +103,22 @@ export function CardsPage() {
   };
 
   return (
-    <div className="page-stack">
-      <section className="card shadow-sm" style={getMotionStyle(0)}>
-        <div className="section-head">
-          <div>
-            <span className="section-kicker">자산 관리</span>
-            <h2 className="section-title">카드</h2>
+    <div className={embedded ? "" : "page-stack"}>
+      {!embedded ? (
+        <section className="card shadow-sm" style={getMotionStyle(0)}>
+          <div className="section-head">
+            <div>
+              <span className="section-kicker">자산 관리</span>
+              <h2 className="section-title">카드</h2>
+            </div>
+            <button type="button" className="btn btn-primary" onClick={openCreateModal}>
+              카드 등록
+            </button>
           </div>
-          <button type="button" className="btn btn-primary" onClick={openCreateModal}>
-            카드 등록
-          </button>
-        </div>
-      </section>
+        </section>
+      ) : null}
 
-      <section className="card shadow-sm" style={getMotionStyle(1)}>
+      <section className={embedded ? "" : "card shadow-sm"} style={getMotionStyle(embedded ? 0 : 1)}>
         <div className="section-head">
           <div>
             <span className="section-kicker">카드 목록</span>

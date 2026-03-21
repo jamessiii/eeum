@@ -236,7 +236,7 @@ export function createHouseholdV2DemoBundle(): WorkspaceBundle {
       merchantName: "서울교통공사",
       description: "카드 사용",
       amount: 15800,
-      categoryId: findCategoryId(categories, "교통비"),
+      categoryId: findCategoryId(categories, "일반 교통"),
       tagIds: testTagId ? [testTagId] : [],
       isInternalTransfer: false,
       isExpenseImpact: true,
