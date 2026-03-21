@@ -57,6 +57,10 @@ export interface Category {
   id: ID;
   workspaceId: ID;
   name: string;
+  categoryType: "group" | "category";
+  parentCategoryId: ID | null;
+  sortOrder: number;
+  isHidden: boolean;
   direction: "expense" | "income" | "transfer" | "mixed";
   fixedOrVariable: "fixed" | "variable";
   necessity: "essential" | "discretionary";

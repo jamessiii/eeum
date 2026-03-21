@@ -1,11 +1,4 @@
-import type {
-  AppState,
-  Category,
-  FinancialProfile,
-  Tag,
-  Workspace,
-  WorkspaceBundle,
-} from "../../shared/types/models";
+import type { AppState, Category, FinancialProfile, Tag, Workspace, WorkspaceBundle } from "../../shared/types/models";
 import { nowIso } from "../../shared/utils/date";
 import { createId } from "../../shared/utils/id";
 
@@ -50,28 +43,79 @@ export function createFinancialProfileBase(workspaceId: string): FinancialProfil
 }
 
 export function createStarterCategories(workspaceId: string): Category[] {
-  const items: Array<
-    Pick<Category, "name" | "direction" | "fixedOrVariable" | "necessity" | "budgetable" | "reportable">
-  > = [
-    { name: "식비", direction: "expense", fixedOrVariable: "variable", necessity: "essential", budgetable: true, reportable: true },
-    { name: "생필품", direction: "expense", fixedOrVariable: "variable", necessity: "essential", budgetable: true, reportable: true },
-    { name: "교통비", direction: "expense", fixedOrVariable: "variable", necessity: "essential", budgetable: true, reportable: true },
-    { name: "주거비", direction: "expense", fixedOrVariable: "fixed", necessity: "essential", budgetable: true, reportable: true },
-    { name: "보험료", direction: "expense", fixedOrVariable: "fixed", necessity: "essential", budgetable: true, reportable: true },
-    { name: "통신비", direction: "expense", fixedOrVariable: "fixed", necessity: "essential", budgetable: true, reportable: true },
-    { name: "가족활동", direction: "expense", fixedOrVariable: "variable", necessity: "discretionary", budgetable: true, reportable: true },
-    { name: "개인지출", direction: "expense", fixedOrVariable: "variable", necessity: "discretionary", budgetable: true, reportable: true },
-    { name: "데이트/여행", direction: "expense", fixedOrVariable: "variable", necessity: "discretionary", budgetable: true, reportable: true },
-    { name: "대출상환", direction: "expense", fixedOrVariable: "fixed", necessity: "essential", budgetable: true, reportable: true },
-    { name: "저축", direction: "income", fixedOrVariable: "fixed", necessity: "essential", budgetable: false, reportable: true },
-    { name: "기타", direction: "mixed", fixedOrVariable: "variable", necessity: "discretionary", budgetable: true, reportable: true },
-  ];
+  const groups = [
+    { name: "주거/고정비", fixedOrVariable: "fixed", necessity: "essential" },
+    { name: "대출/부채", fixedOrVariable: "fixed", necessity: "essential" },
+    { name: "생활비", fixedOrVariable: "variable", necessity: "essential" },
+    { name: "식비", fixedOrVariable: "variable", necessity: "essential" },
+    { name: "교통/차량", fixedOrVariable: "variable", necessity: "essential" },
+    { name: "의료/건강", fixedOrVariable: "variable", necessity: "essential" },
+    { name: "가족/관계", fixedOrVariable: "variable", necessity: "discretionary" },
+    { name: "세금/공과", fixedOrVariable: "fixed", necessity: "essential" },
+    { name: "기부", fixedOrVariable: "variable", necessity: "discretionary" },
+  ] as const;
 
-  return items.map((item) => ({
+  const groupRecords = groups.map((group, index) => ({
     id: createId("category"),
     workspaceId,
-    ...item,
+    name: group.name,
+    categoryType: "group" as const,
+    parentCategoryId: null,
+    sortOrder: index,
+    isHidden: false,
+    direction: "expense" as const,
+    fixedOrVariable: group.fixedOrVariable,
+    necessity: group.necessity,
+    budgetable: true,
+    reportable: true,
   }));
+
+  const groupIdByName = new Map(groupRecords.map((group) => [group.name, group.id]));
+  const items = [
+    { name: "관리비", parentName: "주거/고정비", fixedOrVariable: "fixed", necessity: "essential" },
+    { name: "통신비", parentName: "주거/고정비", fixedOrVariable: "fixed", necessity: "essential" },
+    { name: "구독료", parentName: "주거/고정비", fixedOrVariable: "fixed", necessity: "discretionary" },
+    { name: "보험료", parentName: "주거/고정비", fixedOrVariable: "fixed", necessity: "essential" },
+    { name: "주택담보대출", parentName: "대출/부채", fixedOrVariable: "fixed", necessity: "essential" },
+    { name: "담보대출", parentName: "대출/부채", fixedOrVariable: "fixed", necessity: "essential" },
+    { name: "신용대출", parentName: "대출/부채", fixedOrVariable: "fixed", necessity: "essential" },
+    { name: "학자금 대출", parentName: "대출/부채", fixedOrVariable: "fixed", necessity: "essential" },
+    { name: "생필품", parentName: "생활비", fixedOrVariable: "variable", necessity: "essential" },
+    { name: "개인 지출", parentName: "생활비", fixedOrVariable: "variable", necessity: "discretionary" },
+    { name: "추가 지출", parentName: "생활비", fixedOrVariable: "variable", necessity: "discretionary" },
+    { name: "의류", parentName: "생활비", fixedOrVariable: "variable", necessity: "discretionary" },
+    { name: "일반 식비", parentName: "식비", fixedOrVariable: "variable", necessity: "essential" },
+    { name: "회사 식대", parentName: "식비", fixedOrVariable: "variable", necessity: "essential" },
+    { name: "교통비", parentName: "교통/차량", fixedOrVariable: "variable", necessity: "essential" },
+    { name: "주유비", parentName: "교통/차량", fixedOrVariable: "variable", necessity: "essential" },
+    { name: "통행료/하이패스", parentName: "교통/차량", fixedOrVariable: "variable", necessity: "essential" },
+    { name: "자동차 리스", parentName: "교통/차량", fixedOrVariable: "fixed", necessity: "essential" },
+    { name: "의료비", parentName: "의료/건강", fixedOrVariable: "variable", necessity: "essential" },
+    { name: "가족 활동", parentName: "가족/관계", fixedOrVariable: "variable", necessity: "discretionary" },
+    { name: "데이트/여행", parentName: "가족/관계", fixedOrVariable: "variable", necessity: "discretionary" },
+    { name: "경조사", parentName: "가족/관계", fixedOrVariable: "variable", necessity: "essential" },
+    { name: "용돈", parentName: "가족/관계", fixedOrVariable: "variable", necessity: "discretionary" },
+    { name: "세금", parentName: "세금/공과", fixedOrVariable: "fixed", necessity: "essential" },
+    { name: "기부금", parentName: "기부", fixedOrVariable: "variable", necessity: "discretionary" },
+  ] as const;
+
+  return [
+    ...groupRecords,
+    ...items.map((item, index) => ({
+      id: createId("category"),
+      workspaceId,
+      name: item.name,
+      categoryType: "category" as const,
+      parentCategoryId: groupIdByName.get(item.parentName) ?? null,
+      sortOrder: index,
+      isHidden: false,
+      direction: "expense" as const,
+      fixedOrVariable: item.fixedOrVariable,
+      necessity: item.necessity,
+      budgetable: true,
+      reportable: true,
+    })),
+  ];
 }
 
 export function createStarterTags(workspaceId: string): Tag[] {

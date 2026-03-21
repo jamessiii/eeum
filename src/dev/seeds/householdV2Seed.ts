@@ -4,7 +4,15 @@ import { createId } from "../../shared/utils/id";
 
 function findCategoryId(categories: WorkspaceBundle["categories"], name: string | null): string | null {
   if (!name) return null;
-  return categories.find((category) => category.name === name)?.id ?? null;
+  const aliasMap: Record<string, string> = {
+    기타: "추가 지출",
+    대출상환: "자동차 리스",
+    개인지출: "개인 지출",
+    가족생활: "가족 활동",
+    생활비: "생필품",
+  };
+  const resolvedName = aliasMap[name] ?? name;
+  return categories.find((category) => category.categoryType === "category" && category.name === resolvedName)?.id ?? null;
 }
 
 export function createHouseholdV2DemoBundle(): WorkspaceBundle {

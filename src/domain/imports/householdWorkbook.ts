@@ -35,17 +35,32 @@ function guessIssuer(cardName: string) {
 }
 
 function findCategoryId(categories: WorkspaceBundle["categories"], name: string): string | null {
-  return categories.find((category) => category.name === name)?.id ?? null;
+  const aliasMap: Record<string, string> = {
+    "학자금": "학자금 대출",
+    "가족활동": "가족 활동",
+    "개인지출": "개인 지출",
+    "생활비": "추가 지출",
+    "데이트/여행경비": "데이트/여행",
+    "하이패스": "통행료/하이패스",
+    "주담대": "주택담보대출",
+    "식대(회사)": "회사 식대",
+    "의복비": "의류",
+    "형준용돈": "용돈",
+    "소정용돈": "용돈",
+    "경조사비": "경조사",
+    "자동차리스": "자동차 리스"
+  };
+  const resolvedName = aliasMap[name] ?? name;
+  return categories.find((category) => category.categoryType === "category" && category.name === resolvedName)?.id ?? null;
 }
-
 function inferCategoryIdFromMerchant(categories: WorkspaceBundle["categories"], merchantName: string): string | null {
   const normalizedMerchantName = normalizeText(merchantName).toUpperCase();
 
   const categoryRules: Array<{ categoryName: string; pattern: RegExp }> = [
     { categoryName: "\uAD50\uD1B5\uBE44", pattern: /KTX|SRT|\uCF54\uB808\uC77C|\uCCA0\uB3C4\uC2B9\uCC28\uAD8C|\uD2F0\uBA38\uB2C8|\uC9C0\uD558\uCCA0|\uBC84\uC2A4|\uD0DD\uC2DC/u },
     { categoryName: "\uD1B5\uC2E0\uBE44", pattern: /KT|SKT|LGU\+|\uD1B5\uC2E0|\uC778\uD130\uB137/u },
-    { categoryName: "\uC2DD\uBE44", pattern: /\uCE74\uD398|\uCEE4\uD53C|\uC2DD\uB2F9|\uC678\uC2DD|\uBC30\uB2EC|\uB9E5\uB3C4\uB0A0\uB4DC|\uC2A4\uD0C0\uBC85\uC2A4|\uC2E0\uC120\uAD6C\uC774/u },
-    { categoryName: "\uC0DD\uD65C\uBE44", pattern: /\uCFE0\uD321|\uB124\uC774\uBC84\uD398\uC774|\uC774\uB9C8\uD2B8|\uD648\uD50C\uB7EC\uC2A4|\uB2E4\uC774\uC18C|GS25|CU|\uC138\uBE10\uC77C\uB808\uBE10/u },
+    { categoryName: "\uC77C\uBC18 \uC2DD\uBE44", pattern: /\uCE74\uD398|\uCEE4\uD53C|\uC2DD\uB2F9|\uC678\uC2DD|\uBC30\uB2EC|\uB9E5\uB3C4\uB0A0\uB4DC|\uC2A4\uD0C0\uBC85\uC2A4|\uC2E0\uC120\uAD6C\uC774/u },
+    { categoryName: "\uC0DD\uD544\uD488", pattern: /\uCFE0\uD321|\uB124\uC774\uBC84\uD398\uC774|\uC774\uB9C8\uD2B8|\uD648\uD50C\uB7EC\uC2A4|\uB2E4\uC774\uC18C|GS25|CU|\uC138\uBE10\uC77C\uB808\uBE10/u },
   ];
 
   for (const rule of categoryRules) {
@@ -374,7 +389,7 @@ export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundl
           fromAccountId: null,
           toAccountId: null,
           merchantName: merchant,
-          description: card.name,
+          description: "",
           amount: Math.abs(amount),
           categoryId: findCategoryId(categories, categoryName),
           tagIds: [],
@@ -431,7 +446,7 @@ export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundl
           fromAccountId: null,
           toAccountId: null,
           merchantName,
-          description: saleType || card.name,
+          description: "",
           amount: Math.abs(amount),
           categoryId: inferCategoryIdFromMerchant(categories, normalizeCancelledMerchantName(merchantName)),
           tagIds: [],
@@ -500,7 +515,7 @@ export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundl
           fromAccountId: null,
           toAccountId: null,
           merchantName: normalizeCancelledMerchantName(merchantName),
-          description: saleType || card.name,
+          description: "",
           amount: Math.abs(amount),
           originalAmount: Math.abs(amount),
           discountAmount: 0,
@@ -594,7 +609,7 @@ export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundl
           fromAccountId: null,
           toAccountId: null,
           merchantName,
-          description: normalizeText(row[7]) || card.name,
+          description: "",
           amount: Math.abs(amount),
           originalAmount: Math.abs(amount),
           discountAmount: 0,
@@ -686,7 +701,7 @@ export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundl
           fromAccountId: null,
           toAccountId: null,
           merchantName,
-          description: card.name,
+          description: "",
           amount: Math.abs(amount),
           originalAmount: Math.abs(amount),
           discountAmount: 0,

@@ -9,7 +9,7 @@ import {
   mergeWorkspaceBundle,
 } from "../../domain/app/defaults";
 import { isActiveExpenseTransaction } from "../../domain/transactions/meta";
-import type { Account, AppState, Card, FinancialProfile, Person, ReviewItem, Transaction, WorkspaceBundle } from "../../shared/types/models";
+import type { Account, AppState, Card, Category, FinancialProfile, Person, ReviewItem, Transaction, WorkspaceBundle } from "../../shared/types/models";
 import { createId } from "../../shared/utils/id";
 import { useToast } from "../toast/ToastProvider";
 import { getWorkspaceScope } from "./selectors";
@@ -20,6 +20,10 @@ type AccountDraft = Pick<
   "ownerPersonId" | "name" | "alias" | "institutionName" | "accountNumberMasked" | "accountType" | "usageType" | "isShared" | "memo"
 >;
 type CardDraft = Pick<Card, "ownerPersonId" | "name" | "issuerName" | "cardNumberMasked" | "linkedAccountId" | "cardType" | "memo">;
+type CategoryDraft = Pick<
+  Category,
+  "name" | "categoryType" | "parentCategoryId" | "sortOrder" | "isHidden" | "direction" | "fixedOrVariable" | "necessity" | "budgetable" | "reportable"
+>;
 
 type NewTransactionInput = {
   workspaceId: string;
@@ -68,7 +72,10 @@ type Action =
   | { type: "updateAccount"; payload: { workspaceId: string; accountId: string; values: AccountDraft } }
   | { type: "addCard"; payload: { workspaceId: string; values: CardDraft } }
   | { type: "updateCard"; payload: { workspaceId: string; cardId: string; values: CardDraft } }
-  | { type: "addCategory"; payload: { workspaceId: string; name: string } }
+  | { type: "addCategory"; payload: { workspaceId: string; values: CategoryDraft } }
+  | { type: "updateCategory"; payload: { workspaceId: string; categoryId: string; values: CategoryDraft } }
+  | { type: "deleteCategory"; payload: { workspaceId: string; categoryId: string } }
+  | { type: "moveCategory"; payload: { workspaceId: string; categoryId: string; targetParentCategoryId: string | null; targetIndex: number } }
   | { type: "addTag"; payload: { workspaceId: string; name: string } }
   | { type: "setFinancialProfile"; payload: { workspaceId: string; values: FinancialProfileInput } }
   | { type: "addSettlement"; payload: SettlementInput }
@@ -191,6 +198,36 @@ function createCardDraft(input: string | Partial<CardDraft>, issuerName?: string
   };
 }
 
+function createCategoryDraft(input: string | Partial<CategoryDraft>, parentCategoryId: string | null = null): CategoryDraft {
+  if (typeof input === "string") {
+    return {
+      name: input.trim(),
+      categoryType: "category",
+      parentCategoryId,
+      sortOrder: 0,
+      isHidden: false,
+      direction: "expense",
+      fixedOrVariable: "variable",
+      necessity: "discretionary",
+      budgetable: true,
+      reportable: true,
+    };
+  }
+
+  return {
+    name: String(input.name ?? "").trim(),
+    categoryType: input.categoryType === "group" ? "group" : "category",
+    parentCategoryId: input.categoryType === "group" ? null : input.parentCategoryId ?? null,
+    sortOrder: input.sortOrder ?? 0,
+    isHidden: input.isHidden ?? false,
+    direction: input.direction ?? "expense",
+    fixedOrVariable: input.fixedOrVariable ?? "variable",
+    necessity: input.necessity ?? "discretionary",
+    budgetable: input.budgetable ?? true,
+    reportable: input.reportable ?? true,
+  };
+}
+
 function normalizeAppState(rawState: AppState): AppState {
   return {
     ...rawState,
@@ -211,6 +248,18 @@ function normalizeAppState(rawState: AppState): AppState {
       ...card,
       cardType: card.cardType ?? "credit",
       memo: card.memo ?? "",
+    })),
+    categories: rawState.categories.map((category) => ({
+      ...category,
+      categoryType: category.categoryType ?? "category",
+      parentCategoryId: category.parentCategoryId ?? null,
+      sortOrder: category.sortOrder ?? 0,
+      isHidden: category.isHidden ?? false,
+      direction: category.direction ?? "expense",
+      fixedOrVariable: category.fixedOrVariable ?? "variable",
+      necessity: category.necessity ?? "discretionary",
+      budgetable: category.budgetable ?? true,
+      reportable: category.reportable ?? true,
     })),
   };
 }
@@ -439,6 +488,40 @@ function applyReviewSuggestionToTransactions(transactions: Transaction[], review
   });
 }
 
+function getNextCategorySortOrder(categories: Category[], parentCategoryId: string | null) {
+  const siblingOrders = categories
+    .filter((category) => category.parentCategoryId === parentCategoryId)
+    .map((category) => category.sortOrder);
+  return siblingOrders.length ? Math.max(...siblingOrders) + 1 : 0;
+}
+
+function reorderCategories(
+  categories: Category[],
+  categoryId: string,
+  targetParentCategoryId: string | null,
+  targetIndex: number,
+) {
+  const movingCategory = categories.find((category) => category.id === categoryId);
+  if (!movingCategory) return categories;
+
+  const destinationParentCategoryId = movingCategory.categoryType === "group" ? null : targetParentCategoryId;
+  const baseCategories = categories.filter((category) => category.id !== categoryId);
+  const destinationSiblings = baseCategories
+    .filter((category) => category.parentCategoryId === destinationParentCategoryId)
+    .sort((left, right) => left.sortOrder - right.sortOrder);
+  const clampedTargetIndex = Math.max(0, Math.min(targetIndex, destinationSiblings.length));
+  const reorderedSiblings = [
+    ...destinationSiblings.slice(0, clampedTargetIndex),
+    { ...movingCategory, parentCategoryId: destinationParentCategoryId, sortOrder: clampedTargetIndex },
+    ...destinationSiblings.slice(clampedTargetIndex),
+  ].map((category, index) => ({ ...category, sortOrder: index }));
+  const reorderedSiblingMap = new Map(reorderedSiblings.map((category) => [category.id, category]));
+
+  return baseCategories
+    .map((category) => reorderedSiblingMap.get(category.id) ?? category)
+    .concat(reorderedSiblingMap.get(categoryId) ?? []);
+}
+
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case "hydrate":
@@ -567,14 +650,72 @@ function reducer(state: AppState, action: Action): AppState {
           {
             id: createId("category"),
             workspaceId: action.payload.workspaceId,
-            name: action.payload.name,
-            direction: "expense",
-            fixedOrVariable: "variable",
-            necessity: "discretionary",
-            budgetable: true,
-            reportable: true,
+            ...action.payload.values,
+            sortOrder: getNextCategorySortOrder(
+              state.categories.filter((category) => category.workspaceId === action.payload.workspaceId),
+              action.payload.values.categoryType === "group" ? null : action.payload.values.parentCategoryId,
+            ),
           },
         ],
+      };
+    case "updateCategory":
+      return {
+        ...state,
+        categories: state.categories.map((category) =>
+          category.workspaceId === action.payload.workspaceId && category.id === action.payload.categoryId
+            ? { ...category, ...action.payload.values }
+            : category,
+        ),
+      };
+    case "deleteCategory": {
+      const target = state.categories.find(
+        (category) => category.workspaceId === action.payload.workspaceId && category.id === action.payload.categoryId,
+      );
+      if (!target) return state;
+
+      const categoryIdsToDelete =
+        target.categoryType === "group"
+          ? state.categories
+              .filter(
+                (category) =>
+                  category.workspaceId === action.payload.workspaceId &&
+                  (category.id === target.id || category.parentCategoryId === target.id),
+              )
+              .map((category) => category.id)
+          : [target.id];
+      const deletedCategoryIdSet = new Set(categoryIdsToDelete);
+
+      return {
+        ...state,
+        categories: state.categories.filter(
+          (category) =>
+            !(category.workspaceId === action.payload.workspaceId && deletedCategoryIdSet.has(category.id)),
+        ),
+        transactions: state.transactions.map((transaction) =>
+          transaction.workspaceId === action.payload.workspaceId &&
+          transaction.categoryId &&
+          deletedCategoryIdSet.has(transaction.categoryId)
+            ? { ...transaction, categoryId: null }
+            : transaction,
+        ),
+      };
+    }
+    case "moveCategory":
+      return {
+        ...state,
+        categories: state.categories.some(
+          (category) => category.workspaceId === action.payload.workspaceId && category.id === action.payload.categoryId,
+        )
+          ? [
+              ...state.categories.filter((category) => category.workspaceId !== action.payload.workspaceId),
+              ...reorderCategories(
+                state.categories.filter((category) => category.workspaceId === action.payload.workspaceId),
+                action.payload.categoryId,
+                action.payload.targetParentCategoryId,
+                action.payload.targetIndex,
+              ),
+            ]
+          : state.categories,
       };
     case "addTag":
       return {
@@ -820,7 +961,10 @@ interface AppStateContextValue {
   updateAccount: (workspaceId: string, accountId: string, input: Partial<AccountDraft>) => void;
   addCard: (workspaceId: string, input: string | Partial<CardDraft>, issuerName?: string) => void;
   updateCard: (workspaceId: string, cardId: string, input: Partial<CardDraft>) => void;
-  addCategory: (workspaceId: string, name: string) => void;
+  addCategory: (workspaceId: string, input: string | Partial<CategoryDraft>, parentCategoryId?: string | null) => void;
+  updateCategory: (workspaceId: string, categoryId: string, input: Partial<CategoryDraft>) => void;
+  deleteCategory: (workspaceId: string, categoryId: string) => void;
+  moveCategory: (workspaceId: string, categoryId: string, targetParentCategoryId: string | null, targetIndex: number) => void;
   addTag: (workspaceId: string, name: string) => void;
   setFinancialProfile: (workspaceId: string, values: FinancialProfileInput) => void;
   addSettlement: (input: SettlementInput) => void;
@@ -1020,9 +1164,28 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         dispatch({ type: "updateCard", payload: { workspaceId, cardId, values } });
         showToast(`${values.name} 카드 정보를 저장했습니다.`, "success");
       },
-      addCategory(workspaceId, name) {
-        dispatch({ type: "addCategory", payload: { workspaceId, name } });
+      addCategory(workspaceId, input, parentCategoryId = null) {
+        const values = createCategoryDraft(input, parentCategoryId);
+        if (!values.name) return;
+        const name = values.name;
+        dispatch({ type: "addCategory", payload: { workspaceId, values } });
         showToast(`${name} 카테고리를 추가했습니다.`, "success");
+      },
+      updateCategory(workspaceId, categoryId, input) {
+        const current = state.categories.find((item) => item.workspaceId === workspaceId && item.id === categoryId);
+        if (!current) return;
+        const values = createCategoryDraft({ ...current, ...input });
+        dispatch({ type: "updateCategory", payload: { workspaceId, categoryId, values } });
+        showToast(values.categoryType === "group" ? `${values.name} 그룹 정보를 수정했습니다.` : `${values.name} 카테고리 정보를 수정했습니다.`, "success");
+      },
+      deleteCategory(workspaceId, categoryId) {
+        const current = state.categories.find((item) => item.workspaceId === workspaceId && item.id === categoryId);
+        if (!current) return;
+        dispatch({ type: "deleteCategory", payload: { workspaceId, categoryId } });
+        showToast(current.categoryType === "group" ? `${current.name} 그룹과 하위 카테고리를 삭제했습니다.` : `${current.name} 카테고리를 삭제했습니다.`, "success");
+      },
+      moveCategory(workspaceId, categoryId, targetParentCategoryId, targetIndex) {
+        dispatch({ type: "moveCategory", payload: { workspaceId, categoryId, targetParentCategoryId, targetIndex } });
       },
       addTag(workspaceId, name) {
         dispatch({ type: "addTag", payload: { workspaceId, name } });

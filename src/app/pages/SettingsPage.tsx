@@ -15,7 +15,7 @@ const SETTINGS_TABS = [
   { id: "people", label: "사용자" },
   { id: "accounts", label: "계좌" },
   { id: "cards", label: "카드" },
-  { id: "categories", label: "분류" },
+  { id: "categories", label: "카테고리" },
   { id: "backup", label: "백업" },
   { id: "app", label: "앱 관리" },
 ] as const;
@@ -40,6 +40,7 @@ export function SettingsPage() {
     if (currentTab === "accounts") return <AccountsPage />;
     if (currentTab === "cards") return <CardsPage />;
     if (currentTab === "categories") return <CategoriesPage />;
+
     if (currentTab === "backup") {
       return (
         <section className="card shadow-sm">
@@ -50,7 +51,7 @@ export function SettingsPage() {
             </div>
           </div>
           <div className="settings-compact-copy">
-            <p className="text-secondary mb-0">현재 워크스페이스를 JSON으로 내보내거나 복원합니다.</p>
+            <p className="text-secondary mb-0">현재 가계부 데이터를 JSON 파일로 내보내거나 다시 불러옵니다.</p>
           </div>
           <div className="d-flex flex-wrap gap-2">
             <button className="btn btn-primary" onClick={() => exportState()}>
@@ -80,21 +81,21 @@ export function SettingsPage() {
           <div className="section-head">
             <div>
               <span className="section-kicker">앱 관리</span>
-              <h2 className="section-title">초기화와 상태 확인</h2>
+              <h2 className="section-title">앱 상태와 테마</h2>
             </div>
           </div>
           {!profile?.monthlyNetIncome ? (
             <EmptyStateCallout
-              kicker="기준선 필요"
-              title="먼저 월 수입을 입력해주세요"
-              description="기준값부터 넣으면 진단이 더 정확해집니다."
+              kicker="기준값 필요"
+              title="먼저 월 수입 기준을 입력해 주세요"
+              description="기준값이 있어야 진단과 안내가 더 정확해집니다."
             />
           ) : (
             <div className="settings-compact-copy">
-              <p className="mb-2 text-secondary">현재 기준선 요약</p>
+              <p className="mb-2 text-secondary">현재 기준값 요약</p>
               <div className="resource-grid">
                 <article className="resource-card">
-                  <h3>월 순수입</h3>
+                  <h3>월 수입</h3>
                   <p className="mb-0 text-secondary">{formatCurrency(profile.monthlyNetIncome)}</p>
                 </article>
                 <article className="resource-card">
@@ -105,7 +106,7 @@ export function SettingsPage() {
             </div>
           )}
           <div className="settings-compact-copy">
-            <p className="mb-2 text-secondary">앱 화면 테마</p>
+            <p className="mb-2 text-secondary">테마 전환</p>
             <div className="d-flex flex-wrap gap-2">
               <button type="button" className="theme-toggle-button" onClick={toggleThemeMode}>
                 <span className="theme-toggle-button-label">테마</span>
@@ -123,37 +124,29 @@ export function SettingsPage() {
     }
 
     return (
-        <section className="card shadow-sm">
-          <div className="section-head">
-            <div>
-              <span className="section-kicker">재무 기준값</span>
-            <h2 className="section-title">월 수입과 경고선</h2>
-            </div>
+      <section className="card shadow-sm">
+        <div className="section-head">
+          <div>
+            <span className="section-kicker">재무 기준값</span>
+            <h2 className="section-title">월 수입과 경고 기준</h2>
           </div>
+        </div>
         <div className="settings-summary-row">
           <article className="resource-card">
-            <h3>월 순수입</h3>
-            <p className="mb-0 text-secondary">
-              {hasBaseline ? formatCurrency(profile?.monthlyNetIncome ?? 0) : "아직 입력 전"}
-            </p>
+            <h3>월 수입</h3>
+            <p className="mb-0 text-secondary">{hasBaseline ? formatCurrency(profile?.monthlyNetIncome ?? 0) : "아직 입력 전"}</p>
           </article>
           <article className="resource-card">
             <h3>목표 저축률</h3>
-            <p className="mb-0 text-secondary">
-              {hasBaseline ? formatPercent(profile?.targetSavingsRate ?? 0) : "입력 필요"}
-            </p>
+            <p className="mb-0 text-secondary">{hasBaseline ? formatPercent(profile?.targetSavingsRate ?? 0) : "입력 필요"}</p>
           </article>
           <article className="resource-card">
             <h3>지출 경고 기준</h3>
-            <p className="mb-0 text-secondary">
-              {hasBaseline ? formatPercent(profile?.warningSpendRate ?? 0) : "입력 필요"}
-            </p>
+            <p className="mb-0 text-secondary">{hasBaseline ? formatPercent(profile?.warningSpendRate ?? 0) : "입력 필요"}</p>
           </article>
           <article className="resource-card">
             <h3>고정지출 경고 기준</h3>
-            <p className="mb-0 text-secondary">
-              {hasBaseline ? formatPercent(profile?.warningFixedCostRate ?? 0) : "입력 필요"}
-            </p>
+            <p className="mb-0 text-secondary">{hasBaseline ? formatPercent(profile?.warningFixedCostRate ?? 0) : "입력 필요"}</p>
           </article>
         </div>
         <form
@@ -170,7 +163,7 @@ export function SettingsPage() {
           }}
         >
           <label>
-            <span>월 순수입</span>
+            <span>월 수입</span>
             <input name="monthlyNetIncome" type="number" className="form-control" defaultValue={profile?.monthlyNetIncome ?? 0} />
           </label>
           <label>
@@ -192,21 +185,19 @@ export function SettingsPage() {
           </label>
           <div className="d-flex justify-content-end" style={{ gridColumn: "1 / -1" }}>
             <button className="btn btn-primary" type="submit">
-              기준 저장
+              기준값 저장
             </button>
           </div>
         </form>
         {hasBaseline ? (
           <CompletionBanner
             className="mt-4"
-            title="기준값 저장이 끝났습니다"
-            description="이제 거래 화면과 대시보드에서 바로 확인하면 됩니다."
+            title="기준값 설정이 준비됐습니다"
+            description="이제 거래 화면과 대시보드에서 기준 대비 현황을 더 자연스럽게 볼 수 있습니다."
             actions={
-              <>
-                <Link to="/transactions" className="btn btn-outline-secondary btn-sm">
-                  거래 보기
-                </Link>
-              </>
+              <Link to="/transactions" className="btn btn-outline-secondary btn-sm">
+                거래 보기
+              </Link>
             }
           />
         ) : null}

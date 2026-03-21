@@ -11,6 +11,7 @@ import { getTransactionFilterContext } from "../../domain/transactions/transacti
 import { getSourceTypeCounts } from "../../domain/transactions/sourceTypeCounts";
 import { getSourceTypeLabel, SOURCE_TYPE_OPTIONS } from "../../domain/transactions/sourceTypes";
 import { getTransactionViewMode } from "../../domain/transactions/transactionViewMode";
+import { getCategoryLabel, getLeafCategories } from "../../domain/categories/meta";
 import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { CompletionBanner } from "../components/CompletionBanner";
@@ -77,7 +78,9 @@ export function TransactionsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
-  const categories = new Map(scope.categories.map((item) => [item.id, item.name]));
+  const categoryMap = new Map(scope.categories.map((item) => [item.id, item]));
+  const leafCategories = getLeafCategories(scope.categories);
+  const categories = new Map(leafCategories.map((item) => [item.id, getCategoryLabel(item, categoryMap)]));
   const peopleMap = new Map(scope.people.map((person) => [person.id, person.displayName || person.name]));
   const accountSharedMap = new Map(scope.accounts.map((account) => [account.id, account.isShared]));
   const getTransactionOwnerLabel = (transaction: (typeof transactions)[number]) =>
@@ -143,6 +146,21 @@ export function TransactionsPage() {
 
   const getTransactionTypeValue = (transaction: (typeof transactions)[number]) =>
     transaction.isInternalTransfer ? "internal_transfer" : transaction.transactionType;
+
+  const moveGridEditorFocus = (currentTarget: HTMLElement, direction: "next" | "prev") => {
+    const editors = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-transaction-grid-editor="true"]'),
+    );
+    const currentIndex = editors.findIndex((item) => item === currentTarget);
+    if (currentIndex < 0) return;
+
+    const target = direction === "next" ? editors[currentIndex + 1] : editors[currentIndex - 1];
+    if (!target) return;
+    target.focus();
+    if (target instanceof HTMLInputElement) {
+      target.select();
+    }
+  };
 
   const handleTransactionTypeChange = (
     transaction: (typeof transactions)[number],
@@ -454,9 +472,9 @@ export function TransactionsPage() {
           </select>
           <select name="categoryId" className="form-select" defaultValue="">
             <option value="">카테고리 선택 없음</option>
-            {scope.categories.map((category) => (
+            {leafCategories.map((category) => (
               <option key={category.id} value={category.id}>
-                {category.name}
+                {categories.get(category.id) ?? category.name}
               </option>
             ))}
           </select>
@@ -794,6 +812,7 @@ export function TransactionsPage() {
                         <select
                           className="form-select form-select-sm"
                           style={{ maxWidth: 132 }}
+                          data-transaction-grid-editor="true"
                           value={getTransactionTypeValue(transaction)}
                           onChange={(event) =>
                             handleTransactionTypeChange(
@@ -801,6 +820,24 @@ export function TransactionsPage() {
                               event.target.value as "expense" | "income" | "transfer" | "adjustment" | "internal_transfer",
                             )
                           }
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              moveGridEditorFocus(event.currentTarget, "next");
+                              return;
+                            }
+
+                            if (event.key === "ArrowDown") {
+                              event.preventDefault();
+                              moveGridEditorFocus(event.currentTarget, "next");
+                              return;
+                            }
+
+                            if (event.key === "ArrowUp") {
+                              event.preventDefault();
+                              moveGridEditorFocus(event.currentTarget, "prev");
+                            }
+                          }}
                         >
                           <option value="expense">지출</option>
                           <option value="internal_transfer">내부이체</option>
@@ -843,12 +880,35 @@ export function TransactionsPage() {
                             className="form-control form-control-sm"
                             defaultValue={transaction.description}
                             placeholder="비고"
+                            data-transaction-grid-editor="true"
                             onBlur={(event) => {
                               const nextDescription = event.target.value.trim();
                               if (nextDescription === transaction.description) return;
                               updateTransactionDetails(workspaceId, transaction.id, {
                                 description: nextDescription,
                               });
+                            }}
+                            onFocus={(event) => event.currentTarget.select()}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                event.currentTarget.blur();
+                                moveGridEditorFocus(event.currentTarget, "next");
+                                return;
+                              }
+
+                              if (event.key === "ArrowDown") {
+                                event.preventDefault();
+                                event.currentTarget.blur();
+                                moveGridEditorFocus(event.currentTarget, "next");
+                                return;
+                              }
+
+                              if (event.key === "ArrowUp") {
+                                event.preventDefault();
+                                event.currentTarget.blur();
+                                moveGridEditorFocus(event.currentTarget, "prev");
+                              }
                             }}
                           />
                         </td>

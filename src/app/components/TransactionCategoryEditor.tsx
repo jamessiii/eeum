@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { getCategoryLabel, getLeafCategories } from "../../domain/categories/meta";
 import { isActiveTransaction } from "../../domain/transactions/meta";
 import type { Category, Transaction } from "../../shared/types/models";
 
@@ -16,6 +17,8 @@ export function TransactionCategoryEditor({
   onCategoryChange,
 }: TransactionCategoryEditorProps) {
   const canEdit = isActiveTransaction(transaction);
+  const categoryMap = useMemo(() => new Map(categories.map((category) => [category.id, category])), [categories]);
+  const leafCategories = useMemo(() => getLeafCategories(categories), [categories]);
   const [draftValue, setDraftValue] = useState(categoryName ?? "");
   const inputRef = useRef<HTMLInputElement | null>(null);
   const skipNextBlurCommitRef = useRef(false);
@@ -30,16 +33,24 @@ export function TransactionCategoryEditor({
       const normalizedValue = rawValue.trim().toLowerCase();
       if (!normalizedValue) return "";
 
-      const exactMatch = categories.find((category) => category.name.trim().toLowerCase() === normalizedValue);
+      const resolveLabel = (category: Category) => getCategoryLabel(category, categoryMap).trim().toLowerCase();
+
+      const exactMatch = leafCategories.find((category) => {
+        return category.name.trim().toLowerCase() === normalizedValue || resolveLabel(category) === normalizedValue;
+      });
       if (exactMatch) return exactMatch.id;
 
-      const prefixMatch = categories.find((category) => category.name.trim().toLowerCase().startsWith(normalizedValue));
+      const prefixMatch = leafCategories.find((category) => {
+        return category.name.trim().toLowerCase().startsWith(normalizedValue) || resolveLabel(category).startsWith(normalizedValue);
+      });
       if (prefixMatch) return prefixMatch.id;
 
-      const partialMatch = categories.find((category) => category.name.trim().toLowerCase().includes(normalizedValue));
+      const partialMatch = leafCategories.find((category) => {
+        return category.name.trim().toLowerCase().includes(normalizedValue) || resolveLabel(category).includes(normalizedValue);
+      });
       return partialMatch?.id ?? null;
     },
-    [categories],
+    [categoryMap, leafCategories],
   );
 
   const commitCategoryChange = () => {
@@ -51,22 +62,25 @@ export function TransactionCategoryEditor({
 
     onCategoryChange(resolvedCategoryId);
     const nextLabel = resolvedCategoryId
-      ? categories.find((category) => category.id === resolvedCategoryId)?.name ?? draftValue.trim()
+      ? (() => {
+          const matchedCategory = leafCategories.find((category) => category.id === resolvedCategoryId);
+          return matchedCategory ? getCategoryLabel(matchedCategory, categoryMap) : draftValue.trim();
+        })()
       : "";
     setDraftValue(nextLabel);
   };
 
   const moveFocus = (direction: "next" | "prev") => {
-    const editors = Array.from(
-      document.querySelectorAll<HTMLInputElement>('input[data-category-editor="true"]'),
-    );
+    const editors = Array.from(document.querySelectorAll<HTMLElement>('[data-transaction-grid-editor="true"]'));
     const currentIndex = editors.findIndex((item) => item === inputRef.current);
     if (currentIndex < 0) return;
 
     const target = direction === "next" ? editors[currentIndex + 1] : editors[currentIndex - 1];
     if (!target) return;
     target.focus();
-    target.select();
+    if (target instanceof HTMLInputElement) {
+      target.select();
+    }
   };
 
   if (!canEdit) {
@@ -82,7 +96,7 @@ export function TransactionCategoryEditor({
         list={listId}
         value={draftValue}
         placeholder="카테고리 입력"
-        data-category-editor="true"
+        data-transaction-grid-editor="true"
         onChange={(event) => setDraftValue(event.target.value)}
         onBlur={() => {
           if (skipNextBlurCommitRef.current) {
@@ -127,8 +141,8 @@ export function TransactionCategoryEditor({
       />
       <datalist id={listId}>
         <option value="" label="카테고리 없음" />
-        {categories.map((category) => (
-          <option key={category.id} value={category.name} />
+        {leafCategories.map((category) => (
+          <option key={category.id} value={getCategoryLabel(category, categoryMap)} />
         ))}
       </datalist>
     </div>
