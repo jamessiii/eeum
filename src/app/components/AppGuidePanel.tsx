@@ -10,14 +10,28 @@ import { GuideBeaconScene } from "./GuideBeaconScene";
 import { matchesGuideTargetPath } from "./guidePathMatch";
 
 type GuideAnchorSide = "left" | "right";
+type GuideDragSurface = "beacon" | "panel";
 type PanelMorphState = "closed" | "opening" | "open" | "closing";
 type BeaconMorphState = "hidden" | "entering" | "idle" | "exiting";
+type PanelRelocationPhase = "out" | "in";
 
 const GUIDE_ANCHOR_SIDE_KEY = "household-webapp.guide-anchor-side";
 const GUIDE_BEACON_EXIT_MS = 220;
 const GUIDE_BEACON_ENTER_MS = 700;
 const GUIDE_PANEL_MORPH_MS = 520;
 const GUIDE_BEACON_RETURN_MS = GUIDE_BEACON_ENTER_MS;
+const GUIDE_PANEL_RELOCATE_OUT_MS = 180;
+const GUIDE_PANEL_RELOCATE_IN_MS = 260;
+
+function isGuideDragBlocked(target: EventTarget | null) {
+  if (!(target instanceof Element)) return false;
+  return Boolean(target.closest("button, a, input, select, textarea, summary, [role='button']"));
+}
+
+function clearGuideSelection() {
+  if (typeof window === "undefined") return;
+  window.getSelection()?.removeAllRanges();
+}
 
 export function AppGuidePanel({
   beaconState = "idle",
@@ -41,9 +55,12 @@ export function AppGuidePanel({
     return stored === "left" ? "left" : "right";
   });
   const [dragTargetSide, setDragTargetSide] = useState<GuideAnchorSide | null>(null);
+  const [dragSurface, setDragSurface] = useState<GuideDragSurface | null>(null);
+  const [panelRelocationPhase, setPanelRelocationPhase] = useState<PanelRelocationPhase | null>(null);
   const [overrideBeaconState, setOverrideBeaconState] = useState<BeaconMorphState | null>(null);
   const relocationTimersRef = useRef<number[]>([]);
   const panelMorphTimersRef = useRef<number[]>([]);
+  const panelRelocationTimersRef = useRef<number[]>([]);
   const dragStartXRef = useRef<number | null>(null);
   const isDraggingRef = useRef(false);
   const suppressClickRef = useRef(false);
@@ -83,6 +100,8 @@ export function AppGuidePanel({
       relocationTimersRef.current = [];
       panelMorphTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
       panelMorphTimersRef.current = [];
+      panelRelocationTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
+      panelRelocationTimersRef.current = [];
     };
   }, []);
 
@@ -108,6 +127,7 @@ export function AppGuidePanel({
     anchorSide === "left"
       ? { left: "0.35rem", right: "auto", bottom: "0.2rem" }
       : undefined;
+  const oppositeAnchorSide: GuideAnchorSide = anchorSide === "left" ? "right" : "left";
 
   useEffect(() => {
     if (isRelocating) {
@@ -212,33 +232,80 @@ export function AppGuidePanel({
     }
   };
 
-  const handlePointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+  const relocatePanel = (targetSide: GuideAnchorSide) => {
+    if (targetSide === anchorSide || isRelocating || panelRelocationPhase) return;
+
+    panelRelocationTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
+    panelRelocationTimersRef.current = [];
+    setPanelRelocationPhase("out");
+
+    panelRelocationTimersRef.current.push(
+      window.setTimeout(() => {
+        setAnchorSide(targetSide);
+        window.localStorage.setItem(GUIDE_ANCHOR_SIDE_KEY, targetSide);
+        setPanelRelocationPhase("in");
+      }, GUIDE_PANEL_RELOCATE_OUT_MS),
+    );
+
+    panelRelocationTimersRef.current.push(
+      window.setTimeout(() => {
+        setPanelRelocationPhase(null);
+      }, GUIDE_PANEL_RELOCATE_OUT_MS + GUIDE_PANEL_RELOCATE_IN_MS),
+    );
+  };
+
+  const beginGuideDrag = (event: ReactPointerEvent<HTMLElement>, surface: GuideDragSurface) => {
+    if (surface === "panel") {
+      event.preventDefault();
+      clearGuideSelection();
+    }
     event.currentTarget.setPointerCapture(event.pointerId);
     dragStartXRef.current = event.clientX;
     isDraggingRef.current = false;
+    setDragSurface(surface);
     setDragTargetSide(null);
   };
 
-  const handlePointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+  const handleBeaconPointerDown = (event: ReactPointerEvent<HTMLElement>) => {
+    if (event.button !== 0) return;
+    beginGuideDrag(event, "beacon");
+  };
+
+  const handlePanelPointerDown = (event: ReactPointerEvent<HTMLElement>) => {
+    if (event.button !== 0 || panelRelocationPhase || isGuideDragBlocked(event.target)) return;
+    beginGuideDrag(event, "panel");
+  };
+
+  const handlePointerMove = (event: ReactPointerEvent<HTMLElement>) => {
     if (dragStartXRef.current === null) return;
     if (Math.abs(event.clientX - dragStartXRef.current) > 16) {
+      if (dragSurface === "panel") {
+        clearGuideSelection();
+      }
       isDraggingRef.current = true;
       setDragTargetSide(event.clientX < window.innerWidth / 2 ? "left" : "right");
     }
   };
 
-  const handlePointerUp = (event: ReactPointerEvent<HTMLButtonElement>) => {
+  const handlePointerUp = (event: ReactPointerEvent<HTMLElement>) => {
     if (dragStartXRef.current === null) return;
 
     const dragged = isDraggingRef.current;
+    const sourceSurface = dragSurface;
     dragStartXRef.current = null;
     isDraggingRef.current = false;
+    setDragSurface(null);
     setDragTargetSide(null);
+    clearGuideSelection();
 
     if (!dragged) return;
 
     suppressClickRef.current = true;
     const nextSide: GuideAnchorSide = event.clientX < window.innerWidth / 2 ? "left" : "right";
+    if (sourceSurface === "panel") {
+      relocatePanel(nextSide);
+      return;
+    }
     relocateBeacon(nextSide);
   };
 
@@ -247,7 +314,7 @@ export function AppGuidePanel({
       suppressClickRef.current = false;
       return;
     }
-    if (isRelocating) return;
+    if (isRelocating || panelRelocationPhase) return;
     setIsCollapsed((current) => !current);
   };
 
@@ -255,9 +322,22 @@ export function AppGuidePanel({
     <>
       {shouldRenderPanel ? (
         <div
-          className={`floating-guide-panel-shell floating-guide-panel-shell--${panelMorphState}${anchorSide === "left" ? " is-left" : ""}`}
+          className={`floating-guide-panel-shell floating-guide-panel-shell--${panelMorphState}${anchorSide === "left" ? " is-left" : ""}${
+            panelRelocationPhase ? ` is-relocating-${panelRelocationPhase}` : ""
+          }${
+            dragSurface === "panel" ? " is-dragging-panel" : ""
+          }`}
           style={floatingPanelStyle}
           data-guide-anchor="panel"
+          onPointerDown={handlePanelPointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={() => {
+            dragStartXRef.current = null;
+            isDraggingRef.current = false;
+            setDragSurface(null);
+            setDragTargetSide(null);
+          }}
         >
           <div className="floating-guide-panel-glow" aria-hidden="true" />
           <section className="floating-guide-panel">
@@ -316,12 +396,13 @@ export function AppGuidePanel({
           className={`floating-guide-fab${isPanelCollapsed ? " collapsed" : ""}${anchorSide === "left" ? " is-left" : ""}${panelMorphState === "opening" ? " is-morphing-out" : ""}${panelMorphState === "open" ? " is-hidden-by-panel" : ""}${panelMorphState === "closing" ? " is-morphing-in" : ""}`}
           data-guide-anchor="fab"
           style={floatingFabStyle}
-          onPointerDown={handlePointerDown}
+          onPointerDown={handleBeaconPointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerCancel={() => {
             dragStartXRef.current = null;
             isDraggingRef.current = false;
+            setDragSurface(null);
             setDragTargetSide(null);
           }}
           onClick={handleBeaconClick}
@@ -333,10 +414,13 @@ export function AppGuidePanel({
           </span>
         </button>
       ) : null}
-      {dragTargetSide ? (
+      {dragSurface ? (
         <div className="floating-guide-drop-targets" aria-hidden="true">
-          <div className={`floating-guide-drop-target left${dragTargetSide === "left" ? " active" : ""}`}>왼쪽으로 이동</div>
-          <div className={`floating-guide-drop-target right${dragTargetSide === "right" ? " active" : ""}`}>오른쪽으로 이동</div>
+          <div
+            className={`floating-guide-drop-target floating-guide-drop-target--${dragSurface} ${oppositeAnchorSide}${
+              dragTargetSide === oppositeAnchorSide ? " active" : ""
+            }`}
+          />
         </div>
       ) : null}
     </>
