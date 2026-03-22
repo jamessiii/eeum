@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getCategoryLabel, getLeafCategories } from "../../domain/categories/meta";
-import { isActiveTransaction } from "../../domain/transactions/meta";
 import type { Category, Transaction } from "../../shared/types/models";
 
 interface TransactionCategoryEditorProps {
@@ -16,7 +15,7 @@ export function TransactionCategoryEditor({
   categoryName,
   onCategoryChange,
 }: TransactionCategoryEditorProps) {
-  const canEdit = isActiveTransaction(transaction);
+  const canEdit = transaction.transactionType === "expense" && !transaction.isInternalTransfer;
   const categoryMap = useMemo(() => new Map(categories.map((category) => [category.id, category])), [categories]);
   const leafCategories = useMemo(() => getLeafCategories(categories), [categories]);
   const [draftValue, setDraftValue] = useState(categoryName ?? "");

@@ -113,6 +113,7 @@ export interface ReviewItem {
   reviewType:
     | "duplicate_candidate"
     | "refund_candidate"
+    | "category_suggestion"
     | "uncategorized_transaction"
     | "internal_transfer_candidate"
     | "shared_expense_candidate";
@@ -121,6 +122,7 @@ export interface ReviewItem {
   relatedTransactionIds: ID[];
   confidenceScore: number;
   summary: string;
+  suggestedCategoryId?: ID | null;
 }
 
 export interface ImportRecord {

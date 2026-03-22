@@ -295,6 +295,10 @@ function normalizeKey(value: string) {
   return value.trim().toLowerCase();
 }
 
+function normalizeCategoryLabelKey(value: string) {
+  return normalizeKey(value).replace(/\s+/g, "");
+}
+
 function resolveCategoryRemap(categoryId: string, remapMap: Map<string, string>) {
   let resolvedId = categoryId;
   const visited = new Set<string>();
@@ -344,26 +348,26 @@ function normalizeCategoryStructure(state: AppState): AppState {
       starterGroups.find((category) => normalizeKey(category.name) === normalizeKey("생활비")) ?? starterGroups[0] ?? null;
     const fallbackGroupName = fallbackGroupTemplate?.name ?? "생활비";
 
-    const ensureFallbackGroup = () => {
-      const existingFallbackGroup = workspaceCategories.find(
-        (category) => category.categoryType === "group" && normalizeKey(category.name) === normalizeKey(fallbackGroupName),
+    const ensureStarterGroup = (groupName: string, template = starterGroups.find((category) => normalizeKey(category.name) === normalizeKey(groupName)) ?? null) => {
+      const existingGroup = workspaceCategories.find(
+        (category) => category.categoryType === "group" && normalizeKey(category.name) === normalizeKey(groupName),
       );
-      if (existingFallbackGroup) return existingFallbackGroup;
+      if (existingGroup) return existingGroup;
 
       const rootGroups = workspaceCategories.filter((category) => category.categoryType === "group");
       const nextGroup: Category = {
         id: createId("category"),
         workspaceId,
-        name: fallbackGroupName,
+        name: template?.name ?? groupName,
         categoryType: "group",
         parentCategoryId: null,
         sortOrder: rootGroups.length,
         isHidden: false,
-        direction: fallbackGroupTemplate?.direction ?? "expense",
-        fixedOrVariable: fallbackGroupTemplate?.fixedOrVariable ?? "variable",
-        necessity: fallbackGroupTemplate?.necessity ?? "discretionary",
-        budgetable: fallbackGroupTemplate?.budgetable ?? true,
-        reportable: fallbackGroupTemplate?.reportable ?? true,
+        direction: template?.direction ?? "expense",
+        fixedOrVariable: template?.fixedOrVariable ?? "variable",
+        necessity: template?.necessity ?? "discretionary",
+        budgetable: template?.budgetable ?? true,
+        reportable: template?.reportable ?? true,
       };
 
       workspaceCategories = [...workspaceCategories, nextGroup];
@@ -371,8 +375,101 @@ function normalizeCategoryStructure(state: AppState): AppState {
       return nextGroup;
     };
 
+    const ensureFallbackGroup = () => ensureStarterGroup(fallbackGroupName, fallbackGroupTemplate);
+
     const isValidGroupId = (groupId: string | null) =>
       Boolean(groupId && workspaceCategories.some((category) => category.categoryType === "group" && category.id === groupId));
+
+    const personalExpenseName = "개인지출";
+    const personalExpenseCategories = workspaceCategories.filter(
+      (category) =>
+        category.categoryType === "category" &&
+        normalizeCategoryLabelKey(category.name) === normalizeCategoryLabelKey(personalExpenseName),
+    );
+
+    if (personalExpenseCategories.length) {
+      const personalGroup = ensureStarterGroup("개인");
+      let targetPersonalCategory =
+        workspaceCategories.find(
+          (category) =>
+            category.categoryType === "category" &&
+            category.parentCategoryId === personalGroup.id &&
+            normalizeCategoryLabelKey(category.name) === normalizeCategoryLabelKey(personalExpenseName),
+        ) ?? null;
+
+      if (!targetPersonalCategory) {
+        const canonicalPersonalCategory = chooseCanonicalCategory(personalExpenseCategories);
+        workspaceCategories = workspaceCategories.map((category) =>
+          category.id === canonicalPersonalCategory.id
+            ? {
+                ...category,
+                name: personalExpenseName,
+                parentCategoryId: personalGroup.id,
+                fixedOrVariable: "variable",
+                necessity: "discretionary",
+              }
+            : category,
+        );
+        targetPersonalCategory =
+          workspaceCategories.find((category) => category.id === canonicalPersonalCategory.id) ?? null;
+        categoriesChanged = true;
+      }
+
+      if (
+        targetPersonalCategory &&
+        (targetPersonalCategory.name !== personalExpenseName || targetPersonalCategory.parentCategoryId !== personalGroup.id)
+      ) {
+        const targetPersonalCategoryId = targetPersonalCategory.id;
+        workspaceCategories = workspaceCategories.map((category) =>
+          category.id === targetPersonalCategoryId
+            ? {
+                ...category,
+                name: personalExpenseName,
+                parentCategoryId: personalGroup.id,
+                fixedOrVariable: "variable",
+                necessity: "discretionary",
+              }
+            : category,
+        );
+        targetPersonalCategory =
+          workspaceCategories.find((category) => category.id === targetPersonalCategoryId) ?? targetPersonalCategory;
+        categoriesChanged = true;
+      }
+
+      personalExpenseCategories.forEach((category) => {
+        if (!targetPersonalCategory || category.id === targetPersonalCategory.id) return;
+        remappedCategoryIds.set(category.id, targetPersonalCategory.id);
+        categoriesChanged = true;
+      });
+    }
+
+    const legacyFoodGroup = workspaceCategories.find(
+      (category) => category.categoryType === "group" && normalizeKey(category.name) === normalizeKey("식비"),
+    );
+
+    if (legacyFoodGroup) {
+      const livingGroup = ensureStarterGroup("생활비");
+      const legacyFoodChildren = workspaceCategories.filter(
+        (category) => category.categoryType === "category" && category.parentCategoryId === legacyFoodGroup.id,
+      );
+
+      if (legacyFoodChildren.length) {
+        const legacyFoodChildIds = new Set(legacyFoodChildren.map((category) => category.id));
+        workspaceCategories = workspaceCategories.map((category) =>
+          legacyFoodChildIds.has(category.id)
+            ? {
+                ...category,
+                parentCategoryId: livingGroup.id,
+                fixedOrVariable: "variable",
+                necessity: "essential",
+              }
+            : category,
+        );
+      }
+
+      workspaceCategories = workspaceCategories.filter((category) => category.id !== legacyFoodGroup.id);
+      categoriesChanged = true;
+    }
 
     const orphanLeafCategories = workspaceCategories.filter(
       (category) => category.categoryType === "category" && !isValidGroupId(category.parentCategoryId),
@@ -600,6 +697,7 @@ function rebaseImportedBundleIntoWorkspace(state: AppState, workspaceId: string,
     relatedTransactionIds: review.relatedTransactionIds
       .map((relatedId) => transactionIdMap.get(relatedId))
       .filter((id): id is string => Boolean(id)),
+    suggestedCategoryId: review.suggestedCategoryId ? (categoryIdMap.get(review.suggestedCategoryId) ?? null) : null,
   }));
 
   return {
@@ -691,6 +789,11 @@ function applyReviewSuggestionToTransactions(transactions: Transaction[], review
           fromAccountId: null,
           toAccountId: null,
         };
+      case "category_suggestion":
+        return {
+          ...transaction,
+          categoryId: review.suggestedCategoryId ?? transaction.categoryId,
+        };
       case "internal_transfer_candidate":
         return {
           ...transaction,
@@ -712,6 +815,20 @@ function applyReviewSuggestionToTransactions(transactions: Transaction[], review
       default:
         return transaction;
     }
+  });
+}
+
+function resolveCategoryReviewStatuses(
+  reviews: ReviewItem[],
+  transactionIds: Iterable<string>,
+  status: "resolved" | "dismissed" = "resolved",
+) {
+  const transactionIdSet = new Set(transactionIds);
+  return reviews.map((review) => {
+    if (!transactionIdSet.has(review.primaryTransactionId)) return review;
+    if (review.reviewType !== "uncategorized_transaction" && review.reviewType !== "category_suggestion") return review;
+    if (review.status !== "open") return review;
+    return { ...review, status };
   });
 }
 
@@ -803,9 +920,18 @@ function resetCategoriesToDefaults(categories: Category[], workspaceId: string) 
       .filter((category) => category.categoryType === "category")
       .map((category) => {
         const parent = workspaceCategories.find((item) => item.id === category.parentCategoryId);
-        return [`${normalizeKey(parent?.name ?? "")}::${normalizeKey(category.name)}`, category] as const;
+        return [`${normalizeKey(parent?.name ?? "")}::${normalizeCategoryLabelKey(category.name)}`, category] as const;
       }),
   );
+  const existingChildrenByName = new Map<string, Category[]>();
+  workspaceCategories
+    .filter((category) => category.categoryType === "category")
+    .forEach((category) => {
+      const key = normalizeCategoryLabelKey(category.name);
+      const bucket = existingChildrenByName.get(key) ?? [];
+      bucket.push(category);
+      existingChildrenByName.set(key, bucket);
+    });
 
   const matchedCategoryIds = new Set<string>();
   const defaultGroupIdByName = new Map<string, string>();
@@ -833,7 +959,14 @@ function resetCategoriesToDefaults(categories: Category[], workspaceId: string) 
     }
 
     const parentName = starterGroupNameById.get(starterCategory.parentCategoryId ?? "") ?? "";
-    const matched = existingChildrenByKey.get(`${normalizeKey(parentName)}::${normalizeKey(starterCategory.name)}`);
+    const matched =
+      existingChildrenByKey.get(`${normalizeKey(parentName)}::${normalizeCategoryLabelKey(starterCategory.name)}`) ??
+      (() => {
+        const candidates = (existingChildrenByName.get(normalizeCategoryLabelKey(starterCategory.name)) ?? []).filter(
+          (category) => !matchedCategoryIds.has(category.id),
+        );
+        return candidates.length === 1 ? candidates[0] : undefined;
+      })();
     const nextCategory = matched
       ? {
           ...matched,
@@ -903,12 +1036,14 @@ function reducer(state: AppState, action: Action): AppState {
     case "applyReviewSuggestion": {
       const review = state.reviews.find((item) => item.id === action.payload.reviewId);
       if (!review) return state;
+      const affectedTransactionIds = [review.primaryTransactionId, ...review.relatedTransactionIds];
 
       return {
         ...state,
         transactions: applyReviewSuggestionToTransactions(state.transactions, review),
-        reviews: state.reviews.map((item) =>
-          item.id === action.payload.reviewId ? { ...item, status: "resolved" } : item,
+        reviews: resolveCategoryReviewStatuses(
+          state.reviews.map((item) => (item.id === action.payload.reviewId ? { ...item, status: "resolved" } : item)),
+          affectedTransactionIds,
         ),
       };
     }
@@ -1323,6 +1458,7 @@ function reducer(state: AppState, action: Action): AppState {
             ? { ...transaction, categoryId: action.payload.categoryId }
             : transaction,
         ),
+        reviews: resolveCategoryReviewStatuses(state.reviews, [action.payload.transactionId]),
       };
     case "clearCategory":
       return {
@@ -1343,6 +1479,17 @@ function reducer(state: AppState, action: Action): AppState {
             ? { ...transaction, categoryId: action.payload.categoryId }
             : transaction,
         ),
+        reviews: resolveCategoryReviewStatuses(
+          state.reviews,
+          state.transactions
+            .filter(
+              (transaction) =>
+                transaction.workspaceId === action.payload.workspaceId &&
+                transaction.merchantName === action.payload.merchantName &&
+                transaction.isExpenseImpact,
+            )
+            .map((transaction) => transaction.id),
+        ),
       };
     case "assignCategoryBatch": {
       const transactionIdSet = new Set(action.payload.transactionIds);
@@ -1353,6 +1500,7 @@ function reducer(state: AppState, action: Action): AppState {
             ? { ...transaction, categoryId: action.payload.categoryId }
             : transaction,
         ),
+        reviews: resolveCategoryReviewStatuses(state.reviews, action.payload.transactionIds),
       };
     }
     case "assignTag":

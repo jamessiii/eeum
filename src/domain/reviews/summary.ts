@@ -31,7 +31,12 @@ export function getSortedReviewTypeSummary(reviews: ReviewItem[]) {
 }
 
 export function getOpenReviews(reviews: ReviewItem[]) {
-  return reviews.filter((review) => review.status === "open" && review.reviewType !== "shared_expense_candidate");
+  return reviews.filter(
+    (review) =>
+      review.status === "open" &&
+      review.reviewType !== "shared_expense_candidate" &&
+      review.reviewType !== "uncategorized_transaction",
+  );
 }
 
 export function getOpenReviewTypeSummary(reviews: ReviewItem[]) {
@@ -42,7 +47,9 @@ export function getReviewSummary(
   reviews: ReviewItem[],
   transactionMap: Map<string, Transaction>,
 ): ReviewSummary {
-  const visibleReviews = reviews.filter((review) => review.reviewType !== "shared_expense_candidate");
+  const visibleReviews = reviews.filter(
+    (review) => review.reviewType !== "shared_expense_candidate" && review.reviewType !== "uncategorized_transaction",
+  );
   const openReviews = getOpenReviews(visibleReviews);
   const openReviewCount = openReviews.length;
   const resolvedReviews: ReviewItem[] = [];

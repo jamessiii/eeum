@@ -138,8 +138,8 @@ export function CategoriesPage({ embedded = false }: { embedded?: boolean }) {
       dragGhostRef.current.style.top = `${event.clientY - dragGhostOffsetRef.current.y}px`;
     };
 
-    window.addEventListener("dragover", handleDragOver);
-    return () => window.removeEventListener("dragover", handleDragOver);
+    window.addEventListener("dragover", handleDragOver, true);
+    return () => window.removeEventListener("dragover", handleDragOver, true);
   }, [dragItem]);
 
   useEffect(() => {

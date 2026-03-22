@@ -44,7 +44,7 @@ function findCategoryId(categories: WorkspaceBundle["categories"], name: string)
   const aliasMap: Record<string, string> = {
     "학자금": "학자금 대출",
     "가족활동": "가족 활동",
-    "개인지출": "개인 지출",
+    "개인 지출": "개인지출",
     "생활비": "추가 지출",
     "데이트/여행경비": "데이트/여행",
     "교통비": "일반 교통",
@@ -58,27 +58,8 @@ function findCategoryId(categories: WorkspaceBundle["categories"], name: string)
     "자동차리스": "자동차 리스"
   };
   const resolvedName = aliasMap[name] ?? name;
-  return categories.find((category) => category.categoryType === "category" && category.name === resolvedName)?.id ?? null;
+  return findCategoryCandidate(categories, resolvedName)?.id ?? null;
 }
-function inferCategoryIdFromMerchant(categories: WorkspaceBundle["categories"], merchantName: string): string | null {
-  const normalizedMerchantName = normalizeText(merchantName).toUpperCase();
-
-  const categoryRules: Array<{ categoryName: string; pattern: RegExp }> = [
-    { categoryName: "\uC77C\uBC18 \uAD50\uD1B5", pattern: /KTX|SRT|\uCF54\uB808\uC77C|\uCCA0\uB3C4\uC2B9\uCC28\uAD8C|\uD2F0\uBA38\uB2C8|\uC9C0\uD558\uCCA0|\uBC84\uC2A4|\uD0DD\uC2DC/u },
-    { categoryName: "\uD1B5\uC2E0\uBE44", pattern: /KT|SKT|LGU\+|\uD1B5\uC2E0|\uC778\uD130\uB137/u },
-    { categoryName: "\uD68C\uC0AC \uC2DD\uB300", pattern: /\uCE74\uD398|\uCEE4\uD53C|\uC2DD\uB2F9|\uC678\uC2DD|\uBC30\uB2EC|\uB9E5\uB3C4\uB0A0\uB4DC|\uC2A4\uD0C0\uBC85\uC2A4|\uC2E0\uC120\uAD6C\uC774/u },
-    { categoryName: "\uC0DD\uD544\uD488", pattern: /\uCFE0\uD321|\uB124\uC774\uBC84\uD398\uC774|\uC774\uB9C8\uD2B8|\uD648\uD50C\uB7EC\uC2A4|\uB2E4\uC774\uC18C|GS25|CU|\uC138\uBE10\uC77C\uB808\uBE10/u },
-  ];
-
-  for (const rule of categoryRules) {
-    if (rule.pattern.test(normalizedMerchantName)) {
-      return findCategoryId(categories, rule.categoryName);
-    }
-  }
-
-  return null;
-}
-
 function createReview(
   workspaceId: string,
   primaryTransactionId: string,
@@ -96,6 +77,226 @@ function createReview(
     relatedTransactionIds,
     confidenceScore,
     summary,
+  };
+}
+
+type CategoryLookup = {
+  id: string;
+  name: string;
+  label: string;
+};
+
+type CategoryInference =
+  | {
+      mode: "auto" | "review";
+      categoryId: string;
+      categoryLabel: string;
+      confidenceScore: number;
+    }
+  | null;
+
+type CategoryInferenceRule = {
+  categoryName: string;
+  parentName?: string;
+  mode: "auto" | "review";
+  confidenceScore: number;
+  patterns: RegExp[];
+};
+
+function findCategoryCandidate(
+  categories: WorkspaceBundle["categories"],
+  name: string,
+  options?: { parentName?: string },
+): CategoryLookup | null {
+  const preferredParentByName: Record<string, string> = {
+    식비: "생활비",
+    카페: "생활비",
+  };
+
+  const resolvedParentName = options?.parentName ?? preferredParentByName[name];
+  const groupIdByName = new Map(
+    categories
+      .filter((category) => category.categoryType === "group")
+      .map((category) => [category.name, category.id]),
+  );
+  const candidates = categories.filter((category) => category.categoryType === "category" && category.name === name);
+  const matched =
+    (resolvedParentName
+      ? candidates.find((category) => category.parentCategoryId === groupIdByName.get(resolvedParentName))
+      : null) ?? candidates[0];
+
+  if (!matched) return null;
+
+  const parentName =
+    categories.find((category) => category.categoryType === "group" && category.id === matched.parentCategoryId)?.name ?? null;
+
+  return {
+    id: matched.id,
+    name: matched.name,
+    label: parentName ? `${parentName} > ${matched.name}` : matched.name,
+  };
+}
+
+function inferCategoryDecision(categories: WorkspaceBundle["categories"], merchantName: string): CategoryInference {
+  const normalizedMerchantName = normalizeText(merchantName).toUpperCase();
+  const compactMerchantName = normalizedMerchantName.replace(/\s+/g, "");
+  const matchesRule = (rule: CategoryInferenceRule) =>
+    rule.patterns.some((pattern) => pattern.test(normalizedMerchantName) || pattern.test(compactMerchantName));
+
+  const rules: CategoryInferenceRule[] = [
+    {
+      categoryName: "연회비",
+      mode: "auto",
+      confidenceScore: 0.98,
+      patterns: [/연회비|ANNUAL\s*FEE|MEMBERSHIP\s*FEE/u],
+    },
+    {
+      categoryName: "관리비",
+      mode: "auto",
+      confidenceScore: 0.96,
+      patterns: [/관리비|아파트관리비|관리사무소|아파트관리/u],
+    },
+    {
+      categoryName: "공과금",
+      mode: "auto",
+      confidenceScore: 0.96,
+      patterns: [/공과금|전기요금|전기료|한국전력|한전|도시가스|가스요금|가스료|수도요금|수도료|상하수도|지역난방|난방비/u],
+    },
+    {
+      categoryName: "통신비",
+      mode: "auto",
+      confidenceScore: 0.95,
+      patterns: [/\bKT\b|SKT|LG\s*U\+|LGU\+|헬로모바일|알뜰폰|통신요금|휴대폰요금|인터넷요금/u],
+    },
+    {
+      categoryName: "보험료",
+      mode: "auto",
+      confidenceScore: 0.94,
+      patterns: [/보험료|손해보험|생명보험|화재보험|현대해상|삼성화재|DB손해보험|메리츠화재|KB손해보험|한화손해보험|우체국보험/u],
+    },
+    {
+      categoryName: "주유비",
+      mode: "auto",
+      confidenceScore: 0.93,
+      patterns: [/주유소|셀프주유|오일뱅크|칼텍스|S-OIL|SOIL|SK에너지/u],
+    },
+    {
+      categoryName: "통행료/하이패스",
+      mode: "auto",
+      confidenceScore: 0.93,
+      patterns: [/하이패스|통행료|도로공사|고속도로/u],
+    },
+    {
+      categoryName: "교통비",
+      mode: "auto",
+      confidenceScore: 0.92,
+      patterns: [/KTX|SRT|코레일|철도승차권|티머니|캐시비|지하철|버스|택시|카카오\s*T|카카오택시|우티/u],
+    },
+    {
+      categoryName: "약국",
+      mode: "auto",
+      confidenceScore: 0.95,
+      patterns: [/약국/u],
+    },
+    {
+      categoryName: "의료비",
+      mode: "auto",
+      confidenceScore: 0.92,
+      patterns: [/병원|의원|치과|한의원|정형외과|이비인후과|피부과|내과|소아과|약제비/u],
+    },
+    {
+      categoryName: "회사 식대",
+      parentName: "생활비",
+      mode: "auto",
+      confidenceScore: 0.88,
+      patterns: [/구내식당|사내식당|직원식당|사원식당/u],
+    },
+    {
+      categoryName: "구독료",
+      mode: "auto",
+      confidenceScore: 0.91,
+      patterns: [
+        /NETFLIX|YOUTUBE|SPOTIFY|MELON|FLO|WAVVE|TIVING|DISNEY|APPLE\.COM\/BILL|NOTION|CANVA|ADOBE|CHATGPT|OPENAI|쿠팡와우|정기결제|구독/u,
+      ],
+    },
+    {
+      categoryName: "기부금",
+      mode: "auto",
+      confidenceScore: 0.92,
+      patterns: [/기부|후원|월드비전|유니세프|굿네이버스|초록우산|사랑의열매|적십자|세이브\s*더?\s*칠드런|SAVE\s*THE\s*CHILDREN/u],
+    },
+    {
+      categoryName: "경조사",
+      mode: "auto",
+      confidenceScore: 0.9,
+      patterns: [/축의금|부의금|조의금|화환|경조/u],
+    },
+    {
+      categoryName: "자동차 리스",
+      mode: "auto",
+      confidenceScore: 0.91,
+      patterns: [/자동차\s*리스|오토리스|장기렌트|장기렌터카|SK렌터카|롯데렌탈/u],
+    },
+    {
+      categoryName: "카페",
+      parentName: "생활비",
+      mode: "review",
+      confidenceScore: 0.72,
+      patterns: [/스타벅스|메가커피|컴포즈|빽다방|이디야|투썸|할리스|폴바셋|커피빈|블루보틀|커피|카페/u],
+    },
+    {
+      categoryName: "식비",
+      parentName: "생활비",
+      mode: "review",
+      confidenceScore: 0.68,
+      patterns: [/배달의민족|요기요|쿠팡이츠|맥도날드|버거킹|롯데리아|서브웨이|식당|김밥|국밥|분식|피자|치킨|샐러드|도시락/u],
+    },
+    {
+      categoryName: "생필품",
+      parentName: "생활비",
+      mode: "review",
+      confidenceScore: 0.65,
+      patterns: [/GS25|CU|세븐일레븐|이마트24|편의점|다이소|올리브영|이마트|홈플러스|롯데마트|노브랜드|트레이더스|하나로마트/u],
+    },
+  ];
+
+  for (const rule of rules) {
+    if (!matchesRule(rule)) continue;
+    const category = findCategoryCandidate(
+      categories,
+      rule.categoryName,
+      rule.parentName ? { parentName: rule.parentName } : undefined,
+    );
+    if (!category) continue;
+
+    return {
+      mode: rule.mode,
+      categoryId: category.id,
+      categoryLabel: category.label,
+      confidenceScore: rule.confidenceScore,
+    };
+  }
+
+  return null;
+}
+
+function createCategorySuggestionReview(
+  workspaceId: string,
+  primaryTransactionId: string,
+  suggestedCategoryId: string,
+  suggestedCategoryLabel: string,
+  confidenceScore: number,
+): ReviewItem {
+  return {
+    id: createId("review"),
+    workspaceId,
+    reviewType: "category_suggestion",
+    status: "open",
+    primaryTransactionId,
+    relatedTransactionIds: [],
+    confidenceScore,
+    summary: `이 항목은 ${suggestedCategoryLabel}로 분류할까요?`,
+    suggestedCategoryId,
   };
 }
 
@@ -188,9 +389,12 @@ function normalizeCancelledMerchantName(merchantName: string) {
   return normalizeText(merchantName).replace(/^취소[-\s]*/u, "").trim();
 }
 
-function removeUncategorizedReviews(reviews: ReviewItem[], primaryTransactionId: string) {
+function removePendingCategoryReviews(reviews: ReviewItem[], primaryTransactionId: string) {
   for (let index = reviews.length - 1; index >= 0; index -= 1) {
-    if (reviews[index].primaryTransactionId === primaryTransactionId && reviews[index].reviewType === "uncategorized_transaction") {
+    if (
+      reviews[index].primaryTransactionId === primaryTransactionId &&
+      (reviews[index].reviewType === "uncategorized_transaction" || reviews[index].reviewType === "category_suggestion")
+    ) {
       reviews.splice(index, 1);
     }
   }
@@ -274,9 +478,34 @@ export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundl
     return next;
   };
 
-  const pushTransaction = (transaction: Transaction, createUncategorizedReview = false) => {
+  const pushTransaction = (
+    transaction: Transaction,
+    options?: {
+      createUncategorizedReview?: boolean;
+      suggestedCategoryId?: string | null;
+      suggestedCategoryLabel?: string | null;
+      suggestedConfidenceScore?: number;
+    },
+  ) => {
     transactions.push(transaction);
-    if (createUncategorizedReview && transaction.status === "active" && !transaction.categoryId) {
+    if (transaction.status !== "active" || transaction.categoryId) return;
+
+    if (options?.suggestedCategoryId && options.suggestedCategoryLabel) {
+      reviews.push(
+        createCategorySuggestionReview(
+          workspace.id,
+          transaction.id,
+          options.suggestedCategoryId,
+          options.suggestedCategoryLabel,
+          options.suggestedConfidenceScore ?? 0.65,
+        ),
+      );
+      return;
+    }
+
+    return;
+
+    if (options?.createUncategorizedReview) {
       reviews.push(
         createReview(
           workspace.id,
@@ -341,7 +570,7 @@ export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundl
         status: "active",
       };
 
-      pushTransaction(transaction, transaction.isExpenseImpact);
+      pushTransaction(transaction, { createUncategorizedReview: transaction.isExpenseImpact });
 
       if (transaction.isInternalTransfer) {
         reviews.push(
@@ -406,7 +635,7 @@ export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundl
           refundOfTransactionId: null,
           status: "active",
         },
-        !normalizeText(row[categoryColumn]),
+        { createUncategorizedReview: !normalizeText(row[categoryColumn]) },
       );
     });
   };
@@ -455,7 +684,10 @@ export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundl
           merchantName,
           description: "",
           amount: Math.abs(amount),
-          categoryId: inferCategoryIdFromMerchant(categories, normalizeCancelledMerchantName(merchantName)),
+          categoryId: (() => {
+            const decision = inferCategoryDecision(categories, normalizeCancelledMerchantName(merchantName));
+            return decision?.mode === "auto" ? decision.categoryId : null;
+          })(),
           tagIds: [],
           isInternalTransfer: false,
           isExpenseImpact: !isCancelled,
@@ -463,7 +695,15 @@ export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundl
           refundOfTransactionId: null,
           status: isCancelled ? "cancelled" : "active",
         },
-        !isCancelled,
+        (() => {
+          const decision = inferCategoryDecision(categories, normalizeCancelledMerchantName(merchantName));
+          return {
+            createUncategorizedReview: !isCancelled,
+            suggestedCategoryId: !isCancelled && decision?.mode === "review" ? decision.categoryId : null,
+            suggestedCategoryLabel: !isCancelled && decision?.mode === "review" ? decision.categoryLabel : null,
+            suggestedConfidenceScore: decision?.mode === "review" ? decision.confidenceScore : undefined,
+          };
+        })(),
       );
     }
 
@@ -526,7 +766,10 @@ export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundl
           amount: Math.abs(amount),
           originalAmount: Math.abs(amount),
           discountAmount: 0,
-          categoryId: inferCategoryIdFromMerchant(categories, normalizeCancelledMerchantName(merchantName)),
+          categoryId: (() => {
+            const decision = inferCategoryDecision(categories, normalizeCancelledMerchantName(merchantName));
+            return decision?.mode === "auto" ? decision.categoryId : null;
+          })(),
           tagIds: [],
           isInternalTransfer: false,
           isExpenseImpact: !isCancelled,
@@ -534,7 +777,15 @@ export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundl
           refundOfTransactionId: null,
           status: isCancelled ? "cancelled" : "active",
         },
-        !isCancelled,
+        (() => {
+          const decision = inferCategoryDecision(categories, normalizeCancelledMerchantName(merchantName));
+          return {
+            createUncategorizedReview: !isCancelled,
+            suggestedCategoryId: !isCancelled && decision?.mode === "review" ? decision.categoryId : null,
+            suggestedCategoryLabel: !isCancelled && decision?.mode === "review" ? decision.categoryLabel : null,
+            suggestedConfidenceScore: decision?.mode === "review" ? decision.confidenceScore : undefined,
+          };
+        })(),
       );
     }
 
@@ -620,7 +871,10 @@ export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundl
           amount: Math.abs(amount),
           originalAmount: Math.abs(amount),
           discountAmount: 0,
-          categoryId: inferCategoryIdFromMerchant(categories, merchantName),
+          categoryId: (() => {
+            const decision = inferCategoryDecision(categories, merchantName);
+            return decision?.mode === "auto" ? decision.categoryId : null;
+          })(),
           tagIds: [],
           isInternalTransfer: false,
           isExpenseImpact: true,
@@ -628,7 +882,15 @@ export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundl
           refundOfTransactionId: null,
           status: "active",
         },
-        true,
+        (() => {
+          const decision = inferCategoryDecision(categories, merchantName);
+          return {
+            createUncategorizedReview: true,
+            suggestedCategoryId: decision?.mode === "review" ? decision.categoryId : null,
+            suggestedCategoryLabel: decision?.mode === "review" ? decision.categoryLabel : null,
+            suggestedConfidenceScore: decision?.mode === "review" ? decision.confidenceScore : undefined,
+          };
+        })(),
       );
     }
 
@@ -712,7 +974,10 @@ export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundl
           amount: Math.abs(amount),
           originalAmount: Math.abs(amount),
           discountAmount: 0,
-          categoryId: inferCategoryIdFromMerchant(categories, merchantName),
+          categoryId: (() => {
+            const decision = inferCategoryDecision(categories, merchantName);
+            return decision?.mode === "auto" ? decision.categoryId : null;
+          })(),
           tagIds: [],
           isInternalTransfer: false,
           isExpenseImpact: !isCancelled,
@@ -720,7 +985,15 @@ export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundl
           refundOfTransactionId: null,
           status: isCancelled ? "cancelled" : "active",
         },
-        !isCancelled,
+        (() => {
+          const decision = inferCategoryDecision(categories, merchantName);
+          return {
+            createUncategorizedReview: !isCancelled,
+            suggestedCategoryId: !isCancelled && decision?.mode === "review" ? decision.categoryId : null,
+            suggestedCategoryLabel: !isCancelled && decision?.mode === "review" ? decision.categoryLabel : null,
+            suggestedConfidenceScore: decision?.mode === "review" ? decision.confidenceScore : undefined,
+          };
+        })(),
       );
     }
 
@@ -775,11 +1048,11 @@ export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundl
       };
 
       if (nextStatus === "cancelled") {
-        removeUncategorizedReviews(reviews, previous.id);
+        removePendingCategoryReviews(reviews, previous.id);
       }
 
       transactions.splice(index, 1);
-      removeUncategorizedReviews(reviews, transaction.id);
+      removePendingCategoryReviews(reviews, transaction.id);
       merged = true;
       break;
     }

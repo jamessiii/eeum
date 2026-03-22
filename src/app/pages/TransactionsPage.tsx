@@ -8,6 +8,8 @@ import { getMotionStyle } from "../../shared/utils/motion";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { TransactionCategoryEditor } from "../components/TransactionCategoryEditor";
 import { TransactionRowHeader } from "../components/TransactionRowHeader";
+import { ImportsPage } from "./ImportsPage";
+import { ReviewsPage } from "./ReviewsPage";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
 
@@ -113,6 +115,9 @@ export function TransactionsPage() {
 
   return (
     <div className="page-stack">
+      <ImportsPage />
+      <ReviewsPage />
+
       <section className="card shadow-sm" style={getMotionStyle(0)}>
         <div className="section-head transaction-grid-head">
           <div>
