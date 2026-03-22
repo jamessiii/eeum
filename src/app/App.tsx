@@ -32,8 +32,6 @@ type NavItem = {
 const baseNavItems: NavItem[] = [
   { to: "/", label: "대시보드", end: true },
   { to: "/transactions", label: "카드내역" },
-  { to: "/imports", label: "업로드" },
-  { to: "/reviews", label: "검토함" },
   { to: "/settings", label: "설정" },
   { to: "/dev", label: "개발자" },
 ];
