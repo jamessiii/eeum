@@ -1,0 +1,17 @@
+import { getMotionStyle } from "../../shared/utils/motion";
+
+export function AccountTransfersPage() {
+  return (
+    <div className="page-stack">
+      <section className="card shadow-sm" style={getMotionStyle(0)}>
+        <div className="section-head">
+          <div>
+            <span className="section-kicker">계좌이체 내역</span>
+            <h2 className="section-title">계좌이체 내역</h2>
+          </div>
+        </div>
+        <p className="text-secondary mb-0">준비중입니다.</p>
+      </section>
+    </div>
+  );
+}
