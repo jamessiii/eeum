@@ -121,7 +121,7 @@ export function TransactionsPage() {
       <section className="card shadow-sm" style={getMotionStyle(0)}>
         <div className="section-head transaction-grid-head">
           <div>
-            <h2 className="section-title">거래 데이터</h2>
+            <h2 className="section-title">카드내역</h2>
             <p className="transaction-grid-meta">
               전체 {scope.transactions.length}건 · 미분류 {uncategorizedTransactionCount}건
             </p>
@@ -175,16 +175,11 @@ export function TransactionsPage() {
           <EmptyStateCallout
             kicker="거래 없음"
             title="아직 입력된 카드내역이 없습니다"
-            description="업로드 화면에서 카드 명세서를 가져오면 검토와 통계가 시작됩니다."
+            description="카드내역 상단에서 카드 명세서를 가져오면 검토와 통계가 시작됩니다."
             actions={
-              <>
-                <Link to="/imports" className="btn btn-outline-primary btn-sm">
-                  카드 명세서 업로드
-                </Link>
-                <Link to="/people" className="btn btn-outline-secondary btn-sm">
-                  사용자 관리 보기
-                </Link>
-              </>
+              <Link to="/people" className="btn btn-outline-secondary btn-sm">
+                사용자 관리 보기
+              </Link>
             }
           />
         ) : !transactions.length ? (

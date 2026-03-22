@@ -53,25 +53,35 @@ function summarizeCategories(state: AppState, workspaceId: string, transactions:
     .slice(0, 4);
 }
 
-function getSpendTone(profile: FinancialProfile | null, spendRate: number): InsightTone {
-  if (!profile) return "caution";
+function getSpendTone(profile: FinancialProfile | null, spendRate: number, hasIncomeBasis: boolean): InsightTone {
+  if (!profile || !hasIncomeBasis) return "caution";
   if (spendRate > profile.warningSpendRate) return "warning";
   if (spendRate > profile.warningSpendRate * 0.85) return "caution";
   return "stable";
 }
 
-function getSavingsTone(profile: FinancialProfile | null, savingsRate: number): InsightTone {
-  if (!profile) return "caution";
+function getSavingsTone(profile: FinancialProfile | null, savingsRate: number, hasIncomeBasis: boolean): InsightTone {
+  if (!profile || !hasIncomeBasis) return "caution";
   if (savingsRate < profile.targetSavingsRate * 0.7) return "warning";
   if (savingsRate < profile.targetSavingsRate) return "caution";
   return "stable";
 }
 
-function getFixedTone(profile: FinancialProfile | null, fixedExpenseRate: number): InsightTone {
-  if (!profile) return "caution";
+function getFixedTone(profile: FinancialProfile | null, fixedExpenseRate: number, hasIncomeBasis: boolean): InsightTone {
+  if (!profile || !hasIncomeBasis) return "caution";
   if (fixedExpenseRate > profile.warningFixedCostRate) return "warning";
   if (fixedExpenseRate > profile.warningFixedCostRate * 0.85) return "caution";
   return "stable";
+}
+
+function getRecordedMonthlyIncome(transactions: Transaction[]) {
+  return transactions.reduce((sum, transaction) => {
+    if (transaction.status !== "active") return sum;
+    if (transaction.sourceType !== "account") return sum;
+    if (transaction.transactionType !== "income") return sum;
+    if (transaction.isInternalTransfer) return sum;
+    return sum + Math.abs(transaction.amount);
+  }, 0);
 }
 
 export function getWorkspaceInsights(state: AppState, workspaceId: string, baseMonth = monthKey(new Date())): WorkspaceInsights {
@@ -82,11 +92,12 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
   const expenseStats = getExpenseImpactStats(transactions);
   const reviewCount = getOpenReviewCount(state.reviews.filter((item) => item.workspaceId === workspaceId));
   const financialProfile = state.financialProfiles.find((item) => item.workspaceId === workspaceId) ?? null;
-  const monthlyNetIncome = financialProfile?.monthlyNetIncome ?? 0;
+  const monthlyIncomeBasis = getRecordedMonthlyIncome(transactions);
+  const hasIncomeBasis = monthlyIncomeBasis > 0;
   const expense = expenseStats.expenseImpactAmount;
-  const savings = Math.max(0, monthlyNetIncome - expense);
-  const spendRate = monthlyNetIncome > 0 ? expense / monthlyNetIncome : 0;
-  const savingsRate = monthlyNetIncome > 0 ? savings / monthlyNetIncome : 0;
+  const savings = Math.max(0, monthlyIncomeBasis - expense);
+  const spendRate = hasIncomeBasis ? expense / monthlyIncomeBasis : 0;
+  const savingsRate = hasIncomeBasis ? savings / monthlyIncomeBasis : 0;
   const recurringSuggestionCount = getRecurringMerchantSuggestionCount(
     transactions,
     state.categories.filter((item) => item.workspaceId === workspaceId),
@@ -102,7 +113,7 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
       fixedExpense += Math.abs(transaction.amount);
     }
   }
-  const fixedExpenseRate = monthlyNetIncome > 0 ? fixedExpense / monthlyNetIncome : 0;
+  const fixedExpenseRate = hasIncomeBasis ? fixedExpense / monthlyIncomeBasis : 0;
   const topCategories = summarizeCategories(state, workspaceId, expenseStats.activeExpenseTransactions);
   const sourceBreakdown = getSourceBreakdown(activeTransactions);
   const dominantSource = getDominantSourceBreakdown(sourceBreakdown, Math.max(1, activeTransactions.length));
@@ -144,12 +155,15 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
   if (reviewCount > 0) nextSteps.push(`검토함 ${reviewCount}건을 먼저 정리해보세요.`);
   if (expenseStats.uncategorizedCount > 0) nextSteps.push(`미분류 거래 ${expenseStats.uncategorizedCount}건을 정리하면 통계가 더 정확해집니다.`);
   if (expenseStats.internalTransferCount > 0) nextSteps.push(`내부이체 ${expenseStats.internalTransferCount}건을 점검하면 소비 통계가 더 깔끔해집니다.`);
+  if (!hasIncomeBasis) nextSteps.push("이체내역에 수입 흐름이 들어오면 월수입 기준과 저축 해석이 함께 계산됩니다.");
   if (recurringSuggestionCount > 0) nextSteps.push(`반복 지출 제안 ${recurringSuggestionCount}개를 확인하면 분류 속도가 빨라집니다.`);
   if (!nextSteps.length) nextSteps.push("데이터가 안정적으로 쌓이고 있습니다. 상위 지출 카테고리부터 점검해보세요.");
 
   let coaching = "현재 데이터 흐름이 안정적으로 쌓이고 있습니다.";
-  if (!financialProfile) {
-    coaching = "월수입과 목표 저축률을 설정하면 대시보드 해석이 더 정확해집니다.";
+  if (!hasIncomeBasis) {
+    coaching = "이체내역에 수입 흐름이 아직 없어 월수입 기준과 저축 해석이 0원 기준으로 표시됩니다.";
+  } else if (!financialProfile) {
+    coaching = "목표 저축률과 경고 기준을 설정하면 대시보드 해석이 더 정확해집니다.";
   } else if (reviewCount > 0 || expenseStats.uncategorizedCount > 0) {
     coaching = "검토와 분류가 조금 더 정리되면 이번 달 숫자를 훨씬 안정적으로 읽을 수 있습니다.";
   } else if (spendRate > financialProfile.warningSpendRate) {
@@ -163,7 +177,7 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
   return {
     month: baseMonth,
     transactionCount: getActiveTransactionCount(transactions),
-    income: monthlyNetIncome,
+    income: monthlyIncomeBasis,
     expense,
     savings,
     spendRate,
@@ -174,19 +188,19 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
     internalTransferCount: expenseStats.internalTransferCount,
     uncategorizedCount: expenseStats.uncategorizedCount,
     recurringSuggestionCount,
-    isFinancialProfileReady: monthlyNetIncome > 0,
+    isFinancialProfileReady: hasIncomeBasis,
     isDiagnosisReady: isDiagnosisReady({
       hasTransactions: getActiveTransactionCount(transactions) > 0,
       postImportReady: reviewCount === 0 && expenseStats.uncategorizedCount === 0,
-      monthlyNetIncome,
+      monthlyNetIncome: monthlyIncomeBasis,
     }),
     topCategories,
     sourceBreakdown,
     headlineCards,
     nextSteps,
     coaching,
-    spendTone: getSpendTone(financialProfile, spendRate),
-    savingsTone: getSavingsTone(financialProfile, savingsRate),
-    fixedTone: getFixedTone(financialProfile, fixedExpenseRate),
+    spendTone: getSpendTone(financialProfile, spendRate, hasIncomeBasis),
+    savingsTone: getSavingsTone(financialProfile, savingsRate, hasIncomeBasis),
+    fixedTone: getFixedTone(financialProfile, fixedExpenseRate, hasIncomeBasis),
   };
 }

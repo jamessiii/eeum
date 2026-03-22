@@ -18,8 +18,8 @@ const TransactionsPage = lazy(() =>
 const AccountTransfersPage = lazy(() =>
   import("./pages/AccountTransfersPage").then((module) => ({ default: module.AccountTransfersPage })),
 );
-const ImportsPage = lazy(() => import("./pages/ImportsPage").then((module) => ({ default: module.ImportsPage })));
-const ReviewsPage = lazy(() => import("./pages/ReviewsPage").then((module) => ({ default: module.ReviewsPage })));
+const PeoplePage = lazy(() => import("./pages/PeoplePage").then((module) => ({ default: module.PeoplePage })));
+const CategoriesPage = lazy(() => import("./pages/CategoriesPage").then((module) => ({ default: module.CategoriesPage })));
 const SettingsPage = lazy(() => import("./pages/SettingsPage").then((module) => ({ default: module.SettingsPage })));
 const DeveloperPage = lazy(() => import("./pages/DeveloperPage").then((module) => ({ default: module.DeveloperPage })));
 
@@ -35,7 +35,9 @@ type NavItem = {
 const baseNavItems: NavItem[] = [
   { to: "/", label: "대시보드", end: true },
   { to: "/transactions", label: "카드내역" },
-  { to: "/account-transfers", label: "계좌이체 내역" },
+  { to: "/account-transfers", label: "이체내역" },
+  { to: "/people", label: "자산 설정" },
+  { to: "/categories", label: "카테고리 설정" },
   { to: "/settings", label: "설정" },
   { to: "/dev", label: "개발자" },
 ];
@@ -100,8 +102,8 @@ function AppTopNav({
 
   const activeKey = useMemo(() => {
     const pathname = location.pathname || "/";
-    if (pathname === "/people" || pathname === "/accounts" || pathname === "/cards" || pathname === "/categories") {
-      return "/settings";
+    if (pathname === "/accounts" || pathname === "/cards") {
+      return "/people";
     }
     const exact = navItems.find((item) => item.to === pathname);
     if (exact) return exact.to;
@@ -174,12 +176,12 @@ function AppRoutes({
         <Route path="/" element={<DashboardPage />} />
         <Route path="/transactions" element={<TransactionsPage />} />
         <Route path="/account-transfers" element={<AccountTransfersPage />} />
-        <Route path="/people" element={<Navigate to="/settings?tab=people" replace />} />
-        <Route path="/accounts" element={<Navigate to="/settings?tab=people" replace />} />
-        <Route path="/cards" element={<Navigate to="/settings?tab=people" replace />} />
-        <Route path="/categories" element={<Navigate to="/settings?tab=categories" replace />} />
-        <Route path="/imports" element={<ImportsPage />} />
-        <Route path="/reviews" element={<ReviewsPage />} />
+        <Route path="/people" element={<PeoplePage />} />
+        <Route path="/accounts" element={<Navigate to="/people" replace />} />
+        <Route path="/cards" element={<Navigate to="/people" replace />} />
+        <Route path="/categories" element={<CategoriesPage />} />
+        <Route path="/imports" element={<Navigate to="/transactions" replace />} />
+        <Route path="/reviews" element={<Navigate to="/transactions" replace />} />
         <Route path="/settlements" element={<Navigate to="/" replace />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route
@@ -225,7 +227,7 @@ function WorkspaceNameEditor({
     <div className={`workspace-name-editor${inline ? " workspace-name-editor-inline" : ""}`}>
       <input
         autoFocus
-        className="form-control workspace-name-input"
+        className="board-case-title-input workspace-name-input"
         value={value}
         onChange={(event) => onChange(event.target.value)}
         onBlur={onSubmit}
@@ -269,7 +271,7 @@ function WorkspaceNameDisplay({
       </button>
       <button
         type="button"
-        className="workspace-name-edit-button"
+        className="board-case-edit-button workspace-name-edit-button"
         onClick={onEdit}
         aria-label="가계부 이름 수정"
         title="가계부 이름 수정"
@@ -464,13 +466,9 @@ function AppFrame() {
       ? "text-bg-info"
       : activeWorkspace.source === "imported"
         ? "text-bg-success"
-        : "text-bg-secondary";
+        : null;
   const workspaceBadgeLabel =
-    activeWorkspace.source === "demo"
-      ? "데모"
-      : activeWorkspace.source === "imported"
-        ? "업로드됨"
-        : "빈 가계부";
+    activeWorkspace.source === "demo" ? "데모" : activeWorkspace.source === "imported" ? "업로드됨" : null;
 
   return (
     <div className={`app-shell${isOnboardingEntering ? " is-onboarding-entering" : ""}`}>
@@ -502,7 +500,9 @@ function AppFrame() {
                   titleTag="strong"
                 />
               )}
-              <span className={`badge ${workspaceBadgeClass}`}>{workspaceBadgeLabel}</span>
+              {workspaceBadgeClass && workspaceBadgeLabel ? (
+                <span className={`badge ${workspaceBadgeClass}`}>{workspaceBadgeLabel}</span>
+              ) : null}
             </div>
             <span className="app-topbar-compact-meta">
               카드내역 {headerSummary.transactionsCount}건 · 검토 {headerSummary.openReviewCount}건 · 사용자 {headerSummary.peopleCount}명

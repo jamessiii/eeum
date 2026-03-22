@@ -367,8 +367,8 @@ export function ImportsPage() {
                     </p>
                   </div>
                   {item.reviewCount > 0 ? (
-                    <Link className="btn btn-outline-secondary btn-sm" to="/reviews" onClick={() => setIsImportHistoryOpen(false)}>
-                      검토 보기
+                    <Link className="btn btn-outline-secondary btn-sm" to="/transactions" onClick={() => setIsImportHistoryOpen(false)}>
+                      카드내역에서 검토하기
                     </Link>
                   ) : null}
                 </div>

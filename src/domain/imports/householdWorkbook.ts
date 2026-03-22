@@ -1,6 +1,6 @@
 import * as XLSX from "xlsx";
 import { createFinancialProfileBase, createStarterCategories, createStarterTags, createWorkspaceBase } from "../app/defaults";
-import type { Account, Card, Person, ReviewItem, Transaction, WorkspaceBundle } from "../../shared/types/models";
+import type { Account, Card, Category, Person, ReviewItem, Transaction, WorkspaceBundle } from "../../shared/types/models";
 import { excelSerialToIso } from "../../shared/utils/date";
 import { createId } from "../../shared/utils/id";
 
@@ -103,6 +103,90 @@ type CategoryInferenceRule = {
   patterns: RegExp[];
 };
 
+type ImportClassificationContext = {
+  categories: Category[];
+  transactions: Transaction[];
+};
+
+type MerchantHistoryCategoryBucket = {
+  name: string;
+  parentName?: string;
+  fixedOrVariable: Category["fixedOrVariable"];
+  count: number;
+};
+
+type HistoricalMerchantProfile = {
+  merchantKey: string;
+  count: number;
+  monthCount: number;
+  uniqueCategoryCount: number;
+  amountAverage: number;
+  amountSpreadRate: number;
+  dominantCategory: MerchantHistoryCategoryBucket;
+  dominantCategoryShare: number;
+};
+
+type HistoricalMerchantAccumulator = {
+  count: number;
+  minAmount: number;
+  maxAmount: number;
+  amountSum: number;
+  monthKeys: Set<string>;
+  categoryBuckets: Map<string, MerchantHistoryCategoryBucket>;
+};
+
+const AUTO_BLOCKED_MERCHANT_PATTERNS = [
+  /네이버\s*페이|NAVER\s*PAY/u,
+  /카카오\s*페이|KAKAO\s*PAY/u,
+  /토스|TOSS/u,
+  /페이코|PAYCO/u,
+  /다날|DANAL/u,
+  /KG\s*이니시스|INI?SIS|KCP|NHN/u,
+  /쿠팡|COUPANG/u,
+  /배달의민족|배민|요기요|쿠팡이츠/u,
+];
+
+function normalizeMerchantKey(value: string) {
+  return normalizeText(value).toUpperCase().replace(/[^0-9A-Z가-힣]/gu, "");
+}
+
+function matchesMerchantPattern(merchantName: string, pattern: RegExp) {
+  const normalizedMerchantName = normalizeText(merchantName).toUpperCase();
+  const compactMerchantName = normalizedMerchantName.replace(/\s+/g, "");
+  return pattern.test(normalizedMerchantName) || pattern.test(compactMerchantName);
+}
+
+function isAutoBlockedMerchant(merchantName: string) {
+  return AUTO_BLOCKED_MERCHANT_PATTERNS.some((pattern) => matchesMerchantPattern(merchantName, pattern));
+}
+
+function cloneCategoriesForWorkspace(categories: Category[], workspaceId: string) {
+  const groupIdMap = new Map<string, string>();
+  const clonedGroups = categories
+    .filter((category) => category.categoryType === "group")
+    .map((category) => {
+      const nextId = createId("category");
+      groupIdMap.set(category.id, nextId);
+      return {
+        ...category,
+        id: nextId,
+        workspaceId,
+        parentCategoryId: null,
+      };
+    });
+
+  const clonedLeafCategories = categories
+    .filter((category) => category.categoryType === "category")
+    .map((category) => ({
+      ...category,
+      id: createId("category"),
+      workspaceId,
+      parentCategoryId: category.parentCategoryId ? (groupIdMap.get(category.parentCategoryId) ?? null) : null,
+    }));
+
+  return [...clonedGroups, ...clonedLeafCategories];
+}
+
 function findCategoryCandidate(
   categories: WorkspaceBundle["categories"],
   name: string,
@@ -137,12 +221,7 @@ function findCategoryCandidate(
   };
 }
 
-function inferCategoryDecision(categories: WorkspaceBundle["categories"], merchantName: string): CategoryInference {
-  const normalizedMerchantName = normalizeText(merchantName).toUpperCase();
-  const compactMerchantName = normalizedMerchantName.replace(/\s+/g, "");
-  const matchesRule = (rule: CategoryInferenceRule) =>
-    rule.patterns.some((pattern) => pattern.test(normalizedMerchantName) || pattern.test(compactMerchantName));
-
+function inferRuleBasedCategoryDecision(categories: WorkspaceBundle["categories"], merchantName: string): CategoryInference {
   const rules: CategoryInferenceRule[] = [
     {
       categoryName: "연회비",
@@ -215,9 +294,7 @@ function inferCategoryDecision(categories: WorkspaceBundle["categories"], mercha
       categoryName: "구독료",
       mode: "auto",
       confidenceScore: 0.91,
-      patterns: [
-        /NETFLIX|YOUTUBE|SPOTIFY|MELON|FLO|WAVVE|TIVING|DISNEY|APPLE\.COM\/BILL|NOTION|CANVA|ADOBE|CHATGPT|OPENAI|쿠팡와우|정기결제|구독/u,
-      ],
+      patterns: [/NETFLIX|YOUTUBE|SPOTIFY|MELON|FLO|WAVVE|TIVING|DISNEY|APPLE\.COM\/BILL|NOTION|CANVA|ADOBE|CHATGPT|OPENAI|쿠팡와우/u],
     },
     {
       categoryName: "기부금",
@@ -261,7 +338,8 @@ function inferCategoryDecision(categories: WorkspaceBundle["categories"], mercha
   ];
 
   for (const rule of rules) {
-    if (!matchesRule(rule)) continue;
+    if (!rule.patterns.some((pattern) => matchesMerchantPattern(merchantName, pattern))) continue;
+
     const category = findCategoryCandidate(
       categories,
       rule.categoryName,
@@ -278,6 +356,157 @@ function inferCategoryDecision(categories: WorkspaceBundle["categories"], mercha
   }
 
   return null;
+}
+
+function buildHistoricalMerchantProfiles(
+  transactions: Transaction[],
+  categories: Category[],
+) {
+  const categoryMap = new Map(categories.map((category) => [category.id, category]));
+  const groupNameMap = new Map(
+    categories.filter((category) => category.categoryType === "group").map((category) => [category.id, category.name]),
+  );
+  const merchantMap = new Map<string, HistoricalMerchantAccumulator>();
+
+  for (const transaction of transactions) {
+    if (!transaction.isExpenseImpact || transaction.transactionType !== "expense" || transaction.status !== "active") continue;
+    if (!transaction.categoryId) continue;
+
+    const category = categoryMap.get(transaction.categoryId);
+    if (!category || category.categoryType !== "category") continue;
+
+    const merchantKey = normalizeMerchantKey(transaction.merchantName);
+    if (!merchantKey) continue;
+
+    const bucket =
+      merchantMap.get(merchantKey) ??
+      (() => {
+        const created: HistoricalMerchantAccumulator = {
+          count: 0,
+          minAmount: Number.MAX_SAFE_INTEGER,
+          maxAmount: 0,
+          amountSum: 0,
+          monthKeys: new Set<string>(),
+          categoryBuckets: new Map<string, MerchantHistoryCategoryBucket>(),
+        };
+        merchantMap.set(merchantKey, created);
+        return created;
+      })();
+
+    const amount = Math.abs(transaction.amount);
+    const parentName = category.parentCategoryId ? (groupNameMap.get(category.parentCategoryId) ?? undefined) : undefined;
+    const categoryKey = `${parentName ?? ""}::${category.name}`;
+    const categoryBucket = bucket.categoryBuckets.get(categoryKey) ?? {
+      name: category.name,
+      parentName,
+      fixedOrVariable: category.fixedOrVariable,
+      count: 0,
+    };
+
+    bucket.count += 1;
+    bucket.minAmount = Math.min(bucket.minAmount, amount);
+    bucket.maxAmount = Math.max(bucket.maxAmount, amount);
+    bucket.amountSum += amount;
+    bucket.monthKeys.add(transaction.occurredAt.slice(0, 7));
+    categoryBucket.count += 1;
+    bucket.categoryBuckets.set(categoryKey, categoryBucket);
+  }
+
+  return new Map(
+    [...merchantMap.entries()]
+      .map(([merchantKey, profile]): [string, HistoricalMerchantProfile] | null => {
+        const dominantCategory = [...profile.categoryBuckets.values()].sort((left, right) => right.count - left.count)[0] ?? null;
+        if (!dominantCategory) return null;
+
+        const amountAverage = Math.round(profile.amountSum / Math.max(1, profile.count));
+        const amountSpreadRate = amountAverage ? (profile.maxAmount - profile.minAmount) / amountAverage : 0;
+
+        return [
+          merchantKey,
+          {
+            merchantKey,
+            count: profile.count,
+            monthCount: profile.monthKeys.size,
+            uniqueCategoryCount: profile.categoryBuckets.size,
+            amountAverage,
+            amountSpreadRate,
+            dominantCategory,
+            dominantCategoryShare: dominantCategory.count / Math.max(1, profile.count),
+          },
+        ];
+      })
+      .filter((entry): entry is [string, HistoricalMerchantProfile] => Boolean(entry)),
+  );
+}
+
+function inferHistoryBasedCategoryDecision(
+  categories: WorkspaceBundle["categories"],
+  merchantName: string,
+  historicalProfiles: Map<string, HistoricalMerchantProfile>,
+): CategoryInference {
+  const profile = historicalProfiles.get(normalizeMerchantKey(merchantName));
+  if (!profile) return null;
+
+  const category = findCategoryCandidate(
+    categories,
+    profile.dominantCategory.name,
+    profile.dominantCategory.parentName ? { parentName: profile.dominantCategory.parentName } : undefined,
+  );
+  if (!category) return null;
+
+  const hasStableRecurringPattern =
+    profile.count >= 4 &&
+    profile.monthCount >= 3 &&
+    profile.uniqueCategoryCount === 1 &&
+    profile.dominantCategoryShare >= 0.9 &&
+    profile.amountSpreadRate <= 0.1;
+
+  if (
+    !isAutoBlockedMerchant(merchantName) &&
+    profile.dominantCategory.fixedOrVariable === "fixed" &&
+    hasStableRecurringPattern
+  ) {
+    return {
+      mode: "auto",
+      categoryId: category.id,
+      categoryLabel: category.label,
+      confidenceScore: 0.9,
+    };
+  }
+
+  const hasSuggestibleHistory =
+    profile.count >= 3 &&
+    profile.monthCount >= 2 &&
+    profile.dominantCategoryShare >= 0.8 &&
+    profile.amountSpreadRate <= 0.45;
+
+  if (!hasSuggestibleHistory) return null;
+
+  return {
+    mode: "review",
+    categoryId: category.id,
+    categoryLabel: category.label,
+    confidenceScore: 0.74,
+  };
+}
+
+function inferCategoryDecision(
+  categories: WorkspaceBundle["categories"],
+  merchantName: string,
+  historicalProfiles: Map<string, HistoricalMerchantProfile>,
+): CategoryInference {
+  const ruleDecision = inferRuleBasedCategoryDecision(categories, merchantName);
+  const historyDecision = inferHistoryBasedCategoryDecision(categories, merchantName, historicalProfiles);
+
+  if (ruleDecision?.mode === "auto") return ruleDecision;
+  if (ruleDecision?.mode === "review") {
+    if (historyDecision?.mode === "review" && historyDecision.confidenceScore > ruleDecision.confidenceScore) {
+      return historyDecision;
+    }
+    return ruleDecision;
+  }
+
+  return historyDecision;
 }
 
 function createCategorySuggestionReview(
@@ -400,14 +629,16 @@ function removePendingCategoryReviews(reviews: ReviewItem[], primaryTransactionI
   }
 }
 
-export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundle> {
+export async function parseHouseholdWorkbook(file: File, context?: ImportClassificationContext): Promise<WorkspaceBundle> {
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: "array" });
 
   const workspace = createWorkspaceBase(file.name.replace(/\.xlsx?$/i, ""), "imported");
   const financialProfile = createFinancialProfileBase(workspace.id);
-  const categories = createStarterCategories(workspace.id);
+  const categories =
+    context?.categories?.length ? cloneCategoriesForWorkspace(context.categories, workspace.id) : createStarterCategories(workspace.id);
   const tags = createStarterTags(workspace.id);
+  const historicalProfiles = buildHistoricalMerchantProfiles(context?.transactions ?? [], context?.categories ?? []);
 
   const peopleByName = new Map<string, Person>();
   const accountsByName = new Map<string, Account>();
@@ -685,7 +916,7 @@ export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundl
           description: "",
           amount: Math.abs(amount),
           categoryId: (() => {
-            const decision = inferCategoryDecision(categories, normalizeCancelledMerchantName(merchantName));
+            const decision = inferCategoryDecision(categories, normalizeCancelledMerchantName(merchantName), historicalProfiles);
             return decision?.mode === "auto" ? decision.categoryId : null;
           })(),
           tagIds: [],
@@ -696,7 +927,7 @@ export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundl
           status: isCancelled ? "cancelled" : "active",
         },
         (() => {
-          const decision = inferCategoryDecision(categories, normalizeCancelledMerchantName(merchantName));
+          const decision = inferCategoryDecision(categories, normalizeCancelledMerchantName(merchantName), historicalProfiles);
           return {
             createUncategorizedReview: !isCancelled,
             suggestedCategoryId: !isCancelled && decision?.mode === "review" ? decision.categoryId : null,
@@ -767,7 +998,7 @@ export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundl
           originalAmount: Math.abs(amount),
           discountAmount: 0,
           categoryId: (() => {
-            const decision = inferCategoryDecision(categories, normalizeCancelledMerchantName(merchantName));
+            const decision = inferCategoryDecision(categories, normalizeCancelledMerchantName(merchantName), historicalProfiles);
             return decision?.mode === "auto" ? decision.categoryId : null;
           })(),
           tagIds: [],
@@ -778,7 +1009,7 @@ export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundl
           status: isCancelled ? "cancelled" : "active",
         },
         (() => {
-          const decision = inferCategoryDecision(categories, normalizeCancelledMerchantName(merchantName));
+          const decision = inferCategoryDecision(categories, normalizeCancelledMerchantName(merchantName), historicalProfiles);
           return {
             createUncategorizedReview: !isCancelled,
             suggestedCategoryId: !isCancelled && decision?.mode === "review" ? decision.categoryId : null,
@@ -872,7 +1103,7 @@ export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundl
           originalAmount: Math.abs(amount),
           discountAmount: 0,
           categoryId: (() => {
-            const decision = inferCategoryDecision(categories, merchantName);
+            const decision = inferCategoryDecision(categories, merchantName, historicalProfiles);
             return decision?.mode === "auto" ? decision.categoryId : null;
           })(),
           tagIds: [],
@@ -883,7 +1114,7 @@ export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundl
           status: "active",
         },
         (() => {
-          const decision = inferCategoryDecision(categories, merchantName);
+          const decision = inferCategoryDecision(categories, merchantName, historicalProfiles);
           return {
             createUncategorizedReview: true,
             suggestedCategoryId: decision?.mode === "review" ? decision.categoryId : null,
@@ -975,7 +1206,7 @@ export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundl
           originalAmount: Math.abs(amount),
           discountAmount: 0,
           categoryId: (() => {
-            const decision = inferCategoryDecision(categories, merchantName);
+            const decision = inferCategoryDecision(categories, merchantName, historicalProfiles);
             return decision?.mode === "auto" ? decision.categoryId : null;
           })(),
           tagIds: [],
@@ -986,7 +1217,7 @@ export async function parseHouseholdWorkbook(file: File): Promise<WorkspaceBundl
           status: isCancelled ? "cancelled" : "active",
         },
         (() => {
-          const decision = inferCategoryDecision(categories, merchantName);
+          const decision = inferCategoryDecision(categories, merchantName, historicalProfiles);
           return {
             createUncategorizedReview: !isCancelled,
             suggestedCategoryId: !isCancelled && decision?.mode === "review" ? decision.categoryId : null,

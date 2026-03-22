@@ -330,7 +330,7 @@ export function CategoriesPage({ embedded = false }: { embedded?: boolean }) {
     <div className={embedded ? "" : "page-stack"}>
       <BoardCase
         embedded={embedded}
-        title="카테고리"
+        title="카테고리 설정"
         description="그룹과 하위 카테고리를 같은 보드 포맷에서 관리합니다. 드래그 앤 드롭, 숨기기, 삭제, 기본값 초기화는 그대로 유지됩니다."
         actions={
           <>

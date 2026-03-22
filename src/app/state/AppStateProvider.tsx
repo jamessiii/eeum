@@ -1696,7 +1696,17 @@ export function AppStateProvider({ children }: PropsWithChildren) {
       },
       async previewWorkbookImport(file) {
         const { parseHouseholdWorkbook } = await import("../../domain/imports/householdWorkbook");
-        const bundle = await parseHouseholdWorkbook(file);
+        const activeWorkspaceId = state.activeWorkspaceId;
+        const classificationContext = activeWorkspaceId ? getWorkspaceScope(state, activeWorkspaceId) : null;
+        const bundle = await parseHouseholdWorkbook(
+          file,
+          classificationContext
+            ? {
+                categories: classificationContext.categories,
+                transactions: classificationContext.transactions,
+              }
+            : undefined,
+        );
         showToast(`${file.name} 미리보기를 준비했습니다.`, "info");
         return bundle;
       },

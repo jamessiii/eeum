@@ -1,11 +1,9 @@
 ﻿import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
-import { Link } from "react-router-dom";
 import { useEffect } from "react";
 import { useRef } from "react";
 import { createPortal } from "react-dom";
-import { getAccountUsageSummary, getCardUsageSummary, getPersonUsageSummary } from "../../domain/assets/usageSummary";
+import { getPersonUsageSummary } from "../../domain/assets/usageSummary";
 import { getActiveTransactions } from "../../domain/transactions/meta";
-import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { AppModal } from "../components/AppModal";
 import { BoardCase } from "../components/BoardCase";
@@ -67,14 +65,6 @@ const CARD_TYPE_OPTIONS = [
 
 type AccountUsageType = (typeof ACCOUNT_USAGE_OPTIONS)[number]["value"];
 
-type PersonDraftState = {
-  name: string;
-  displayName: string;
-  role: "owner" | "member";
-  memo: string;
-  isActive: boolean;
-};
-
 type PersonAccountDraftState = {
   name: string;
   alias: string;
@@ -103,14 +93,6 @@ type DragItem =
   | { id: string; itemType: "card"; ownerPersonId: string | null; isHidden: boolean };
 
 let transparentDragImage: HTMLCanvasElement | null = null;
-
-const EMPTY_PERSON_DRAFT: PersonDraftState = {
-  name: "",
-  displayName: "",
-  role: "member",
-  memo: "",
-  isActive: true,
-};
 
 const EMPTY_PERSON_ACCOUNT_DRAFT: PersonAccountDraftState = {
   name: "",
@@ -180,23 +162,6 @@ function getFinancialInstitutionOptions(currentValue?: string) {
     return FINANCIAL_INSTITUTION_OPTIONS;
   }
   return [normalizedCurrentValue, ...FINANCIAL_INSTITUTION_OPTIONS];
-}
-
-function createDraftFromPerson(person?: {
-  name: string;
-  displayName: string;
-  role: "owner" | "member";
-  memo: string;
-  isActive: boolean;
-}): PersonDraftState {
-  if (!person) return EMPTY_PERSON_DRAFT;
-  return {
-    name: person.name,
-    displayName: person.displayName,
-    role: person.role,
-    memo: person.memo,
-    isActive: person.isActive,
-  };
 }
 
 function createAccountDraftForPerson(personId: string): PersonAccountDraftState {
@@ -290,7 +255,6 @@ function createSequentialLabel(baseLabel: string, existingLabels: string[]) {
 export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   const { addAccount, addPerson, deleteAccount, deleteCard, deletePerson, moveAccount, moveCard, movePerson, state, updateAccount, updateCard, updatePerson } =
     useAppState();
-  const [expandedPersonId, setExpandedPersonId] = useState<string | null>(null);
   const [inlineEditingPersonId, setInlineEditingPersonId] = useState<string | null>(null);
   const [inlinePersonName, setInlinePersonName] = useState("");
   const [pendingInlinePersonName, setPendingInlinePersonName] = useState<string | null>(null);
@@ -302,12 +266,10 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   const [isDragOverlayActive, setIsDragOverlayActive] = useState(false);
   const [isHiddenPanelOpen, setIsHiddenPanelOpen] = useState(false);
   const [pendingDeleteItem, setPendingDeleteItem] = useState<{ itemType: DragItem["itemType"]; id: string } | null>(null);
-  const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
   const [accountOwnerPersonId, setAccountOwnerPersonId] = useState<string | null>(null);
   const [accountDraft, setAccountDraft] = useState<PersonAccountDraftState>(EMPTY_PERSON_ACCOUNT_DRAFT);
-  const [editDraft, setEditDraft] = useState<PersonDraftState>(EMPTY_PERSON_DRAFT);
   const [editAccountDraft, setEditAccountDraft] = useState<PersonAccountDraftState>(EMPTY_PERSON_ACCOUNT_DRAFT);
   const [editCardDraft, setEditCardDraft] = useState<PersonCardDraftState>(EMPTY_PERSON_CARD_DRAFT);
   const dragOverlayTimeoutRef = useRef<number | null>(null);
@@ -318,7 +280,6 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   const dragGhostOffsetRef = useRef({ x: 0, y: 0 });
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
-  const allPeople = scope.people;
   const people = scope.people.filter((person) => !person.isHidden);
   const hiddenPeople = scope.people.filter((person) => person.isHidden);
   const hiddenAccounts = scope.accounts.filter((account) => account.isHidden && !account.isShared);
@@ -326,7 +287,6 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   const transactions = getActiveTransactions(scope.transactions);
   const personNameMap = new Map(scope.people.map((person) => [person.id, person.displayName || person.name]));
   const accountNameMap = new Map(scope.accounts.map((account) => [account.id, account.alias || account.name]));
-  const editingPerson = useMemo(() => allPeople.find((person) => person.id === editingPersonId) ?? null, [allPeople, editingPersonId]);
   const editingAccount = useMemo(
     () => scope.accounts.find((account) => account.id === editingAccountId) ?? null,
     [scope.accounts, editingAccountId],
@@ -338,17 +298,6 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
     if (!targetCard) return "";
     return `${getCardAccountLabel(targetCard.cardType)}로 연결`;
   }, [activeCardLinkTargetId, scope.cards]);
-
-  const normalizeDraftValues = (draft: PersonDraftState) => {
-    const name = draft.name.trim();
-    return {
-      name,
-      displayName: draft.displayName.trim() || name,
-      role: draft.role,
-      memo: draft.memo.trim(),
-      isActive: draft.isActive,
-    };
-  };
 
   const accountsByPersonId = new Map(
     scope.people.map((person) => [person.id, scope.accounts.filter((account) => account.ownerPersonId === person.id && !account.isHidden)]),
@@ -676,7 +625,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   };
 
   const accountOwner = accountOwnerPersonId ? people.find((person) => person.id === accountOwnerPersonId) ?? null : null;
-  const pendingDeletePerson = pendingDeleteItem?.itemType === "person" ? allPeople.find((person) => person.id === pendingDeleteItem.id) ?? null : null;
+  const pendingDeletePerson = pendingDeleteItem?.itemType === "person" ? scope.people.find((person) => person.id === pendingDeleteItem.id) ?? null : null;
   const pendingDeleteAccount = pendingDeleteItem?.itemType === "account" ? scope.accounts.find((account) => account.id === pendingDeleteItem.id) ?? null : null;
   const pendingDeleteCard = pendingDeleteItem?.itemType === "card" ? scope.cards.find((card) => card.id === pendingDeleteItem.id) ?? null : null;
   const embeddedSections = people.map((person) => ({
@@ -691,8 +640,8 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   const embeddedPeopleSection = (
     <>
       <BoardCase
-      embedded
-      title="사용자"
+      embedded={embedded}
+      title="자산 설정"
       description="사용자별 계좌와 카드를 같은 보드 형식에서 관리합니다."
       actions={
         <button
@@ -1085,273 +1034,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
 
   return (
     <div className={embedded ? "" : "page-stack"}>
-      {!embedded ? (
-        <section className="card shadow-sm" style={getMotionStyle(0)}>
-          <div className="section-head">
-            <div>
-              <span className="section-kicker">구성원 중심 관리</span>
-              <h2 className="section-title">사용자</h2>
-            </div>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={createPersonSection}
-            >
-              사용자 등록
-            </button>
-          </div>
-          <p className="mb-0 text-secondary">
-            계좌와 카드는 전역 탭 대신 각 사용자 아래에서 관리합니다. 카드는 업로드 중 자동 생성되고 여기서 소유자와 연결 계좌를 보정합니다.
-          </p>
-        </section>
-      ) : null}
-
-      {embedded ? (
-        embeddedPeopleSection
-      ) : (
-        <section className="card shadow-sm" style={getMotionStyle(1)}>
-        <div className="section-head">
-          <div>
-            <span className="section-kicker">구성원 목록</span>
-            <h2 className="section-title">등록된 사용자 관리</h2>
-          </div>
-          <span className="badge text-bg-dark">{people.length}명</span>
-        </div>
-        {!people.length ? (
-          <EmptyStateCallout
-            kicker="첫 단계"
-            title="입력과 업로드에 연결할 사용자를 먼저 등록해주세요"
-            description="사용자가 정리되어 있어야 계좌 등록과 카드 자동 매핑이 자연스럽게 이어집니다."
-            actions={
-              <>
-                <Link to="/imports" className="btn btn-outline-primary btn-sm">
-                  업로드 화면 보기
-                </Link>
-                <Link to="/settings?tab=categories" className="btn btn-outline-secondary btn-sm">
-                  카테고리 보기
-                </Link>
-              </>
-            }
-          />
-        ) : (
-          <div className="resource-grid compact-resource-grid">
-            {people.map((person, index) => {
-              const usage = getPersonUsageSummary(transactions, person.id);
-              const isExpanded = expandedPersonId === person.id;
-              const linkedAccounts = accountsByPersonId.get(person.id) ?? [];
-              const linkedCards = cardsByPersonId.get(person.id) ?? [];
-
-              return (
-                <article
-                  key={person.id}
-                  className={`resource-card compact-resource-card${isExpanded ? " expanded" : ""}`}
-                  style={getMotionStyle(index + 2)}
-                >
-                  <div className="compact-card-summary">
-                    <div>
-                      <div className="compact-card-meta">
-                        <span className={`badge ${person.isActive ? "text-bg-success" : "text-bg-secondary"}`}>
-                          {person.isActive ? "사용 중" : "보관"}
-                        </span>
-                        <span className="compact-card-caption">{getPersonRoleLabel(person.role)}</span>
-                      </div>
-                      <h3 className="mb-1">{person.displayName || person.name}</h3>
-                      <p className="mb-1 text-secondary">{person.name !== person.displayName ? `원본 이름 ${person.name}` : " "}</p>
-                      <p className="mb-0 text-secondary">거래 {usage.transactionCount}건</p>
-                    </div>
-                    <div className="compact-card-actions">
-                      <button
-                        type="button"
-                        className="btn btn-outline-secondary btn-sm"
-                        onClick={() => {
-                          setEditingPersonId(person.id);
-                          setEditDraft(createDraftFromPerson(person));
-                        }}
-                      >
-                        수정
-                      </button>
-                      <button
-                        type="button"
-                        className="expand-toggle-button"
-                        onClick={() => setExpandedPersonId((current) => (current === person.id ? null : person.id))}
-                        aria-expanded={isExpanded}
-                        aria-label={isExpanded ? "상세 닫기" : "상세 펼치기"}
-                      >
-                        {isExpanded ? "−" : "+"}
-                      </button>
-                    </div>
-                  </div>
-                  {isExpanded ? (
-                    <div className="compact-card-details">
-                      <div className="compact-detail-grid">
-                        <div>
-                          <span className="section-kicker">역할</span>
-                          <strong>{getPersonRoleLabel(person.role)}</strong>
-                        </div>
-                        <div>
-                          <span className="section-kicker">상태</span>
-                          <strong>{person.isActive ? "사용 중" : "보관"}</strong>
-                        </div>
-                        <div>
-                          <span className="section-kicker">거래 수</span>
-                          <strong>{usage.transactionCount}건</strong>
-                        </div>
-                        <div>
-                          <span className="section-kicker">사용 금액</span>
-                          <strong>{formatCurrency(usage.sharedExpenseAmount)}</strong>
-                        </div>
-                      </div>
-
-                      <div className="compact-detail-grid">
-                        <div>
-                          <span className="section-kicker">등록 계좌</span>
-                          <strong>{linkedAccounts.length}개</strong>
-                        </div>
-                        <div>
-                          <span className="section-kicker">등록 카드</span>
-                          <strong>{linkedCards.length}개</strong>
-                        </div>
-                      </div>
-
-                      <div className="section-head mb-3">
-                        <div>
-                          <span className="section-kicker">사용자 하위 자산</span>
-                          <h3 className="section-title mb-0">계좌</h3>
-                        </div>
-                        <button
-                          type="button"
-                          className="btn btn-outline-primary btn-sm"
-                          onClick={() => openPersonAccountModal(person.id)}
-                        >
-                          계좌 추가
-                        </button>
-                      </div>
-                      {linkedAccounts.length ? (
-                        <div className="person-asset-grid">
-                          {linkedAccounts.map((account) => {
-                            const usageSummary = getAccountUsageSummary(transactions, account.id);
-                            const usageLabel =
-                              ACCOUNT_USAGE_OPTIONS.find((option) => option.value === getVisibleAccountUsageType(account.usageType, account.isShared))
-                                ?.label ?? "기타";
-                            return (
-                              <article key={account.id} className="person-asset-card">
-                                <strong>{account.alias || account.name}</strong>
-                                <span>{account.institutionName || "직접 입력"}</span>
-                                <span>{account.accountNumberMasked || "계좌번호 미입력"}</span>
-                                <span className="small text-secondary">{usageLabel}</span>
-                                <span className="small text-secondary">지출 {formatCurrency(usageSummary.expenseAmount)}</span>
-                                <button
-                                  type="button"
-                                  className="btn btn-link btn-sm p-0 align-self-start"
-                                  onClick={() => {
-                                    setEditingAccountId(account.id);
-                                    setEditAccountDraft(createDraftFromAccount(account));
-                                  }}
-                                >
-                                  계좌 수정
-                                </button>
-                              </article>
-                            );
-                          })}
-                          <button
-                            type="button"
-                            className="person-asset-card person-asset-card-add"
-                            onClick={() => openPersonAccountModal(person.id)}
-                            aria-label={`${person.displayName || person.name} 계좌 추가`}
-                          >
-                            <span className="person-asset-plus">+</span>
-                            <span>계좌 추가</span>
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="person-asset-grid">
-                          <button
-                            type="button"
-                            className="person-asset-card person-asset-card-add"
-                            onClick={() => openPersonAccountModal(person.id)}
-                            aria-label={`${person.displayName || person.name} 계좌 추가`}
-                          >
-                            <span className="person-asset-plus">+</span>
-                            <span>첫 계좌 등록</span>
-                          </button>
-                        </div>
-                      )}
-
-                      <div className="section-head mb-3 mt-4">
-                        <div>
-                          <span className="section-kicker">업로드 기반 카드</span>
-                          <h3 className="section-title mb-0">카드</h3>
-                        </div>
-                      </div>
-                      {linkedCards.length ? (
-                        <div className="resource-grid compact-resource-grid">
-                          {linkedCards.map((card) => {
-                            const usageSummary = getCardUsageSummary(transactions, card.id);
-                            const linkedAccountName = card.linkedAccountId
-                              ? accountNameMap.get(card.linkedAccountId) ?? "없음"
-                              : "없음";
-                            const cardAccountLabel = getCardAccountLabel(card.cardType);
-                            const cardIdentifier = getVisibleCardIdentifier(card.cardNumberMasked);
-                            const isLinkedAccountFlashing = linkedAccountFlash?.cardId === card.id;
-                            const linkedAccountFlashKey = isLinkedAccountFlashing ? linkedAccountFlash.sequence : 0;
-                            return (
-                              <article key={card.id} className="resource-card compact-resource-card">
-                                <div className="compact-card-summary">
-                                  <div>
-                                    <div className="compact-card-meta">
-                                      <span className="badge text-bg-secondary">
-                                        {CARD_TYPE_OPTIONS.find((option) => option.value === card.cardType)?.label ?? "기타"}
-                                      </span>
-                                      <span className="compact-card-caption">{`${card.issuerName || "카드사 미확인"}${cardIdentifier ? ` (${cardIdentifier})` : ""}`}</span>
-                                    </div>
-                                    <h3 className="mb-1">{card.name}</h3>
-                                    <p className="mb-1 text-secondary">
-                                      <span className="people-linked-account-row">
-                                        <span
-                                          key={`${card.id}-${linkedAccountFlashKey}`}
-                                          className={`people-linked-account-line${isLinkedAccountFlashing ? " is-flashing" : ""}`}
-                                        >
-                                          <span className="people-linked-account-label">{cardAccountLabel}</span>
-                                          <span className="people-linked-account-value">{linkedAccountName}</span>
-                                        </span>
-                                        {isLinkedAccountFlashing ? <span className="people-linked-account-status">연결됨</span> : null}
-                                      </span>
-                                    </p>
-                                    <p className="mb-0 text-secondary">사용 {formatCurrency(usageSummary.expenseAmount)}</p>
-                                  </div>
-                                  <div className="compact-card-actions">
-                                    <button
-                                      type="button"
-                                      className="btn btn-outline-secondary btn-sm"
-                                      onClick={() => {
-                                        setEditingCardId(card.id);
-                                        setEditCardDraft(createDraftFromCard(card));
-                                      }}
-                                    >
-                                      카드 수정
-                                    </button>
-                                  </div>
-                                </div>
-                              </article>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <p className="mb-0 text-secondary small">
-                          아직 연결된 카드가 없습니다. 카드 명세서를 업로드하면 자동 생성되고 여기서 소유자와 연결 계좌를 조정할 수 있습니다.
-                        </p>
-                      )}
-
-                      {person.memo ? <div className="compact-note">{person.memo}</div> : null}
-                    </div>
-                  ) : null}
-                </article>
-              );
-            })}
-          </div>
-        )}
-        </section>
-      )}
+      {embeddedPeopleSection}
 
       <AppModal
         open={Boolean(pendingDeleteItem)}
@@ -1466,64 +1149,6 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
             <label style={{ gridColumn: "1 / -1" }}>
               메모
               <textarea className="form-control" rows={3} value={accountDraft.memo} onChange={(event) => patchAccountDraft({ memo: event.target.value }, setAccountDraft, accountOwnerPersonId)} />
-            </label>
-            <div className="d-flex justify-content-end" style={{ gridColumn: "1 / -1" }}>
-              <button className="btn btn-primary" type="submit">
-                저장
-              </button>
-            </div>
-          </form>
-        ) : null}
-      </AppModal>
-
-      <AppModal
-        open={Boolean(editingPerson)}
-        title="사용자 수정"
-        description="필터와 연결 규칙에 닿는 정보만 빠르게 수정할 수 있습니다."
-        onClose={() => {
-          setEditingPersonId(null);
-          setEditDraft(EMPTY_PERSON_DRAFT);
-        }}
-      >
-        {editingPerson ? (
-          <form
-            className="profile-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const values = normalizeDraftValues(editDraft);
-              if (!values.name) return;
-              updatePerson(workspaceId, editingPerson.id, values);
-              setEditingPersonId(null);
-              setEditDraft(EMPTY_PERSON_DRAFT);
-            }}
-          >
-            <label>
-              이름
-              <input className="form-control" value={editDraft.name} onChange={(event) => setEditDraft((current) => ({ ...current, name: event.target.value }))} />
-            </label>
-            <label>
-              표시 이름
-              <input className="form-control" value={editDraft.displayName} onChange={(event) => setEditDraft((current) => ({ ...current, displayName: event.target.value }))} />
-            </label>
-            <label>
-              역할
-              <select className="form-select" value={editDraft.role} onChange={(event) => setEditDraft((current) => ({ ...current, role: event.target.value === "owner" ? "owner" : "member" }))}>
-                <option value="owner">기본 사용자</option>
-                <option value="member">구성원</option>
-              </select>
-            </label>
-            <label className="compact-check">
-              <span className="fw-semibold">현재 사용 중</span>
-              <input
-                type="checkbox"
-                className="form-check-input mt-0"
-                checked={editDraft.isActive}
-                onChange={(event) => setEditDraft((current) => ({ ...current, isActive: event.target.checked }))}
-              />
-            </label>
-            <label style={{ gridColumn: "1 / -1" }}>
-              메모
-              <textarea className="form-control" rows={3} value={editDraft.memo} onChange={(event) => setEditDraft((current) => ({ ...current, memo: event.target.value }))} />
             </label>
             <div className="d-flex justify-content-end" style={{ gridColumn: "1 / -1" }}>
               <button className="btn btn-primary" type="submit">

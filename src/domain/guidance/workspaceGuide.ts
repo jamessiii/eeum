@@ -44,7 +44,7 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
   const hasDominantSourceConcentration = isDominantSourceConcentrated(dominantSource);
   const postImportFollowUp =
     health.openReviewCount > 0
-      ? { targetPath: "/reviews", ctaLabel: `검토함 ${health.openReviewCount}건 보기` }
+      ? { targetPath: "/transactions", ctaLabel: `카드내역에서 검토 ${health.openReviewCount}건 보기` }
       : uncategorizedCount > 0
         ? { targetPath: "/transactions?cleanup=uncategorized", ctaLabel: `미분류 ${uncategorizedCount}건 정리` }
         : { targetPath: "/transactions", ctaLabel: "거래 흐름 보기" };
@@ -70,7 +70,7 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
       id: "assets",
       title: "계좌와 카드 연결",
       description: "거래 출처를 분리하려면 계좌와 카드를 먼저 정리하는 편이 좋습니다.",
-      targetPath: "/accounts",
+      targetPath: "/people",
       ctaLabel: "자산 관리 보기",
       tips: ["계좌를 먼저 등록하고 카드의 결제 계좌를 연결하면 흐름이 깔끔해집니다."],
       completed: scope.accounts.length > 0 && scope.cards.length > 0,
@@ -81,8 +81,8 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
       description: hasImportedData
         ? "업로드된 거래를 기준으로 검토와 분류를 이어갈 수 있습니다."
         : "거래를 입력하거나 업로드해야 분석이 시작됩니다.",
-      targetPath: hasImportedData ? postImportFollowUp.targetPath : "/imports",
-      ctaLabel: hasImportedData ? postImportFollowUp.ctaLabel : "거래 업로드하기",
+      targetPath: hasImportedData ? postImportFollowUp.targetPath : "/transactions",
+      ctaLabel: hasImportedData ? postImportFollowUp.ctaLabel : "카드내역에서 업로드하기",
       tips: ["거래가 들어오면 검토와 분류 흐름이 바로 시작됩니다."],
       completed: hasTransactions,
     },
@@ -90,8 +90,8 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
       id: "reviews",
       title: "검토함 정리",
       description: "중복, 환불, 내부이체 후보를 먼저 정리하면 거래 해석이 더 안정적입니다.",
-      targetPath: "/reviews",
-      ctaLabel: "검토함 보기",
+      targetPath: "/transactions",
+      ctaLabel: "카드내역에서 검토하기",
       tips: ["자동 검토 후보를 먼저 정리하면 뒤쪽 분류가 훨씬 쉬워집니다."],
       completed: hasTransactions ? health.openReviewCount === 0 : false,
     },

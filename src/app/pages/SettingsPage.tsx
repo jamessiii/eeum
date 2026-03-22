@@ -1,19 +1,8 @@
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
 import { formatPercent } from "../../shared/utils/format";
-import { CategoriesPage } from "./CategoriesPage";
-import { PeoplePage } from "./PeoplePage";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
 import { useThemeMode } from "../useThemeMode";
-
-const SETTINGS_TABS = [
-  { id: "profile", label: "기본값" },
-  { id: "people", label: "사용자" },
-  { id: "categories", label: "카테고리" },
-] as const;
-
-type SettingsTabId = (typeof SETTINGS_TABS)[number]["id"];
 
 type ProfileDraftState = {
   targetSavingsRate: string;
@@ -22,10 +11,6 @@ type ProfileDraftState = {
 };
 
 type EditableProfileField = keyof ProfileDraftState;
-
-function isSettingsTab(value: string | null): value is SettingsTabId {
-  return SETTINGS_TABS.some((tab) => tab.id === value);
-}
 
 function createProfileDraft(profile: ReturnType<typeof getWorkspaceScope>["financialProfile"]): ProfileDraftState {
   return {
@@ -47,16 +32,8 @@ function formatDraftPercent(value: string) {
 export function SettingsPage() {
   const { exportState, importState, setFinancialProfile, state } = useAppState();
   const { themeMode, toggleThemeMode } = useThemeMode();
-  const [searchParams, setSearchParams] = useSearchParams();
   const workspaceId = state.activeWorkspaceId!;
   const profile = getWorkspaceScope(state, workspaceId).financialProfile;
-  const requestedTab = searchParams.get("tab");
-  const currentTab =
-    requestedTab === "accounts" || requestedTab === "cards" || requestedTab === "backup" || requestedTab === "app"
-      ? "profile"
-      : isSettingsTab(requestedTab)
-        ? requestedTab
-        : "profile";
   const [profileDraft, setProfileDraft] = useState<ProfileDraftState>(() => createProfileDraft(profile));
   const [activeProfileField, setActiveProfileField] = useState<EditableProfileField | null>(null);
 
@@ -115,115 +92,6 @@ export function SettingsPage() {
     },
   ];
 
-  const renderTabContent = () => {
-    if (currentTab === "people") return <PeoplePage embedded />;
-    if (currentTab === "categories") return <CategoriesPage embedded />;
-
-    return (
-      <section className="settings-section-block">
-        <div className="settings-summary-row">
-          {profileCards.map((card) => (
-            <article key={card.key} className="resource-card settings-profile-card">
-              <h3>{card.title}</h3>
-              {activeProfileField === card.key ? (
-                <div className="settings-profile-display-row is-editing">
-                  <label className="settings-profile-input is-inline-edit">
-                    <span className="visually-hidden">{card.title}</span>
-                    <input
-                      autoFocus
-                      name={card.key}
-                      type="number"
-                      inputMode="numeric"
-                      min="0"
-                      className="form-control"
-                      value={profileDraft[card.key]}
-                      placeholder={card.placeholder}
-                      onChange={(event) => updateProfileDraft(card.key, event.target.value)}
-                      onBlur={commitProfileDraft}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          commitProfileDraft();
-                        }
-
-                        if (event.key === "Escape") {
-                          event.preventDefault();
-                          resetProfileField(card.key);
-                        }
-                      }}
-                    />
-                    <span className="settings-profile-input-suffix">%</span>
-                  </label>
-                  <button
-                    type="button"
-                    className="board-case-edit-button settings-profile-edit-button"
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={commitProfileDraft}
-                    aria-label="Save setting"
-                  >
-                    ✓
-                  </button>
-                </div>
-              ) : (
-                <div className="settings-profile-display-row">
-                  <p className="settings-profile-value-static">{card.preview}</p>
-                  <button
-                    type="button"
-                    className="board-case-edit-button settings-profile-edit-button"
-                    onClick={() => setActiveProfileField(card.key)}
-                    aria-label="Edit setting"
-                  >
-                    ✎
-                  </button>
-                </div>
-              )}
-            </article>
-          ))}
-        </div>
-
-        <article className="resource-card settings-panel-card">
-          <div>
-            <span className="section-kicker">백업</span>
-            <h3 className="mb-1">데이터 내보내기와 가져오기</h3>
-            <p className="mb-0 text-secondary">현재 가계부의 데이터를 JSON 파일로 저장하거나 다시 불러옵니다.</p>
-          </div>
-          <div className="d-flex flex-wrap gap-2">
-            <button className="btn btn-primary" onClick={() => exportState()}>
-              전체 데이터 내보내기
-            </button>
-            <label className="btn btn-outline-primary">
-              백업 파일 가져오기
-              <input
-                hidden
-                type="file"
-                accept=".json"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) void importState(file);
-                  event.currentTarget.value = "";
-                }}
-              />
-            </label>
-          </div>
-        </article>
-
-        <article className="resource-card settings-panel-card">
-          <div>
-            <span className="section-kicker">앱 관리</span>
-            <h3 className="mb-1">테마</h3>
-            <p className="mb-0 text-secondary">앱에서 사용할 기본 테마를 전환합니다.</p>
-          </div>
-          <div className="d-flex flex-wrap gap-2">
-            <button type="button" className="theme-toggle-button" onClick={toggleThemeMode}>
-              <span className="theme-toggle-button-label">테마</span>
-              <strong>{themeMode === "dark" ? "Light" : "Dark"}</strong>
-            </button>
-          </div>
-        </article>
-      </section>
-    );
-  };
-
   return (
     <div className="page-stack">
       <section className="settings-shell-card card shadow-sm">
@@ -232,21 +100,110 @@ export function SettingsPage() {
             <span className="section-kicker">설정</span>
             <h2 className="section-title settings-shell-title">설정</h2>
           </div>
-          <div className="settings-tab-strip">
-            {SETTINGS_TABS.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                className={`settings-tab-button${currentTab === tab.id ? " active" : ""}`}
-                onClick={() => setSearchParams(tab.id === "profile" ? {} : { tab: tab.id })}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
         </div>
-        <div className="settings-shell-divider" />
-        <div className="settings-shell-body">{renderTabContent()}</div>
+        <div className="settings-shell-body">
+          <section className="settings-section-block">
+            <div className="settings-summary-row">
+              {profileCards.map((card) => (
+                <article key={card.key} className="resource-card settings-profile-card">
+                  <h3>{card.title}</h3>
+                  {activeProfileField === card.key ? (
+                    <div className="settings-profile-display-row is-editing">
+                      <label className="settings-profile-input is-inline-edit">
+                        <span className="visually-hidden">{card.title}</span>
+                        <input
+                          autoFocus
+                          name={card.key}
+                          type="number"
+                          inputMode="numeric"
+                          min="0"
+                          className="form-control"
+                          value={profileDraft[card.key]}
+                          placeholder={card.placeholder}
+                          onChange={(event) => updateProfileDraft(card.key, event.target.value)}
+                          onBlur={commitProfileDraft}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              commitProfileDraft();
+                            }
+
+                            if (event.key === "Escape") {
+                              event.preventDefault();
+                              resetProfileField(card.key);
+                            }
+                          }}
+                        />
+                        <span className="settings-profile-input-suffix">%</span>
+                      </label>
+                      <button
+                        type="button"
+                        className="board-case-edit-button settings-profile-edit-button"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={commitProfileDraft}
+                        aria-label="Save setting"
+                      >
+                        ✓
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="settings-profile-display-row">
+                      <p className="settings-profile-value-static">{card.preview}</p>
+                      <button
+                        type="button"
+                        className="board-case-edit-button settings-profile-edit-button"
+                        onClick={() => setActiveProfileField(card.key)}
+                        aria-label="Edit setting"
+                      >
+                        ✎
+                      </button>
+                    </div>
+                  )}
+                </article>
+              ))}
+            </div>
+
+            <article className="resource-card settings-panel-card">
+              <div>
+                <span className="section-kicker">백업</span>
+                <h3 className="mb-1">데이터 내보내기와 가져오기</h3>
+                <p className="mb-0 text-secondary">현재 가계부의 데이터를 JSON 파일로 저장하거나 다시 불러옵니다.</p>
+              </div>
+              <div className="d-flex flex-wrap gap-2">
+                <button className="btn btn-primary" onClick={() => exportState()}>
+                  전체 데이터 내보내기
+                </button>
+                <label className="btn btn-outline-primary">
+                  백업 파일 가져오기
+                  <input
+                    hidden
+                    type="file"
+                    accept=".json"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) void importState(file);
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                </label>
+              </div>
+            </article>
+
+            <article className="resource-card settings-panel-card">
+              <div>
+                <span className="section-kicker">앱 관리</span>
+                <h3 className="mb-1">테마</h3>
+                <p className="mb-0 text-secondary">앱에서 사용할 기본 테마를 전환합니다.</p>
+              </div>
+              <div className="d-flex flex-wrap gap-2">
+                <button type="button" className="theme-toggle-button" onClick={toggleThemeMode}>
+                  <span className="theme-toggle-button-label">테마</span>
+                  <strong>{themeMode === "dark" ? "Light" : "Dark"}</strong>
+                </button>
+              </div>
+            </article>
+          </section>
+        </div>
       </section>
     </div>
   );
