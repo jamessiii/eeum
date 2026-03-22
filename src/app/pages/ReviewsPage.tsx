@@ -5,7 +5,6 @@ import { REVIEW_ACTION_LABELS, REVIEW_DISMISS_LABELS, REVIEW_TYPE_LABELS, type R
 import { getReviewSummary, getReviewTypeCounts } from "../../domain/reviews/summary";
 import { getSourceTypeLabel, SOURCE_TYPE_OPTIONS } from "../../domain/transactions/sourceTypes";
 import { getMotionStyle } from "../../shared/utils/motion";
-import { CompletionBanner } from "../components/CompletionBanner";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { ReviewTypeFilterBar } from "../components/ReviewTypeFilterBar";
 import { useAppState } from "../state/AppStateProvider";
@@ -57,7 +56,6 @@ export function ReviewsPage() {
   });
   const filteredReviewCounts = getReviewTypeCounts(filteredReviewsByContext);
   const hasActiveReviewFilters = activeFilter !== "all" || activeSourceType !== "all";
-  const uncategorizedCount = 0;
 
   const getTransactionConnectionMeta = (transactionId: string) => {
     const transaction = transactions.get(transactionId);
@@ -133,23 +131,10 @@ export function ReviewsPage() {
       ) : null}
 
       {!openReviewCount ? (
-        <CompletionBanner
-          className="mt-3"
-          title="검토함 정리가 완료됐습니다"
-          description="자동 검토 후보가 모두 처리됐습니다. 이제 미분류 거래 정리와 대시보드 확인만 이어가면 됩니다."
-          actions={
-            <>
-              {uncategorizedCount ? (
-                <Link className="btn btn-outline-primary btn-sm" to="/transactions?cleanup=uncategorized">
-                  미분류 {uncategorizedCount}건 정리
-                </Link>
-              ) : null}
-              <Link className="btn btn-outline-secondary btn-sm" to="/">
-                대시보드 보기
-              </Link>
-            </>
-          }
-        />
+        <div className="review-complete-copy mt-3">
+          <strong>검토함 정리가 완료됐습니다</strong>
+          <p>자동 검토 후보가 모두 처리됐습니다. 이제 미분류 거래 정리와 대시보드 확인만 이어가면 됩니다.</p>
+        </div>
       ) : !filteredReviews.length ? (
         <EmptyStateCallout
           kicker="필터 결과 없음"

@@ -20,7 +20,7 @@ html.motion-ready body {
 .review-card,
 .resource-card,
 .stat-card,
-.upload-dropzone {
+.stat-card {
   transition:
     transform var(--motion-duration-base) var(--motion-ease-standard),
     opacity var(--motion-duration-base) var(--motion-ease-standard),
@@ -35,7 +35,6 @@ html.motion-ready body {
 .resource-card,
 .stat-card,
 .quick-add-card,
-.upload-dropzone,
 .mini-breakdown-row {
   animation:
     motion-rise var(--motion-duration-base) var(--motion-ease-standard) both;
@@ -71,9 +70,7 @@ html.motion-ready body {
 .btn:hover,
 .btn:focus-visible,
 .nav-link:hover,
-.nav-link:focus-visible,
-.upload-dropzone:hover,
-.upload-dropzone:focus-within {
+.nav-link:focus-visible {
   transform: translateY(-1px);
 }
 

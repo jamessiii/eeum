@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState, type DragEvent } from "react";
 import { Link } from "react-router-dom";
 import { AppModal } from "../components/AppModal";
 import type { WorkspaceBundle } from "../../shared/types/models";
@@ -14,6 +14,10 @@ function getVisibleCardIdentifier(cardNumberMasked: string) {
   const trimmed = cardNumberMasked.trim();
   if (!trimmed) return "";
   return /\d/.test(trimmed) ? trimmed : "";
+}
+
+function isWorkbookFile(file: File) {
+  return /\.xlsx?$/.test(file.name.toLowerCase());
 }
 
 function getPostImportLabel(bundle: WorkspaceBundle) {
@@ -32,6 +36,10 @@ export function ImportsPage() {
   const [selectedImportOwnerId, setSelectedImportOwnerId] = useState("");
   const [importCardNameDrafts, setImportCardNameDrafts] = useState<Record<string, string>>({});
   const [isImportHistoryOpen, setIsImportHistoryOpen] = useState(false);
+  const [isDropzoneActive, setIsDropzoneActive] = useState(false);
+  const [isDropzoneInvalid, setIsDropzoneInvalid] = useState(false);
+  const dragDepthRef = useRef(0);
+
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const recentImports = [...scope.imports].sort((a, b) => b.importedAt.localeCompare(a.importedAt));
@@ -55,6 +63,67 @@ export function ImportsPage() {
     };
   });
 
+  const resetDropzoneState = () => {
+    dragDepthRef.current = 0;
+    setIsDropzoneActive(false);
+    setIsDropzoneInvalid(false);
+  };
+
+  const preparePreview = async (file: File) => {
+    setIsPreparingPreview(true);
+    resetDropzoneState();
+    try {
+      const bundle = await previewWorkbookImport(file);
+      setPreviewBundle(bundle);
+      setPreviewFileName(file.name);
+      setSelectedImportOwnerId("");
+      setImportCardNameDrafts(Object.fromEntries(bundle.cards.map((card) => [card.id, card.name])));
+    } finally {
+      setIsPreparingPreview(false);
+    }
+  };
+
+  const handlePickedFile = async (file: File | null | undefined) => {
+    if (!file) return;
+    if (!isWorkbookFile(file)) {
+      setIsDropzoneInvalid(true);
+      setIsDropzoneActive(false);
+      return;
+    }
+    await preparePreview(file);
+  };
+
+  const handleDropzoneDragEnter = (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    dragDepthRef.current += 1;
+    setIsDropzoneActive(true);
+  };
+
+  const handleDropzoneDragOver = (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    const file = event.dataTransfer.files?.[0];
+    const isValid = !file || isWorkbookFile(file);
+    event.dataTransfer.dropEffect = isValid ? "copy" : "none";
+    setIsDropzoneActive(true);
+    setIsDropzoneInvalid(!isValid);
+  };
+
+  const handleDropzoneDragLeave = (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) {
+      setIsDropzoneActive(false);
+      setIsDropzoneInvalid(false);
+    }
+  };
+
+  const handleDropzoneDrop = async (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    const file = event.dataTransfer.files?.[0];
+    resetDropzoneState();
+    await handlePickedFile(file);
+  };
+
   const commitPreview = () => {
     if (!previewBundle || !selectedImportOwnerId) return;
     const renamedCards = previewBundle.cards.map((card) => {
@@ -74,6 +143,7 @@ export function ImportsPage() {
         name: matchedCard?.name ?? ((importCardNameDrafts[card.id] ?? card.name).trim() || card.name),
       };
     });
+
     const normalizedBundle: WorkspaceBundle = {
       ...previewBundle,
       people: [],
@@ -90,12 +160,23 @@ export function ImportsPage() {
         ownerPersonId: selectedImportOwnerId,
       })),
     };
+
     commitImportedBundle(normalizedBundle, previewFileName);
     setPreviewBundle(null);
     setPreviewFileName("");
     setSelectedImportOwnerId("");
     setImportCardNameDrafts({});
   };
+
+  const dropzoneTitle = isDropzoneInvalid
+    ? "엑셀 파일만 업로드할 수 있어요"
+    : isDropzoneActive
+      ? "여기에 파일을 놓으면 미리보기를 준비합니다"
+      : "클릭하거나 파일을 끌어놓으세요";
+
+  const dropzoneDescription = isDropzoneInvalid
+    ? "지원 형식: .xlsx, .xls"
+    : "미리보기에서 거래 수, 검토 수, 자산 정보를 먼저 확인합니다.";
 
   return (
     <>
@@ -106,11 +187,7 @@ export function ImportsPage() {
               <span className="section-kicker">업로드 센터</span>
               <h2 className="section-title">카드 명세서 가져오기</h2>
             </div>
-            <button
-              type="button"
-              className="btn btn-outline-secondary btn-sm"
-              onClick={() => setIsImportHistoryOpen(true)}
-            >
+            <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setIsImportHistoryOpen(true)}>
               히스토리
             </button>
           </div>
@@ -118,10 +195,22 @@ export function ImportsPage() {
             엑셀 파일을 올리면 바로 반영하지 않고 먼저 미리보기로 검토합니다. 확인 후 한 번에 가져오면 됩니다.
           </p>
 
-          <label className="upload-dropzone">
-            <div>
-              <strong>가계부 파일 업로드</strong>
-              <p className="mb-0 text-secondary">미리보기에서 거래 수, 검토 수, 자산 정보를 먼저 확인합니다.</p>
+          <label
+            className={`upload-dropzone${isDropzoneActive ? " is-active" : ""}${isDropzoneInvalid ? " is-invalid" : ""}`}
+            onDragEnter={handleDropzoneDragEnter}
+            onDragOver={handleDropzoneDragOver}
+            onDragLeave={handleDropzoneDragLeave}
+            onDrop={handleDropzoneDrop}
+          >
+            <div className="upload-dropzone-copy">
+              <div className="upload-dropzone-kicker-row">
+                <span className="upload-dropzone-kicker">카드 이용 내역 명세서 업로드</span>
+                <span className="upload-dropzone-format-badge" aria-hidden="true">
+                  .xlsx / .xls
+                </span>
+              </div>
+              <strong>{dropzoneTitle}</strong>
+              <p className="mb-0 text-secondary">{dropzoneDescription}</p>
             </div>
             <input
               hidden
@@ -129,18 +218,8 @@ export function ImportsPage() {
               accept=".xlsx,.xls"
               onChange={async (event) => {
                 const file = event.target.files?.[0];
-                if (!file) return;
-                setIsPreparingPreview(true);
-                try {
-                  const bundle = await previewWorkbookImport(file);
-                  setPreviewBundle(bundle);
-                  setPreviewFileName(file.name);
-                  setSelectedImportOwnerId("");
-                  setImportCardNameDrafts(Object.fromEntries(bundle.cards.map((card) => [card.id, card.name])));
-                } finally {
-                  setIsPreparingPreview(false);
-                  event.currentTarget.value = "";
-                }
+                await handlePickedFile(file);
+                event.currentTarget.value = "";
               }}
             />
           </label>
@@ -175,6 +254,7 @@ export function ImportsPage() {
                   </strong>
                 </article>
               </div>
+
               <div className="mt-4">
                 <label className="form-label" htmlFor="import-owner-person">
                   사용자 선택
@@ -199,6 +279,7 @@ export function ImportsPage() {
                   <p className="text-secondary mt-2 mb-0">선택한 사용자에게 이번 명세서의 카드와 거래를 연결합니다.</p>
                 )}
               </div>
+
               {previewCardMatches.length ? (
                 <div className="mt-4">
                   <label className="form-label mb-2">카드 확인</label>
@@ -246,6 +327,7 @@ export function ImportsPage() {
                   </div>
                 </div>
               ) : null}
+
               <div className="action-row mt-4">
                 <button
                   className="btn btn-primary"

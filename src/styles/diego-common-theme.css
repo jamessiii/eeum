@@ -108,8 +108,7 @@ body {
 .settlement-summary-box,
 .coach-box,
 .table-responsive,
-.compact-check,
-.upload-dropzone {
+.compact-check {
   background: var(--app-panel) !important;
   border: 1px solid var(--app-line) !important;
   border-radius: var(--app-radius) !important;
