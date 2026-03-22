@@ -2,6 +2,14 @@ import type { AppState, Category, FinancialProfile, Tag, Workspace, WorkspaceBun
 import { nowIso } from "../../shared/utils/date";
 import { createId } from "../../shared/utils/id";
 
+function mergeById<T extends { id: string }>(current: T[], incoming: T[]) {
+  const merged = new Map(current.map((item) => [item.id, item]));
+  incoming.forEach((item) => {
+    merged.set(item.id, item);
+  });
+  return Array.from(merged.values());
+}
+
 export function createEmptyState(): AppState {
   return {
     schemaVersion: 4,
@@ -144,14 +152,14 @@ export function mergeWorkspaceBundle(state: AppState, bundle: WorkspaceBundle): 
     activeWorkspaceId: bundle.workspace.id,
     workspaces,
     financialProfiles,
-    people: [...state.people, ...bundle.people],
-    accounts: [...state.accounts, ...bundle.accounts],
-    cards: [...state.cards, ...bundle.cards],
-    categories: [...state.categories, ...bundle.categories],
-    tags: [...state.tags, ...bundle.tags],
-    transactions: [...state.transactions, ...bundle.transactions],
-    reviews: [...state.reviews, ...bundle.reviews],
-    imports: [...state.imports, ...bundle.imports],
-    settlements: [...state.settlements, ...bundle.settlements],
+    people: mergeById(state.people, bundle.people),
+    accounts: mergeById(state.accounts, bundle.accounts),
+    cards: mergeById(state.cards, bundle.cards),
+    categories: mergeById(state.categories, bundle.categories),
+    tags: mergeById(state.tags, bundle.tags),
+    transactions: mergeById(state.transactions, bundle.transactions),
+    reviews: mergeById(state.reviews, bundle.reviews),
+    imports: mergeById(state.imports, bundle.imports),
+    settlements: mergeById(state.settlements, bundle.settlements),
   };
 }

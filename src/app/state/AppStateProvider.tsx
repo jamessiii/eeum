@@ -520,11 +520,21 @@ function rebaseImportedBundleIntoWorkspace(state: AppState, workspaceId: string,
     return [{ ...person, id: nextId, workspaceId }];
   });
 
+  const existingPersonIds = new Set(scope.people.map((person) => person.id));
+  const resolveOwnerPersonId = (ownerPersonId: string | null) => {
+    if (!ownerPersonId) return null;
+    return personIdMap.get(ownerPersonId) ?? (existingPersonIds.has(ownerPersonId) ? ownerPersonId : null);
+  };
+
   const accountIdMap = new Map<string, string>();
   const accountsToAdd = bundle.accounts.flatMap((account) => {
     const matched = scope.accounts.find((item) => normalizeKey(item.name) === normalizeKey(account.name));
+    const resolvedOwnerPersonId = resolveOwnerPersonId(account.ownerPersonId);
     if (matched) {
       accountIdMap.set(account.id, matched.id);
+      if ((matched.ownerPersonId ?? null) === null && resolvedOwnerPersonId) {
+        return [{ ...matched, ownerPersonId: resolvedOwnerPersonId }];
+      }
       return [];
     }
     const nextId = createId("account");
@@ -534,7 +544,7 @@ function rebaseImportedBundleIntoWorkspace(state: AppState, workspaceId: string,
         ...account,
         id: nextId,
         workspaceId,
-        ownerPersonId: account.ownerPersonId ? (personIdMap.get(account.ownerPersonId) ?? null) : null,
+        ownerPersonId: resolvedOwnerPersonId,
       },
     ];
   });
@@ -542,8 +552,12 @@ function rebaseImportedBundleIntoWorkspace(state: AppState, workspaceId: string,
   const cardIdMap = new Map<string, string>();
   const cardsToAdd = bundle.cards.flatMap((card) => {
     const matched = scope.cards.find((item) => normalizeKey(item.name) === normalizeKey(card.name));
+    const resolvedOwnerPersonId = resolveOwnerPersonId(card.ownerPersonId);
     if (matched) {
       cardIdMap.set(card.id, matched.id);
+      if ((matched.ownerPersonId ?? null) === null && resolvedOwnerPersonId) {
+        return [{ ...matched, ownerPersonId: resolvedOwnerPersonId }];
+      }
       return [];
     }
     const nextId = createId("card");
@@ -553,7 +567,7 @@ function rebaseImportedBundleIntoWorkspace(state: AppState, workspaceId: string,
         ...card,
         id: nextId,
         workspaceId,
-        ownerPersonId: card.ownerPersonId ? (personIdMap.get(card.ownerPersonId) ?? null) : null,
+        ownerPersonId: resolvedOwnerPersonId,
         linkedAccountId: card.linkedAccountId ? (accountIdMap.get(card.linkedAccountId) ?? null) : null,
       },
     ];
@@ -568,7 +582,7 @@ function rebaseImportedBundleIntoWorkspace(state: AppState, workspaceId: string,
       ...transaction,
       id: nextId,
       workspaceId,
-      ownerPersonId: transaction.ownerPersonId ? (personIdMap.get(transaction.ownerPersonId) ?? null) : null,
+      ownerPersonId: resolveOwnerPersonId(transaction.ownerPersonId),
       cardId: transaction.cardId ? (cardIdMap.get(transaction.cardId) ?? null) : null,
       accountId: transaction.accountId ? (accountIdMap.get(transaction.accountId) ?? null) : null,
       fromAccountId: transaction.fromAccountId ? (accountIdMap.get(transaction.fromAccountId) ?? null) : null,

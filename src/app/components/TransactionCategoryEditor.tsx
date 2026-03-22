@@ -23,6 +23,8 @@ export function TransactionCategoryEditor({
   const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const skipNextBlurCommitRef = useRef(false);
+  const isComposingRef = useRef(false);
+  const pendingCompositionCommitRef = useRef(false);
   const listId = `transaction-category-options-${transaction.id}`;
 
   useEffect(() => {
@@ -125,13 +127,32 @@ export function TransactionCategoryEditor({
             skipNextBlurCommitRef.current = false;
             return;
           }
+          if (isComposingRef.current) {
+            pendingCompositionCommitRef.current = true;
+            return;
+          }
           commitCategoryChange();
         }}
         onFocus={(event) => {
           setIsFocused(true);
           event.currentTarget.select();
         }}
+        onCompositionStart={() => {
+          isComposingRef.current = true;
+          pendingCompositionCommitRef.current = false;
+        }}
+        onCompositionEnd={() => {
+          isComposingRef.current = false;
+          if (pendingCompositionCommitRef.current) {
+            pendingCompositionCommitRef.current = false;
+            commitCategoryChange();
+          }
+        }}
         onKeyDown={(event) => {
+          if (event.nativeEvent.isComposing || isComposingRef.current) {
+            return;
+          }
+
           if (event.key === "Enter") {
             event.preventDefault();
             skipNextBlurCommitRef.current = true;
