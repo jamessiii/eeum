@@ -102,6 +102,8 @@ type DragItem =
   | { id: string; itemType: "account"; ownerPersonId: string | null; isHidden: boolean }
   | { id: string; itemType: "card"; ownerPersonId: string | null; isHidden: boolean };
 
+let transparentDragImage: HTMLCanvasElement | null = null;
+
 const EMPTY_PERSON_DRAFT: PersonDraftState = {
   name: "",
   displayName: "",
@@ -140,6 +142,16 @@ function getInsertIndexByHorizontalPointer(event: React.DragEvent<HTMLElement>, 
 function getInsertIndexByVerticalPointer(event: React.DragEvent<HTMLElement>, baseIndex: number) {
   const rect = event.currentTarget.getBoundingClientRect();
   return event.clientY > rect.top + rect.height / 2 ? baseIndex + 1 : baseIndex;
+}
+
+function getTransparentDragImage() {
+  if (typeof document === "undefined") return null;
+  if (!transparentDragImage) {
+    transparentDragImage = document.createElement("canvas");
+    transparentDragImage.width = 1;
+    transparentDragImage.height = 1;
+  }
+  return transparentDragImage;
 }
 
 function getPersonRoleLabel(role: "owner" | "member") {
@@ -303,10 +315,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   const linkedAccountFlashTimeoutRef = useRef<number | null>(null);
   const linkedAccountFlashSequenceRef = useRef(0);
   const dragGhostRef = useRef<HTMLElement | null>(null);
-  const dragImageElementRef = useRef<HTMLElement | null>(null);
   const dragGhostOffsetRef = useRef({ x: 0, y: 0 });
-  const dragGhostPointerRef = useRef({ x: 0, y: 0 });
-  const dragGhostFrameRef = useRef<number | null>(null);
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const allPeople = scope.people;
@@ -340,21 +349,6 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
       isActive: draft.isActive,
     };
   };
-
-  const updateDragGhostPointer = (clientX: number, clientY: number) => {
-    if (!dragGhostRef.current) return;
-    if (clientX <= 0 && clientY <= 0) return;
-    dragGhostPointerRef.current = { x: clientX, y: clientY };
-    if (dragGhostFrameRef.current !== null) return;
-    dragGhostFrameRef.current = window.requestAnimationFrame(() => {
-      dragGhostFrameRef.current = null;
-      if (!dragGhostRef.current) return;
-      dragGhostRef.current.style.left = `${dragGhostPointerRef.current.x - dragGhostOffsetRef.current.x}px`;
-      dragGhostRef.current.style.top = `${dragGhostPointerRef.current.y - dragGhostOffsetRef.current.y}px`;
-    });
-  };
-
-  const isDragHandleEnabled = (id: string) => !dragItem || dragItem.id === id;
 
   const accountsByPersonId = new Map(
     scope.people.map((person) => [person.id, scope.accounts.filter((account) => account.ownerPersonId === person.id && !account.isHidden)]),
@@ -459,17 +453,13 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
     if (!dragItem || !dragGhostRef.current) return;
 
     const handleDragOver = (event: DragEvent) => {
-      updateDragGhostPointer(event.clientX, event.clientY);
+      if (!dragGhostRef.current) return;
+      dragGhostRef.current.style.left = `${event.clientX - dragGhostOffsetRef.current.x}px`;
+      dragGhostRef.current.style.top = `${event.clientY - dragGhostOffsetRef.current.y}px`;
     };
 
     window.addEventListener("dragover", handleDragOver, true);
-    return () => {
-      window.removeEventListener("dragover", handleDragOver, true);
-      if (dragGhostFrameRef.current !== null) {
-        window.cancelAnimationFrame(dragGhostFrameRef.current);
-        dragGhostFrameRef.current = null;
-      }
-    };
+    return () => window.removeEventListener("dragover", handleDragOver, true);
   }, [dragItem]);
 
   useEffect(() => {
@@ -498,14 +488,6 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   }, []);
 
   const resetDragState = () => {
-    if (dragGhostFrameRef.current !== null) {
-      window.cancelAnimationFrame(dragGhostFrameRef.current);
-      dragGhostFrameRef.current = null;
-    }
-    if (dragImageElementRef.current) {
-      dragImageElementRef.current.remove();
-      dragImageElementRef.current = null;
-    }
     if (dragGhostRef.current) {
       dragGhostRef.current.remove();
       dragGhostRef.current = null;
@@ -531,18 +513,14 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
     setPendingDeleteItem({ itemType: item.itemType, id: item.id });
   };
 
-  const handleSourceDrag = (event: React.DragEvent<HTMLElement>) => {
-    updateDragGhostPointer(event.clientX, event.clientY);
-  };
-
   const startDrag = (item: DragItem, event: React.DragEvent<HTMLElement>) => {
     event.stopPropagation();
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", item.id);
     const sourceElement = event.currentTarget as HTMLElement;
-    if (dragImageElementRef.current) {
-      dragImageElementRef.current.remove();
-      dragImageElementRef.current = null;
+    const dragImage = getTransparentDragImage();
+    if (dragImage) {
+      event.dataTransfer.setDragImage(dragImage, 0, 0);
     }
     if (dragGhostRef.current) {
       dragGhostRef.current.remove();
@@ -554,33 +532,27 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
       x: event.clientX - sourceRect.left,
       y: event.clientY - sourceRect.top,
     };
-    dragGhostPointerRef.current = {
-      x: event.clientX,
-      y: event.clientY,
-    };
 
-    const dragImageElement = sourceElement.cloneNode(true) as HTMLElement;
-    dragImageElement.classList.remove("is-dragging", "is-drop-target-hide", "is-drop-target-delete", "is-account-link-target", "is-account-link-active");
-    dragImageElement.classList.add("category-drag-ghost");
-    dragImageElement.style.position = "fixed";
-    dragImageElement.style.left = "-10000px";
-    dragImageElement.style.top = "-10000px";
-    dragImageElement.style.width = `${sourceRect.width}px`;
-    dragImageElement.style.minWidth = `${sourceRect.width}px`;
-    dragImageElement.style.maxWidth = `${sourceRect.width}px`;
-    dragImageElement.style.pointerEvents = "none";
-    dragImageElement.style.margin = "0";
-    dragImageElement.style.opacity = "1";
-    dragImageElement.style.transform = "none";
-    dragImageElement.style.filter = "none";
-    dragImageElement.style.zIndex = "-1";
-    document.body.appendChild(dragImageElement);
-    event.dataTransfer.setDragImage(
-      dragImageElement,
-      dragGhostOffsetRef.current.x,
-      dragGhostOffsetRef.current.y,
-    );
-    dragImageElementRef.current = dragImageElement;
+    const ghostElement = sourceElement.cloneNode(true) as HTMLElement;
+    ghostElement.classList.add("category-drag-ghost");
+    ghostElement.style.position = "fixed";
+    ghostElement.style.left = `${event.clientX - dragGhostOffsetRef.current.x}px`;
+    ghostElement.style.top = `${event.clientY - dragGhostOffsetRef.current.y}px`;
+    ghostElement.style.width = `${sourceRect.width}px`;
+    ghostElement.style.minWidth = `${sourceRect.width}px`;
+    ghostElement.style.maxWidth = `${sourceRect.width}px`;
+    ghostElement.style.pointerEvents = "none";
+    ghostElement.style.margin = "0";
+    ghostElement.style.opacity = "1";
+    ghostElement.style.transform = "none";
+    ghostElement.style.filter = "none";
+    ghostElement.style.zIndex = "9999";
+    ghostElement.style.backdropFilter = "none";
+    ghostElement.style.contentVisibility = "visible";
+    ghostElement.style.contain = "none";
+    ghostElement.style.containIntrinsicSize = "auto";
+    document.body.appendChild(ghostElement);
+    dragGhostRef.current = ghostElement;
 
     setDragItem(item);
   };
@@ -740,7 +712,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
         />
       ) : (
         <div
-          className={`board-case-stack${dragItem ? " is-board-dragging" : ""}`}
+          className="board-case-stack"
           onDragOver={(event) => {
             if (dragItem?.itemType !== "person") return;
             event.preventDefault();
@@ -754,9 +726,8 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                 key={section.id}
                 className={`board-case-section category-case-section people-case-section${getDragStateClassName(section.id)}`}
                 style={getMotionStyle(index + 2)}
-                draggable={!isInlineEditing && isDragHandleEnabled(section.person.id)}
+                draggable={!isInlineEditing}
                 onDragStart={(event) => startDrag({ id: section.person.id, itemType: "person", ownerPersonId: null, isHidden: false }, event)}
-                onDrag={handleSourceDrag}
                 onDragEnd={resetDragState}
                 onDragOver={(event) => {
                   if (dragItem?.itemType !== "person") return;
@@ -835,13 +806,13 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                         <article
                          key={account.id}
                          className={`category-case-card people-board-card${getDragStateClassName(account.id)}`}
-                         draggable={isDragHandleEnabled(account.id)}
+                         draggable
                          onDragStart={(event) => startDrag({ id: account.id, itemType: "account", ownerPersonId: account.ownerPersonId ?? null, isHidden: false }, event)}
-                         onDrag={handleSourceDrag}
                          onDragEnd={resetDragState}
                          onDragOver={(event) => {
                            if (dragItem?.itemType !== "account" || dragItem.ownerPersonId !== section.person.id) return;
                            event.preventDefault();
+                           event.stopPropagation();
                          }}
                          onDrop={(event) => handleAccountDrop(event, section.person.id, section.linkedAccounts.indexOf(account))}
                        >
@@ -911,9 +882,8 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                           className={`category-case-card people-board-card${
                             dragItem?.itemType === "account" && dragItem.ownerPersonId === section.person.id ? " is-account-link-target" : ""
                           }${isActiveCardLinkTarget ? " is-account-link-active" : ""}${getDragStateClassName(card.id)}`}
-                          draggable={isDragHandleEnabled(card.id)}
+                          draggable
                           onDragStart={(event) => startDrag({ id: card.id, itemType: "card", ownerPersonId: card.ownerPersonId ?? null, isHidden: false }, event)}
-                          onDrag={handleSourceDrag}
                           onDragEnd={resetDragState}
                           onDragEnter={() => {
                             if (dragItem?.itemType !== "account" || dragItem.ownerPersonId !== section.person.id) return;
@@ -928,6 +898,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                               return;
                             }
                             event.preventDefault();
+                            event.stopPropagation();
                             if (dragItem.itemType === "account") {
                               setActiveCardLinkTargetId(card.id);
                             }
@@ -1021,9 +992,8 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
               <article
                 key={person.id}
                 className={`category-hidden-card${getDragStateClassName(person.id)}`}
-                draggable={isDragHandleEnabled(person.id)}
+                draggable
                 onDragStart={(event) => startDrag({ id: person.id, itemType: "person", ownerPersonId: null, isHidden: true }, event)}
-                onDrag={handleSourceDrag}
                 onDragEnd={resetDragState}
               >
                 <strong>{person.displayName || person.name}</strong>
@@ -1039,9 +1009,8 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
               <article
                 key={account.id}
                 className={`category-hidden-card${getDragStateClassName(account.id)}`}
-                draggable={isDragHandleEnabled(account.id)}
+                draggable
                 onDragStart={(event) => startDrag({ id: account.id, itemType: "account", ownerPersonId: account.ownerPersonId ?? null, isHidden: true }, event)}
-                onDrag={handleSourceDrag}
                 onDragEnd={resetDragState}
               >
                 <strong>{account.alias || account.name}</strong>
@@ -1057,9 +1026,8 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
               <article
                 key={card.id}
                 className={`category-hidden-card${getDragStateClassName(card.id)}`}
-                draggable={isDragHandleEnabled(card.id)}
+                draggable
                 onDragStart={(event) => startDrag({ id: card.id, itemType: "card", ownerPersonId: card.ownerPersonId ?? null, isHidden: true }, event)}
-                onDrag={handleSourceDrag}
                 onDragEnd={resetDragState}
               >
                 <strong>{card.name}</strong>
