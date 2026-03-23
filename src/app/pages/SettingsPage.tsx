@@ -206,6 +206,24 @@ export function SettingsPage() {
 
             <article className="resource-card settings-panel-card">
               <div>
+                <span className="section-kicker">앱 관리</span>
+                <h3 className="mb-1">실험실</h3>
+                <p className="mb-0 text-secondary">이음 Lab에서 실험 중인 기능과 도구를 새 탭으로 엽니다.</p>
+              </div>
+              <div className="d-flex flex-wrap gap-2">
+                <a
+                  className="btn btn-outline-secondary"
+                  href="https://jamessiii.github.io/eeumlab/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  실험실 열기
+                </a>
+              </div>
+            </article>
+
+            <article className="resource-card settings-panel-card">
+              <div>
                 <span className="section-kicker">가이드</span>
                 <h3 className="mb-1">가이드 테스트 시작</h3>
                 <p className="mb-0 text-secondary">
