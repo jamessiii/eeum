@@ -8,6 +8,8 @@ interface TransactionCategoryEditorProps {
   categoryName: string | null;
   onCategoryChange: (categoryId: string) => void;
   guideTarget?: string;
+  reviewSuggestionLabel?: string | null;
+  isReviewFocused?: boolean;
 }
 
 export function TransactionCategoryEditor({
@@ -16,6 +18,8 @@ export function TransactionCategoryEditor({
   categoryName,
   onCategoryChange,
   guideTarget,
+  reviewSuggestionLabel,
+  isReviewFocused = false,
 }: TransactionCategoryEditorProps) {
   const canEdit = transaction.transactionType === "expense" && !transaction.isInternalTransfer;
   const categoryMap = useMemo(() => new Map(categories.map((category) => [category.id, category])), [categories]);
@@ -106,7 +110,7 @@ export function TransactionCategoryEditor({
       };
 
   return (
-    <div>
+    <div className={`transaction-category-editor${isReviewFocused ? " is-review-focused" : ""}`}>
       <input
         ref={inputRef}
         className="form-control form-control-sm"
@@ -187,6 +191,12 @@ export function TransactionCategoryEditor({
           }
         }}
       />
+      {reviewSuggestionLabel ? (
+        <div className={`transaction-category-review-hint${isReviewFocused ? " is-review-focused" : ""}`}>
+          <strong>제안</strong>
+          <span>{reviewSuggestionLabel}</span>
+        </div>
+      ) : null}
       <datalist id={listId}>
         <option value="" label="카테고리 없음" />
         {leafCategories.map((category) => (
