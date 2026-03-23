@@ -4,6 +4,7 @@ import { useRef } from "react";
 import { createPortal } from "react-dom";
 import { getPersonUsageSummary } from "../../domain/assets/usageSummary";
 import { getActiveTransactions } from "../../domain/transactions/meta";
+import type { Category } from "../../shared/types/models";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { AppModal } from "../components/AppModal";
 import { BoardCase } from "../components/BoardCase";
@@ -90,7 +91,17 @@ type PersonCardDraftState = {
 type DragItem =
   | { id: string; itemType: "person"; ownerPersonId: null; isHidden: boolean }
   | { id: string; itemType: "account"; ownerPersonId: string | null; isHidden: boolean }
-  | { id: string; itemType: "card"; ownerPersonId: string | null; isHidden: boolean };
+  | { id: string; itemType: "card"; ownerPersonId: string | null; isHidden: boolean }
+  | { id: string; itemType: "categoryLink"; ownerPersonId: null; isHidden: false }
+  | { id: string; itemType: "categoryGroupLink"; ownerPersonId: null; isHidden: false; categoryIds: string[] };
+
+type CategoryGroup = Category & { categoryType: "group" };
+type LeafCategory = Category & { categoryType: "category" };
+
+type CategoryLinkGroup = {
+  group: CategoryGroup;
+  categories: LeafCategory[];
+};
 
 let transparentDragImage: HTMLCanvasElement | null = null;
 
@@ -126,6 +137,23 @@ function getInsertIndexByVerticalPointer(event: React.DragEvent<HTMLElement>, ba
   return event.clientY > rect.top + rect.height / 2 ? baseIndex + 1 : baseIndex;
 }
 
+function clampNumber(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function getDefaultCategoryLinkPanelPosition() {
+  if (typeof window === "undefined") {
+    return { left: 16, top: 104 };
+  }
+
+  const margin = 16;
+  const desiredWidth = Math.min(1120, Math.max(360, window.innerWidth - margin * 2));
+  return {
+    left: Math.max(margin, Math.round((window.innerWidth - desiredWidth) / 2)),
+    top: 104,
+  };
+}
+
 function getTransparentDragImage() {
   if (typeof document === "undefined") return null;
   if (!transparentDragImage) {
@@ -134,6 +162,10 @@ function getTransparentDragImage() {
     transparentDragImage.height = 1;
   }
   return transparentDragImage;
+}
+
+function isCategoryConnectionDragItem(item: DragItem | null): item is Extract<DragItem, { itemType: "categoryLink" | "categoryGroupLink" }> {
+  return item?.itemType === "categoryLink" || item?.itemType === "categoryGroupLink";
 }
 
 function getPersonRoleLabel(role: "owner" | "member") {
@@ -253,7 +285,21 @@ function createSequentialLabel(baseLabel: string, existingLabels: string[]) {
 }
 
 export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
-  const { addAccount, addPerson, deleteAccount, deleteCard, deletePerson, moveAccount, moveCard, movePerson, state, updateAccount, updateCard, updatePerson } =
+  const {
+    addAccount,
+    addPerson,
+    deleteAccount,
+    deleteCard,
+    deletePerson,
+    moveAccount,
+    moveCard,
+    movePerson,
+    state,
+    updateAccount,
+    updateCard,
+    updateCategory,
+    updatePerson,
+  } =
     useAppState();
   const [inlineEditingPersonId, setInlineEditingPersonId] = useState<string | null>(null);
   const [inlinePersonName, setInlinePersonName] = useState("");
@@ -261,11 +307,16 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   const [dragItem, setDragItem] = useState<DragItem | null>(null);
   const [activeDropZone, setActiveDropZone] = useState<"hide" | "delete" | null>(null);
   const [activeCardLinkTargetId, setActiveCardLinkTargetId] = useState<string | null>(null);
+  const [activeCategoryLinkTargetId, setActiveCategoryLinkTargetId] = useState<string | null>(null);
   const [linkedAccountFlash, setLinkedAccountFlash] = useState<{ cardId: string; sequence: number } | null>(null);
   const [isDragOverlayVisible, setIsDragOverlayVisible] = useState(false);
   const [isDragOverlayActive, setIsDragOverlayActive] = useState(false);
   const [isHiddenPanelOpen, setIsHiddenPanelOpen] = useState(false);
-  const [pendingDeleteItem, setPendingDeleteItem] = useState<{ itemType: DragItem["itemType"]; id: string } | null>(null);
+  const [isCategoryLinkPanelOpen, setIsCategoryLinkPanelOpen] = useState(false);
+  const [categoryLinkPanelPosition, setCategoryLinkPanelPosition] = useState<{ left: number; top: number } | null>(null);
+  const [isCategoryLinkPanelDragging, setIsCategoryLinkPanelDragging] = useState(false);
+  const [isCategoryLinkResetZoneActive, setIsCategoryLinkResetZoneActive] = useState(false);
+  const [pendingDeleteItem, setPendingDeleteItem] = useState<{ itemType: "person" | "account" | "card"; id: string } | null>(null);
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
   const [accountOwnerPersonId, setAccountOwnerPersonId] = useState<string | null>(null);
@@ -278,6 +329,8 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   const linkedAccountFlashSequenceRef = useRef(0);
   const dragGhostRef = useRef<HTMLElement | null>(null);
   const dragGhostOffsetRef = useRef({ x: 0, y: 0 });
+  const categoryLinkPanelRef = useRef<HTMLElement | null>(null);
+  const categoryLinkPanelDragStateRef = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null);
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const people = scope.people.filter((person) => !person.isHidden);
@@ -287,17 +340,71 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   const transactions = getActiveTransactions(scope.transactions);
   const personNameMap = new Map(scope.people.map((person) => [person.id, person.displayName || person.name]));
   const accountNameMap = new Map(scope.accounts.map((account) => [account.id, account.alias || account.name]));
+  const categoryGroupNameMap = useMemo(
+    () =>
+      new Map(
+        scope.categories
+          .filter((category): category is CategoryGroup => category.categoryType === "group")
+          .map((group) => [group.id, group.name]),
+      ),
+    [scope.categories],
+  );
+  const allLeafCategories = useMemo(
+    () =>
+      scope.categories
+        .filter((category): category is LeafCategory => category.categoryType === "category")
+        .sort((left, right) => left.sortOrder - right.sortOrder || left.name.localeCompare(right.name, "ko-KR")),
+    [scope.categories],
+  );
+  const visibleLeafCategories = useMemo(
+    () => allLeafCategories.filter((category) => !category.isHidden),
+    [allLeafCategories],
+  );
+  const categoryLinkGroups = useMemo<CategoryLinkGroup[]>(() => {
+    const groups = scope.categories
+      .filter((category): category is CategoryGroup => category.categoryType === "group" && !category.isHidden)
+      .sort((left, right) => left.sortOrder - right.sortOrder || left.name.localeCompare(right.name, "ko-KR"));
+
+    return groups
+      .map((group) => ({
+        group,
+        categories: visibleLeafCategories.filter((category) => category.parentCategoryId === group.id),
+      }))
+      .filter((entry) => entry.categories.length);
+  }, [scope.categories, visibleLeafCategories]);
+  const linkedCategoriesByAccountId = useMemo(() => {
+    const nextMap = new Map<string, LeafCategory[]>();
+    allLeafCategories.forEach((category) => {
+      if (!category.linkedAccountId) return;
+      const current = nextMap.get(category.linkedAccountId) ?? [];
+      current.push(category);
+      nextMap.set(category.linkedAccountId, current);
+    });
+    nextMap.forEach((categories) => {
+      categories.sort((left, right) => left.sortOrder - right.sortOrder || left.name.localeCompare(right.name, "ko-KR"));
+    });
+    return nextMap;
+  }, [allLeafCategories]);
   const editingAccount = useMemo(
     () => scope.accounts.find((account) => account.id === editingAccountId) ?? null,
     [scope.accounts, editingAccountId],
+  );
+  const editingAccountLinkedCategories = useMemo(
+    () => (editingAccount ? linkedCategoriesByAccountId.get(editingAccount.id) ?? [] : []),
+    [editingAccount, linkedCategoriesByAccountId],
   );
   const editingCard = useMemo(() => scope.cards.find((card) => card.id === editingCardId) ?? null, [scope.cards, editingCardId]);
   const activeCardLinkMessage = useMemo(() => {
     if (!activeCardLinkTargetId) return "";
     const targetCard = scope.cards.find((card) => card.id === activeCardLinkTargetId);
     if (!targetCard) return "";
-    return `${getCardAccountLabel(targetCard.cardType)}로 연결`;
+    return `🔗 ${getCardAccountLabel(targetCard.cardType)}로 연결`;
   }, [activeCardLinkTargetId, scope.cards]);
+  const activeCategoryLinkMessage = useMemo(() => {
+    if (isCategoryLinkResetZoneActive) return "⛓️‍💥 연결해제";
+    if (!activeCategoryLinkTargetId) return "";
+    return "🔗 카테고리 연결";
+  }, [activeCategoryLinkTargetId, isCategoryLinkResetZoneActive]);
 
   const accountsByPersonId = new Map(
     scope.people.map((person) => [person.id, scope.accounts.filter((account) => account.ownerPersonId === person.id && !account.isHidden)]),
@@ -361,7 +468,67 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   }, [pendingInlinePersonName, people]);
 
   useEffect(() => {
-    if (dragItem) {
+    if (!isCategoryLinkPanelOpen || typeof window === "undefined") {
+      categoryLinkPanelDragStateRef.current = null;
+      setIsCategoryLinkPanelDragging(false);
+      return;
+    }
+
+    const clampPanelPosition = (position: { left: number; top: number }) => {
+      const margin = 16;
+      const panelWidth = categoryLinkPanelRef.current?.offsetWidth ?? Math.min(1120, Math.max(360, window.innerWidth - margin * 2));
+      const panelHeight = categoryLinkPanelRef.current?.offsetHeight ?? 360;
+      return {
+        left: clampNumber(position.left, margin, Math.max(margin, window.innerWidth - panelWidth - margin)),
+        top: clampNumber(position.top, margin, Math.max(margin, window.innerHeight - panelHeight - margin)),
+      };
+    };
+
+    const frame = window.requestAnimationFrame(() => {
+      setCategoryLinkPanelPosition((current) => clampPanelPosition(current ?? getDefaultCategoryLinkPanelPosition()));
+    });
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const dragState = categoryLinkPanelDragStateRef.current;
+      if (!dragState) return;
+      event.preventDefault();
+      setCategoryLinkPanelPosition(
+        clampPanelPosition({
+          left: event.clientX - dragState.offsetX,
+          top: event.clientY - dragState.offsetY,
+        }),
+      );
+    };
+
+    const handlePointerUp = (event: PointerEvent) => {
+      const dragState = categoryLinkPanelDragStateRef.current;
+      if (!dragState || dragState.pointerId !== event.pointerId) return;
+      categoryLinkPanelDragStateRef.current = null;
+      setIsCategoryLinkPanelDragging(false);
+    };
+
+    const handleResize = () => {
+      setCategoryLinkPanelPosition((current) => clampPanelPosition(current ?? getDefaultCategoryLinkPanelPosition()));
+    };
+
+    window.addEventListener("pointermove", handlePointerMove, { passive: false });
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
+      window.removeEventListener("resize", handleResize);
+      categoryLinkPanelDragStateRef.current = null;
+      setIsCategoryLinkPanelDragging(false);
+    };
+  }, [isCategoryLinkPanelOpen]);
+
+  useEffect(() => {
+    if (dragItem && !isCategoryConnectionDragItem(dragItem)) {
       if (dragOverlayTimeoutRef.current) {
         window.clearTimeout(dragOverlayTimeoutRef.current);
         dragOverlayTimeoutRef.current = null;
@@ -380,7 +547,10 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
     }
 
     setIsDragOverlayActive(false);
+    setIsDragOverlayVisible(false);
     setActiveCardLinkTargetId(null);
+    setActiveCategoryLinkTargetId(null);
+    setIsCategoryLinkResetZoneActive(false);
     dragOverlayTimeoutRef.current = window.setTimeout(() => {
       setIsDragOverlayVisible(false);
       dragOverlayTimeoutRef.current = null;
@@ -419,13 +589,20 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
 
   useEffect(() => {
     if (!dragGhostRef.current) return;
-    dragGhostRef.current.classList.toggle("is-account-link-ready", dragItem?.itemType === "account" && Boolean(activeCardLinkTargetId));
-    if (activeCardLinkMessage) {
-      dragGhostRef.current.setAttribute("data-link-message", activeCardLinkMessage);
+    const isAccountLinkReady = dragItem?.itemType === "account" && Boolean(activeCardLinkTargetId);
+    const isCategoryLinkReady =
+      isCategoryConnectionDragItem(dragItem) && (Boolean(activeCategoryLinkTargetId) || isCategoryLinkResetZoneActive);
+    const linkMessage = isAccountLinkReady ? activeCardLinkMessage : isCategoryLinkReady ? activeCategoryLinkMessage : "";
+
+    dragGhostRef.current.classList.toggle("is-account-link-ready", isAccountLinkReady);
+    dragGhostRef.current.classList.toggle("is-category-link-ready", isCategoryLinkReady);
+
+    if (linkMessage) {
+      dragGhostRef.current.setAttribute("data-link-message", linkMessage);
     } else {
       dragGhostRef.current.removeAttribute("data-link-message");
     }
-  }, [activeCardLinkMessage, activeCardLinkTargetId, dragItem]);
+  }, [activeCardLinkMessage, activeCardLinkTargetId, activeCategoryLinkMessage, activeCategoryLinkTargetId, dragItem]);
 
   useEffect(() => {
     return () => {
@@ -444,6 +621,8 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
     setDragItem(null);
     setActiveDropZone(null);
     setActiveCardLinkTargetId(null);
+    setActiveCategoryLinkTargetId(null);
+    setIsCategoryLinkResetZoneActive(false);
   };
 
   const applyHiddenState = (item: DragItem, isHidden: boolean) => {
@@ -459,7 +638,24 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   };
 
   const requestDeleteItem = (item: DragItem) => {
+    if (item.itemType === "categoryLink" || item.itemType === "categoryGroupLink") return;
     setPendingDeleteItem({ itemType: item.itemType, id: item.id });
+  };
+
+  const handleCategoryLinkPanelPointerDown = (event: React.PointerEvent<HTMLElement>) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    if ((event.target as HTMLElement).closest("button")) return;
+
+    const panelRect = categoryLinkPanelRef.current?.getBoundingClientRect();
+    if (!panelRect) return;
+
+    categoryLinkPanelDragStateRef.current = {
+      pointerId: event.pointerId,
+      offsetX: event.clientX - panelRect.left,
+      offsetY: event.clientY - panelRect.top,
+    };
+    setIsCategoryLinkPanelDragging(true);
+    event.preventDefault();
   };
 
   const startDrag = (item: DragItem, event: React.DragEvent<HTMLElement>) => {
@@ -595,6 +791,46 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
     resetDragState();
   };
 
+  const getDraggedCategories = (item: Extract<DragItem, { itemType: "categoryLink" | "categoryGroupLink" }>) =>
+    item.itemType === "categoryLink"
+      ? visibleLeafCategories.filter((category) => category.id === item.id)
+      : visibleLeafCategories.filter((category) => item.categoryIds.includes(category.id));
+
+  const handleCategoryLinkDrop = (event: React.DragEvent<HTMLElement>, accountId: string) => {
+    if (!dragItem || !isCategoryConnectionDragItem(dragItem)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setIsCategoryLinkResetZoneActive(false);
+    const targetCategories = getDraggedCategories(dragItem);
+
+    if (!targetCategories.length) {
+      resetDragState();
+      return;
+    }
+
+    targetCategories.forEach((category) => {
+      if (category.linkedAccountId !== accountId) {
+        updateCategory(workspaceId, category.id, { linkedAccountId: accountId });
+      }
+    });
+    resetDragState();
+  };
+
+  const handleCategoryLinkResetDrop = (event: React.DragEvent<HTMLElement>) => {
+    if (!dragItem || !isCategoryConnectionDragItem(dragItem)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const targetCategories = getDraggedCategories(dragItem);
+
+    targetCategories.forEach((category) => {
+      if (category.linkedAccountId) {
+        updateCategory(workspaceId, category.id, { linkedAccountId: null });
+      }
+    });
+
+    resetDragState();
+  };
+
   const getDragStateClassName = (id: string) =>
     `${dragItem?.id === id ? " is-dragging" : ""}${dragItem?.id === id && activeDropZone === "hide" ? " is-drop-target-hide" : ""}${
       dragItem?.id === id && activeDropZone === "delete" ? " is-drop-target-delete" : ""
@@ -645,15 +881,24 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
         title="자산 설정"
         description="사용자별 계좌와 카드를 같은 보드 형식에서 관리합니다."
         actions={
-        <button
-          type="button"
-          className={`board-case-action-button${isHiddenPanelOpen ? " is-active" : ""}`}
-          data-guide-target="people-hidden-toggle"
-          onClick={() => setIsHiddenPanelOpen((current) => !current)}
-        >
-          숨김 {hiddenPeople.length + hiddenAccounts.length + hiddenCards.length}
-        </button>
-      }
+          <>
+            <button
+              type="button"
+              className={`board-case-action-button${isCategoryLinkPanelOpen ? " is-active is-strong" : ""}`}
+              onClick={() => setIsCategoryLinkPanelOpen((current) => !current)}
+            >
+              카테고리 연결
+            </button>
+            <button
+              type="button"
+              className={`board-case-action-button${isHiddenPanelOpen ? " is-active" : ""}`}
+              data-guide-target="people-hidden-toggle"
+              onClick={() => setIsHiddenPanelOpen((current) => !current)}
+            >
+              숨김 {hiddenPeople.length + hiddenAccounts.length + hiddenCards.length}
+            </button>
+          </>
+        }
     >
       {!embeddedSections.length ? (
         <EmptyStateCallout
@@ -744,29 +989,69 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                   <div
                     className="category-case-grid"
                     onDragOver={(event) => {
+                      if (isCategoryConnectionDragItem(dragItem)) {
+                        event.preventDefault();
+                        setIsCategoryLinkResetZoneActive(false);
+                        if (event.target === event.currentTarget) setActiveCategoryLinkTargetId(null);
+                        return;
+                      }
                       if (dragItem?.itemType !== "account" || dragItem.ownerPersonId !== section.person.id) return;
                       event.preventDefault();
                     }}
-                    onDrop={(event) => handleAccountAppendDrop(event, section.person.id, section.linkedAccounts.length)}
+                    onDrop={(event) => {
+                      if (isCategoryConnectionDragItem(dragItem)) {
+                        event.preventDefault();
+                        setActiveCategoryLinkTargetId(null);
+                        setIsCategoryLinkResetZoneActive(false);
+                        return;
+                      }
+                      handleAccountAppendDrop(event, section.person.id, section.linkedAccounts.length);
+                    }}
                   >
                     {section.linkedAccounts.map((account) => {
                       const usageLabel =
                         ACCOUNT_USAGE_OPTIONS.find((option) => option.value === getVisibleAccountUsageType(account.usageType, account.isShared))?.label ??
                         "기타";
+                      const linkedCategories = linkedCategoriesByAccountId.get(account.id) ?? [];
+                      const isActiveCategoryLinkTarget = activeCategoryLinkTargetId === account.id && isCategoryConnectionDragItem(dragItem);
                        return (
                         <article
-                         key={account.id}
-                         className={`category-case-card people-board-card${getDragStateClassName(account.id)}`}
-                         draggable
-                         onDragStart={(event) => startDrag({ id: account.id, itemType: "account", ownerPersonId: account.ownerPersonId ?? null, isHidden: false }, event)}
-                         onDragEnd={resetDragState}
-                         onDragOver={(event) => {
-                           if (dragItem?.itemType !== "account" || dragItem.ownerPersonId !== section.person.id) return;
-                           event.preventDefault();
-                           event.stopPropagation();
-                         }}
-                         onDrop={(event) => handleAccountDrop(event, section.person.id, section.linkedAccounts.indexOf(account))}
-                       >
+                          key={account.id}
+                          className={`category-case-card people-board-card${
+                            isCategoryConnectionDragItem(dragItem) ? " is-category-link-target" : ""
+                          }${isActiveCategoryLinkTarget ? " is-category-link-active" : ""}${getDragStateClassName(account.id)}`}
+                          draggable
+                          onDragStart={(event) => startDrag({ id: account.id, itemType: "account", ownerPersonId: account.ownerPersonId ?? null, isHidden: false }, event)}
+                          onDragEnd={resetDragState}
+                          onDragEnter={() => {
+                            if (!isCategoryConnectionDragItem(dragItem)) return;
+                            setIsCategoryLinkResetZoneActive(false);
+                            setActiveCategoryLinkTargetId(account.id);
+                          }}
+                          onDragOver={(event) => {
+                            if (isCategoryConnectionDragItem(dragItem)) {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              setIsCategoryLinkResetZoneActive(false);
+                              setActiveCategoryLinkTargetId(account.id);
+                              return;
+                            }
+                            if (dragItem?.itemType !== "account" || dragItem.ownerPersonId !== section.person.id) return;
+                            event.preventDefault();
+                            event.stopPropagation();
+                          }}
+                          onDragLeave={() => {
+                            if (activeCategoryLinkTargetId !== account.id) return;
+                            setActiveCategoryLinkTargetId((current) => (current === account.id ? null : current));
+                          }}
+                          onDrop={(event) => {
+                            if (isCategoryConnectionDragItem(dragItem)) {
+                              handleCategoryLinkDrop(event, account.id);
+                              return;
+                            }
+                            handleAccountDrop(event, section.person.id, section.linkedAccounts.indexOf(account));
+                          }}
+                        >
                         <button
                           type="button"
                           className="board-case-edit-button category-case-card-edit"
@@ -778,12 +1063,17 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                         >
                           ✎
                         </button>
-                         <div className="category-case-card-copy people-board-card-copy">
-                           <strong>{account.alias || account.name}</strong>
-                           <span>{account.institutionName || "직접 입력"}</span>
-                           <span>{account.accountNumberMasked || "계좌번호 미입력"}</span>
-                          </div>
-                         <div className="category-case-pill">{usageLabel}</div>
+                          <div className="category-case-card-copy people-board-card-copy">
+                            <strong>{account.alias || account.name}</strong>
+                            <span>{account.institutionName || "직접 입력"}</span>
+                            <span>{account.accountNumberMasked || "계좌번호 미입력"}</span>
+                            <div className="people-linked-category-block">
+                              <span className={`people-linked-category-count${linkedCategories.length ? "" : " is-empty"}`}>
+                                {linkedCategories.length ? `카테고리 ${linkedCategories.length}개` : "카테고리 없음"}
+                              </span>
+                            </div>
+                           </div>
+                          <div className="category-case-pill">{usageLabel}</div>
                         </article>
                       );
                     })}
@@ -992,6 +1282,123 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
         {!hiddenPeople.length && !hiddenAccounts.length && !hiddenCards.length ? <p className="text-secondary mb-0">숨긴 항목이 없습니다.</p> : null}
       </aside>
     ) : null}
+
+    {isCategoryLinkPanelOpen && typeof document !== "undefined"
+      ? createPortal(
+          <>
+            <aside
+              ref={categoryLinkPanelRef}
+              className={`people-category-link-panel${isCategoryLinkPanelDragging ? " is-dragging" : ""}`}
+              style={
+                categoryLinkPanelPosition
+                  ? {
+                      left: `${categoryLinkPanelPosition.left}px`,
+                      top: `${categoryLinkPanelPosition.top}px`,
+                      right: "auto",
+                    }
+                  : undefined
+              }
+              aria-labelledby="peopleCategoryLinkTitle"
+            >
+            <div className="people-category-link-panel-head" onPointerDown={handleCategoryLinkPanelPointerDown}>
+              <div>
+                <span className="section-kicker">정산 소스 계좌</span>
+                <h3 id="peopleCategoryLinkTitle">카테고리 연결</h3>
+                <span className="people-category-link-panel-drag-hint">헤더를 드래그해 위치 이동</span>
+              </div>
+              <div className="people-category-link-panel-actions">
+                {isCategoryConnectionDragItem(dragItem) ? (
+                  <div
+                    className={`people-category-link-reset-zone is-ready${isCategoryLinkResetZoneActive ? " is-active" : ""}`}
+                    onDragOver={(event) => {
+                      if (!isCategoryConnectionDragItem(dragItem)) return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setActiveCategoryLinkTargetId(null);
+                      setIsCategoryLinkResetZoneActive(true);
+                    }}
+                    onDragLeave={() => setIsCategoryLinkResetZoneActive(false)}
+                    onDrop={handleCategoryLinkResetDrop}
+                  >
+                    <span className="people-category-link-reset-label">
+                      <span className="people-category-link-reset-icon" aria-hidden="true">
+                        ⛓️‍💥
+                      </span>
+                      연결해제
+                    </span>
+                  </div>
+                ) : null}
+                <button
+                  type="button"
+                  className="board-case-edit-button"
+                  onClick={() => setIsCategoryLinkPanelOpen(false)}
+                  aria-label="카테고리 연결 패널 닫기"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+              <div className="people-category-link-panel-scroll">
+                {categoryLinkGroups.length ? (
+                  <div className="people-category-link-groups">
+                    {categoryLinkGroups.map((entry) => (
+                      <section
+                        key={entry.group.id}
+                        className={`people-category-link-group${
+                          dragItem?.itemType === "categoryGroupLink" && dragItem.id === entry.group.id ? " is-dragging" : ""
+                        }`}
+                        draggable
+                        onDragStart={(event) =>
+                          startDrag(
+                            {
+                              id: entry.group.id,
+                              itemType: "categoryGroupLink",
+                              ownerPersonId: null,
+                              isHidden: false,
+                              categoryIds: entry.categories.map((category) => category.id),
+                            },
+                            event,
+                          )
+                        }
+                        onDragEnd={resetDragState}
+                      >
+                        <div className="people-category-link-group-head">
+                          <strong>{entry.group.name}</strong>
+                          <span>{entry.categories.length}개</span>
+                        </div>
+                        <div className="people-category-link-list">
+                          {entry.categories.map((category) => (
+                            <article
+                              key={category.id}
+                              className={`people-category-link-item${!category.linkedAccountId ? " is-unlinked" : ""}${
+                                dragItem?.itemType === "categoryLink" && dragItem.id === category.id ? " is-dragging" : ""
+                              }`}
+                              draggable
+                              onDragStart={(event) =>
+                                startDrag({ id: category.id, itemType: "categoryLink", ownerPersonId: null, isHidden: false }, event)
+                              }
+                              onDragEnd={resetDragState}
+                            >
+                              <strong>{category.name}</strong>
+                              <span>{category.linkedAccountId ? accountNameMap.get(category.linkedAccountId) ?? "연결 계좌 없음" : "미연결"}</span>
+                              <div className={`category-case-pill people-category-link-pill${category.fixedOrVariable === "fixed" ? " is-fixed" : ""}`}>
+                                {category.fixedOrVariable === "fixed" ? "고정" : "변동"}
+                              </div>
+                            </article>
+                          ))}
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-secondary mb-0">연결할 카테고리가 없습니다.</p>
+                )}
+              </div>
+            </aside>
+          </>,
+          document.body,
+        )
+      : null}
 
       {isDragOverlayVisible && typeof document !== "undefined"
       ? createPortal(
@@ -1244,6 +1651,38 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
               메모
               <textarea className="form-control" rows={3} value={editAccountDraft.memo} onChange={(event) => patchAccountDraft({ memo: event.target.value }, setEditAccountDraft, editingAccount.ownerPersonId)} />
             </label>
+            <div className="people-linked-category-detail" style={{ gridColumn: "1 / -1" }}>
+              <div className="people-linked-category-detail-head">
+                <strong>연결된 정산 카테고리</strong>
+                <span>{editingAccountLinkedCategories.length}개</span>
+              </div>
+              {editingAccountLinkedCategories.length ? (
+                <div className="people-linked-category-detail-list">
+                  {editingAccountLinkedCategories.map((category) => (
+                    <div key={category.id} className="people-linked-category-detail-item">
+                      <div className="people-linked-category-detail-copy">
+                        <strong>{category.name}</strong>
+                        <span>
+                          {category.parentCategoryId ? categoryGroupNameMap.get(category.parentCategoryId) ?? "미분류 그룹" : "미분류 그룹"}
+                          {category.isHidden ? " · 숨김" : ""}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-outline-secondary btn-sm"
+                        onClick={() => updateCategory(workspaceId, category.id, { linkedAccountId: null })}
+                      >
+                        연결 해제
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="people-linked-category-detail-empty mb-0">
+                  연결된 카테고리가 없습니다. 카테고리 연결 팝업에서 드래그해 추가할 수 있습니다.
+                </p>
+              )}
+            </div>
             <div className="d-flex justify-content-end" style={{ gridColumn: "1 / -1" }}>
               <button className="btn btn-primary" type="submit">
                 저장

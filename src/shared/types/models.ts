@@ -65,6 +65,7 @@ export interface Category {
   name: string;
   categoryType: "group" | "category";
   parentCategoryId: ID | null;
+  linkedAccountId?: ID | null;
   sortOrder: number;
   isHidden: boolean;
   direction: "expense" | "income" | "transfer" | "mixed";

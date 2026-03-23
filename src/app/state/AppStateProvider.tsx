@@ -24,7 +24,17 @@ type AccountDraft = Pick<
 type CardDraft = Pick<Card, "ownerPersonId" | "name" | "issuerName" | "cardNumberMasked" | "linkedAccountId" | "cardType" | "memo" | "sortOrder" | "isHidden">;
 type CategoryDraft = Pick<
   Category,
-  "name" | "categoryType" | "parentCategoryId" | "sortOrder" | "isHidden" | "direction" | "fixedOrVariable" | "necessity" | "budgetable" | "reportable"
+  | "name"
+  | "categoryType"
+  | "parentCategoryId"
+  | "linkedAccountId"
+  | "sortOrder"
+  | "isHidden"
+  | "direction"
+  | "fixedOrVariable"
+  | "necessity"
+  | "budgetable"
+  | "reportable"
 >;
 
 type NewTransactionInput = {
@@ -225,6 +235,7 @@ function createCategoryDraft(input: string | Partial<CategoryDraft>, parentCateg
       name: input.trim(),
       categoryType: "category",
       parentCategoryId,
+      linkedAccountId: null,
       sortOrder: 0,
       isHidden: false,
       direction: "expense",
@@ -239,6 +250,7 @@ function createCategoryDraft(input: string | Partial<CategoryDraft>, parentCateg
     name: String(input.name ?? "").trim(),
     categoryType: input.categoryType === "group" ? "group" : "category",
     parentCategoryId: input.categoryType === "group" ? null : input.parentCategoryId ?? null,
+    linkedAccountId: input.categoryType === "group" ? null : input.linkedAccountId ?? null,
     sortOrder: input.sortOrder ?? 0,
     isHidden: input.isHidden ?? false,
     direction: input.direction ?? "expense",
@@ -250,9 +262,10 @@ function createCategoryDraft(input: string | Partial<CategoryDraft>, parentCateg
 }
 
 function normalizeAppState(rawState: AppState): AppState {
+  const validAccountIds = new Set(rawState.accounts.map((account) => `${account.workspaceId}:${account.id}`));
   const normalizedState = {
     ...rawState,
-    schemaVersion: Math.max(rawState.schemaVersion ?? 0, 4),
+    schemaVersion: Math.max(rawState.schemaVersion ?? 0, 5),
     people: rawState.people.map((person) => ({
       ...person,
       displayName: person.displayName ?? person.name,
@@ -280,6 +293,10 @@ function normalizeAppState(rawState: AppState): AppState {
       ...category,
       categoryType: category.categoryType ?? "category",
       parentCategoryId: category.parentCategoryId ?? null,
+      linkedAccountId:
+        category.linkedAccountId && validAccountIds.has(`${category.workspaceId}:${category.linkedAccountId}`)
+          ? category.linkedAccountId
+          : null,
       sortOrder: category.sortOrder ?? 0,
       isHidden: category.isHidden ?? false,
       direction: category.direction ?? "expense",
@@ -1159,6 +1176,11 @@ function reducer(state: AppState, action: Action): AppState {
         ),
       };
     case "deletePerson":
+      const removedPersonAccountIds = new Set(
+        state.accounts
+          .filter((account) => account.workspaceId === action.payload.workspaceId && account.ownerPersonId === action.payload.personId)
+          .map((account) => account.id),
+      );
       return {
         ...state,
         people: state.people.filter(
@@ -1169,6 +1191,11 @@ function reducer(state: AppState, action: Action): AppState {
         ),
         cards: state.cards.filter(
           (card) => !(card.workspaceId === action.payload.workspaceId && card.ownerPersonId === action.payload.personId),
+        ),
+        categories: state.categories.map((category) =>
+          category.workspaceId === action.payload.workspaceId && category.linkedAccountId && removedPersonAccountIds.has(category.linkedAccountId)
+            ? { ...category, linkedAccountId: null }
+            : category,
         ),
         transactions: state.transactions.map((transaction) =>
           transaction.workspaceId !== action.payload.workspaceId || transaction.ownerPersonId !== action.payload.personId
@@ -1255,6 +1282,11 @@ function reducer(state: AppState, action: Action): AppState {
           card.workspaceId === action.payload.workspaceId && card.linkedAccountId === action.payload.accountId
             ? { ...card, linkedAccountId: null }
             : card,
+        ),
+        categories: state.categories.map((category) =>
+          category.workspaceId === action.payload.workspaceId && category.linkedAccountId === action.payload.accountId
+            ? { ...category, linkedAccountId: null }
+            : category,
         ),
         transactions: state.transactions.map((transaction) =>
           transaction.workspaceId !== action.payload.workspaceId

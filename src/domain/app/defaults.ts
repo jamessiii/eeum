@@ -12,7 +12,7 @@ function mergeById<T extends { id: string }>(current: T[], incoming: T[]) {
 
 export function createEmptyState(): AppState {
   return {
-    schemaVersion: 4,
+    schemaVersion: 5,
     activeWorkspaceId: null,
     workspaces: [],
     financialProfiles: [],
@@ -70,6 +70,7 @@ export function createStarterCategories(workspaceId: string): Category[] {
     name: group.name,
     categoryType: "group" as const,
     parentCategoryId: null,
+    linkedAccountId: null,
     sortOrder: index,
     isHidden: false,
     direction: "expense" as const,
@@ -121,6 +122,7 @@ export function createStarterCategories(workspaceId: string): Category[] {
       name: item.name,
       categoryType: "category" as const,
       parentCategoryId: groupIdByName.get(item.parentName) ?? null,
+      linkedAccountId: null,
       sortOrder: index,
       isHidden: false,
       direction: "expense" as const,
