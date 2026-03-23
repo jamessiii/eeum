@@ -103,7 +103,16 @@ type CategoryLinkGroup = {
   categories: LeafCategory[];
 };
 
+type CategoryLinkPanelSize = {
+  width: number;
+  height: number;
+};
+
+type CategoryLinkPanelResizeDirection = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
+
 let transparentDragImage: HTMLCanvasElement | null = null;
+
+const CATEGORY_LINK_PANEL_RESIZE_DIRECTIONS: CategoryLinkPanelResizeDirection[] = ["n", "s", "e", "w", "ne", "nw", "se", "sw"];
 
 const EMPTY_PERSON_ACCOUNT_DRAFT: PersonAccountDraftState = {
   name: "",
@@ -141,15 +150,56 @@ function clampNumber(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
-function getDefaultCategoryLinkPanelPosition() {
+function getCategoryLinkPanelSizeBounds() {
+  if (typeof window === "undefined") {
+    return {
+      margin: 16,
+      minWidth: 360,
+      maxWidth: 768,
+      minHeight: 240,
+      maxHeight: 352,
+    };
+  }
+
+  const margin = 16;
+  const maxWidth = Math.max(360, window.innerWidth - margin * 2);
+  const maxHeight = Math.max(240, window.innerHeight - margin * 2);
+  return {
+    margin,
+    minWidth: Math.min(480, maxWidth),
+    maxWidth,
+    minHeight: Math.min(240, maxHeight),
+    maxHeight,
+  };
+}
+
+function clampCategoryLinkPanelSize(size: CategoryLinkPanelSize) {
+  const bounds = getCategoryLinkPanelSizeBounds();
+  return {
+    width: clampNumber(size.width, bounds.minWidth, bounds.maxWidth),
+    height: clampNumber(size.height, bounds.minHeight, bounds.maxHeight),
+  };
+}
+
+function getDefaultCategoryLinkPanelSize() {
+  if (typeof window === "undefined") {
+    return { width: 768, height: 352 };
+  }
+
+  return clampCategoryLinkPanelSize({
+    width: Math.min(768, window.innerWidth - 32),
+    height: Math.min(352, window.innerHeight - 112),
+  });
+}
+
+function getDefaultCategoryLinkPanelPosition(panelSize = getDefaultCategoryLinkPanelSize()) {
   if (typeof window === "undefined") {
     return { left: 16, top: 104 };
   }
 
-  const margin = 16;
-  const desiredWidth = Math.min(1120, Math.max(360, window.innerWidth - margin * 2));
+  const { margin } = getCategoryLinkPanelSizeBounds();
   return {
-    left: Math.max(margin, Math.round((window.innerWidth - desiredWidth) / 2)),
+    left: Math.max(margin, Math.round((window.innerWidth - panelSize.width) / 2)),
     top: 104,
   };
 }
@@ -313,8 +363,11 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   const [isDragOverlayActive, setIsDragOverlayActive] = useState(false);
   const [isHiddenPanelOpen, setIsHiddenPanelOpen] = useState(false);
   const [isCategoryLinkPanelOpen, setIsCategoryLinkPanelOpen] = useState(false);
+  const [categoryLinkPanelSize, setCategoryLinkPanelSize] = useState<CategoryLinkPanelSize | null>(null);
   const [categoryLinkPanelPosition, setCategoryLinkPanelPosition] = useState<{ left: number; top: number } | null>(null);
+  const [categoryLinkColumnCount, setCategoryLinkColumnCount] = useState(1);
   const [isCategoryLinkPanelDragging, setIsCategoryLinkPanelDragging] = useState(false);
+  const [isCategoryLinkPanelResizing, setIsCategoryLinkPanelResizing] = useState(false);
   const [isCategoryLinkResetZoneActive, setIsCategoryLinkResetZoneActive] = useState(false);
   const [pendingDeleteItem, setPendingDeleteItem] = useState<{ itemType: "person" | "account" | "card"; id: string } | null>(null);
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
@@ -330,7 +383,19 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   const dragGhostRef = useRef<HTMLElement | null>(null);
   const dragGhostOffsetRef = useRef({ x: 0, y: 0 });
   const categoryLinkPanelRef = useRef<HTMLElement | null>(null);
+  const categoryLinkPanelScrollRef = useRef<HTMLDivElement | null>(null);
+  const categoryLinkPanelSizeRef = useRef<CategoryLinkPanelSize | null>(null);
   const categoryLinkPanelDragStateRef = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null);
+  const categoryLinkPanelResizeStateRef = useRef<{
+    pointerId: number;
+    direction: CategoryLinkPanelResizeDirection;
+    startX: number;
+    startY: number;
+    startWidth: number;
+    startHeight: number;
+    startLeft: number;
+    startTop: number;
+  } | null>(null);
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const people = scope.people.filter((person) => !person.isHidden);
@@ -372,6 +437,10 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
       }))
       .filter((entry) => entry.categories.length);
   }, [scope.categories, visibleLeafCategories]);
+  const maxCategoryLinkGroupSize = useMemo(
+    () => categoryLinkGroups.reduce((max, entry) => Math.max(max, entry.categories.length), 1),
+    [categoryLinkGroups],
+  );
   const linkedCategoriesByAccountId = useMemo(() => {
     const nextMap = new Map<string, LeafCategory[]>();
     allLeafCategories.forEach((category) => {
@@ -405,6 +474,68 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
     if (!activeCategoryLinkTargetId) return "";
     return "🔗 카테고리 연결";
   }, [activeCategoryLinkTargetId, isCategoryLinkResetZoneActive]);
+  const categoryLinkGridStyle = useMemo(
+    () =>
+      ({
+        "--people-category-link-columns": `${categoryLinkColumnCount}`,
+      }) as Record<string, string>,
+    [categoryLinkColumnCount],
+  );
+
+  useEffect(() => {
+    categoryLinkPanelSizeRef.current = categoryLinkPanelSize;
+  }, [categoryLinkPanelSize]);
+
+  useEffect(() => {
+    if (!isCategoryLinkPanelOpen || typeof window === "undefined") {
+      setCategoryLinkColumnCount(1);
+      return;
+    }
+
+    const panelScroll = categoryLinkPanelScrollRef.current;
+    if (!panelScroll) return;
+
+    const rootFontSize = parseFloat(window.getComputedStyle(document.documentElement).fontSize) || 16;
+    const minCardWidth = 11 * rootFontSize;
+    const listGap = 0.55 * rootFontSize;
+    let frame = 0;
+
+    const updateColumnCount = () => {
+      frame = 0;
+      const firstList = panelScroll.querySelector<HTMLElement>(".people-category-link-list");
+      const listWidth = firstList?.clientWidth ?? 0;
+      if (!listWidth) {
+        setCategoryLinkColumnCount(1);
+        return;
+      }
+
+      const fittedColumns = Math.max(1, Math.floor((listWidth + listGap) / (minCardWidth + listGap)));
+      setCategoryLinkColumnCount(Math.max(1, Math.min(maxCategoryLinkGroupSize, fittedColumns)));
+    };
+
+    const queueColumnCountUpdate = () => {
+      if (frame) return;
+      frame = window.requestAnimationFrame(updateColumnCount);
+    };
+
+    const resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(queueColumnCountUpdate);
+    resizeObserver?.observe(panelScroll);
+    const firstList = panelScroll.querySelector<HTMLElement>(".people-category-link-list");
+    if (firstList) {
+      resizeObserver?.observe(firstList);
+    }
+
+    queueColumnCountUpdate();
+    window.addEventListener("resize", queueColumnCountUpdate);
+
+    return () => {
+      if (frame) {
+        window.cancelAnimationFrame(frame);
+      }
+      window.removeEventListener("resize", queueColumnCountUpdate);
+      resizeObserver?.disconnect();
+    };
+  }, [isCategoryLinkPanelOpen, maxCategoryLinkGroupSize, categoryLinkPanelSize]);
 
   const accountsByPersonId = new Map(
     scope.people.map((person) => [person.id, scope.accounts.filter((account) => account.ownerPersonId === person.id && !account.isHidden)]),
@@ -470,25 +601,82 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   useEffect(() => {
     if (!isCategoryLinkPanelOpen || typeof window === "undefined") {
       categoryLinkPanelDragStateRef.current = null;
+      categoryLinkPanelResizeStateRef.current = null;
       setIsCategoryLinkPanelDragging(false);
+      setIsCategoryLinkPanelResizing(false);
       return;
     }
 
-    const clampPanelPosition = (position: { left: number; top: number }) => {
-      const margin = 16;
-      const panelWidth = categoryLinkPanelRef.current?.offsetWidth ?? Math.min(1120, Math.max(360, window.innerWidth - margin * 2));
-      const panelHeight = categoryLinkPanelRef.current?.offsetHeight ?? 360;
+    const getCurrentPanelSize = () =>
+      categoryLinkPanelSizeRef.current ??
+      (categoryLinkPanelRef.current
+        ? clampCategoryLinkPanelSize({
+            width: categoryLinkPanelRef.current.offsetWidth,
+            height: categoryLinkPanelRef.current.offsetHeight,
+          })
+        : getDefaultCategoryLinkPanelSize());
+
+    const clampPanelPosition = (position: { left: number; top: number }, panelSize = getCurrentPanelSize()) => {
+      const { margin } = getCategoryLinkPanelSizeBounds();
       return {
-        left: clampNumber(position.left, margin, Math.max(margin, window.innerWidth - panelWidth - margin)),
-        top: clampNumber(position.top, margin, Math.max(margin, window.innerHeight - panelHeight - margin)),
+        left: clampNumber(position.left, margin, Math.max(margin, window.innerWidth - panelSize.width - margin)),
+        top: clampNumber(position.top, margin, Math.max(margin, window.innerHeight - panelSize.height - margin)),
       };
     };
 
     const frame = window.requestAnimationFrame(() => {
-      setCategoryLinkPanelPosition((current) => clampPanelPosition(current ?? getDefaultCategoryLinkPanelPosition()));
+      const initialSize = getCurrentPanelSize();
+      if (!categoryLinkPanelSizeRef.current) {
+        setCategoryLinkPanelSize(initialSize);
+      }
+      setCategoryLinkPanelPosition((current) => clampPanelPosition(current ?? getDefaultCategoryLinkPanelPosition(initialSize), initialSize));
     });
 
     const handlePointerMove = (event: PointerEvent) => {
+      const resizeState = categoryLinkPanelResizeStateRef.current;
+      if (resizeState) {
+        event.preventDefault();
+        const { margin, minWidth, minHeight } = getCategoryLinkPanelSizeBounds();
+        const deltaX = event.clientX - resizeState.startX;
+        const deltaY = event.clientY - resizeState.startY;
+        const rightEdge = resizeState.startLeft + resizeState.startWidth;
+        const bottomEdge = resizeState.startTop + resizeState.startHeight;
+        let nextLeft = resizeState.startLeft;
+        let nextTop = resizeState.startTop;
+        let nextWidth = resizeState.startWidth;
+        let nextHeight = resizeState.startHeight;
+
+        if (resizeState.direction.includes("e")) {
+          nextWidth = clampNumber(
+            resizeState.startWidth + deltaX,
+            minWidth,
+            Math.max(minWidth, window.innerWidth - margin - resizeState.startLeft),
+          );
+        }
+
+        if (resizeState.direction.includes("s")) {
+          nextHeight = clampNumber(
+            resizeState.startHeight + deltaY,
+            minHeight,
+            Math.max(minHeight, window.innerHeight - margin - resizeState.startTop),
+          );
+        }
+
+        if (resizeState.direction.includes("w")) {
+          nextLeft = clampNumber(resizeState.startLeft + deltaX, margin, Math.max(margin, rightEdge - minWidth));
+          nextWidth = clampNumber(rightEdge - nextLeft, minWidth, Math.max(minWidth, rightEdge - margin));
+        }
+
+        if (resizeState.direction.includes("n")) {
+          nextTop = clampNumber(resizeState.startTop + deltaY, margin, Math.max(margin, bottomEdge - minHeight));
+          nextHeight = clampNumber(bottomEdge - nextTop, minHeight, Math.max(minHeight, bottomEdge - margin));
+        }
+
+        setCategoryLinkPanelPosition({ left: nextLeft, top: nextTop });
+        setCategoryLinkPanelSize({ width: nextWidth, height: nextHeight });
+        return;
+      }
+
       const dragState = categoryLinkPanelDragStateRef.current;
       if (!dragState) return;
       event.preventDefault();
@@ -501,6 +689,12 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
     };
 
     const handlePointerUp = (event: PointerEvent) => {
+      const resizeState = categoryLinkPanelResizeStateRef.current;
+      if (resizeState && resizeState.pointerId === event.pointerId) {
+        categoryLinkPanelResizeStateRef.current = null;
+        setIsCategoryLinkPanelResizing(false);
+      }
+
       const dragState = categoryLinkPanelDragStateRef.current;
       if (!dragState || dragState.pointerId !== event.pointerId) return;
       categoryLinkPanelDragStateRef.current = null;
@@ -508,7 +702,9 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
     };
 
     const handleResize = () => {
-      setCategoryLinkPanelPosition((current) => clampPanelPosition(current ?? getDefaultCategoryLinkPanelPosition()));
+      const nextSize = clampCategoryLinkPanelSize(getCurrentPanelSize());
+      setCategoryLinkPanelSize(nextSize);
+      setCategoryLinkPanelPosition((current) => clampPanelPosition(current ?? getDefaultCategoryLinkPanelPosition(nextSize), nextSize));
     };
 
     window.addEventListener("pointermove", handlePointerMove, { passive: false });
@@ -523,7 +719,9 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
       window.removeEventListener("pointercancel", handlePointerUp);
       window.removeEventListener("resize", handleResize);
       categoryLinkPanelDragStateRef.current = null;
+      categoryLinkPanelResizeStateRef.current = null;
       setIsCategoryLinkPanelDragging(false);
+      setIsCategoryLinkPanelResizing(false);
     };
   }, [isCategoryLinkPanelOpen]);
 
@@ -658,6 +856,34 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
     event.preventDefault();
   };
 
+  const handleCategoryLinkPanelResizePointerDown = (
+    direction: CategoryLinkPanelResizeDirection,
+    event: React.PointerEvent<HTMLSpanElement>,
+  ) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+
+    const panelRect = categoryLinkPanelRef.current?.getBoundingClientRect();
+    if (!panelRect) return;
+
+    categoryLinkPanelDragStateRef.current = null;
+    categoryLinkPanelResizeStateRef.current = {
+      pointerId: event.pointerId,
+      direction,
+      startX: event.clientX,
+      startY: event.clientY,
+      startWidth: panelRect.width,
+      startHeight: panelRect.height,
+      startLeft: panelRect.left,
+      startTop: panelRect.top,
+    };
+    setCategoryLinkPanelPosition({ left: panelRect.left, top: panelRect.top });
+    setCategoryLinkPanelSize({ width: panelRect.width, height: panelRect.height });
+    setIsCategoryLinkPanelDragging(false);
+    setIsCategoryLinkPanelResizing(true);
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
   const startDrag = (item: DragItem, event: React.DragEvent<HTMLElement>) => {
     event.stopPropagation();
     event.dataTransfer.effectAllowed = "move";
@@ -680,6 +906,12 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
 
     const ghostElement = sourceElement.cloneNode(true) as HTMLElement;
     ghostElement.classList.add("category-drag-ghost");
+    if (typeof window !== "undefined") {
+      const computedColumns = window.getComputedStyle(sourceElement).getPropertyValue("--people-category-link-columns").trim();
+      if (computedColumns) {
+        ghostElement.style.setProperty("--people-category-link-columns", computedColumns);
+      }
+    }
     ghostElement.style.position = "fixed";
     ghostElement.style.left = `${event.clientX - dragGhostOffsetRef.current.x}px`;
     ghostElement.style.top = `${event.clientY - dragGhostOffsetRef.current.y}px`;
@@ -1288,13 +1520,17 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
           <>
             <aside
               ref={categoryLinkPanelRef}
-              className={`people-category-link-panel${isCategoryLinkPanelDragging ? " is-dragging" : ""}`}
+              className={`people-category-link-panel${isCategoryLinkPanelDragging ? " is-dragging" : ""}${
+                isCategoryLinkPanelResizing ? " is-resizing" : ""
+              }`}
               style={
-                categoryLinkPanelPosition
+                categoryLinkPanelPosition || categoryLinkPanelSize
                   ? {
-                      left: `${categoryLinkPanelPosition.left}px`,
-                      top: `${categoryLinkPanelPosition.top}px`,
+                      left: `${(categoryLinkPanelPosition ?? getDefaultCategoryLinkPanelPosition(categoryLinkPanelSize ?? getDefaultCategoryLinkPanelSize())).left}px`,
+                      top: `${(categoryLinkPanelPosition ?? getDefaultCategoryLinkPanelPosition(categoryLinkPanelSize ?? getDefaultCategoryLinkPanelSize())).top}px`,
                       right: "auto",
+                      width: categoryLinkPanelSize ? `${categoryLinkPanelSize.width}px` : undefined,
+                      height: categoryLinkPanelSize ? `${categoryLinkPanelSize.height}px` : undefined,
                     }
                   : undefined
               }
@@ -1304,7 +1540,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
               <div>
                 <span className="section-kicker">정산 소스 계좌</span>
                 <h3 id="peopleCategoryLinkTitle">카테고리 연결</h3>
-                <span className="people-category-link-panel-drag-hint">헤더를 드래그해 위치 이동</span>
+                <span className="people-category-link-panel-drag-hint">헤더는 이동, 테두리와 모서리는 크기 조절</span>
               </div>
               <div className="people-category-link-panel-actions">
                 {isCategoryConnectionDragItem(dragItem) ? (
@@ -1338,9 +1574,9 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                 </button>
               </div>
             </div>
-              <div className="people-category-link-panel-scroll">
+              <div ref={categoryLinkPanelScrollRef} className="people-category-link-panel-scroll">
                 {categoryLinkGroups.length ? (
-                  <div className="people-category-link-groups">
+                  <div className="people-category-link-groups" style={categoryLinkGridStyle}>
                     {categoryLinkGroups.map((entry) => (
                       <section
                         key={entry.group.id}
@@ -1394,6 +1630,14 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                   <p className="text-secondary mb-0">연결할 카테고리가 없습니다.</p>
                 )}
               </div>
+              {CATEGORY_LINK_PANEL_RESIZE_DIRECTIONS.map((direction) => (
+                <span
+                  key={direction}
+                  className={`people-category-link-resize-handle is-${direction}`}
+                  onPointerDown={(event) => handleCategoryLinkPanelResizePointerDown(direction, event)}
+                  aria-hidden="true"
+                />
+              ))}
             </aside>
           </>,
           document.body,
