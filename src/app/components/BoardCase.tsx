@@ -1,6 +1,6 @@
 import type { HTMLAttributes, ReactNode } from "react";
 
-type BoardCaseProps = {
+type BoardCaseProps = Omit<HTMLAttributes<HTMLElement>, "children" | "title"> & {
   title: string;
   description?: string;
   actions?: ReactNode;
@@ -15,9 +15,17 @@ type BoardCaseSectionProps = Omit<HTMLAttributes<HTMLElement>, "title"> & {
   children: ReactNode;
 };
 
-export function BoardCase({ title, description, actions, children, embedded = false }: BoardCaseProps) {
+export function BoardCase({
+  title,
+  description,
+  actions,
+  children,
+  embedded = false,
+  className = "",
+  ...props
+}: BoardCaseProps) {
   return (
-    <section className={`board-case-shell${embedded ? " is-embedded" : ""}`}>
+    <section className={`board-case-shell${embedded ? " is-embedded" : ""}${className ? ` ${className}` : ""}`} {...props}>
       <div className="board-case-header">
         <div className="board-case-header-copy">
           <h2>{title}</h2>

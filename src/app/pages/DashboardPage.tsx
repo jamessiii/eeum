@@ -481,7 +481,7 @@ export function DashboardPage() {
 
   return (
     <div className="page-stack">
-      <section className="card shadow-sm" style={getMotionStyle(0)}>
+      <section className="card shadow-sm" style={getMotionStyle(0)} data-guide-target="dashboard-summary">
         <div className="section-head">
           <div>
             <span className="section-kicker">이번 달 요약</span>

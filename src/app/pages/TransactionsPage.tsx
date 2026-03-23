@@ -51,6 +51,8 @@ export function TransactionsPage() {
     () => (selectedMonth === "all" ? baseTransactions : baseTransactions.filter((transaction) => transaction.occurredAt.slice(0, 7) === selectedMonth)),
     [baseTransactions, selectedMonth],
   );
+  const uncategorizedGuideTransactionId =
+    filters.nature === "uncategorized" ? transactions.find((transaction) => !transaction.categoryId)?.id ?? null : null;
   const uncategorizedTransactionCount = useMemo(
     () => scope.transactions.filter((transaction) => !transaction.categoryId).length,
     [scope.transactions],
@@ -118,7 +120,7 @@ export function TransactionsPage() {
       <ImportsPage />
       <ReviewsPage />
 
-      <section className="card shadow-sm" style={getMotionStyle(0)}>
+      <section className="card shadow-sm" style={getMotionStyle(0)} data-guide-target="transactions-page-overview">
         <div className="section-head transaction-grid-head">
           <div>
             <h2 className="section-title">카드내역</h2>
@@ -127,7 +129,7 @@ export function TransactionsPage() {
             </p>
           </div>
           <div className="transaction-grid-toolbar">
-            <label className="transaction-filter-toggle">
+            <label className="transaction-filter-toggle" data-guide-target="transactions-uncategorized-filter">
               <span className="transaction-filter-toggle-label">미분류</span>
               <input
                 type="checkbox"
@@ -240,6 +242,11 @@ export function TransactionsPage() {
                         transaction={transaction}
                         categories={scope.categories}
                         categoryName={transaction.categoryId ? categories.get(transaction.categoryId) ?? null : null}
+                        guideTarget={
+                          uncategorizedGuideTransactionId === transaction.id
+                            ? "transactions-uncategorized-category-input"
+                            : undefined
+                        }
                         onCategoryChange={(categoryId) => {
                           if (!categoryId) {
                             clearCategory(workspaceId, transaction.id);

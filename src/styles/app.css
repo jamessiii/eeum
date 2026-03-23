@@ -6,6 +6,7 @@
   --app-panel: rgba(255, 255, 255, 0.86);
   --app-panel-strong: rgba(255, 255, 255, 0.94);
   --app-panel-muted: rgba(248, 250, 252, 0.86);
+  --guide-panel-fill: rgba(255, 255, 255, 0.985);
   --app-line: rgba(23, 32, 51, 0.08);
   --app-line-strong: rgba(59, 130, 246, 0.18);
   --app-text: #172033;
@@ -33,6 +34,7 @@
   --app-panel: rgba(15, 23, 42, 0.92);
   --app-panel-strong: rgba(30, 41, 59, 0.96);
   --app-panel-muted: rgba(15, 23, 42, 0.78);
+  --guide-panel-fill: rgba(30, 41, 59, 0.99);
   --app-line: rgba(148, 163, 184, 0.18);
   --app-line-strong: rgba(96, 165, 250, 0.28);
   --app-text: #f8fafc;
@@ -2116,6 +2118,118 @@ label,
   background: rgba(25, 135, 84, 0.08);
 }
 
+.guide-step-chip.optional {
+  border-style: dashed;
+  opacity: 0.8;
+}
+
+.guide-support-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.85rem;
+  align-items: end;
+  padding: 0.95rem 1rem;
+  border: 1px solid rgba(37, 99, 235, 0.14);
+  border-radius: 1rem;
+  background:
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.12), transparent 38%),
+    rgba(255, 255, 255, 0.8);
+}
+
+.guide-support-card h4 {
+  margin: 0.35rem 0 0;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.guide-support-card p {
+  margin: 0.45rem 0 0;
+  color: var(--app-muted);
+  line-height: 1.55;
+}
+
+.guide-test-controls {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.9rem 1rem;
+  border: 1px dashed rgba(37, 99, 235, 0.22);
+  border-radius: 1rem;
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.guide-test-note {
+  color: var(--app-muted);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.guide-test-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.guide-target-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 39;
+  pointer-events: none;
+}
+
+.guide-target-overlay--topbar {
+  z-index: 44;
+}
+
+.guide-target-highlight {
+  position: fixed;
+  border-radius: 1.35rem;
+  border: 1px solid rgba(96, 165, 250, 0.82);
+  background: transparent;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.72),
+    0 0 0 8px rgba(59, 130, 246, 0.05),
+    0 16px 32px rgba(37, 99, 235, 0.1);
+  transition:
+    top 180ms ease,
+    left 180ms ease,
+    width 180ms ease,
+    height 180ms ease;
+}
+
+.guide-target-highlight::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: inherit;
+  border: 1px dashed rgba(59, 130, 246, 0.26);
+}
+
+.guide-target-badge {
+  position: fixed;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.32rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.86);
+  color: white;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.22);
+}
+
+.guide-target-beacon {
+  position: fixed;
+  filter: drop-shadow(0 10px 22px rgba(15, 23, 42, 0.16));
+}
+
+.guide-target-beacon .ai-sphere-stage,
+.guide-target-beacon .guide-beacon {
+  width: 100%;
+  height: 100%;
+}
+
 .empty-state-callout {
   display: grid;
   gap: 0.45rem;
@@ -3833,6 +3947,12 @@ label,
   font-weight: 800;
 }
 
+.btn.btn-sm {
+  border-radius: 12px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
 .btn.btn-primary,
 .btn.btn-outline-primary {
   border-color: transparent;
@@ -3967,7 +4087,7 @@ textarea:focus {
   position: fixed;
   right: 2.5rem;
   bottom: 2.5rem;
-  z-index: 45;
+  z-index: 120;
   isolation: isolate;
   overflow: visible;
   border-radius: 1.35rem;
@@ -4019,7 +4139,7 @@ textarea:focus {
   border-radius: 1.35rem;
   background:
     radial-gradient(circle at top right, rgba(59, 130, 246, 0.18), transparent 34%),
-    var(--app-panel-strong);
+    var(--guide-panel-fill);
   box-shadow: var(--app-shadow-strong);
   border-color: transparent;
   backdrop-filter: blur(18px);
@@ -4032,7 +4152,7 @@ textarea:focus {
   inset: 0;
   padding: 1px;
   background:
-    linear-gradient(var(--app-panel-strong), var(--app-panel-strong)) padding-box,
+    linear-gradient(var(--guide-panel-fill), var(--guide-panel-fill)) padding-box,
     linear-gradient(135deg, rgba(96, 246, 220, 1), rgba(176, 101, 255, 1)) border-box;
   border: 1px solid transparent;
   border-radius: inherit;
@@ -4079,7 +4199,12 @@ textarea:focus {
 }
 
 .floating-guide-body {
-  align-items: flex-end;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.guide-panel-copy-block {
+  min-width: 0;
 }
 
 .floating-guide-kicker-row strong {
@@ -4097,6 +4222,28 @@ textarea:focus {
 .floating-guide-action {
   flex-shrink: 0;
   transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.floating-guide-action-group {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-self: flex-end;
+  width: 100%;
+}
+
+.floating-guide-action-group-left,
+.floating-guide-action-group-right {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.floating-guide-action-group-right {
+  justify-content: flex-end;
+  margin-left: auto;
 }
 
 .floating-guide-action:hover {
@@ -4117,7 +4264,7 @@ textarea:focus {
   position: fixed;
   right: 0.35rem;
   bottom: 0.2rem;
-  z-index: 46;
+  z-index: 121;
   display: inline-grid;
   place-items: center;
   width: 9.3rem;
@@ -4173,7 +4320,7 @@ textarea:focus {
 .floating-guide-drop-targets {
   position: fixed;
   inset: 0;
-  z-index: 44;
+  z-index: 119;
   pointer-events: none;
 }
 
@@ -4832,6 +4979,8 @@ textarea:focus {
 :root[data-theme="dark"] .resource-card,
 :root[data-theme="dark"] .stat-card,
 :root[data-theme="dark"] .guide-next-summary,
+:root[data-theme="dark"] .guide-support-card,
+:root[data-theme="dark"] .guide-test-controls,
 :root[data-theme="dark"] .guide-step-chip,
 :root[data-theme="dark"] .empty-state-callout,
 :root[data-theme="dark"] .review-summary-panel,
@@ -4839,6 +4988,28 @@ textarea:focus {
   border-color: var(--app-line);
   background: var(--app-panel-muted);
   color: var(--app-text);
+}
+
+:root[data-theme="dark"] .guide-target-badge {
+  background: rgba(15, 23, 42, 0.92);
+  box-shadow: 0 16px 32px rgba(2, 6, 23, 0.44);
+}
+
+:root[data-theme="dark"] .guide-target-highlight {
+  border-color: rgba(125, 211, 252, 0.88);
+  background: rgba(59, 130, 246, 0.08);
+  box-shadow:
+    0 0 0 1px rgba(191, 219, 254, 0.5),
+    0 0 0 12px rgba(59, 130, 246, 0.1),
+    0 22px 48px rgba(2, 6, 23, 0.36);
+}
+
+:root[data-theme="dark"] .guide-target-highlight::after {
+  border-color: rgba(125, 211, 252, 0.4);
+}
+
+:root[data-theme="dark"] .guide-test-controls {
+  border-style: dashed;
 }
 
 :root[data-theme="dark"] .compact-resource-card.expanded {
@@ -6151,6 +6322,7 @@ textarea:focus {
   .classification-flow-grid,
   .classification-action-row,
   .guide-panel-main,
+  .guide-support-card,
   .guide-step-list,
   .manual-transaction-form,
   .profile-form,
@@ -6380,12 +6552,27 @@ textarea:focus {
   }
 
   .floating-guide-body {
+    gap: 0.9rem;
+  }
+
+  .guide-test-actions {
     flex-direction: column;
-    align-items: stretch;
   }
 
   .floating-guide-action {
     width: 100%;
+  }
+
+  .floating-guide-action-group {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .floating-guide-action-group-left,
+  .floating-guide-action-group-right {
+    width: 100%;
+    justify-content: stretch;
   }
 
   .floating-guide-panel.collapsed {

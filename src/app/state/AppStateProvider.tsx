@@ -9,6 +9,8 @@ import {
   mergeWorkspaceBundle,
 } from "../../domain/app/defaults";
 import { isActiveExpenseTransaction } from "../../domain/transactions/meta";
+import { clearGuideSampleState, hasGuideSampleState, readGuideSampleState, writeGuideSampleState } from "../../domain/guidance/guideSampleState";
+import { createGuideSampleBundle, GUIDE_SAMPLE_MEMO, GUIDE_SAMPLE_PARSER_ID } from "../../domain/guidance/guideSampleBundle";
 import type { Account, AppState, Card, Category, FinancialProfile, Person, ReviewItem, Transaction, WorkspaceBundle } from "../../shared/types/models";
 import { createId } from "../../shared/utils/id";
 import { useToast } from "../toast/ToastProvider";
@@ -722,6 +724,90 @@ function rebaseImportedBundleIntoWorkspace(state: AppState, workspaceId: string,
       },
     ],
     settlements: [],
+  };
+}
+
+function removeGuideSampleDataFromState(state: AppState, workspaceId: string) {
+  const storedSampleState = readGuideSampleState(workspaceId);
+  const samplePersonIds = new Set(
+    hasGuideSampleState(storedSampleState)
+      ? storedSampleState.personIds
+      : state.people
+          .filter((person) => person.workspaceId === workspaceId && person.memo === GUIDE_SAMPLE_MEMO)
+          .map((person) => person.id),
+  );
+  const sampleAccountIds = new Set(
+    hasGuideSampleState(storedSampleState)
+      ? storedSampleState.accountIds
+      : state.accounts
+          .filter((account) => account.workspaceId === workspaceId && account.memo === GUIDE_SAMPLE_MEMO)
+          .map((account) => account.id),
+  );
+  const sampleCardIds = new Set(
+    hasGuideSampleState(storedSampleState)
+      ? storedSampleState.cardIds
+      : state.cards
+          .filter((card) => card.workspaceId === workspaceId && card.memo === GUIDE_SAMPLE_MEMO)
+          .map((card) => card.id),
+  );
+  const sampleTransactionIds = new Set(
+    hasGuideSampleState(storedSampleState)
+      ? storedSampleState.transactionIds
+      : state.transactions
+          .filter(
+            (transaction) =>
+              transaction.workspaceId === workspaceId &&
+              ((transaction.ownerPersonId && samplePersonIds.has(transaction.ownerPersonId)) ||
+                (transaction.cardId && sampleCardIds.has(transaction.cardId)) ||
+                (transaction.accountId && sampleAccountIds.has(transaction.accountId)) ||
+                (transaction.fromAccountId && sampleAccountIds.has(transaction.fromAccountId)) ||
+                (transaction.toAccountId && sampleAccountIds.has(transaction.toAccountId))),
+          )
+          .map((transaction) => transaction.id),
+  );
+  const sampleReviewIds = new Set(
+    hasGuideSampleState(storedSampleState)
+      ? storedSampleState.reviewIds
+      : state.reviews
+          .filter(
+            (review) =>
+              review.workspaceId === workspaceId &&
+              (sampleTransactionIds.has(review.primaryTransactionId) ||
+                review.relatedTransactionIds.some((transactionId) => sampleTransactionIds.has(transactionId))),
+          )
+          .map((review) => review.id),
+  );
+  const sampleImportIds = new Set(
+    hasGuideSampleState(storedSampleState)
+      ? storedSampleState.importIds
+      : state.imports
+          .filter((record) => record.workspaceId === workspaceId && record.parserId === GUIDE_SAMPLE_PARSER_ID)
+          .map((record) => record.id),
+  );
+
+  const hasSampleData =
+    samplePersonIds.size > 0 ||
+    sampleAccountIds.size > 0 ||
+    sampleCardIds.size > 0 ||
+    sampleTransactionIds.size > 0 ||
+    sampleReviewIds.size > 0 ||
+    sampleImportIds.size > 0;
+
+  if (!hasSampleData) {
+    return { nextState: state, removed: false };
+  }
+
+  return {
+    nextState: {
+      ...state,
+      people: state.people.filter((person) => !samplePersonIds.has(person.id)),
+      accounts: state.accounts.filter((account) => !sampleAccountIds.has(account.id)),
+      cards: state.cards.filter((card) => !sampleCardIds.has(card.id)),
+      transactions: state.transactions.filter((transaction) => !sampleTransactionIds.has(transaction.id)),
+      reviews: state.reviews.filter((review) => !sampleReviewIds.has(review.id)),
+      imports: state.imports.filter((record) => !sampleImportIds.has(record.id)),
+    },
+    removed: true,
   };
 }
 
@@ -1582,6 +1668,8 @@ interface AppStateContextValue {
   createDemoWorkspace: () => Promise<void>;
   previewWorkbookImport: (file: File) => Promise<WorkspaceBundle>;
   commitImportedBundle: (bundle: WorkspaceBundle, fileName: string) => void;
+  loadGuideSampleData: () => void;
+  clearGuideSampleData: () => void;
   setActiveWorkspace: (workspaceId: string) => void;
   renameWorkspace: (workspaceId: string, name: string) => void;
   resetApp: () => Promise<void>;
@@ -1715,6 +1803,44 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         const payload = activeWorkspaceId ? rebaseImportedBundleIntoWorkspace(state, activeWorkspaceId, bundle) : bundle;
         dispatch({ type: "mergeBundle", payload });
         showToast(`${fileName} 업로드를 완료했습니다.`, "success");
+      },
+      loadGuideSampleData() {
+        const activeWorkspaceId = state.activeWorkspaceId;
+        if (!activeWorkspaceId) return;
+
+        const scope = getWorkspaceScope(state, activeWorkspaceId);
+        if (scope.transactions.length > 0 || scope.imports.length > 0) {
+          showToast("가이드 샘플은 거래가 없는 가계부에서만 불러올 수 있습니다.", "info");
+          return;
+        }
+
+        const primaryPerson =
+          scope.people.find((person) => !person.isHidden && person.isActive !== false) ?? scope.people[0] ?? null;
+        const bundle = createGuideSampleBundle({
+          ownerName: primaryPerson?.displayName?.trim() || primaryPerson?.name?.trim() || null,
+        });
+        const payload = rebaseImportedBundleIntoWorkspace(state, activeWorkspaceId, bundle);
+        writeGuideSampleState(activeWorkspaceId, {
+          personIds: payload.people.map((person) => person.id),
+          accountIds: payload.accounts.map((account) => account.id),
+          cardIds: payload.cards.map((card) => card.id),
+          transactionIds: payload.transactions.map((transaction) => transaction.id),
+          reviewIds: payload.reviews.map((review) => review.id),
+          importIds: payload.imports.map((record) => record.id),
+        });
+        dispatch({ type: "mergeBundle", payload });
+        showToast("가이드용 샘플 카드내역을 불러왔습니다.", "success");
+      },
+      clearGuideSampleData() {
+        const activeWorkspaceId = state.activeWorkspaceId;
+        if (!activeWorkspaceId) return;
+
+        const { nextState, removed } = removeGuideSampleDataFromState(state, activeWorkspaceId);
+        clearGuideSampleState(activeWorkspaceId);
+        if (!removed) return;
+
+        dispatch({ type: "replaceState", payload: nextState });
+        showToast("튜토리얼 샘플 데이터를 정리했습니다.", "success");
       },
       setActiveWorkspace(workspaceId) {
         dispatch({ type: "setActiveWorkspace", payload: workspaceId });

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { startGuideReplay } from "../../domain/guidance/guideRuntime";
 import { formatPercent } from "../../shared/utils/format";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
@@ -94,7 +95,7 @@ export function SettingsPage() {
 
   return (
     <div className="page-stack">
-      <section className="settings-shell-card card shadow-sm">
+      <section className="settings-shell-card card shadow-sm" data-guide-target="settings-page-overview">
         <div className="settings-shell-header">
           <div>
             <span className="section-kicker">설정</span>
@@ -199,6 +200,21 @@ export function SettingsPage() {
                 <button type="button" className="theme-toggle-button" onClick={toggleThemeMode}>
                   <span className="theme-toggle-button-label">테마</span>
                   <strong>{themeMode === "dark" ? "Light" : "Dark"}</strong>
+                </button>
+              </div>
+            </article>
+
+            <article className="resource-card settings-panel-card">
+              <div>
+                <span className="section-kicker">가이드</span>
+                <h3 className="mb-1">가이드 테스트 시작</h3>
+                <p className="mb-0 text-secondary">
+                  메인 가이드를 단계별로 다시 재생해서 흐름을 직접 테스트할 수 있습니다. 테스트를 끝내면 실제 진행 상태로 돌아갑니다.
+                </p>
+              </div>
+              <div className="d-flex flex-wrap gap-2">
+                <button type="button" className="btn btn-outline-secondary" onClick={() => startGuideReplay(workspaceId)}>
+                  테스트 시작
                 </button>
               </div>
             </article>

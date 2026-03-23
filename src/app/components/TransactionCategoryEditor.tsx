@@ -7,6 +7,7 @@ interface TransactionCategoryEditorProps {
   categories: Category[];
   categoryName: string | null;
   onCategoryChange: (categoryId: string) => void;
+  guideTarget?: string;
 }
 
 export function TransactionCategoryEditor({
@@ -14,6 +15,7 @@ export function TransactionCategoryEditor({
   categories,
   categoryName,
   onCategoryChange,
+  guideTarget,
 }: TransactionCategoryEditorProps) {
   const canEdit = transaction.transactionType === "expense" && !transaction.isInternalTransfer;
   const categoryMap = useMemo(() => new Map(categories.map((category) => [category.id, category])), [categories]);
@@ -118,6 +120,7 @@ export function TransactionCategoryEditor({
         }}
         list={listId}
         value={draftValue}
+        data-guide-target={guideTarget}
         data-transaction-grid-editor="true"
         onChange={(event) => setDraftValue(event.target.value)}
         onBlur={() => {

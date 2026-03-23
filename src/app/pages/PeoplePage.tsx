@@ -640,13 +640,15 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   const embeddedPeopleSection = (
     <>
       <BoardCase
-      embedded={embedded}
-      title="자산 설정"
-      description="사용자별 계좌와 카드를 같은 보드 형식에서 관리합니다."
-      actions={
+        embedded={embedded}
+        data-guide-target="people-page-overview"
+        title="자산 설정"
+        description="사용자별 계좌와 카드를 같은 보드 형식에서 관리합니다."
+        actions={
         <button
           type="button"
           className={`board-case-action-button${isHiddenPanelOpen ? " is-active" : ""}`}
+          data-guide-target="people-hidden-toggle"
           onClick={() => setIsHiddenPanelOpen((current) => !current)}
         >
           숨김 {hiddenPeople.length + hiddenAccounts.length + hiddenCards.length}
@@ -806,6 +808,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                   </div>
                   <div
                     className="category-case-grid"
+                    data-guide-target="people-card-linking"
                     onDragOver={(event) => {
                       if (!dragItem || dragItem.ownerPersonId !== section.person.id) return;
                       if (dragItem.itemType === "account") {
@@ -1011,6 +1014,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
             </div>
             <div
               className={`category-side-zone category-side-zone-right${isDragOverlayActive ? " is-visible" : ""}${activeDropZone === "delete" ? " is-active" : ""}`}
+              data-guide-target="people-delete-zone"
               onDragOver={(event) => {
                 event.preventDefault();
                 setActiveDropZone("delete");

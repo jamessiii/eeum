@@ -72,7 +72,7 @@ export function ReviewsPage() {
   };
 
   return (
-    <section className="card shadow-sm">
+    <section className="card shadow-sm" data-guide-target="transactions-reviews">
       <div className="section-head">
         <div>
           <span className="section-kicker">검토함</span>
@@ -176,7 +176,12 @@ export function ReviewsPage() {
               isCategorySuggestion ? primaryTransaction?.merchantName ?? review.summary : review.summary;
 
             return (
-              <article key={review.id} className="review-card review-card--compact" style={getMotionStyle(index)}>
+              <article
+                key={review.id}
+                className="review-card review-card--compact"
+                style={getMotionStyle(index)}
+                data-guide-target={index === 0 ? "transactions-review-card" : undefined}
+              >
                 <div className="d-flex justify-content-between align-items-start gap-3">
                   <div className="review-card-main">
                     <span className="review-type">{REVIEW_TYPE_LABELS[review.reviewType] ?? review.reviewType}</span>

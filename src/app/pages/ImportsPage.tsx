@@ -181,7 +181,7 @@ export function ImportsPage() {
   return (
     <>
       <div className="page-stack">
-        <section className="card shadow-sm" style={getMotionStyle(0)}>
+        <section className="card shadow-sm" style={getMotionStyle(0)} data-guide-target="transactions-upload">
           <div className="section-head">
             <div>
               <span className="section-kicker">업로드 센터</span>
@@ -197,6 +197,7 @@ export function ImportsPage() {
 
           <label
             className={`upload-dropzone${isDropzoneActive ? " is-active" : ""}${isDropzoneInvalid ? " is-invalid" : ""}`}
+            data-guide-target="transactions-upload-action"
             onDragEnter={handleDropzoneDragEnter}
             onDragOver={handleDropzoneDragOver}
             onDragLeave={handleDropzoneDragLeave}

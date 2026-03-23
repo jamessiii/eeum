@@ -1,5 +1,6 @@
 ﻿import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { HashRouter, Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
+import { GUIDE_V1_RESET_EVENT, readGuideRuntime } from "../domain/guidance/guideRuntime";
 import { getWorkspaceHeaderSummary } from "../domain/workspace/summary";
 import { MotionProvider } from "./motion/MotionProvider";
 import { AppModal } from "./components/AppModal";
@@ -41,6 +42,13 @@ const baseNavItems: NavItem[] = [
   { to: "/settings", label: "설정" },
   { to: "/dev", label: "개발자" },
 ];
+
+const navGuideTargetMap: Record<string, string> = {
+  "/": "nav-dashboard",
+  "/transactions": "nav-transactions",
+  "/account-transfers": "nav-account-transfers",
+  "/people": "nav-people",
+};
 
 function useDeveloperMode() {
   const [isDeveloperModeUnlocked, setIsDeveloperModeUnlocked] = useState(false);
@@ -137,7 +145,7 @@ function AppTopNav({
   }, [activeKey]);
 
   return (
-    <nav ref={navRef} className="app-top-nav">
+    <nav ref={navRef} className="app-top-nav" data-guide-target="nav-menu">
       <div
         className={`app-top-nav-indicator${indicatorStyle.visible ? " visible" : ""}`}
         style={{
@@ -154,6 +162,7 @@ function AppTopNav({
           to={item.to}
           end={item.end}
           className="nav-link"
+          data-guide-target={navGuideTargetMap[item.to] ?? undefined}
           onClick={item.to === "/settings" ? onSettingsTap : undefined}
         >
           {item.label}
@@ -363,6 +372,9 @@ function AppFrame() {
     if (!isReady || !state.activeWorkspaceId) return;
     if (hasPlayedGuideBeaconIntroRef.current) return;
 
+    const guideRuntime = readGuideRuntime(state.activeWorkspaceId);
+    const shouldAutoExpandGuidePanel = guideRuntime.replayStepIndex !== null || guideRuntime.flowMode !== "tips";
+
     hasPlayedGuideBeaconIntroRef.current = true;
     setIsGuideBeaconMounted(false);
     setGuideBeaconState("hidden");
@@ -385,12 +397,14 @@ function AppFrame() {
             setGuideBeaconState("idle");
           }, 2900),
         );
-        timers.push(
-          window.setTimeout(() => {
-            setGuidePanelExpandSignal((current) => current + 1);
-            setIsGuidePanelForceCollapsed(false);
-          }, 3900),
-        );
+        if (shouldAutoExpandGuidePanel) {
+          timers.push(
+            window.setTimeout(() => {
+              setGuidePanelExpandSignal((current) => current + 1);
+              setIsGuidePanelForceCollapsed(false);
+            }, 3900),
+          );
+        }
       });
     });
 
@@ -414,6 +428,23 @@ function AppFrame() {
 
     return () => window.clearTimeout(timerId);
   }, [isReady, state.activeWorkspaceId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleGuideReset = (event: Event) => {
+      const detail = (event as CustomEvent<{ workspaceId?: string }>).detail;
+      if (detail?.workspaceId && detail.workspaceId !== state.activeWorkspaceId) return;
+
+      setIsGuideBeaconMounted(true);
+      setGuideBeaconState("idle");
+      setGuidePanelExpandSignal((current) => current + 1);
+      setIsGuidePanelForceCollapsed(false);
+    };
+
+    window.addEventListener(GUIDE_V1_RESET_EVENT, handleGuideReset as EventListener);
+    return () => window.removeEventListener(GUIDE_V1_RESET_EVENT, handleGuideReset as EventListener);
+  }, [state.activeWorkspaceId]);
 
   if (!isReady) return <LoadingScreen />;
   if (!state.workspaces.length) return <EmptyWorkspaceScreen />;

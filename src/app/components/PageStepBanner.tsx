@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useLocation } from "react-router-dom";
+import { readGuideRuntime } from "../../domain/guidance/guideRuntime";
 import { getWorkspaceGuide } from "../../domain/guidance/workspaceGuide";
 import { useAppState } from "../state/AppStateProvider";
 import { matchesGuideTargetPath } from "./guidePathMatch";
@@ -12,7 +13,14 @@ export function PageStepBanner() {
 
   const currentStep = useMemo(() => {
     if (!workspaceId) return null;
-    return getWorkspaceGuide(state, workspaceId).currentStep;
+    const guide = getWorkspaceGuide(state, workspaceId);
+    const guideRuntime = readGuideRuntime(workspaceId);
+
+    return (
+      guide.steps
+        .filter((step) => step.blocking !== false && step.available !== false)
+        .find((step) => !step.completed && !guideRuntime.visitedStepIds.includes(step.id)) ?? null
+    );
   }, [state, workspaceId]);
 
   if (!currentStep || !matchesGuideTargetPath(currentPath, currentStep.targetPath)) return null;
