@@ -1,10 +1,13 @@
 ﻿import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
-import { HashRouter, Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
+import { HashRouter, Navigate, NavLink, Route, Routes, useLocation, useSearchParams } from "react-router-dom";
 import { GUIDE_V1_RESET_EVENT, readGuideRuntime } from "../domain/guidance/guideRuntime";
+import { Fragment } from "react";
+import { Link } from "react-router-dom";
 import { getWorkspaceHeaderSummary } from "../domain/workspace/summary";
 import { MotionProvider } from "./motion/MotionProvider";
 import { AppModal } from "./components/AppModal";
 import { AppGuidePanel } from "./components/AppGuidePanel";
+import { EmptyStateCallout } from "./components/EmptyStateCallout";
 import { EmptyWorkspaceScreen, ONBOARDING_COMPLETE_KEY, WORKSPACE_SETUP_KEY } from "./pages/EmptyWorkspaceScreen";
 import { LoadingScreen } from "./pages/LoadingScreen";
 import { AppStateProvider, useAppState } from "./state/AppStateProvider";
@@ -21,33 +24,62 @@ const AccountTransfersPage = lazy(() =>
 );
 const PeoplePage = lazy(() => import("./pages/PeoplePage").then((module) => ({ default: module.PeoplePage })));
 const CategoriesPage = lazy(() => import("./pages/CategoriesPage").then((module) => ({ default: module.CategoriesPage })));
+const SettlementsPage = lazy(() =>
+  import("./pages/SettlementsPage").then((module) => ({ default: module.SettlementsPage })),
+);
 const SettingsPage = lazy(() => import("./pages/SettingsPage").then((module) => ({ default: module.SettingsPage })));
 const DeveloperPage = lazy(() => import("./pages/DeveloperPage").then((module) => ({ default: module.DeveloperPage })));
 
 const DEVELOPER_MODE_KEY = "household-webapp.developer-mode";
 const CREATE_WORKSPACE_OPTION = "__create_workspace__";
 
+type NavSubItem = {
+  key: string;
+  label: string;
+  to: string;
+};
+
 type NavItem = {
   to: string;
   label: string;
   end?: boolean;
+  subItems?: NavSubItem[];
 };
 
 const baseNavItems: NavItem[] = [
-  { to: "/", label: "대시보드", end: true },
-  { to: "/transactions", label: "카드내역" },
-  { to: "/account-transfers", label: "이체내역" },
-  { to: "/people", label: "자산 설정" },
-  { to: "/categories", label: "카테고리 설정" },
-  { to: "/settings", label: "설정" },
-  { to: "/dev", label: "개발자" },
+  {
+    to: "/transactions",
+    label: "조각모음",
+    subItems: [
+      { key: "cards", label: "카드조각", to: "/transactions" },
+      { key: "transfers", label: "이체조각", to: "/transactions?view=transfers" },
+    ],
+  },
+  {
+    to: "/people",
+    label: "이음",
+    subItems: [
+      { key: "assets", label: "자산", to: "/people" },
+      { key: "classification", label: "분류", to: "/people?view=classification" },
+    ],
+  },
+  { to: "/settlements", label: "맺음" },
+  {
+    to: "/",
+    label: "기록",
+    end: true,
+    subItems: [
+      { key: "month", label: "달 기록", to: "/" },
+      { key: "year", label: "해 기록", to: "/?view=year" },
+    ],
+  },
 ];
 
 const navGuideTargetMap: Record<string, string> = {
-  "/": "nav-dashboard",
   "/transactions": "nav-transactions",
-  "/account-transfers": "nav-account-transfers",
   "/people": "nav-people",
+  "/settlements": "nav-settlements",
+  "/": "nav-dashboard",
 };
 
 function useDeveloperMode() {
@@ -87,86 +119,74 @@ function useDeveloperMode() {
   return { isDeveloperModeUnlocked, registerUnlockTap, lockDeveloperMode };
 }
 
-function AppTopNav({
-  isDeveloperModeUnlocked,
-  onSettingsTap,
-}: {
-  isDeveloperModeUnlocked: boolean;
-  onSettingsTap: () => void;
-}) {
+function AppTopNav() {
   const location = useLocation();
-  const navRef = useRef<HTMLElement | null>(null);
-  const linkRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
-  const [indicatorStyle, setIndicatorStyle] = useState<{ width: number; x: number; visible: boolean }>({
-    width: 0,
-    x: 0,
-    visible: false,
-  });
 
-  const navItems = useMemo(
-    () => baseNavItems.filter((item) => isDeveloperModeUnlocked || item.to !== "/dev"),
-    [isDeveloperModeUnlocked],
-  );
-
-  const activeKey = useMemo(() => {
+  const activeKey = useMemo<string | null>(() => {
     const pathname = location.pathname || "/";
-    if (pathname === "/accounts" || pathname === "/cards") {
+    if (pathname === "/account-transfers" || pathname === "/imports" || pathname === "/reviews") {
+      return "/transactions";
+    }
+    if (pathname === "/accounts" || pathname === "/cards" || pathname === "/categories") {
       return "/people";
     }
-    const exact = navItems.find((item) => item.to === pathname);
+    if (pathname === "/settings" || pathname === "/dev") {
+      return null;
+    }
+    const exact = baseNavItems.find((item) => item.to === pathname);
     if (exact) return exact.to;
-    const partial = navItems.find((item) => item.to !== "/" && pathname.startsWith(item.to));
-    return partial?.to ?? "/";
-  }, [location.pathname, navItems]);
+    const partial = baseNavItems.find((item) => item.to !== "/" && pathname.startsWith(item.to));
+    return partial?.to ?? null;
+  }, [location.pathname]);
 
-  useEffect(() => {
-    const syncIndicator = () => {
-      const nav = navRef.current;
-      const activeLink = linkRefs.current[activeKey];
-      if (!nav || !activeLink) {
-        setIndicatorStyle((current) => ({ ...current, visible: false }));
-        return;
-      }
-
-      const navRect = nav.getBoundingClientRect();
-      const linkRect = activeLink.getBoundingClientRect();
-      const navStyles = window.getComputedStyle(nav);
-      const navPaddingLeft = Number.parseFloat(navStyles.paddingLeft) || 0;
-      setIndicatorStyle({
-        width: linkRect.width,
-        x: linkRect.left - navRect.left - navPaddingLeft,
-        visible: true,
-      });
-    };
-
-    syncIndicator();
-    window.addEventListener("resize", syncIndicator);
-    return () => window.removeEventListener("resize", syncIndicator);
-  }, [activeKey]);
+  const activeSubKey = useMemo(() => {
+    const searchParams = new URLSearchParams(location.search);
+    if (activeKey === "/transactions") {
+      return searchParams.get("view") === "transfers" ? "transfers" : "cards";
+    }
+    if (activeKey === "/people") {
+      return searchParams.get("view") === "classification" ? "classification" : "assets";
+    }
+    if (activeKey === "/") {
+      return searchParams.get("view") === "year" ? "year" : "month";
+    }
+    return null;
+  }, [activeKey, location.search]);
 
   return (
-    <nav ref={navRef} className="app-top-nav" data-guide-target="nav-menu">
-      <div
-        className={`app-top-nav-indicator${indicatorStyle.visible ? " visible" : ""}`}
-        style={{
-          width: `${indicatorStyle.width}px`,
-          transform: `translateX(${indicatorStyle.x}px)`,
-        }}
-      />
-      {navItems.map((item) => (
-        <NavLink
-          key={item.to}
-          ref={(element) => {
-            linkRefs.current[item.to] = element;
-          }}
-          to={item.to}
-          end={item.end}
-          className="nav-link"
-          data-guide-target={navGuideTargetMap[item.to] ?? undefined}
-          onClick={item.to === "/settings" ? onSettingsTap : undefined}
-        >
-          {item.label}
-        </NavLink>
+    <nav className="app-top-nav" data-guide-target="nav-menu">
+      {baseNavItems.map((item, index) => (
+        <Fragment key={item.to}>
+          {index > 0 ? (
+            <span className="app-top-nav-group-divider" aria-hidden="true">
+              |
+            </span>
+          ) : null}
+          <div className={`app-top-nav-group${item.to === activeKey ? " is-active" : ""}`}>
+            <NavLink
+              to={item.to}
+              end={item.end}
+              className="nav-link nav-parent-link"
+              data-guide-target={navGuideTargetMap[item.to] ?? undefined}
+            >
+              {item.label}
+            </NavLink>
+            {item.to === activeKey && item.subItems?.length ? (
+              <div className="app-top-subnav">
+                {item.subItems.map((subItem) => (
+                  <Fragment key={subItem.key}>
+                    <Link
+                      to={subItem.to}
+                      className={`nav-link nav-sub-link${activeSubKey === subItem.key ? " active" : ""}`}
+                    >
+                      {subItem.label}
+                    </Link>
+                  </Fragment>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </Fragment>
       ))}
     </nav>
   );
@@ -182,16 +202,16 @@ function AppRoutes({
   return (
     <Suspense fallback={<LoadingScreen message="화면을 준비하는 중입니다." />}>
       <Routes>
-        <Route path="/" element={<DashboardPage />} />
-        <Route path="/transactions" element={<TransactionsPage />} />
-        <Route path="/account-transfers" element={<AccountTransfersPage />} />
-        <Route path="/people" element={<PeoplePage />} />
+        <Route path="/" element={<RecordsPage />} />
+        <Route path="/transactions" element={<CollectionsPage />} />
+        <Route path="/account-transfers" element={<Navigate to="/transactions?view=transfers" replace />} />
+        <Route path="/people" element={<ConnectionPage />} />
         <Route path="/accounts" element={<Navigate to="/people" replace />} />
         <Route path="/cards" element={<Navigate to="/people" replace />} />
-        <Route path="/categories" element={<CategoriesPage />} />
+        <Route path="/categories" element={<Navigate to="/people?view=classification" replace />} />
         <Route path="/imports" element={<Navigate to="/transactions" replace />} />
         <Route path="/reviews" element={<Navigate to="/transactions" replace />} />
-        <Route path="/settlements" element={<Navigate to="/" replace />} />
+        <Route path="/settlements" element={<SettlementsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route
           path="/dev"
@@ -216,6 +236,62 @@ function EditIcon() {
         fill="currentColor"
       />
     </svg>
+  );
+}
+
+function SettingsIcon() {
+  return (
+    <svg className="app-topbar-settings-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <g fill="currentColor">
+        <rect x="10.9" y="1.4" width="2.2" height="4.4" rx="1.1" />
+        <rect x="10.9" y="18.2" width="2.2" height="4.4" rx="1.1" />
+        <rect x="18.2" y="10.9" width="4.4" height="2.2" rx="1.1" />
+        <rect x="1.4" y="10.9" width="4.4" height="2.2" rx="1.1" />
+        <rect x="16.7" y="3.4" width="2.2" height="4.4" rx="1.1" transform="rotate(45 17.8 5.6)" />
+        <rect x="16.7" y="16.2" width="2.2" height="4.4" rx="1.1" transform="rotate(135 17.8 18.4)" />
+        <rect x="5.1" y="16.2" width="2.2" height="4.4" rx="1.1" transform="rotate(-135 6.2 18.4)" />
+        <rect x="5.1" y="3.4" width="2.2" height="4.4" rx="1.1" transform="rotate(-45 6.2 5.6)" />
+      </g>
+      <path
+        fill="currentColor"
+        fillRule="evenodd"
+        d="M12 5.35a6.65 6.65 0 1 0 0 13.3a6.65 6.65 0 0 0 0-13.3Zm0 3.75a2.9 2.9 0 1 1 0 5.8a2.9 2.9 0 0 1 0-5.8Z"
+        clipRule="evenodd"
+      />
+    </svg>
+  );
+}
+
+function CollectionsPage() {
+  const [searchParams] = useSearchParams();
+  const activeView = searchParams.get("view") === "transfers" ? "transfers" : "cards";
+  return activeView === "cards" ? <TransactionsPage /> : <AccountTransfersPage />;
+}
+
+function ConnectionPage() {
+  const [searchParams] = useSearchParams();
+  const activeView = searchParams.get("view") === "classification" ? "classification" : "assets";
+  return activeView === "assets" ? <PeoplePage /> : <CategoriesPage />;
+}
+
+function RecordsPage() {
+  const [searchParams] = useSearchParams();
+  const activeView = searchParams.get("view") === "year" ? "year" : "month";
+
+  return (
+    <>
+      {activeView === "month" ? (
+        <DashboardPage />
+      ) : (
+        <div className="page-stack">
+          <EmptyStateCallout
+            kicker="해 기록"
+            title="한 해의 흐름을 곧 더 길게 돌아볼 수 있어요"
+            description="지금은 달 기록을 중심으로 보여주고 있어요. 해 기록은 한 해의 소비 흐름과 맺음의 변화를 차분히 모아볼 수 있게 이어서 준비할게요."
+          />
+        </div>
+      )}
+    </>
   );
 }
 
@@ -539,10 +615,11 @@ function AppFrame() {
               카드내역 {headerSummary.transactionsCount}건 · 검토 {headerSummary.openReviewCount}건 · 사용자 {headerSummary.peopleCount}명
             </span>
           </div>
-            <div className="app-topbar-actions">
-              <select
-                className="form-select workspace-select"
-                value={activeWorkspace.id}
+          <div className="app-topbar-actions">
+            <AppTopNav />
+            <select
+              className="form-select workspace-select"
+              value={activeWorkspace.id}
               onChange={(event) => {
                 if (event.target.value === CREATE_WORKSPACE_OPTION) {
                   setNewWorkspaceName("");
@@ -551,16 +628,24 @@ function AppFrame() {
                 }
                 setActiveWorkspace(event.target.value);
               }}
-              >
-                {state.workspaces.map((workspace) => (
+            >
+              {state.workspaces.map((workspace) => (
                 <option key={workspace.id} value={workspace.id}>
                   {workspace.name}
                 </option>
-                ))}
-                <option value={CREATE_WORKSPACE_OPTION}>+ 새 가계부 추가...</option>
-              </select>
-            </div>
-          <AppTopNav isDeveloperModeUnlocked={isDeveloperModeUnlocked} onSettingsTap={registerUnlockTap} />
+              ))}
+              <option value={CREATE_WORKSPACE_OPTION}>+ 새 가계부 추가...</option>
+            </select>
+            <NavLink
+              to="/settings"
+              className={({ isActive }) => `app-topbar-settings-link${isActive ? " active" : ""}`}
+              aria-label="설정"
+              title="설정"
+              onClick={registerUnlockTap}
+            >
+              <SettingsIcon />
+            </NavLink>
+          </div>
         </div>
       </header>
 

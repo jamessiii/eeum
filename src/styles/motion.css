@@ -74,6 +74,11 @@ html.motion-ready body {
   transform: translateY(-1px);
 }
 
+.app-top-nav .nav-link:hover,
+.app-top-nav .nav-link:focus-visible {
+  transform: none;
+}
+
 .card:hover,
 .review-card:hover,
 .resource-card:hover,

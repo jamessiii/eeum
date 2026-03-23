@@ -359,23 +359,43 @@ textarea:focus {
 }
 
 .app-top-nav .nav-link {
-  border: 1px solid var(--app-line);
-  background: transparent;
-  color: var(--app-text) !important;
-  border-radius: 999px;
-  padding: 12px 18px !important;
-  letter-spacing: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: inherit !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  letter-spacing: inherit !important;
+  box-shadow: none !important;
+}
+
+.app-top-nav .nav-parent-link {
+  color: color-mix(in srgb, var(--app-text) 86%, var(--app-muted) 14%) !important;
+  font-size: 0.95rem !important;
+  font-weight: 750 !important;
+  letter-spacing: 0.06em !important;
+}
+
+.app-top-nav .nav-sub-link {
+  color: color-mix(in srgb, var(--app-text) 48%, var(--app-muted) 52%) !important;
+  font-size: 0.74rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.04em !important;
 }
 
 .app-top-nav .nav-link.active {
   border-color: transparent !important;
-  color: #eff6ff !important;
+  background: transparent !important;
+  color: color-mix(in srgb, var(--app-text) 74%, #456aa8 26%) !important;
+  font-weight: 800 !important;
 }
 
 .app-top-nav-indicator {
-  border-radius: 999px !important;
-  background: linear-gradient(135deg, #2563eb, #3b82f6) !important;
-  box-shadow: none !important;
+  display: none !important;
+}
+
+.app-top-nav .nav-sub-link.active {
+  color: color-mix(in srgb, var(--app-text) 58%, #456aa8 42%) !important;
+  font-weight: 700 !important;
 }
 
 .theme-toggle-button {
