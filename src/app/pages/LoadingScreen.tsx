@@ -1,4 +1,4 @@
-export function LoadingScreen({ message = "가계부 상태를 불러오는 중입니다." }: { message?: string }) {
+export function LoadingScreen({ message = "이음을 불러오는 중입니다." }: { message?: string }) {
   return (
     <div className="app-loading">
       <div className="spinner-border text-primary" role="status" />

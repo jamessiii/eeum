@@ -506,11 +506,11 @@ function AppFrame() {
       <header className="app-topbar condensed">
         <div className="app-topbar-main">
           <div className="app-brand-block">
-            <span className="sidebar-kicker">Household Web App</span>
+            <span className="sidebar-kicker">이음</span>
             <button type="button" className="sidebar-brand-button">
-              <h1>가계부 웹앱</h1>
+              <h1>이음</h1>
             </button>
-            <p className="sidebar-copy">빠르게 기록하고 자연스럽게 정리하는 생활 가계부입니다.</p>
+            <p className="sidebar-copy">이음은 빠르게 기록하고 자연스럽게 정리하는 생활 가계부 서비스입니다.</p>
           </div>
           <div className="app-topbar-compact-header">
             <span className="section-kicker">현재 가계부</span>
