@@ -362,31 +362,47 @@ textarea:focus {
   border: 0 !important;
   background: transparent !important;
   color: inherit !important;
-  border-radius: 0 !important;
-  padding: 0 !important;
+  border-radius: 999px !important;
+  padding: 0.2rem 0.52rem !important;
   letter-spacing: inherit !important;
   box-shadow: none !important;
 }
 
 .app-top-nav .nav-parent-link {
   color: color-mix(in srgb, var(--app-text) 86%, var(--app-muted) 14%) !important;
-  font-size: 0.95rem !important;
+  font-size: 1.01rem !important;
   font-weight: 750 !important;
   letter-spacing: 0.06em !important;
 }
 
+.app-top-nav .nav-parent-link:hover,
+.app-top-nav-group.has-subnav.is-subnav-open .nav-parent-button {
+  color: color-mix(in srgb, var(--app-text) 82%, #334b71 18%) !important;
+}
+
 .app-top-nav .nav-sub-link {
-  color: color-mix(in srgb, var(--app-text) 48%, var(--app-muted) 52%) !important;
-  font-size: 0.74rem !important;
+  color: color-mix(in srgb, var(--app-text) 62%, var(--app-muted) 38%) !important;
+  font-size: 0.87rem !important;
   font-weight: 600 !important;
-  letter-spacing: 0.04em !important;
+  letter-spacing: 0.01em !important;
+}
+
+.app-top-nav .nav-sub-link:hover {
+  background: color-mix(in srgb, var(--app-panel-muted) 86%, transparent 14%) !important;
+  color: color-mix(in srgb, var(--app-text) 74%, #334b71 26%) !important;
 }
 
 .app-top-nav .nav-link.active {
   border-color: transparent !important;
   background: transparent !important;
-  color: color-mix(in srgb, var(--app-text) 74%, #456aa8 26%) !important;
+  color: #516abd !important;
   font-weight: 800 !important;
+  box-shadow: none !important;
+}
+
+.app-top-nav .nav-link.active:hover,
+.app-top-nav-group.has-subnav.is-subnav-open .nav-parent-button.active {
+  color: #516abd !important;
 }
 
 .app-top-nav-indicator {
@@ -394,8 +410,14 @@ textarea:focus {
 }
 
 .app-top-nav .nav-sub-link.active {
-  color: color-mix(in srgb, var(--app-text) 58%, #456aa8 42%) !important;
+  background: transparent !important;
+  color: #516abd !important;
   font-weight: 700 !important;
+  box-shadow: none !important;
+}
+
+.app-top-nav .nav-sub-link.active:hover {
+  color: #516abd !important;
 }
 
 .theme-toggle-button {

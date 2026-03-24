@@ -664,6 +664,11 @@ function rebaseImportedBundleIntoWorkspace(state: AppState, workspaceId: string,
       },
     ];
   });
+  const existingAccountIds = new Set(scope.accounts.map((account) => account.id));
+  const resolveAccountId = (accountId: string | null) => {
+    if (!accountId) return null;
+    return accountIdMap.get(accountId) ?? (existingAccountIds.has(accountId) ? accountId : null);
+  };
 
   const cardIdMap = new Map<string, string>();
   const cardsToAdd = bundle.cards.flatMap((card) => {
@@ -684,7 +689,7 @@ function rebaseImportedBundleIntoWorkspace(state: AppState, workspaceId: string,
         id: nextId,
         workspaceId,
         ownerPersonId: resolvedOwnerPersonId,
-        linkedAccountId: card.linkedAccountId ? (accountIdMap.get(card.linkedAccountId) ?? null) : null,
+        linkedAccountId: resolveAccountId(card.linkedAccountId),
       },
     ];
   });
@@ -700,9 +705,9 @@ function rebaseImportedBundleIntoWorkspace(state: AppState, workspaceId: string,
       workspaceId,
       ownerPersonId: resolveOwnerPersonId(transaction.ownerPersonId),
       cardId: transaction.cardId ? (cardIdMap.get(transaction.cardId) ?? null) : null,
-      accountId: transaction.accountId ? (accountIdMap.get(transaction.accountId) ?? null) : null,
-      fromAccountId: transaction.fromAccountId ? (accountIdMap.get(transaction.fromAccountId) ?? null) : null,
-      toAccountId: transaction.toAccountId ? (accountIdMap.get(transaction.toAccountId) ?? null) : null,
+      accountId: resolveAccountId(transaction.accountId),
+      fromAccountId: resolveAccountId(transaction.fromAccountId),
+      toAccountId: resolveAccountId(transaction.toAccountId),
       categoryId: transaction.categoryId ? (categoryIdMap.get(transaction.categoryId) ?? null) : null,
       tagIds: transaction.tagIds.map((tagId) => tagIdMap.get(tagId)).filter((tagId): tagId is string => Boolean(tagId)),
     };

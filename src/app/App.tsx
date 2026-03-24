@@ -74,6 +74,7 @@ const baseNavItems: NavItem[] = [
     ],
   },
 ];
+const developerNavItem: NavItem = { to: "/dev", label: "DEV" };
 
 const navGuideTargetMap: Record<string, string> = {
   "/transactions": "nav-transactions",
@@ -119,8 +120,13 @@ function useDeveloperMode() {
   return { isDeveloperModeUnlocked, registerUnlockTap, lockDeveloperMode };
 }
 
-function AppTopNav() {
+function AppTopNav({ isDeveloperModeUnlocked }: { isDeveloperModeUnlocked: boolean }) {
   const location = useLocation();
+  const navItems = useMemo(
+    () => (isDeveloperModeUnlocked ? [...baseNavItems, developerNavItem] : baseNavItems),
+    [isDeveloperModeUnlocked],
+  );
+  const [openSubnavKey, setOpenSubnavKey] = useState<string | null>(null);
 
   const activeKey = useMemo<string | null>(() => {
     const pathname = location.pathname || "/";
@@ -130,14 +136,14 @@ function AppTopNav() {
     if (pathname === "/accounts" || pathname === "/cards" || pathname === "/categories") {
       return "/people";
     }
-    if (pathname === "/settings" || pathname === "/dev") {
+    if (pathname === "/settings") {
       return null;
     }
-    const exact = baseNavItems.find((item) => item.to === pathname);
+    const exact = navItems.find((item) => item.to === pathname);
     if (exact) return exact.to;
-    const partial = baseNavItems.find((item) => item.to !== "/" && pathname.startsWith(item.to));
+    const partial = navItems.find((item) => item.to !== "/" && pathname.startsWith(item.to));
     return partial?.to ?? null;
-  }, [location.pathname]);
+  }, [location.pathname, navItems]);
 
   const activeSubKey = useMemo(() => {
     const searchParams = new URLSearchParams(location.search);
@@ -153,44 +159,89 @@ function AppTopNav() {
     return null;
   }, [activeKey, location.search]);
 
+  useEffect(() => {
+    setOpenSubnavKey(null);
+  }, [location.pathname, location.search]);
+
   return (
     <nav className="app-top-nav" data-guide-target="nav-menu">
-      {baseNavItems.map((item, index) => (
-        <Fragment key={item.to}>
-          {index > 0 ? (
-            <span className="app-top-nav-group-divider" aria-hidden="true">
-              |
-            </span>
-          ) : null}
-          <div
-            className={`app-top-nav-group${item.subItems?.length ? " has-subnav" : ""}${item.to === activeKey ? " is-active" : ""}`}
-          >
-            <NavLink
-              to={item.to}
-              end={item.end}
-              className="nav-link nav-parent-link"
-              data-guide-target={navGuideTargetMap[item.to] ?? undefined}
-            >
-              {item.label}
-            </NavLink>
-            {item.subItems?.length ? (
-              <div className={`app-top-subnav${item.to === activeKey ? " is-active" : ""}`} aria-hidden={item.to !== activeKey}>
-                {item.subItems.map((subItem) => (
-                  <Fragment key={subItem.key}>
-                    <Link
-                      to={subItem.to}
-                      className={`nav-link nav-sub-link${activeSubKey === subItem.key ? " active" : ""}`}
-                      tabIndex={item.to === activeKey ? 0 : -1}
-                    >
-                      {subItem.label}
-                    </Link>
-                  </Fragment>
-                ))}
-              </div>
+      {navItems.map((item, index) => {
+        const subItems = item.subItems ?? [];
+        const hasSubnav = subItems.length > 0;
+        const isSubnavOpen = openSubnavKey === item.to;
+
+        return (
+          <Fragment key={item.to}>
+            {index > 0 ? (
+              <span className="app-top-nav-group-divider" aria-hidden="true">
+                |
+              </span>
             ) : null}
-          </div>
-        </Fragment>
-      ))}
+            <div
+              className={`app-top-nav-group${hasSubnav ? " has-subnav" : ""}${item.to === activeKey ? " is-active" : ""}${isSubnavOpen ? " is-subnav-open" : ""}`}
+              onMouseEnter={hasSubnav ? () => setOpenSubnavKey(item.to) : undefined}
+              onMouseLeave={
+                hasSubnav
+                  ? (event) => {
+                      const nextTarget = event.relatedTarget;
+                      if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) {
+                        setOpenSubnavKey((current) => (current === item.to ? null : current));
+                      }
+                    }
+                  : undefined
+              }
+              onFocusCapture={hasSubnav ? () => setOpenSubnavKey(item.to) : undefined}
+              onBlurCapture={
+                hasSubnav
+                  ? (event) => {
+                      const nextTarget = event.relatedTarget;
+                      if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) {
+                        setOpenSubnavKey((current) => (current === item.to ? null : current));
+                      }
+                    }
+                  : undefined
+              }
+            >
+              {hasSubnav ? (
+                <button
+                  type="button"
+                  className={`nav-link nav-parent-link nav-parent-button${item.to === activeKey ? " active" : ""}`}
+                  data-guide-target={navGuideTargetMap[item.to] ?? undefined}
+                  aria-haspopup="true"
+                  aria-expanded={isSubnavOpen}
+                >
+                  {item.label}
+                </button>
+              ) : (
+                <NavLink
+                  to={item.to}
+                  end={item.end}
+                  className={`nav-link nav-parent-link${item.to === activeKey ? " active" : ""}`}
+                  data-guide-target={navGuideTargetMap[item.to] ?? undefined}
+                >
+                  {item.label}
+                </NavLink>
+              )}
+              {hasSubnav ? (
+                <div className="app-top-subnav" aria-label={`${item.label} 하위 메뉴`}>
+                  {subItems.map((subItem) => (
+                    <Fragment key={subItem.key}>
+                      <Link
+                        to={subItem.to}
+                        className={`nav-link nav-sub-link${activeSubKey === subItem.key ? " active" : ""}`}
+                        aria-current={activeSubKey === subItem.key ? "page" : undefined}
+                        onClick={() => setOpenSubnavKey(null)}
+                      >
+                        {subItem.label}
+                      </Link>
+                    </Fragment>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </Fragment>
+        );
+      })}
     </nav>
   );
 }
@@ -228,29 +279,6 @@ function AppRoutes({
         />
       </Routes>
     </Suspense>
-  );
-}
-
-function SettingsIcon() {
-  return (
-    <svg className="app-topbar-settings-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <g fill="currentColor">
-        <rect x="10.9" y="1.4" width="2.2" height="4.4" rx="1.1" />
-        <rect x="10.9" y="18.2" width="2.2" height="4.4" rx="1.1" />
-        <rect x="18.2" y="10.9" width="4.4" height="2.2" rx="1.1" />
-        <rect x="1.4" y="10.9" width="4.4" height="2.2" rx="1.1" />
-        <rect x="16.7" y="3.4" width="2.2" height="4.4" rx="1.1" transform="rotate(45 17.8 5.6)" />
-        <rect x="16.7" y="16.2" width="2.2" height="4.4" rx="1.1" transform="rotate(135 17.8 18.4)" />
-        <rect x="5.1" y="16.2" width="2.2" height="4.4" rx="1.1" transform="rotate(-135 6.2 18.4)" />
-        <rect x="5.1" y="3.4" width="2.2" height="4.4" rx="1.1" transform="rotate(-45 6.2 5.6)" />
-      </g>
-      <path
-        fill="currentColor"
-        fillRule="evenodd"
-        d="M12 5.35a6.65 6.65 0 1 0 0 13.3a6.65 6.65 0 0 0 0-13.3Zm0 3.75a2.9 2.9 0 1 1 0 5.8a2.9 2.9 0 0 1 0-5.8Z"
-        clipRule="evenodd"
-      />
-    </svg>
   );
 }
 
@@ -463,13 +491,13 @@ function AppFrame() {
         <div className="app-topbar-main">
           <div className="app-brand-block">
             <span className="sidebar-kicker">이음</span>
-            <button type="button" className="sidebar-brand-button">
+            <button type="button" className="sidebar-brand-button" onClick={registerUnlockTap}>
               <h1>이음</h1>
             </button>
             <p className="sidebar-copy">이음은 빠르게 기록하고 자연스럽게 정리하는 생활 가계부 서비스입니다.</p>
           </div>
           <div className="app-topbar-compact-header">
-            <Link to="/" className="app-topbar-logo-link" aria-label="이음 홈으로 이동">
+            <Link to="/" className="app-topbar-logo-link" aria-label="이음 홈으로 이동" onClick={registerUnlockTap}>
               <img className="app-topbar-logo-image" src={`${import.meta.env.BASE_URL}logo.png`} alt="이음" />
             </Link>
             <span className="app-topbar-compact-meta">
@@ -477,7 +505,7 @@ function AppFrame() {
             </span>
           </div>
           <div className="app-topbar-actions">
-            <AppTopNav />
+            <AppTopNav isDeveloperModeUnlocked={isDeveloperModeUnlocked} />
             <select
               className="form-select workspace-select"
               value={activeWorkspace.id}
@@ -497,15 +525,19 @@ function AppFrame() {
               ))}
               <option value={CREATE_WORKSPACE_OPTION}>+ 새 가계부 추가...</option>
             </select>
-            <NavLink
-              to="/settings"
-              className={({ isActive }) => `app-topbar-settings-link${isActive ? " active" : ""}`}
-              aria-label="설정"
-              title="설정"
-              onClick={registerUnlockTap}
-            >
-              <SettingsIcon />
-            </NavLink>
+            <div className="app-topbar-settings-cluster">
+              <span className="app-topbar-settings-divider" aria-hidden="true">
+                |
+              </span>
+              <NavLink
+                to="/settings"
+                className={({ isActive }) => `app-topbar-settings-link${isActive ? " active" : ""}`}
+                aria-label="설정"
+                title="설정"
+              >
+                설정
+              </NavLink>
+            </div>
           </div>
         </div>
       </header>

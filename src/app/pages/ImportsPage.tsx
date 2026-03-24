@@ -1,7 +1,7 @@
-import { useRef, useState, type DragEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { Link } from "react-router-dom";
 import { AppModal } from "../components/AppModal";
-import type { WorkspaceBundle } from "../../shared/types/models";
+import type { Account, Card, WorkspaceBundle } from "../../shared/types/models";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
@@ -20,6 +20,85 @@ function isWorkbookFile(file: File) {
   return /\.xlsx?$/.test(file.name.toLowerCase());
 }
 
+function findMatchedCard(existingCards: Card[], previewCard: Card) {
+  const previewCardIdentifier = getVisibleCardIdentifier(previewCard.cardNumberMasked);
+  return (
+    existingCards.find(
+      (existing) =>
+        existing.issuerName === previewCard.issuerName &&
+        getVisibleCardIdentifier(existing.cardNumberMasked) &&
+        previewCardIdentifier &&
+        normalizeCardKey(getVisibleCardIdentifier(existing.cardNumberMasked)) === normalizeCardKey(previewCardIdentifier),
+    ) ??
+    existingCards.find((existing) => normalizeCardKey(existing.name) === normalizeCardKey(previewCard.name)) ??
+    null
+  );
+}
+
+function isCardPaymentAccount(account: Pick<Account, "usageType" | "name" | "alias">) {
+  if (account.usageType === "card_payment") return true;
+  const normalizedLabel = normalizeCardKey(`${account.name} ${account.alias}`);
+  return (
+    normalizedLabel.includes("카드값") ||
+    normalizedLabel.includes("카드결제") ||
+    normalizedLabel.includes("결제계좌") ||
+    normalizedLabel.includes("결제통장") ||
+    normalizedLabel.includes("납부")
+  );
+}
+
+type LinkedAccountCandidate = Pick<
+  Account,
+  "id" | "name" | "alias" | "institutionName" | "accountNumberMasked" | "isShared" | "usageType" | "ownerPersonId"
+> & {
+  source: "existing" | "preview";
+};
+const EMPTY_LINKED_ACCOUNT_CANDIDATES: LinkedAccountCandidate[] = [];
+
+function buildLinkedAccountCandidates(existingAccounts: Account[], previewAccounts: Account[], ownerPersonId: string) {
+  const dedupedCandidates = new Map<string, LinkedAccountCandidate>();
+
+  const upsertCandidate = (account: Account, source: LinkedAccountCandidate["source"]) => {
+    if (!isCardPaymentAccount(account)) return;
+    if (source === "existing" && !account.isShared && account.ownerPersonId !== ownerPersonId) return;
+
+    const dedupeKey = `${normalizeCardKey(account.alias || account.name)}:${normalizeCardKey(account.accountNumberMasked)}`;
+    const candidate: LinkedAccountCandidate = {
+      id: account.id,
+      name: account.name,
+      alias: account.alias,
+      institutionName: account.institutionName,
+      accountNumberMasked: account.accountNumberMasked,
+      isShared: account.isShared,
+      usageType: account.usageType,
+      ownerPersonId: account.ownerPersonId,
+      source,
+    };
+    const existingCandidate = dedupedCandidates.get(dedupeKey);
+
+    if (!existingCandidate || (existingCandidate.source === "preview" && source === "existing")) {
+      dedupedCandidates.set(dedupeKey, candidate);
+    }
+  };
+
+  existingAccounts.forEach((account) => upsertCandidate(account, "existing"));
+  previewAccounts.forEach((account) =>
+    upsertCandidate(
+      {
+        ...account,
+        ownerPersonId: account.isShared ? null : ownerPersonId,
+      },
+      "preview",
+    ),
+  );
+
+  return Array.from(dedupedCandidates.values()).sort((left, right) => {
+    if (left.source !== right.source) return left.source === "existing" ? -1 : 1;
+    if (left.isShared !== right.isShared) return left.isShared ? 1 : -1;
+    return (left.alias || left.name).localeCompare(right.alias || right.name, "ko");
+  });
+}
+
 function getPostImportLabel(bundle: WorkspaceBundle) {
   if (bundle.reviews.length > 0) return `검토 ${bundle.reviews.length}건 확인`;
   if (bundle.transactions.some((transaction) => transaction.isExpenseImpact && !transaction.categoryId)) {
@@ -35,38 +114,97 @@ export function ImportsPage() {
   const [isPreparingPreview, setIsPreparingPreview] = useState(false);
   const [selectedImportOwnerId, setSelectedImportOwnerId] = useState("");
   const [importCardNameDrafts, setImportCardNameDrafts] = useState<Record<string, string>>({});
+  const [importCardLinkedAccountDrafts, setImportCardLinkedAccountDrafts] = useState<Record<string, string>>({});
   const [isImportHistoryOpen, setIsImportHistoryOpen] = useState(false);
+  const [isLinkedAccountModalOpen, setIsLinkedAccountModalOpen] = useState(false);
   const [isDropzoneActive, setIsDropzoneActive] = useState(false);
   const [isDropzoneInvalid, setIsDropzoneInvalid] = useState(false);
   const dragDepthRef = useRef(0);
 
   const workspaceId = state.activeWorkspaceId!;
-  const scope = getWorkspaceScope(state, workspaceId);
+  const scope = useMemo(() => getWorkspaceScope(state, workspaceId), [state, workspaceId]);
   const recentImports = [...scope.imports].sort((a, b) => b.importedAt.localeCompare(a.importedAt));
 
-  const previewCardMatches = (previewBundle?.cards ?? []).map((card) => {
-    const previewCardIdentifier = getVisibleCardIdentifier(card.cardNumberMasked);
-    const matchedCard =
-      scope.cards.find(
-        (existing) =>
-          existing.issuerName === card.issuerName &&
-          getVisibleCardIdentifier(existing.cardNumberMasked) &&
-          previewCardIdentifier &&
-          normalizeCardKey(getVisibleCardIdentifier(existing.cardNumberMasked)) === normalizeCardKey(previewCardIdentifier),
-      ) ??
-      scope.cards.find((existing) => normalizeCardKey(existing.name) === normalizeCardKey(card.name));
+  const previewCardMatches = useMemo(
+    () =>
+      (previewBundle?.cards ?? []).map((card) => {
+        const matchedCard = findMatchedCard(scope.cards, card);
+        return {
+          card,
+          matchedCard,
+          draftName: importCardNameDrafts[card.id] ?? card.name,
+        };
+      }),
+    [importCardNameDrafts, previewBundle, scope.cards],
+  );
+  const previewCardMatchMap = useMemo(() => new Map(previewCardMatches.map((entry) => [entry.card.id, entry])), [previewCardMatches]);
+  const newCreditPreviewCards = useMemo(
+    () => previewCardMatches.filter(({ card, matchedCard }) => !matchedCard && card.cardType === "credit"),
+    [previewCardMatches],
+  );
+  const linkedAccountCandidates = useMemo(
+    () =>
+      previewBundle && selectedImportOwnerId
+        ? buildLinkedAccountCandidates(scope.accounts, previewBundle.accounts, selectedImportOwnerId)
+        : EMPTY_LINKED_ACCOUNT_CANDIDATES,
+    [previewBundle, scope.accounts, selectedImportOwnerId],
+  );
+  const shouldPromptLinkedAccounts = newCreditPreviewCards.length > 0 && linkedAccountCandidates.length > 0;
 
-    return {
-      card,
-      matchedCard,
-      draftName: importCardNameDrafts[card.id] ?? card.name,
-    };
-  });
+  useEffect(() => {
+    if (!previewBundle || !shouldPromptLinkedAccounts) {
+      setImportCardLinkedAccountDrafts({});
+      setIsLinkedAccountModalOpen(false);
+      return;
+    }
+
+    const validCardIds = new Set(newCreditPreviewCards.map(({ card }) => card.id));
+    const validAccountIds = new Set(linkedAccountCandidates.map((account) => account.id));
+    const defaultAccountId = linkedAccountCandidates.length === 1 ? linkedAccountCandidates[0]?.id ?? "" : "";
+
+    setImportCardLinkedAccountDrafts((current) => {
+      const nextDrafts: Record<string, string> = {};
+      let changed = false;
+
+      newCreditPreviewCards.forEach(({ card }) => {
+        const hasCurrentSelection = Object.prototype.hasOwnProperty.call(current, card.id);
+        const currentValue = current[card.id] ?? "";
+        const nextValue =
+          hasCurrentSelection && (!currentValue || validAccountIds.has(currentValue))
+            ? currentValue
+            : defaultAccountId;
+        nextDrafts[card.id] = nextValue;
+        if (nextValue !== currentValue) {
+          changed = true;
+        }
+      });
+
+      Object.keys(current).forEach((cardId) => {
+        if (!validCardIds.has(cardId)) {
+          changed = true;
+        }
+      });
+
+      if (!changed && Object.keys(current).length === Object.keys(nextDrafts).length) {
+        return current;
+      }
+      return nextDrafts;
+    });
+  }, [linkedAccountCandidates, newCreditPreviewCards, previewBundle, shouldPromptLinkedAccounts]);
 
   const resetDropzoneState = () => {
     dragDepthRef.current = 0;
     setIsDropzoneActive(false);
     setIsDropzoneInvalid(false);
+  };
+
+  const clearPreview = () => {
+    setPreviewBundle(null);
+    setPreviewFileName("");
+    setSelectedImportOwnerId("");
+    setImportCardNameDrafts({});
+    setImportCardLinkedAccountDrafts({});
+    setIsLinkedAccountModalOpen(false);
   };
 
   const preparePreview = async (file: File) => {
@@ -78,6 +216,8 @@ export function ImportsPage() {
       setPreviewFileName(file.name);
       setSelectedImportOwnerId("");
       setImportCardNameDrafts(Object.fromEntries(bundle.cards.map((card) => [card.id, card.name])));
+      setImportCardLinkedAccountDrafts({});
+      setIsLinkedAccountModalOpen(false);
     } finally {
       setIsPreparingPreview(false);
     }
@@ -127,22 +267,16 @@ export function ImportsPage() {
   const commitPreview = () => {
     if (!previewBundle || !selectedImportOwnerId) return;
     const renamedCards = previewBundle.cards.map((card) => {
-      const previewCardIdentifier = getVisibleCardIdentifier(card.cardNumberMasked);
-      const matchedCard =
-        scope.cards.find(
-          (existing) =>
-            existing.issuerName === card.issuerName &&
-            getVisibleCardIdentifier(existing.cardNumberMasked) &&
-            previewCardIdentifier &&
-            normalizeCardKey(getVisibleCardIdentifier(existing.cardNumberMasked)) === normalizeCardKey(previewCardIdentifier),
-        ) ??
-        scope.cards.find((existing) => normalizeCardKey(existing.name) === normalizeCardKey(card.name));
+      const matchedCard = previewCardMatchMap.get(card.id)?.matchedCard ?? null;
+      const selectedLinkedAccountId = importCardLinkedAccountDrafts[card.id] || null;
 
       return {
         ...card,
         name: matchedCard?.name ?? ((importCardNameDrafts[card.id] ?? card.name).trim() || card.name),
+        linkedAccountId: matchedCard?.linkedAccountId ?? selectedLinkedAccountId ?? card.linkedAccountId ?? null,
       };
     });
+    const linkedAccountIdByPreviewCardId = new Map(renamedCards.map((card) => [card.id, card.linkedAccountId ?? null]));
 
     const normalizedBundle: WorkspaceBundle = {
       ...previewBundle,
@@ -158,14 +292,21 @@ export function ImportsPage() {
       transactions: previewBundle.transactions.map((transaction) => ({
         ...transaction,
         ownerPersonId: selectedImportOwnerId,
+        accountId: transaction.cardId ? linkedAccountIdByPreviewCardId.get(transaction.cardId) ?? transaction.accountId : transaction.accountId,
       })),
     };
 
     commitImportedBundle(normalizedBundle, previewFileName);
-    setPreviewBundle(null);
-    setPreviewFileName("");
-    setSelectedImportOwnerId("");
-    setImportCardNameDrafts({});
+    clearPreview();
+  };
+
+  const handleCommitPreview = () => {
+    if (!previewBundle || !selectedImportOwnerId) return;
+    if (shouldPromptLinkedAccounts) {
+      setIsLinkedAccountModalOpen(true);
+      return;
+    }
+    commitPreview();
   };
 
   const dropzoneTitle = isDropzoneInvalid
@@ -306,7 +447,7 @@ export function ImportsPage() {
                             기존 카드 <strong>{matchedCard.name}</strong>에 연결해서 가져옵니다.
                           </p>
                         ) : (
-                          <div className="mt-3">
+                          <div className="mt-3 d-grid gap-2">
                             <label className="form-label mb-1" htmlFor={`import-card-name-${card.id}`}>
                               새 카드 이름
                             </label>
@@ -321,6 +462,11 @@ export function ImportsPage() {
                                 }))
                               }
                             />
+                            {card.cardType === "credit" && linkedAccountCandidates.length > 0 ? (
+                              <p className="mb-0 text-secondary">
+                                카드값 계좌 {linkedAccountCandidates.length}개를 찾았어요. 가져오기 전에 납부계좌를 빠르게 연결할 수 있습니다.
+                              </p>
+                            ) : null}
                           </div>
                         )}
                       </article>
@@ -333,12 +479,12 @@ export function ImportsPage() {
                 <button
                   className="btn btn-primary"
                   type="button"
-                  onClick={commitPreview}
+                  onClick={handleCommitPreview}
                   disabled={!selectedImportOwnerId || !scope.people.length}
                 >
                   {getPostImportLabel(previewBundle)}
                 </button>
-                <button className="btn btn-outline-secondary" type="button" onClick={() => setPreviewBundle(null)}>
+                <button className="btn btn-outline-secondary" type="button" onClick={clearPreview}>
                   미리보기 닫기
                 </button>
               </div>
@@ -377,6 +523,104 @@ export function ImportsPage() {
             ))}
           </div>
         )}
+      </AppModal>
+
+      <AppModal
+        open={Boolean(previewBundle) && shouldPromptLinkedAccounts && isLinkedAccountModalOpen}
+        title="납부계좌 빠른 연결"
+        description="카드값 계좌가 있습니다. 연결할 계좌가 있으면 선택하세요."
+        onClose={() => setIsLinkedAccountModalOpen(false)}
+        footer={
+          <div className="import-linked-account-footer-actions">
+            <button type="button" className="btn btn-primary" onClick={commitPreview}>
+              선택 반영 후 가져오기
+            </button>
+          </div>
+        }
+      >
+        <div className="import-linked-account-modal">
+          <div className="import-linked-account-summary">
+            <strong>새로 등록될 신용카드 {newCreditPreviewCards.length}장</strong>
+            <span>납부계좌 후보 {linkedAccountCandidates.length}개를 찾았습니다.</span>
+          </div>
+
+          <div className="import-linked-account-list">
+            {newCreditPreviewCards.map(({ card }, index) => {
+              const selectedLinkedAccountId = importCardLinkedAccountDrafts[card.id] ?? "";
+
+              return (
+                <article key={card.id} className="review-card import-linked-card" style={getMotionStyle(index + 1)}>
+                  <div className="import-linked-card-head">
+                    <div>
+                      <span className="import-linked-card-kicker">새 카드</span>
+                      <h3 className="mb-1">{importCardNameDrafts[card.id] ?? card.name}</h3>
+                      <p className="mb-0 text-secondary">
+                        {card.issuerName}
+                        {card.cardNumberMasked ? ` · ${card.cardNumberMasked}` : ""}
+                      </p>
+                    </div>
+                    <span className="badge text-bg-light">납부계좌 선택</span>
+                  </div>
+
+                  <div className="category-case-grid import-linked-account-option-grid">
+                    <label
+                      className={`category-case-card people-board-card import-linked-account-option import-linked-account-option-skip${
+                        selectedLinkedAccountId === "" ? " is-selected" : ""
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name={`import-linked-account-${card.id}`}
+                        checked={selectedLinkedAccountId === ""}
+                        onChange={() =>
+                          setImportCardLinkedAccountDrafts((current) => ({
+                            ...current,
+                            [card.id]: "",
+                          }))
+                        }
+                      />
+                      <div className="category-case-card-copy people-board-card-copy import-linked-account-option-skip-copy">
+                        <span className="import-linked-account-option-skip-badge">지금은 연결하지 않기</span>
+                      </div>
+                    </label>
+
+                    {linkedAccountCandidates.map((account) => (
+                      <label
+                        key={`${card.id}-${account.id}`}
+                        className={`category-case-card people-board-card import-linked-account-option${
+                          selectedLinkedAccountId === account.id ? " is-selected" : ""
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name={`import-linked-account-${card.id}`}
+                          checked={selectedLinkedAccountId === account.id}
+                          onChange={() =>
+                            setImportCardLinkedAccountDrafts((current) => ({
+                              ...current,
+                              [card.id]: account.id,
+                            }))
+                          }
+                        />
+                        <div className="category-case-card-copy people-board-card-copy">
+                          <strong>{account.alias || account.name}</strong>
+                          <span>{account.institutionName || "직접 입력"}</span>
+                          <span>{account.accountNumberMasked || "계좌번호 미입력"}</span>
+                          <div className="people-linked-category-block">
+                            <span className={`people-linked-category-count${account.isShared ? "" : " is-empty"}`}>
+                              {account.isShared ? "공동 계좌" : "개인 계좌"}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="category-case-pill">{account.source === "existing" ? "기존 계좌" : "이번 업로드"}</div>
+                      </label>
+                    ))}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </div>
       </AppModal>
     </>
   );
