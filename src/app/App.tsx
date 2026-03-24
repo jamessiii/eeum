@@ -231,17 +231,6 @@ function AppRoutes({
   );
 }
 
-function EditIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
-      <path
-        d="M4 20l4.2-1 9.5-9.5-3.2-3.2L5 15.8 4 20zm12-15.4l3.2 3.2 1.1-1.1a1.5 1.5 0 000-2.1l-1.1-1.1a1.5 1.5 0 00-2.1 0L16 4.6z"
-        fill="currentColor"
-      />
-    </svg>
-  );
-}
-
 function SettingsIcon() {
   return (
     <svg className="app-topbar-settings-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -298,86 +287,12 @@ function RecordsPage() {
   );
 }
 
-function WorkspaceNameEditor({
-  value,
-  onChange,
-  onSubmit,
-  onCancel,
-  inline = false,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  onSubmit: () => void;
-  onCancel: () => void;
-  inline?: boolean;
-}) {
-  return (
-    <div className={`workspace-name-editor${inline ? " workspace-name-editor-inline" : ""}`}>
-      <input
-        autoFocus
-        className="board-case-title-input workspace-name-input"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        onBlur={onSubmit}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            onSubmit();
-          }
-          if (event.key === "Escape") {
-            event.preventDefault();
-            onCancel();
-          }
-        }}
-      />
-    </div>
-  );
-}
-
-function WorkspaceNameDisplay({
-  name,
-  onEdit,
-  className,
-  titleTag = "h2",
-}: {
-  name: string;
-  onEdit: () => void;
-  className?: string;
-  titleTag?: "h2" | "strong";
-}) {
-  const content = titleTag === "strong" ? <strong>{name}</strong> : <h2 className="mb-0">{name}</h2>;
-
-  return (
-    <div className={`workspace-name-row${className ? ` ${className}` : ""}`}>
-      <button
-        type="button"
-        className="sidebar-brand-button workspace-name-trigger"
-        onDoubleClick={onEdit}
-        title="더블클릭하면 이름 수정"
-      >
-        {content}
-      </button>
-      <button
-        type="button"
-        className="board-case-edit-button workspace-name-edit-button"
-        onClick={onEdit}
-        aria-label="가계부 이름 수정"
-        title="가계부 이름 수정"
-      >
-        <EditIcon />
-      </button>
-    </div>
-  );
-}
-
 function AppFrame() {
-  const { addPerson, createEmptyWorkspace, isReady, renameWorkspace, setActiveWorkspace, state } = useAppState();
+  const { addPerson, createEmptyWorkspace, isReady, setActiveWorkspace, state } = useAppState();
   const { isDeveloperModeUnlocked, registerUnlockTap, lockDeveloperMode } = useDeveloperMode();
   useThemeMode();
-  const [isEditingWorkspaceName, setIsEditingWorkspaceName] = useState(false);
   const [isCreateWorkspaceOpen, setIsCreateWorkspaceOpen] = useState(false);
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
-  const [workspaceNameDraft, setWorkspaceNameDraft] = useState("");
   const [guideBeaconState, setGuideBeaconState] = useState<"hidden" | "entering" | "idle">("hidden");
   const [isGuideBeaconMounted, setIsGuideBeaconMounted] = useState(false);
   const [guidePanelExpandSignal, setGuidePanelExpandSignal] = useState(0);
@@ -407,13 +322,6 @@ function AppFrame() {
       window.removeEventListener("resize", handleScroll);
     };
   }, []);
-
-  useEffect(() => {
-    if (!isEditingWorkspaceName && state.activeWorkspaceId) {
-      const currentWorkspace = state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId);
-      if (currentWorkspace) setWorkspaceNameDraft(currentWorkspace.name);
-    }
-  }, [isEditingWorkspaceName, state.activeWorkspaceId, state.workspaces]);
 
   useEffect(() => {
     if (state.workspaces.length) return;
@@ -531,28 +439,6 @@ function AppFrame() {
   const activeWorkspace = getActiveWorkspace(state);
   if (!activeWorkspace) return <EmptyWorkspaceScreen />;
 
-  const openWorkspaceNameEditor = () => {
-    setWorkspaceNameDraft(activeWorkspace.name);
-    setIsEditingWorkspaceName(true);
-  };
-
-  const closeWorkspaceNameEditor = () => {
-    setWorkspaceNameDraft(activeWorkspace.name);
-    setIsEditingWorkspaceName(false);
-  };
-
-  const submitWorkspaceName = () => {
-    const trimmedName = workspaceNameDraft.trim();
-    if (!trimmedName) {
-      closeWorkspaceNameEditor();
-      return;
-    }
-    if (trimmedName !== activeWorkspace.name) {
-      renameWorkspace(activeWorkspace.id, trimmedName);
-    }
-    setIsEditingWorkspaceName(false);
-  };
-
   const closeCreateWorkspaceModal = () => {
     setIsCreateWorkspaceOpen(false);
     setNewWorkspaceName("");
@@ -571,15 +457,6 @@ function AppFrame() {
     transactions: scope.transactions,
     peopleCount: scope.people.length,
   });
-  const workspaceBadgeClass =
-    activeWorkspace.source === "demo"
-      ? "text-bg-info"
-      : activeWorkspace.source === "imported"
-        ? "text-bg-success"
-        : null;
-  const workspaceBadgeLabel =
-    activeWorkspace.source === "demo" ? "데모" : activeWorkspace.source === "imported" ? "업로드됨" : null;
-
   return (
     <div className={`app-shell${isOnboardingEntering ? " is-onboarding-entering" : ""}`}>
       <header className="app-topbar condensed">
@@ -592,28 +469,9 @@ function AppFrame() {
             <p className="sidebar-copy">이음은 빠르게 기록하고 자연스럽게 정리하는 생활 가계부 서비스입니다.</p>
           </div>
           <div className="app-topbar-compact-header">
-            <span className="section-kicker">현재 가계부</span>
-            <div className="app-topbar-workspace-row">
-              {isEditingWorkspaceName ? (
-                <WorkspaceNameEditor
-                  value={workspaceNameDraft}
-                  onChange={setWorkspaceNameDraft}
-                  onSubmit={submitWorkspaceName}
-                  onCancel={closeWorkspaceNameEditor}
-                  inline
-                />
-              ) : (
-                <WorkspaceNameDisplay
-                  name={activeWorkspace.name}
-                  onEdit={openWorkspaceNameEditor}
-                  className="workspace-name-row-inline"
-                  titleTag="strong"
-                />
-              )}
-              {workspaceBadgeClass && workspaceBadgeLabel ? (
-                <span className={`badge ${workspaceBadgeClass}`}>{workspaceBadgeLabel}</span>
-              ) : null}
-            </div>
+            <Link to="/" className="app-topbar-logo-link" aria-label="이음 홈으로 이동">
+              <img className="app-topbar-logo-image" src="/logo.png" alt="이음" />
+            </Link>
             <span className="app-topbar-compact-meta">
               카드내역 {headerSummary.transactionsCount}건 · 검토 {headerSummary.openReviewCount}건 · 사용자 {headerSummary.peopleCount}명
             </span>

@@ -1648,6 +1648,32 @@ label,
   padding-inline: 0;
 }
 
+.app-topbar-logo-link {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  color: var(--app-text);
+  line-height: 0;
+  transition: transform 180ms ease, opacity 180ms ease;
+}
+
+.app-topbar-logo-link:hover {
+  transform: translateY(-1px);
+  opacity: 0.92;
+}
+
+.app-topbar-logo-link:focus-visible {
+  outline: 2px solid rgba(69, 106, 168, 0.28);
+  outline-offset: 0.3rem;
+  border-radius: 0.8rem;
+}
+
+.app-topbar-logo-image {
+  display: block;
+  width: 8.9rem;
+  height: auto;
+}
+
 .app-topbar-workspace-row {
   display: flex;
   align-items: center;
@@ -1869,15 +1895,15 @@ label,
 .app-top-nav .nav-parent-link {
   color: color-mix(in srgb, var(--app-text) 86%, var(--app-muted) 14%);
   font-size: 1.04rem;
-  font-weight: 750;
-  letter-spacing: 0.06em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
 
 .app-top-nav .nav-sub-link {
   color: color-mix(in srgb, var(--app-text) 48%, var(--app-muted) 52%);
   font-size: 0.74rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  font-weight: 500;
+  letter-spacing: 0.02em;
 }
 
 .app-topbar-compact-header .section-kicker {
@@ -1903,6 +1929,10 @@ label,
 
 .app-topbar.condensed .app-topbar-compact-header {
   gap: 0.18rem;
+}
+
+.app-topbar.condensed .app-topbar-logo-image {
+  width: 8.1rem;
 }
 
 .app-topbar.condensed .app-topbar-compact-header strong {
@@ -2014,7 +2044,7 @@ label,
 .app-main {
   display: grid;
   justify-items: center;
-  padding: 8.9rem 2.3rem 2.6rem;
+  padding: 9.8rem 2.3rem 2.6rem;
 }
 
 .app-header-sentinel {
