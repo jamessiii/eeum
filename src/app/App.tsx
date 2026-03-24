@@ -470,7 +470,7 @@ function AppFrame() {
           </div>
           <div className="app-topbar-compact-header">
             <Link to="/" className="app-topbar-logo-link" aria-label="이음 홈으로 이동">
-              <img className="app-topbar-logo-image" src="/logo.png" alt="이음" />
+              <img className="app-topbar-logo-image" src={`${import.meta.env.BASE_URL}logo.png`} alt="이음" />
             </Link>
             <span className="app-topbar-compact-meta">
               카드내역 {headerSummary.transactionsCount}건 · 검토 {headerSummary.openReviewCount}건 · 사용자 {headerSummary.peopleCount}명
