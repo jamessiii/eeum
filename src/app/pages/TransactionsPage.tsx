@@ -26,6 +26,11 @@ const DEFAULT_TRANSACTION_FILTERS: TransactionFilters = {
   searchQuery: "",
 };
 
+const DEFAULT_CARD_TRANSACTION_FILTERS: TransactionFilters = {
+  ...DEFAULT_TRANSACTION_FILTERS,
+  nature: "uncategorized",
+};
+
 type ReviewWorkflowState = {
   activeReviewId: string | null;
   queuedReviewIds: string[];
@@ -89,7 +94,7 @@ export function TransactionsPage() {
     [scope.transactions],
   );
 
-  const [filters, setFilters] = useState<TransactionFilters>(DEFAULT_TRANSACTION_FILTERS);
+  const [filters, setFilters] = useState<TransactionFilters>(DEFAULT_CARD_TRANSACTION_FILTERS);
   const [selectedMonth, setSelectedMonth] = useState("all");
   const [reviewWorkflow, setReviewWorkflow] = useState<ReviewWorkflowState | null>(null);
 
@@ -360,7 +365,7 @@ export function TransactionsPage() {
       <section className="card shadow-sm" style={getMotionStyle(0)} data-guide-target="transactions-page-overview">
         <div className="section-head transaction-grid-head">
           <div>
-            <h2 className="section-title">카드내역</h2>
+            <h2 className="section-title">카드조각</h2>
             <p className="transaction-grid-meta">
               전체 {scope.transactions.length}건 · 미분류 {uncategorizedTransactionCount}건
               {reviewWorkflow ? ` · 자동검토 ${transactionWorkflowReviews.length}건 진행 중` : ""}
@@ -434,10 +439,10 @@ export function TransactionsPage() {
         {!scope.transactions.length ? (
           <EmptyStateCallout
             kicker="거래 없음"
-            title="아직 입력된 카드내역이 없습니다"
-            description="카드내역 상단에서 카드 명세서를 가져오면 검토와 통계가 시작됩니다."
+            title="아직 입력된 카드조각이 없습니다"
+            description="카드조각 상단에서 카드 명세서를 가져오면 검토와 통계가 시작됩니다."
             actions={
-              <Link to="/people" className="btn btn-outline-secondary btn-sm">
+              <Link to="/connections/assets" className="btn btn-outline-secondary btn-sm">
                 사용자 관리 보기
               </Link>
             }
@@ -445,7 +450,7 @@ export function TransactionsPage() {
         ) : !transactions.length ? (
           <EmptyStateCallout
             kicker="결과 없음"
-            title={reviewWorkflow ? "자동검토 대상 거래가 지금은 없습니다" : "조건에 맞는 카드내역이 없습니다"}
+            title={reviewWorkflow ? "자동검토 대상 거래가 지금은 없습니다" : "조건에 맞는 카드조각이 없습니다"}
             description={
               reviewWorkflow
                 ? "현재 자동검토 큐에 남아 있는 거래가 없습니다. 검토 모드를 종료하거나 일반 필터로 돌아가 보세요."

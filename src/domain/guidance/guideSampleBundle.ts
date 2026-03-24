@@ -2,7 +2,7 @@ import { createFinancialProfileBase, createStarterCategories, createWorkspaceBas
 import type { Category, ReviewItem, Transaction, WorkspaceBundle } from "../../shared/types/models";
 import { createId } from "../../shared/utils/id";
 
-export const GUIDE_SAMPLE_FILE_NAME = "가이드 샘플 카드내역.xlsx";
+export const GUIDE_SAMPLE_FILE_NAME = "가이드 샘플 카드조각.xlsx";
 export const GUIDE_SAMPLE_PARSER_ID = "guide-sample-v1";
 export const GUIDE_SAMPLE_MEMO = "guide-sample-v1";
 

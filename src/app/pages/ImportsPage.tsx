@@ -104,7 +104,7 @@ function getPostImportLabel(bundle: WorkspaceBundle) {
   if (bundle.transactions.some((transaction) => transaction.isExpenseImpact && !transaction.categoryId)) {
     return "미분류 거래 정리";
   }
-  return "카드내역 보기";
+  return "카드조각 보기";
 }
 
 export function ImportsPage() {
@@ -514,8 +514,8 @@ export function ImportsPage() {
                     </p>
                   </div>
                   {item.reviewCount > 0 ? (
-                    <Link className="btn btn-outline-secondary btn-sm" to="/transactions" onClick={() => setIsImportHistoryOpen(false)}>
-                      카드내역에서 검토하기
+                    <Link className="btn btn-outline-secondary btn-sm" to="/collections/card" onClick={() => setIsImportHistoryOpen(false)}>
+                      카드조각에서 검토하기
                     </Link>
                   ) : null}
                 </div>

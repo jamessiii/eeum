@@ -1,5 +1,5 @@
 ﻿import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
-import { HashRouter, Navigate, NavLink, Route, Routes, useLocation, useSearchParams } from "react-router-dom";
+import { HashRouter, Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { GUIDE_V1_RESET_EVENT, readGuideRuntime } from "../domain/guidance/guideRuntime";
 import { Fragment } from "react";
 import { Link } from "react-router-dom";
@@ -48,39 +48,39 @@ type NavItem = {
 
 const baseNavItems: NavItem[] = [
   {
-    to: "/transactions",
+    to: "/collections",
     label: "조각모음",
     subItems: [
-      { key: "cards", label: "카드조각", to: "/transactions" },
-      { key: "transfers", label: "이체조각", to: "/transactions?view=transfers" },
+      { key: "card", label: "카드조각", to: "/collections/card" },
+      { key: "transfer", label: "이체조각", to: "/collections/transfer" },
     ],
   },
   {
-    to: "/people",
+    to: "/connections",
     label: "이음",
     subItems: [
-      { key: "assets", label: "자산", to: "/people" },
-      { key: "classification", label: "분류", to: "/people?view=classification" },
+      { key: "assets", label: "자산", to: "/connections/assets" },
+      { key: "categories", label: "분류", to: "/connections/categories" },
     ],
   },
   { to: "/settlements", label: "맺음" },
   {
-    to: "/",
+    to: "/records",
     label: "기록",
     end: true,
     subItems: [
-      { key: "month", label: "달 기록", to: "/" },
-      { key: "year", label: "해 기록", to: "/?view=year" },
+      { key: "moon", label: "달 기록", to: "/records/moon" },
+      { key: "sun", label: "해 기록", to: "/records/sun" },
     ],
   },
 ];
 const developerNavItem: NavItem = { to: "/dev", label: "DEV" };
 
 const navGuideTargetMap: Record<string, string> = {
-  "/transactions": "nav-transactions",
-  "/people": "nav-people",
+  "/collections": "nav-collections",
+  "/connections": "nav-connections",
   "/settlements": "nav-settlements",
-  "/": "nav-dashboard",
+  "/records": "nav-records",
 };
 
 function useDeveloperMode() {
@@ -130,11 +130,27 @@ function AppTopNav({ isDeveloperModeUnlocked }: { isDeveloperModeUnlocked: boole
 
   const activeKey = useMemo<string | null>(() => {
     const pathname = location.pathname || "/";
-    if (pathname === "/account-transfers" || pathname === "/imports" || pathname === "/reviews") {
-      return "/transactions";
+    if (
+      pathname === "/" ||
+      pathname.startsWith("/collections") ||
+      pathname === "/transactions" ||
+      pathname === "/account-transfers" ||
+      pathname === "/imports" ||
+      pathname === "/reviews"
+    ) {
+      return "/collections";
     }
-    if (pathname === "/accounts" || pathname === "/cards" || pathname === "/categories") {
-      return "/people";
+    if (
+      pathname.startsWith("/connections") ||
+      pathname === "/people" ||
+      pathname === "/accounts" ||
+      pathname === "/cards" ||
+      pathname === "/categories"
+    ) {
+      return "/connections";
+    }
+    if (pathname.startsWith("/records")) {
+      return "/records";
     }
     if (pathname === "/settings") {
       return null;
@@ -146,18 +162,17 @@ function AppTopNav({ isDeveloperModeUnlocked }: { isDeveloperModeUnlocked: boole
   }, [location.pathname, navItems]);
 
   const activeSubKey = useMemo(() => {
-    const searchParams = new URLSearchParams(location.search);
-    if (activeKey === "/transactions") {
-      return searchParams.get("view") === "transfers" ? "transfers" : "cards";
+    if (activeKey === "/collections") {
+      return location.pathname === "/account-transfers" || location.pathname.startsWith("/collections/transfer") ? "transfer" : "card";
     }
-    if (activeKey === "/people") {
-      return searchParams.get("view") === "classification" ? "classification" : "assets";
+    if (activeKey === "/connections") {
+      return location.pathname === "/categories" || location.pathname.startsWith("/connections/categories") ? "categories" : "assets";
     }
-    if (activeKey === "/") {
-      return searchParams.get("view") === "year" ? "year" : "month";
+    if (activeKey === "/records") {
+      return location.pathname.startsWith("/records/sun") ? "sun" : "moon";
     }
     return null;
-  }, [activeKey, location.search]);
+  }, [activeKey, location.pathname]);
 
   useEffect(() => {
     setOpenSubnavKey(null);
@@ -256,15 +271,53 @@ function AppRoutes({
   return (
     <Suspense fallback={<LoadingScreen message="화면을 준비하는 중입니다." />}>
       <Routes>
-        <Route path="/" element={<RecordsPage />} />
-        <Route path="/transactions" element={<CollectionsPage />} />
-        <Route path="/account-transfers" element={<Navigate to="/transactions?view=transfers" replace />} />
-        <Route path="/people" element={<ConnectionPage />} />
-        <Route path="/accounts" element={<Navigate to="/people" replace />} />
-        <Route path="/cards" element={<Navigate to="/people" replace />} />
-        <Route path="/categories" element={<Navigate to="/people?view=classification" replace />} />
-        <Route path="/imports" element={<Navigate to="/transactions" replace />} />
-        <Route path="/reviews" element={<Navigate to="/transactions" replace />} />
+        <Route path="/" element={<SectionIndexRedirect defaultPath="/collections/card" />} />
+        <Route
+          path="/collections"
+          element={<SectionIndexRedirect defaultPath="/collections/card" alternatePath="/collections/transfer" viewKey="view" alternateValue="transfers" />}
+        />
+        <Route path="/collections/card" element={<TransactionsPage />} />
+        <Route path="/collections/transfer" element={<AccountTransfersPage />} />
+        <Route
+          path="/records"
+          element={<SectionIndexRedirect defaultPath="/records/moon" alternatePath="/records/sun" viewKey="view" alternateValue="year" />}
+        />
+        <Route path="/records/moon" element={<RecordsPage view="moon" />} />
+        <Route path="/records/sun" element={<RecordsPage view="sun" />} />
+        <Route
+          path="/connections"
+          element={
+            <SectionIndexRedirect
+              defaultPath="/connections/assets"
+              alternatePath="/connections/categories"
+              viewKey="view"
+              alternateValue="classification"
+            />
+          }
+        />
+        <Route path="/connections/assets" element={<PeoplePage />} />
+        <Route path="/connections/categories" element={<CategoriesPage />} />
+        <Route
+          path="/transactions"
+          element={<SectionIndexRedirect defaultPath="/collections/card" alternatePath="/collections/transfer" viewKey="view" alternateValue="transfers" />}
+        />
+        <Route path="/account-transfers" element={<PathRedirect to="/collections/transfer" />} />
+        <Route
+          path="/people"
+          element={
+            <SectionIndexRedirect
+              defaultPath="/connections/assets"
+              alternatePath="/connections/categories"
+              viewKey="view"
+              alternateValue="classification"
+            />
+          }
+        />
+        <Route path="/accounts" element={<PathRedirect to="/connections/assets" />} />
+        <Route path="/cards" element={<PathRedirect to="/connections/assets" />} />
+        <Route path="/categories" element={<PathRedirect to="/connections/categories" />} />
+        <Route path="/imports" element={<PathRedirect to="/collections/card" />} />
+        <Route path="/reviews" element={<PathRedirect to="/collections/card" />} />
         <Route path="/settlements" element={<SettlementsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route
@@ -282,25 +335,38 @@ function AppRoutes({
   );
 }
 
-function CollectionsPage() {
-  const [searchParams] = useSearchParams();
-  const activeView = searchParams.get("view") === "transfers" ? "transfers" : "cards";
-  return activeView === "cards" ? <TransactionsPage /> : <AccountTransfersPage />;
+function PathRedirect({ to }: { to: string }) {
+  const location = useLocation();
+  const search = location.search || "";
+  return <Navigate to={`${to}${search}`} replace />;
 }
 
-function ConnectionPage() {
-  const [searchParams] = useSearchParams();
-  const activeView = searchParams.get("view") === "classification" ? "classification" : "assets";
-  return activeView === "assets" ? <PeoplePage /> : <CategoriesPage />;
+function SectionIndexRedirect({
+  defaultPath,
+  alternatePath,
+  viewKey,
+  alternateValue,
+}: {
+  defaultPath: string;
+  alternatePath?: string;
+  viewKey?: string;
+  alternateValue?: string;
+}) {
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const shouldUseAlternate = viewKey && alternatePath && alternateValue ? searchParams.get(viewKey) === alternateValue : false;
+  if (viewKey) {
+    searchParams.delete(viewKey);
+  }
+  const nextSearch = searchParams.toString();
+  const nextPath = shouldUseAlternate && alternatePath ? alternatePath : defaultPath;
+  return <Navigate to={`${nextPath}${nextSearch ? `?${nextSearch}` : ""}`} replace />;
 }
 
-function RecordsPage() {
-  const [searchParams] = useSearchParams();
-  const activeView = searchParams.get("view") === "year" ? "year" : "month";
-
+function RecordsPage({ view }: { view: "moon" | "sun" }) {
   return (
     <>
-      {activeView === "month" ? (
+      {view === "moon" ? (
         <DashboardPage />
       ) : (
         <div className="page-stack">
@@ -497,11 +563,11 @@ function AppFrame() {
             <p className="sidebar-copy">이음은 빠르게 기록하고 자연스럽게 정리하는 생활 가계부 서비스입니다.</p>
           </div>
           <div className="app-topbar-compact-header">
-            <Link to="/" className="app-topbar-logo-link" aria-label="이음 홈으로 이동" onClick={registerUnlockTap}>
+            <Link to="/collections/card" className="app-topbar-logo-link" aria-label="이음 카드조각으로 이동" onClick={registerUnlockTap}>
               <img className="app-topbar-logo-image" src={`${import.meta.env.BASE_URL}logo.png`} alt="이음" />
             </Link>
             <span className="app-topbar-compact-meta">
-              카드내역 {headerSummary.transactionsCount}건 · 검토 {headerSummary.openReviewCount}건 · 사용자 {headerSummary.peopleCount}명
+              카드조각 {headerSummary.transactionsCount}건 · 검토 {headerSummary.openReviewCount}건 · 사용자 {headerSummary.peopleCount}명
             </span>
           </div>
           <div className="app-topbar-actions">

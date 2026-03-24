@@ -580,8 +580,8 @@ export function DashboardPage() {
             title="대시보드 해석 준비가 끝났습니다"
             description="검토와 분류, 기준값 설정이 마무리되어 이번 달 흐름을 안정적으로 볼 수 있습니다."
             actions={
-              <Link to="/transactions" className="btn btn-outline-secondary btn-sm">
-                카드내역 보기
+              <Link to="/collections/card" className="btn btn-outline-secondary btn-sm">
+                카드조각 보기
               </Link>
             }
           />
@@ -730,7 +730,7 @@ export function DashboardPage() {
               title="먼저 사용자 연결부터 맞춰 주세요"
               description="사용자별 카테고리 사용내역은 거래에 사용자 정보가 연결되어 있어야 정확하게 나뉩니다."
               actions={
-                <Link to="/people" className="btn btn-outline-primary btn-sm">
+                <Link to="/connections/assets" className="btn btn-outline-primary btn-sm">
                   사용자 관리
                 </Link>
               }
@@ -802,7 +802,7 @@ export function DashboardPage() {
               title="먼저 카드 연결부터 맞춰 주세요"
               description="사용자별 카드 사용내역은 카드가 등록되어 있거나 카드 결제가 사용자 정보와 함께 들어와 있어야 정확하게 나뉩니다."
               actions={
-                <Link to="/people" className="btn btn-outline-primary btn-sm">
+                <Link to="/connections/assets" className="btn btn-outline-primary btn-sm">
                   사용자 관리
                 </Link>
               }
@@ -829,7 +829,7 @@ export function DashboardPage() {
               {foundationRemainingCount ? "사용자, 계좌, 카드 연결만 먼저 맞추면 됩니다." : "이제 거래와 대시보드 흐름을 집중해서 보면 됩니다."}
             </p>
           </div>
-          <Link to="/people" className="btn btn-outline-primary btn-sm">
+          <Link to="/connections/assets" className="btn btn-outline-primary btn-sm">
             설정 이어가기
           </Link>
         </div>
@@ -841,7 +841,7 @@ export function DashboardPage() {
               {peopleSetupRemaining ? "설정 필요" : "준비 완료"}
             </span>
             <p className="mb-0 text-secondary">{peopleSetupRemaining ? "사용자 정보부터 정리해 주세요." : "사용자 정보가 준비되었습니다."}</p>
-            <Link to="/people" className="btn btn-outline-primary btn-sm mt-3">
+            <Link to="/connections/assets" className="btn btn-outline-primary btn-sm mt-3">
               사용자 관리
             </Link>
           </article>
@@ -852,7 +852,7 @@ export function DashboardPage() {
               {unmappedAccountCount ? `${unmappedAccountCount}개 미연결` : "준비 완료"}
             </span>
             <p className="mb-0 text-secondary">{unmappedAccountCount ? "소유자가 없는 계좌가 남아 있습니다." : "계좌 정보가 준비되었습니다."}</p>
-            <Link to="/people" className="btn btn-outline-primary btn-sm mt-3">
+            <Link to="/connections/assets" className="btn btn-outline-primary btn-sm mt-3">
               자산 설정
             </Link>
           </article>
@@ -863,7 +863,7 @@ export function DashboardPage() {
               {unmappedCardCount ? `${unmappedCardCount}개 미연결` : "준비 완료"}
             </span>
             <p className="mb-0 text-secondary">{unmappedCardCount ? "카드 연결 정보가 덜 정리되었습니다." : "카드 정보가 준비되었습니다."}</p>
-            <Link to="/people" className="btn btn-outline-primary btn-sm mt-3">
+            <Link to="/connections/assets" className="btn btn-outline-primary btn-sm mt-3">
               자산 설정
             </Link>
           </article>

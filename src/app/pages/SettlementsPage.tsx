@@ -73,7 +73,7 @@ export function SettlementsPage() {
       }
     }
     const query = transactionSearchParams.toString();
-    return appendCurrentTransactionFilters(query ? `/transactions?${query}` : "/transactions");
+    return appendCurrentTransactionFilters(query ? `/collections/card?${query}` : "/collections/card");
   };
   const getTransactionConnectionSummary = (transaction: { ownerPersonId: string | null; accountId: string | null; cardId: string | null }) =>
     [
@@ -156,7 +156,7 @@ export function SettlementsPage() {
         description: hasScopedSettlementContext
           ? "현재 조건에 맞는 공동지출이 없습니다."
           : "공동지출 거래가 있는지 먼저 확인해보세요.",
-        to: "/transactions?nature=shared",
+        to: "/collections/card?nature=shared",
         actionLabel: hasScopedSettlementContext ? "현재 맥락 공동지출 보기" : "공동지출 거래 보기",
       }
     : sharedTransactions.length
@@ -166,19 +166,19 @@ export function SettlementsPage() {
           description: hasScopedSettlementContext
             ? `${sender.name} → ${receiver.name} ${formatCurrency(suggestedSettlementAmount)} 차이가 보입니다.`
             : `${sender.name} → ${receiver.name} ${formatCurrency(suggestedSettlementAmount)} 정산 흐름이 잡혀 있습니다.`,
-          to: "/transactions?nature=shared",
+          to: "/collections/card?nature=shared",
           actionLabel: hasScopedSettlementContext ? "현재 맥락 공동지출 점검" : "공동지출 점검하기",
         }
       : {
           title: "지금 가장 먼저 할 일",
           description: "남은 정산 편차는 크지 않습니다.",
-          to: "/transactions?nature=shared",
+          to: "/collections/card?nature=shared",
           actionLabel: hasScopedSettlementContext ? "현재 맥락 공동지출 보기" : "공동지출 거래 보기",
         }
     : {
         title: "지금 가장 먼저 할 일",
         description: "거래 화면에서 공동지출 흐름을 다시 확인해보세요.",
-        to: "/transactions",
+        to: "/collections/card",
         actionLabel: hasScopedSettlementContext ? "현재 맥락 거래 보기" : "거래 화면 보기",
       };
   const isSettlementBalanced = visibleSharedTransactionCount > 0 && !receiver && !sender;
@@ -227,7 +227,7 @@ export function SettlementsPage() {
             ) : null}
           </div>
           <Link
-            to={appendCurrentTransactionFilters(visibleSharedTransactionCount ? "/transactions?nature=shared" : "/transactions")}
+            to={appendCurrentTransactionFilters(visibleSharedTransactionCount ? "/collections/card?nature=shared" : "/collections/card")}
             className="btn btn-outline-secondary btn-sm"
           >
             {visibleSharedTransactionCount
@@ -273,11 +273,11 @@ export function SettlementsPage() {
                     전체 정산으로 돌아가기
                   </Link>
                 ) : null}
-                <Link to={appendCurrentTransactionFilters("/transactions?nature=shared")} className="btn btn-outline-primary btn-sm">
+                <Link to={appendCurrentTransactionFilters("/collections/card?nature=shared")} className="btn btn-outline-primary btn-sm">
                   {hasScopedSettlementContext ? "현재 맥락 공동지출 보기" : "공동지출 거래 보기"}
                 </Link>
                 {!hasScopedSettlementContext ? (
-                  <Link to="/" className="btn btn-outline-secondary btn-sm">
+                  <Link to="/records/moon" className="btn btn-outline-secondary btn-sm">
                     대시보드 보기
                   </Link>
                 ) : null}
@@ -330,7 +330,7 @@ export function SettlementsPage() {
                 </p>
               </div>
               <div className="action-row">
-                <Link to={appendCurrentTransactionFilters("/transactions")} className="btn btn-outline-primary btn-sm">
+                <Link to={appendCurrentTransactionFilters("/collections/card")} className="btn btn-outline-primary btn-sm">
                   {hasScopedSettlementContext ? "현재 맥락 거래 보기" : "거래 화면 보기"}
                 </Link>
                 {hasScopedSettlementContext ? (
@@ -338,11 +338,11 @@ export function SettlementsPage() {
                     전체 정산으로 돌아가기
                   </Link>
                 ) : null}
-                <Link to="/people" className="btn btn-outline-secondary btn-sm">
+                <Link to="/connections/assets" className="btn btn-outline-secondary btn-sm">
                   사용자 관리 보기
                 </Link>
                 {!hasScopedSettlementContext ? (
-                  <Link to="/" className="btn btn-outline-secondary btn-sm">
+                  <Link to="/records/moon" className="btn btn-outline-secondary btn-sm">
                     대시보드 보기
                   </Link>
                 ) : null}
@@ -430,7 +430,7 @@ export function SettlementsPage() {
                   </p>
                 </div>
                 <div className="action-row">
-                  <Link to={appendCurrentTransactionFilters("/transactions?nature=shared")} className="btn btn-outline-primary btn-sm">
+                  <Link to={appendCurrentTransactionFilters("/collections/card?nature=shared")} className="btn btn-outline-primary btn-sm">
                     {hasScopedSettlementContext ? "현재 맥락 공동지출 보기" : "공동지출 거래 보기"}
                   </Link>
                 </div>
@@ -491,7 +491,7 @@ export function SettlementsPage() {
                       <Link className="btn btn-outline-secondary btn-sm" to="/settlements">
                         전체 정산으로 돌아가기
                       </Link>
-                      <Link className="btn btn-outline-secondary btn-sm" to={appendCurrentTransactionFilters("/transactions?nature=shared")}>
+                      <Link className="btn btn-outline-secondary btn-sm" to={appendCurrentTransactionFilters("/collections/card?nature=shared")}>
                         {hasScopedSettlementContext ? "현재 맥락 공동지출 보기" : "공동지출 거래 보기"}
                       </Link>
                     </>
@@ -557,7 +557,7 @@ export function SettlementsPage() {
                       전체 정산으로 돌아가기
                     </Link>
                   ) : null}
-                  <Link to={appendCurrentTransactionFilters("/transactions?nature=shared")} className="btn btn-outline-primary btn-sm">
+                  <Link to={appendCurrentTransactionFilters("/collections/card?nature=shared")} className="btn btn-outline-primary btn-sm">
                     {hasScopedSettlementContext ? "현재 맥락 공동지출 보기" : "공동지출 거래 보기"}
                   </Link>
                 </>

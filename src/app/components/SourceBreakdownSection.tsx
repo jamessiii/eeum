@@ -36,7 +36,7 @@ export function SourceBreakdownSection({
             <p className="mb-0 text-secondary">
               이 경로에서 실지출로 반영된 금액은 {formatCurrency(item.expenseAmount)}입니다.
             </p>
-            <Link to={`/transactions?sourceType=${item.sourceType}`} className={`btn btn-outline-${buttonVariant} btn-sm mt-3`}>
+            <Link to={`/collections/card?sourceType=${item.sourceType}`} className={`btn btn-outline-${buttonVariant} btn-sm mt-3`}>
               {getSourceTypeLabel(item.sourceType)} 거래 보기
             </Link>
           </article>

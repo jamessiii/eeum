@@ -155,13 +155,13 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
   if (reviewCount > 0) nextSteps.push(`검토함 ${reviewCount}건을 먼저 정리해보세요.`);
   if (expenseStats.uncategorizedCount > 0) nextSteps.push(`미분류 거래 ${expenseStats.uncategorizedCount}건을 정리하면 통계가 더 정확해집니다.`);
   if (expenseStats.internalTransferCount > 0) nextSteps.push(`내부이체 ${expenseStats.internalTransferCount}건을 점검하면 소비 통계가 더 깔끔해집니다.`);
-  if (!hasIncomeBasis) nextSteps.push("이체내역에 수입 흐름이 들어오면 월수입 기준과 저축 해석이 함께 계산됩니다.");
+  if (!hasIncomeBasis) nextSteps.push("이체조각에 수입 흐름이 들어오면 월수입 기준과 저축 해석이 함께 계산됩니다.");
   if (recurringSuggestionCount > 0) nextSteps.push(`반복 지출 제안 ${recurringSuggestionCount}개를 확인하면 분류 속도가 빨라집니다.`);
   if (!nextSteps.length) nextSteps.push("데이터가 안정적으로 쌓이고 있습니다. 상위 지출 카테고리부터 점검해보세요.");
 
   let coaching = "현재 데이터 흐름이 안정적으로 쌓이고 있습니다.";
   if (!hasIncomeBasis) {
-    coaching = "이체내역에 수입 흐름이 아직 없어 월수입 기준과 저축 해석이 0원 기준으로 표시됩니다.";
+    coaching = "이체조각에 수입 흐름이 아직 없어 월수입 기준과 저축 해석이 0원 기준으로 표시됩니다.";
   } else if (!financialProfile) {
     coaching = "목표 저축률과 경고 기준을 설정하면 대시보드 해석이 더 정확해집니다.";
   } else if (reviewCount > 0 || expenseStats.uncategorizedCount > 0) {

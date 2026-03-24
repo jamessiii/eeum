@@ -318,6 +318,75 @@ function normalizeCategoryLabelKey(value: string) {
   return normalizeKey(value).replace(/\s+/g, "");
 }
 
+const FIRST_DAILY_ACCOUNT_AUTO_LINK_GROUP_KEYS = new Set(
+  ["주거/고정비", "생활비", "교통/차량", "의료/건강", "가족/관계", "데이트/여행", "세금/공과", "기부금"].map(
+    normalizeCategoryLabelKey,
+  ),
+);
+
+const FIRST_DAILY_ACCOUNT_AUTO_LINK_CATEGORY_KEYS = new Set(["생필품"].map(normalizeCategoryLabelKey));
+
+const FIRST_LOAN_ACCOUNT_AUTO_LINK_GROUP_KEYS = new Set(["대출/부채"].map(normalizeCategoryLabelKey));
+
+function shouldAutoLinkFirstDailyAccount(state: AppState, workspaceId: string, accountId: string | null, usageType: Account["usageType"]) {
+  if (usageType !== "daily") return false;
+
+  return !state.accounts.some(
+    (account) =>
+      account.workspaceId === workspaceId &&
+      account.usageType === "daily" &&
+      (accountId ? account.id !== accountId : true),
+  );
+}
+
+function shouldAutoLinkFirstLoanAccount(state: AppState, workspaceId: string, accountId: string | null, usageType: Account["usageType"]) {
+  if (usageType !== "loan") return false;
+
+  return !state.accounts.some(
+    (account) =>
+      account.workspaceId === workspaceId &&
+      account.usageType === "loan" &&
+      (accountId ? account.id !== accountId : true),
+  );
+}
+
+function autoLinkCategoriesToFirstDailyAccount(categories: Category[], workspaceId: string, accountId: string) {
+  const workspaceCategories = categories.filter((category) => category.workspaceId === workspaceId);
+  const categoryMap = new Map(workspaceCategories.map((category) => [category.id, category]));
+
+  return categories.map((category) => {
+    if (category.workspaceId !== workspaceId || category.categoryType !== "category" || category.linkedAccountId) {
+      return category;
+    }
+
+    const parentCategory = category.parentCategoryId ? categoryMap.get(category.parentCategoryId) ?? null : null;
+    const categoryKey = normalizeCategoryLabelKey(category.name);
+    const parentKey = parentCategory ? normalizeCategoryLabelKey(parentCategory.name) : "";
+    const shouldAutoLink =
+      FIRST_DAILY_ACCOUNT_AUTO_LINK_CATEGORY_KEYS.has(categoryKey) ||
+      (parentCategory ? FIRST_DAILY_ACCOUNT_AUTO_LINK_GROUP_KEYS.has(parentKey) : false);
+
+    return shouldAutoLink ? { ...category, linkedAccountId: accountId } : category;
+  });
+}
+
+function autoLinkCategoriesToFirstLoanAccount(categories: Category[], workspaceId: string, accountId: string) {
+  const workspaceCategories = categories.filter((category) => category.workspaceId === workspaceId);
+  const categoryMap = new Map(workspaceCategories.map((category) => [category.id, category]));
+
+  return categories.map((category) => {
+    if (category.workspaceId !== workspaceId || category.categoryType !== "category" || category.linkedAccountId) {
+      return category;
+    }
+
+    const parentCategory = category.parentCategoryId ? categoryMap.get(category.parentCategoryId) ?? null : null;
+    const parentKey = parentCategory ? normalizeCategoryLabelKey(parentCategory.name) : "";
+    const shouldAutoLink = parentCategory ? FIRST_LOAN_ACCOUNT_AUTO_LINK_GROUP_KEYS.has(parentKey) : false;
+
+    return shouldAutoLink ? { ...category, linkedAccountId: accountId } : category;
+  });
+}
+
 function resolveCategoryRemap(categoryId: string, remapMap: Map<string, string>) {
   let resolvedId = categoryId;
   const visited = new Set<string>();
@@ -1239,26 +1308,43 @@ function reducer(state: AppState, action: Action): AppState {
           .concat(reorderPeople(state.people.filter((person) => person.workspaceId === action.payload.workspaceId), action.payload.personId, action.payload.targetIndex)),
       };
     case "addAccount":
+      const nextAccountId = createId("account");
+      const nextAccount: Account = {
+        id: nextAccountId,
+        workspaceId: action.payload.workspaceId,
+        ...action.payload.values,
+        sortOrder:
+          action.payload.values.sortOrder ??
+          state.accounts.filter(
+            (account) =>
+              account.workspaceId === action.payload.workspaceId &&
+              (account.ownerPersonId ?? null) === (action.payload.values.ownerPersonId ?? null),
+          ).length,
+        isHidden: action.payload.values.isHidden ?? false,
+      };
+
       return {
         ...state,
-        accounts: [
-          ...state.accounts,
-          {
-            id: createId("account"),
-            workspaceId: action.payload.workspaceId,
-            ...action.payload.values,
-            sortOrder:
-              action.payload.values.sortOrder ??
-              state.accounts.filter(
-                (account) =>
-                  account.workspaceId === action.payload.workspaceId &&
-                  (account.ownerPersonId ?? null) === (action.payload.values.ownerPersonId ?? null),
-              ).length,
-            isHidden: action.payload.values.isHidden ?? false,
-          },
-        ],
+        accounts: [...state.accounts, nextAccount],
+        categories: shouldAutoLinkFirstDailyAccount(state, action.payload.workspaceId, null, nextAccount.usageType)
+          ? autoLinkCategoriesToFirstDailyAccount(state.categories, action.payload.workspaceId, nextAccountId)
+          : shouldAutoLinkFirstLoanAccount(state, action.payload.workspaceId, null, nextAccount.usageType)
+            ? autoLinkCategoriesToFirstLoanAccount(state.categories, action.payload.workspaceId, nextAccountId)
+            : state.categories,
       };
     case "updateAccount":
+      const currentAccount = state.accounts.find(
+        (account) => account.workspaceId === action.payload.workspaceId && account.id === action.payload.accountId,
+      );
+      const shouldAutoLinkDailyCategories =
+        currentAccount &&
+        currentAccount.usageType !== "daily" &&
+        shouldAutoLinkFirstDailyAccount(state, action.payload.workspaceId, action.payload.accountId, action.payload.values.usageType);
+      const shouldAutoLinkLoanCategories =
+        currentAccount &&
+        currentAccount.usageType !== "loan" &&
+        shouldAutoLinkFirstLoanAccount(state, action.payload.workspaceId, action.payload.accountId, action.payload.values.usageType);
+
       return {
         ...state,
         accounts: state.accounts.map((account) =>
@@ -1266,6 +1352,11 @@ function reducer(state: AppState, action: Action): AppState {
             ? { ...account, ...action.payload.values }
             : account,
         ),
+        categories: shouldAutoLinkDailyCategories
+          ? autoLinkCategoriesToFirstDailyAccount(state.categories, action.payload.workspaceId, action.payload.accountId)
+          : shouldAutoLinkLoanCategories
+            ? autoLinkCategoriesToFirstLoanAccount(state.categories, action.payload.workspaceId, action.payload.accountId)
+            : state.categories,
         transactions: state.transactions.map((transaction) =>
           transaction.workspaceId === action.payload.workspaceId &&
           transaction.sourceType === "account" &&
@@ -1866,7 +1957,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
           importIds: payload.imports.map((record) => record.id),
         });
         dispatch({ type: "mergeBundle", payload });
-        showToast("가이드용 샘플 카드내역을 불러왔습니다.", "success");
+        showToast("가이드용 샘플 카드조각을 불러왔습니다.", "success");
       },
       clearGuideSampleData() {
         const activeWorkspaceId = state.activeWorkspaceId;
