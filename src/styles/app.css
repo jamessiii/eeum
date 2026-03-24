@@ -1781,14 +1781,10 @@ label,
 
 .app-top-nav-group {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   flex: 0 0 auto;
-  gap: 0.72rem;
+  gap: 0;
   min-width: 0;
-}
-
-.app-top-nav-group.is-active {
-  gap: 0.8rem;
 }
 
 .app-top-nav-group-divider {
@@ -1805,8 +1801,34 @@ label,
   align-items: center;
   gap: 0.55rem;
   min-width: 0;
-  padding-left: 0.7rem;
+  max-width: 0;
+  margin-left: 0;
+  padding-left: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
   position: relative;
+  transform: translateX(-0.45rem);
+  visibility: hidden;
+  white-space: nowrap;
+  transition:
+    max-width 240ms var(--motion-ease-standard, cubic-bezier(0.22, 1, 0.36, 1)),
+    margin-left 240ms var(--motion-ease-standard, cubic-bezier(0.22, 1, 0.36, 1)),
+    padding-left 240ms var(--motion-ease-standard, cubic-bezier(0.22, 1, 0.36, 1)),
+    opacity 140ms ease,
+    transform 240ms var(--motion-ease-standard, cubic-bezier(0.22, 1, 0.36, 1)),
+    visibility 0s linear 240ms;
+}
+
+.app-top-nav-group.has-subnav.is-active .app-top-subnav {
+  max-width: 16rem;
+  margin-left: 0.8rem;
+  padding-left: 0.7rem;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+  visibility: visible;
+  transition-delay: 0s;
 }
 
 .app-top-subnav::before {
@@ -1819,6 +1841,12 @@ label,
   border-radius: 999px;
   background: color-mix(in srgb, var(--app-text) 24%, transparent 76%);
   transform: translateY(-50%);
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.app-top-nav-group.has-subnav.is-active .app-top-subnav::before {
+  opacity: 1;
 }
 
 .app-top-nav .nav-link {
@@ -1926,7 +1954,7 @@ label,
 }
 
 .app-topbar.condensed .app-top-nav-group {
-  gap: 0.5rem;
+  gap: 0;
 }
 
 .app-topbar.condensed .app-top-nav-group-divider {
@@ -1935,7 +1963,12 @@ label,
 
 .app-topbar.condensed .app-top-subnav {
   gap: 0.42rem;
+}
+
+.app-topbar.condensed .app-top-nav-group.has-subnav.is-active .app-top-subnav {
+  margin-left: 0.52rem;
   padding-left: 0.52rem;
+  max-width: 13rem;
 }
 
 .app-topbar.condensed .app-topbar-settings-link {

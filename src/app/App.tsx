@@ -162,7 +162,9 @@ function AppTopNav() {
               |
             </span>
           ) : null}
-          <div className={`app-top-nav-group${item.to === activeKey ? " is-active" : ""}`}>
+          <div
+            className={`app-top-nav-group${item.subItems?.length ? " has-subnav" : ""}${item.to === activeKey ? " is-active" : ""}`}
+          >
             <NavLink
               to={item.to}
               end={item.end}
@@ -171,13 +173,14 @@ function AppTopNav() {
             >
               {item.label}
             </NavLink>
-            {item.to === activeKey && item.subItems?.length ? (
-              <div className="app-top-subnav">
+            {item.subItems?.length ? (
+              <div className={`app-top-subnav${item.to === activeKey ? " is-active" : ""}`} aria-hidden={item.to !== activeKey}>
                 {item.subItems.map((subItem) => (
                   <Fragment key={subItem.key}>
                     <Link
                       to={subItem.to}
                       className={`nav-link nav-sub-link${activeSubKey === subItem.key ? " active" : ""}`}
+                      tabIndex={item.to === activeKey ? 0 : -1}
                     >
                       {subItem.label}
                     </Link>
