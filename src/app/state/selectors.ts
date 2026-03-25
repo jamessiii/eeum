@@ -15,6 +15,7 @@ export function getWorkspaceScope(state: AppState, workspaceId: string) {
     reviews: state.reviews.filter((item) => item.workspaceId === workspaceId),
     imports: state.imports.filter((item) => item.workspaceId === workspaceId),
     settlements: state.settlements.filter((item) => item.workspaceId === workspaceId),
+    incomeEntries: state.incomeEntries.filter((item) => item.workspaceId === workspaceId),
     financialProfile: state.financialProfiles.find((item) => item.workspaceId === workspaceId) ?? null,
   };
 }

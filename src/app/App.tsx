@@ -21,6 +21,7 @@ const TransactionsPage = lazy(() =>
 const AccountTransfersPage = lazy(() =>
   import("./pages/AccountTransfersPage").then((module) => ({ default: module.AccountTransfersPage })),
 );
+const IncomePage = lazy(() => import("./pages/IncomePage").then((module) => ({ default: module.IncomePage })));
 const PeoplePage = lazy(() => import("./pages/PeoplePage").then((module) => ({ default: module.PeoplePage })));
 const CategoriesPage = lazy(() => import("./pages/CategoriesPage").then((module) => ({ default: module.CategoriesPage })));
 const SettlementsPage = lazy(() =>
@@ -50,8 +51,8 @@ const baseNavItems: NavItem[] = [
     to: "/collections",
     label: "조각모음",
     subItems: [
+      { key: "income", label: "수입", to: "/collections/income" },
       { key: "card", label: "결제내역", to: "/collections/card" },
-      { key: "transfer", label: "이체내역", to: "/collections/transfer" },
     ],
   },
   {
@@ -162,7 +163,13 @@ function AppTopNav({ isDeveloperModeUnlocked }: { isDeveloperModeUnlocked: boole
 
   const activeSubKey = useMemo(() => {
     if (activeKey === "/collections") {
-      return location.pathname === "/account-transfers" || location.pathname.startsWith("/collections/transfer") ? "transfer" : "card";
+      if (location.pathname === "/account-transfers" || location.pathname.startsWith("/collections/transfer")) {
+        return "transfer";
+      }
+      if (location.pathname.startsWith("/collections/income")) {
+        return "income";
+      }
+      return "card";
     }
     if (activeKey === "/connections") {
       return location.pathname === "/categories" || location.pathname.startsWith("/connections/categories") ? "categories" : "assets";
@@ -271,12 +278,10 @@ function AppRoutes({
     <Suspense fallback={<LoadingScreen message="화면을 준비하는 중입니다." />}>
       <Routes>
         <Route path="/" element={<SectionIndexRedirect defaultPath="/collections/card" />} />
-        <Route
-          path="/collections"
-          element={<SectionIndexRedirect defaultPath="/collections/card" alternatePath="/collections/transfer" viewKey="view" alternateValue="transfers" />}
-        />
+        <Route path="/collections" element={<SectionIndexRedirect defaultPath="/collections/card" />} />
         <Route path="/collections/card" element={<TransactionsPage />} />
         <Route path="/collections/transfer" element={<AccountTransfersPage />} />
+        <Route path="/collections/income" element={<IncomePage />} />
         <Route
           path="/records"
           element={<SectionIndexRedirect defaultPath="/records/moon" alternatePath="/records/sun" viewKey="view" alternateValue="year" />}
@@ -296,10 +301,7 @@ function AppRoutes({
         />
         <Route path="/connections/assets" element={<PeoplePage />} />
         <Route path="/connections/categories" element={<CategoriesPage />} />
-        <Route
-          path="/transactions"
-          element={<SectionIndexRedirect defaultPath="/collections/card" alternatePath="/collections/transfer" viewKey="view" alternateValue="transfers" />}
-        />
+        <Route path="/transactions" element={<SectionIndexRedirect defaultPath="/collections/card" />} />
         <Route path="/account-transfers" element={<PathRedirect to="/collections/transfer" />} />
         <Route
           path="/people"

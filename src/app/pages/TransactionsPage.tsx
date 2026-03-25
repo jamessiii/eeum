@@ -16,6 +16,7 @@ import { TransactionRowHeader } from "../components/TransactionRowHeader";
 import { ImportsPage } from "./ImportsPage";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
+import { useToast } from "../toast/ToastProvider";
 
 const DEFAULT_TRANSACTION_FILTERS: TransactionFilters = {
   transactionType: "all",
@@ -79,7 +80,8 @@ function getInlineReviewPrompt(review: ReviewItem) {
 }
 
 export function TransactionsPage() {
-  const { applyReviewSuggestion, assignCategory, clearCategory, dismissReview, state, updateTransactionDetails } = useAppState();
+  const { applyReviewSuggestion, assignCategory, clearCategory, resolveReview, state, updateTransactionDetails } = useAppState();
+  const { showToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const workspaceId = state.activeWorkspaceId!;
   const scope = useMemo(() => getWorkspaceScope(state, workspaceId), [state, workspaceId]);
@@ -331,7 +333,7 @@ export function TransactionsPage() {
     setReviewWorkflow(null);
   };
 
-  const handleActiveReviewDecision = (decision: "apply" | "dismiss") => {
+  const handleActiveReviewDecision = (decision: "apply" | "resolve") => {
     if (!reviewWorkflow || !activeWorkflowReview) return;
 
     const nextReviewId = getNextQueuedReviewId(reviewWorkflow.queuedReviewIds, activeWorkflowReview.id);
@@ -349,23 +351,32 @@ export function TransactionsPage() {
       return;
     }
 
-    dismissReview(activeWorkflowReview.id);
+    resolveReview(activeWorkflowReview.id);
   };
 
   const deferActiveReview = () => {
     if (!reviewWorkflow || !activeWorkflowReview) return;
 
-    const nextReviewId = getNextQueuedReviewId(reviewWorkflow.queuedReviewIds, activeWorkflowReview.id);
-    if (!nextReviewId) return;
+    const remainingReviewIds = reviewWorkflow.queuedReviewIds.filter((reviewId) => reviewId !== activeWorkflowReview.id);
+    if (!remainingReviewIds.length) {
+      setFilters(reviewWorkflow.preservedFilters.filters);
+      setSelectedStatementId(reviewWorkflow.preservedFilters.selectedStatementId);
+      setReviewWorkflow(null);
+      showToast("이번 자동검토에서는 넘기고, 다음 자동검토에서 다시 보여드립니다.", "info");
+      return;
+    }
 
+    const nextReviewId = getNextQueuedReviewId(reviewWorkflow.queuedReviewIds, activeWorkflowReview.id);
     setReviewWorkflow((current) =>
       current
         ? {
             ...current,
-            activeReviewId: nextReviewId,
+            activeReviewId: nextReviewId && remainingReviewIds.includes(nextReviewId) ? nextReviewId : remainingReviewIds[0] ?? null,
+            queuedReviewIds: remainingReviewIds,
           }
         : current,
     );
+    showToast("이번 자동검토에서는 넘기고, 다음 자동검토에서 다시 보여드립니다.", "info");
   };
 
   const getTransactionReviewBadgeLabel = (transaction: Transaction) => {
@@ -452,10 +463,11 @@ export function TransactionsPage() {
                 </option>
               ))}
             </select>
-            {!reviewWorkflow && statementOptions.length ? (
+            {statementOptions.length ? (
               <select
                 className="form-select transaction-month-select"
                 value={effectiveSelectedStatementId === "all" ? statementOptions[0]?.id ?? "" : effectiveSelectedStatementId}
+                disabled={Boolean(reviewWorkflow)}
                 onChange={(event) => setSelectedStatementId(event.target.value)}
               >
                 {statementOptions.map((option) => (
@@ -650,7 +662,7 @@ export function TransactionsPage() {
                                 <button type="button" className="btn btn-outline-secondary btn-sm" onClick={deferActiveReview}>
                                   보류
                                 </button>
-                                <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => handleActiveReviewDecision("dismiss")}>
+                                <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => handleActiveReviewDecision("resolve")}>
                                   아니오
                                 </button>
                                 <button type="button" className="btn btn-primary btn-sm" onClick={() => handleActiveReviewDecision("apply")}>

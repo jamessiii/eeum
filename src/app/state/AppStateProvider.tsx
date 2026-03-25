@@ -69,6 +69,14 @@ type SettlementInput = {
   note: string;
 };
 
+type IncomeEntryInput = {
+  workspaceId: string;
+  ownerPersonId: string | null;
+  occurredAt: string;
+  sourceName: string;
+  amount: number;
+};
+
 type Action =
   | { type: "hydrate"; payload: AppState }
   | { type: "setActiveWorkspace"; payload: string }
@@ -98,6 +106,8 @@ type Action =
   | { type: "addTag"; payload: { workspaceId: string; name: string } }
   | { type: "setFinancialProfile"; payload: { workspaceId: string; values: FinancialProfileInput } }
   | { type: "addSettlement"; payload: SettlementInput }
+  | { type: "addIncomeEntry"; payload: IncomeEntryInput }
+  | { type: "deleteIncomeEntry"; payload: { workspaceId: string; incomeEntryId: string } }
   | { type: "addTransaction"; payload: NewTransactionInput }
   | {
       type: "updateTransactionDetails";
@@ -266,7 +276,7 @@ function normalizeAppState(rawState: AppState): AppState {
   const validAccountIds = new Set(rawState.accounts.map((account) => `${account.workspaceId}:${account.id}`));
   const normalizedState = {
     ...rawState,
-    schemaVersion: Math.max(rawState.schemaVersion ?? 0, 6),
+    schemaVersion: Math.max(rawState.schemaVersion ?? 0, 7),
     people: rawState.people.map((person) => ({
       ...person,
       displayName: person.displayName ?? person.name,
@@ -319,6 +329,12 @@ function normalizeAppState(rawState: AppState): AppState {
     imports: rawState.imports.map((record) => ({
       ...record,
       statementMonth: record.statementMonth ?? null,
+    })),
+    incomeEntries: (rawState.incomeEntries ?? []).map((entry) => ({
+      ...entry,
+      ownerPersonId: entry.ownerPersonId ?? null,
+      sourceName: entry.sourceName ?? "",
+      createdAt: entry.createdAt ?? entry.occurredAt,
     })),
   };
 
@@ -874,6 +890,7 @@ function rebaseImportedBundleIntoWorkspace(state: AppState, workspaceId: string,
       },
     ],
     settlements: [],
+    incomeEntries: [],
   };
 }
 
@@ -1703,6 +1720,29 @@ function reducer(state: AppState, action: Action): AppState {
           },
         ],
       };
+    case "addIncomeEntry":
+      return {
+        ...state,
+        incomeEntries: [
+          ...state.incomeEntries,
+          {
+            id: createId("income"),
+            workspaceId: action.payload.workspaceId,
+            ownerPersonId: action.payload.ownerPersonId,
+            occurredAt: new Date(action.payload.occurredAt).toISOString(),
+            sourceName: action.payload.sourceName,
+            amount: Math.abs(action.payload.amount),
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      };
+    case "deleteIncomeEntry":
+      return {
+        ...state,
+        incomeEntries: state.incomeEntries.filter(
+          (entry) => !(entry.workspaceId === action.payload.workspaceId && entry.id === action.payload.incomeEntryId),
+        ),
+      };
     case "addTransaction":
       return {
         ...state,
@@ -1942,6 +1982,8 @@ interface AppStateContextValue {
   addTag: (workspaceId: string, name: string) => void;
   setFinancialProfile: (workspaceId: string, values: FinancialProfileInput) => void;
   addSettlement: (input: SettlementInput) => void;
+  addIncomeEntry: (input: IncomeEntryInput) => void;
+  deleteIncomeEntry: (workspaceId: string, incomeEntryId: string) => void;
   addTransaction: (input: NewTransactionInput) => void;
   updateTransactionDetails: (
     workspaceId: string,
@@ -2017,6 +2059,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
             reviews: [],
             imports: [],
             settlements: [],
+            incomeEntries: [],
           },
         });
         showToast(`"${name}" 워크스페이스를 만들었습니다.`, "success");
@@ -2323,6 +2366,16 @@ export function AppStateProvider({ children }: PropsWithChildren) {
             "success",
           );
         }
+      },
+      addIncomeEntry(input) {
+        dispatch({ type: "addIncomeEntry", payload: input });
+        showToast(`${input.sourceName} 수입을 추가했습니다.`, "success");
+      },
+      deleteIncomeEntry(workspaceId, incomeEntryId) {
+        const current = state.incomeEntries.find((item) => item.workspaceId === workspaceId && item.id === incomeEntryId);
+        if (!current) return;
+        dispatch({ type: "deleteIncomeEntry", payload: { workspaceId, incomeEntryId } });
+        showToast(`${current.sourceName} 수입을 삭제했습니다.`, "success");
       },
     }),
     [isReady, showToast, state],

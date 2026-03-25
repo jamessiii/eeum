@@ -1371,5 +1371,6 @@ export async function parseHouseholdWorkbook(file: File, context?: ImportClassif
       },
     ],
     settlements: [],
+    incomeEntries: [],
   };
 }

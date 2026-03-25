@@ -12,7 +12,7 @@ function mergeById<T extends { id: string }>(current: T[], incoming: T[]) {
 
 export function createEmptyState(): AppState {
   return {
-    schemaVersion: 6,
+    schemaVersion: 7,
     activeWorkspaceId: null,
     workspaces: [],
     financialProfiles: [],
@@ -25,6 +25,7 @@ export function createEmptyState(): AppState {
     reviews: [],
     imports: [],
     settlements: [],
+    incomeEntries: [],
   };
 }
 
@@ -169,5 +170,6 @@ export function mergeWorkspaceBundle(state: AppState, bundle: WorkspaceBundle): 
     reviews: mergeById(state.reviews, bundle.reviews),
     imports: mergeById(state.imports, bundle.imports),
     settlements: mergeById(state.settlements, bundle.settlements),
+    incomeEntries: mergeById(state.incomeEntries, bundle.incomeEntries),
   };
 }

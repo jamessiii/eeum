@@ -199,5 +199,6 @@ export function createGuideSampleBundle({
       },
     ],
     settlements: [],
+    incomeEntries: [],
   };
 }

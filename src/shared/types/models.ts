@@ -152,6 +152,16 @@ export interface SettlementRecord {
   completedAt: string;
 }
 
+export interface IncomeEntry {
+  id: ID;
+  workspaceId: ID;
+  ownerPersonId: ID | null;
+  occurredAt: string;
+  sourceName: string;
+  amount: number;
+  createdAt: string;
+}
+
 export interface WorkspaceBundle {
   workspace: Workspace;
   financialProfile: FinancialProfile;
@@ -164,6 +174,7 @@ export interface WorkspaceBundle {
   reviews: ReviewItem[];
   imports: ImportRecord[];
   settlements: SettlementRecord[];
+  incomeEntries: IncomeEntry[];
 }
 
 export interface AppState {
@@ -180,4 +191,5 @@ export interface AppState {
   reviews: ReviewItem[];
   imports: ImportRecord[];
   settlements: SettlementRecord[];
+  incomeEntries: IncomeEntry[];
 }

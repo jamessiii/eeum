@@ -2612,6 +2612,10 @@ label,
   margin-bottom: 1.35rem;
 }
 
+.income-entry-section-head {
+  margin-bottom: 0.8rem;
+}
+
 .stats-grid,
 .settings-grid {
   display: grid;
@@ -3185,6 +3189,160 @@ label,
   gap: 0.45rem;
 }
 
+.income-entry-form {
+  grid-template-columns: minmax(0, 11rem) minmax(0, 10rem) minmax(0, 1.4fr) minmax(0, 12rem) auto;
+  align-items: end;
+}
+
+.income-entry-card-shell {
+  overflow: visible;
+  z-index: 10;
+}
+
+.income-entry-form label {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.income-entry-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: stretch;
+}
+
+.income-source-field {
+  position: relative;
+}
+
+.income-source-suggestion-list {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 0.4rem);
+  left: 0;
+  right: 0;
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.45rem;
+  border: 1px solid rgba(23, 32, 51, 0.12);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.12);
+  backdrop-filter: blur(10px);
+}
+
+.income-source-suggestion-item {
+  display: grid;
+  gap: 0.22rem;
+  padding: 0.7rem 0.8rem;
+  border: 0;
+  border-radius: 0.85rem;
+  background: rgba(248, 250, 252, 0.88);
+  text-align: left;
+  transition:
+    transform 180ms ease,
+    background-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.income-source-suggestion-item:hover,
+.income-source-suggestion-item:focus-visible {
+  transform: translateY(-1px);
+  background: rgba(239, 246, 255, 0.96);
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.12);
+}
+
+.income-source-suggestion-name {
+  font-weight: 700;
+  color: #172033;
+}
+
+.income-source-suggestion-meta {
+  color: var(--app-muted);
+  font-size: 0.78rem;
+}
+
+.income-month-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.resource-card.income-month-section {
+  display: grid;
+  gap: 0.85rem;
+  width: 100%;
+  align-items: stretch;
+  justify-items: stretch;
+}
+
+.income-month-card {
+  position: relative;
+  padding: 1rem 1.1rem;
+}
+
+.income-month-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  width: 100%;
+}
+
+.income-month-header-copy {
+  padding-right: 11rem;
+}
+
+.income-month-header-copy h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.income-month-header-copy p {
+  margin-top: 0.35rem;
+}
+
+.income-month-total {
+  position: absolute;
+  top: 1rem;
+  right: 1.1rem;
+  min-width: fit-content;
+  text-align: right;
+}
+
+.income-month-total strong {
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.review-list.income-entry-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0.85rem;
+  margin-top: 0.15rem;
+  width: 100%;
+}
+
+.income-entry-card {
+  width: auto;
+  max-width: 100%;
+}
+
+.income-entry-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.85rem;
+  color: var(--app-muted);
+  font-size: 13px;
+}
+
+.income-entry-card .review-card-side {
+  align-items: flex-end;
+}
+
 .profile-form textarea {
   resize: vertical;
 }
@@ -3581,6 +3739,26 @@ label,
 
 .transaction-grid-table td:nth-child(2) {
   word-break: keep-all;
+}
+
+.income-entry-grid-table .income-entry-col-month {
+  width: 9rem;
+}
+
+.income-entry-grid-table .income-entry-col-date {
+  width: 8rem;
+}
+
+.income-entry-grid-table .income-entry-col-owner {
+  width: 8rem;
+}
+
+.income-entry-grid-table .income-entry-col-amount {
+  width: 9rem;
+}
+
+.income-entry-grid-table .income-entry-col-actions {
+  width: 6rem;
 }
 
 .transaction-row-header {
