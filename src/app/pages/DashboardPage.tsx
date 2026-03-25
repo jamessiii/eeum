@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { monthKey } from "../../shared/utils/date";
-import type { Card, Category, Person } from "../../shared/types/models";
-import { getWorkspaceInsights } from "../../domain/insights/workspaceInsights";
+import type { Card, Category, ImportRecord, Person } from "../../shared/types/models";
+import { getWorkspaceInsights, type WorkspaceInsightBasis } from "../../domain/insights/workspaceInsights";
 import { getExpenseImpactStats } from "../../domain/transactions/expenseImpactStats";
 import { getSourceTypeLabel } from "../../domain/transactions/sourceTypes";
 import { formatCurrency, formatPercent } from "../../shared/utils/format";
@@ -72,10 +72,20 @@ type DashboardPersonCardUsage = {
   isUnassigned?: boolean;
 };
 
+type DashboardScopeOption = {
+  value: string;
+  label: string;
+};
+
+type StatementScopeOption = DashboardScopeOption & {
+  importRecordIds: Set<string>;
+};
+
 const UNASSIGNED_PERSON_KEY = "__dashboard-unassigned__";
 const UNCATEGORIZED_CATEGORY_KEY = "__dashboard-uncategorized__";
 const OTHER_CATEGORY_GROUP_KEY = "__dashboard-other-categories__";
 const UNASSIGNED_CARD_KEY = "__dashboard-unassigned-card__";
+const UNSPECIFIED_STATEMENT_KEY = "__dashboard-unspecified-statement__";
 
 function compareBySortOrder(left: { sortOrder?: number; name: string }, right: { sortOrder?: number; name: string }) {
   return (left.sortOrder ?? Number.MAX_SAFE_INTEGER) - (right.sortOrder ?? Number.MAX_SAFE_INTEGER) || left.name.localeCompare(right.name, "ko");
@@ -115,6 +125,49 @@ function formatMonthLabel(value: string) {
   return `${year}년 ${Number(month)}월`;
 }
 
+function formatStatementMonthLabel(value: string) {
+  return `${formatMonthLabel(value)} 청구`;
+}
+
+function getStatementScopeOptions(imports: ImportRecord[], linkedImportRecordIds: Set<string>): StatementScopeOption[] {
+  const statementMap = new Map<string, StatementScopeOption>();
+  const unspecifiedImportRecordIds = new Set<string>();
+
+  for (const record of imports) {
+    if (!linkedImportRecordIds.has(record.id)) continue;
+
+    const statementMonth = record.statementMonth?.trim();
+    if (!statementMonth) {
+      unspecifiedImportRecordIds.add(record.id);
+      continue;
+    }
+
+    const existing = statementMap.get(statementMonth);
+    if (existing) {
+      existing.importRecordIds.add(record.id);
+      continue;
+    }
+
+    statementMap.set(statementMonth, {
+      value: statementMonth,
+      label: formatStatementMonthLabel(statementMonth),
+      importRecordIds: new Set([record.id]),
+    });
+  }
+
+  const options = [...statementMap.values()].sort((left, right) => right.value.localeCompare(left.value));
+
+  if (unspecifiedImportRecordIds.size) {
+    options.push({
+      value: UNSPECIFIED_STATEMENT_KEY,
+      label: "기준 미지정 명세서",
+      importRecordIds: unspecifiedImportRecordIds,
+    });
+  }
+
+  return options;
+}
+
 export function DashboardPage() {
   const { state } = useAppState();
   const workspaceId = state.activeWorkspaceId!;
@@ -127,9 +180,28 @@ export function DashboardPage() {
       ),
     [scope.transactions],
   );
+  const monthScopeOptions = useMemo<DashboardScopeOption[]>(
+    () => monthOptions.map((month) => ({ value: month, label: formatMonthLabel(month) })),
+    [monthOptions],
+  );
+  const linkedImportRecordIds = useMemo(
+    () =>
+      new Set(
+        scope.transactions
+          .map((transaction) => transaction.importRecordId)
+          .filter((importRecordId): importRecordId is string => Boolean(importRecordId)),
+      ),
+    [scope.transactions],
+  );
+  const statementScopeOptions = useMemo(
+    () => getStatementScopeOptions(scope.imports, linkedImportRecordIds),
+    [linkedImportRecordIds, scope.imports],
+  );
+  const [selectedDashboardBasis, setSelectedDashboardBasis] = useState<WorkspaceInsightBasis>("month");
   const [selectedDashboardMonth, setSelectedDashboardMonth] = useState(() =>
     monthOptions.includes(currentMonth) ? currentMonth : monthOptions[0] ?? currentMonth,
   );
+  const [selectedDashboardStatement, setSelectedDashboardStatement] = useState(() => statementScopeOptions[0]?.value ?? "");
   const [expandedCategoryGroupKeys, setExpandedCategoryGroupKeys] = useState<Set<string>>(() => new Set());
   const [showAllCategoryPersonKeys, setShowAllCategoryPersonKeys] = useState<Set<string>>(() => new Set());
 
@@ -145,7 +217,47 @@ export function DashboardPage() {
     }
   }, [currentMonth, monthOptions, selectedDashboardMonth]);
 
-  const insights = getWorkspaceInsights(state, workspaceId, selectedDashboardMonth);
+  useEffect(() => {
+    const nextSelectedStatement = statementScopeOptions.some((option) => option.value === selectedDashboardStatement)
+      ? selectedDashboardStatement
+      : statementScopeOptions[0]?.value ?? "";
+
+    if (nextSelectedStatement !== selectedDashboardStatement) {
+      setSelectedDashboardStatement(nextSelectedStatement);
+    }
+
+    if (!statementScopeOptions.length && selectedDashboardBasis === "statement") {
+      setSelectedDashboardBasis("month");
+    }
+  }, [selectedDashboardBasis, selectedDashboardStatement, statementScopeOptions]);
+
+  const selectedDashboardScopeOptions = selectedDashboardBasis === "statement" ? statementScopeOptions : monthScopeOptions;
+  const selectedDashboardScopeValue =
+    selectedDashboardBasis === "statement" ? selectedDashboardStatement : selectedDashboardMonth;
+  const selectedDashboardScopeLabel =
+    selectedDashboardScopeOptions.find((option) => option.value === selectedDashboardScopeValue)?.label ??
+    (selectedDashboardBasis === "statement" ? "명세서 없음" : "연월 없음");
+  const selectedDashboardTransactions = useMemo(() => {
+    if (selectedDashboardBasis === "statement") {
+      const selectedStatement = statementScopeOptions.find((option) => option.value === selectedDashboardStatement);
+      if (!selectedStatement) return [];
+      return scope.transactions.filter(
+        (transaction) => Boolean(transaction.importRecordId && selectedStatement.importRecordIds.has(transaction.importRecordId)),
+      );
+    }
+
+    return scope.transactions.filter((transaction) => monthKey(transaction.occurredAt) === selectedDashboardMonth);
+  }, [scope.transactions, selectedDashboardBasis, selectedDashboardMonth, selectedDashboardStatement, statementScopeOptions]);
+  const selectedDashboardExpenseTransactions = useMemo(
+    () => getExpenseImpactStats(selectedDashboardTransactions).activeExpenseTransactions,
+    [selectedDashboardTransactions],
+  );
+
+  const insights = getWorkspaceInsights(state, workspaceId, {
+    basis: selectedDashboardBasis,
+    label: selectedDashboardScopeLabel,
+    transactions: selectedDashboardTransactions,
+  });
   const dominantCategory = insights.topCategories[0] ?? null;
   const dominantCategoryShare =
     dominantCategory && insights.expense > 0 ? Math.round((dominantCategory.amount / insights.expense) * 100) : null;
@@ -163,31 +275,36 @@ export function DashboardPage() {
     () => new Map(scope.accounts.map((account) => [account.id, account.alias || account.name])),
     [scope.accounts],
   );
-  const selectedMonthTransactions = useMemo(
-    () => scope.transactions.filter((transaction) => monthKey(transaction.occurredAt) === selectedDashboardMonth),
-    [scope.transactions, selectedDashboardMonth],
-  );
-  const selectedMonthExpenseTransactions = useMemo(
-    () => getExpenseImpactStats(selectedMonthTransactions).activeExpenseTransactions,
-    [selectedMonthTransactions],
-  );
 
-  const renderMonthSelect = (ariaLabel: string) => (
+  const renderScopeSelect = (ariaLabel: string) => (
     <div className="dashboard-section-toolbar">
       <select
-        className="form-select dashboard-section-month-select"
-        value={selectedDashboardMonth}
-        onChange={(event) => setSelectedDashboardMonth(event.target.value)}
-        aria-label={ariaLabel}
+        className="form-select dashboard-section-basis-select"
+        value={selectedDashboardBasis}
+        onChange={(event) => setSelectedDashboardBasis(event.target.value as WorkspaceInsightBasis)}
+        aria-label={`${ariaLabel} 기준 선택`}
       >
-        {monthOptions.length ? (
-          monthOptions.map((month) => (
-            <option key={month} value={month}>
-              {formatMonthLabel(month)}
+        <option value="month">월별</option>
+        {statementScopeOptions.length ? <option value="statement">명세서</option> : null}
+      </select>
+      <select
+        className="form-select dashboard-section-month-select"
+        value={selectedDashboardScopeValue}
+        onChange={(event) =>
+          selectedDashboardBasis === "statement"
+            ? setSelectedDashboardStatement(event.target.value)
+            : setSelectedDashboardMonth(event.target.value)
+        }
+        aria-label={`${ariaLabel} 범위 선택`}
+      >
+        {selectedDashboardScopeOptions.length ? (
+          selectedDashboardScopeOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
             </option>
           ))
         ) : (
-          <option value={selectedDashboardMonth}>연월 없음</option>
+          <option value={selectedDashboardScopeValue}>{selectedDashboardBasis === "statement" ? "명세서 없음" : "연월 없음"}</option>
         )}
       </select>
     </div>
@@ -241,7 +358,7 @@ export function DashboardPage() {
       scope.categories.filter((category) => category.categoryType === "category").map((category) => [category.id, category]),
     );
     const usedPersonIds = new Set(
-      selectedMonthExpenseTransactions
+      selectedDashboardExpenseTransactions
         .map((transaction) => transaction.ownerPersonId)
         .filter((personId): personId is string => Boolean(personId && personMap.has(personId))),
     );
@@ -256,7 +373,7 @@ export function DashboardPage() {
       return created;
     };
 
-    for (const transaction of selectedMonthExpenseTransactions) {
+    for (const transaction of selectedDashboardExpenseTransactions) {
       const personKey = transaction.ownerPersonId && personMap.has(transaction.ownerPersonId) ? transaction.ownerPersonId : UNASSIGNED_PERSON_KEY;
       const categoryKey = transaction.categoryId ?? UNCATEGORIZED_CATEGORY_KEY;
       const personUsage = ensureUsageMap(personKey);
@@ -361,7 +478,7 @@ export function DashboardPage() {
     }
 
     return sections;
-  }, [scope.categories, selectedMonthExpenseTransactions, visiblePeople]);
+  }, [scope.categories, selectedDashboardExpenseTransactions, visiblePeople]);
 
   const personCardUsage = useMemo<DashboardPersonCardUsage[]>(() => {
     const personMap = new Map(visiblePeople.map((person) => [person.id, person]));
@@ -381,7 +498,7 @@ export function DashboardPage() {
       return created;
     };
 
-    for (const transaction of selectedMonthExpenseTransactions) {
+    for (const transaction of selectedDashboardExpenseTransactions) {
       if (!transaction.cardId && transaction.sourceType !== "card") continue;
 
       const personKey = transaction.ownerPersonId && personMap.has(transaction.ownerPersonId) ? transaction.ownerPersonId : UNASSIGNED_PERSON_KEY;
@@ -394,7 +511,7 @@ export function DashboardPage() {
     }
 
     const usedCardPersonIds = new Set(
-      selectedMonthExpenseTransactions
+      selectedDashboardExpenseTransactions
         .filter((transaction) => Boolean(transaction.cardId || transaction.sourceType === "card"))
         .map((transaction) => transaction.ownerPersonId)
         .filter((personId): personId is string => Boolean(personId && personMap.has(personId))),
@@ -477,30 +594,30 @@ export function DashboardPage() {
     }
 
     return sections;
-  }, [accountNameMap, selectedMonthExpenseTransactions, visibleCards, visiblePeople]);
+  }, [accountNameMap, selectedDashboardExpenseTransactions, visibleCards, visiblePeople]);
 
   return (
     <div className="page-stack">
       <section className="card shadow-sm" style={getMotionStyle(0)} data-guide-target="dashboard-summary">
         <div className="section-head">
           <div>
-            <span className="section-kicker">이번 달 요약</span>
+            <span className="section-kicker">{selectedDashboardBasis === "statement" ? "명세서 기준 요약" : "월별 요약"}</span>
             <h2 className="section-title">가계 상태 요약</h2>
           </div>
-          {renderMonthSelect("가계 상태 요약 연월 선택")}
+          {renderScopeSelect("가계 상태 요약")}
         </div>
 
         <div className="stats-grid">
           <article className="stat-card" style={getMotionStyle(1)}>
-            <span className="stat-label">월수입 기준</span>
+            <span className="stat-label">기준 수입</span>
             <strong>{formatCurrency(insights.income)}</strong>
           </article>
           <article className="stat-card" style={getMotionStyle(2)}>
-            <span className="stat-label">이번 달 소비</span>
+            <span className="stat-label">기준 소비</span>
             <strong>{formatCurrency(insights.expense)}</strong>
           </article>
           <article className="stat-card" style={getMotionStyle(3)}>
-            <span className="stat-label">남은 저축 여력</span>
+            <span className="stat-label">기준 저축 여력</span>
             <strong>{formatCurrency(insights.savings)}</strong>
           </article>
           <article className="stat-card" style={getMotionStyle(4)}>
@@ -560,12 +677,12 @@ export function DashboardPage() {
                 {dominantCategory ? (
                   <p className="mb-0 text-secondary">
                     가장 큰 지출 원인은 {dominantCategory.categoryName}
-                    {dominantCategoryShare !== null ? `로, 이번 달 소비의 ${dominantCategoryShare}%를 차지합니다.` : "입니다."}
+                    {dominantCategoryShare !== null ? `로, 선택한 기준 소비의 ${dominantCategoryShare}%를 차지합니다.` : "입니다."}
                   </p>
                 ) : null}
                 {dominantSource ? (
                   <p className="mb-0 text-secondary">
-                    주요 결제 경로는 {getSourceTypeLabel(dominantSource.sourceType)}이며, 이번 달 거래 {dominantSource.count}건과 소비 반영{" "}
+                    주요 결제 경로는 {getSourceTypeLabel(dominantSource.sourceType)}이며, 선택한 기준 거래 {dominantSource.count}건과 소비 반영{" "}
                     {formatCurrency(dominantSource.expenseAmount)}이 잡혀 있습니다.
                   </p>
                 ) : null}
@@ -578,10 +695,10 @@ export function DashboardPage() {
           <CompletionBanner
             className="mt-4"
             title="대시보드 해석 준비가 끝났습니다"
-            description="검토와 분류, 기준값 설정이 마무리되어 이번 달 흐름을 안정적으로 볼 수 있습니다."
+            description="검토와 분류, 기준값 설정이 마무리되어 선택한 기준 흐름을 안정적으로 볼 수 있습니다."
             actions={
               <Link to="/collections/card" className="btn btn-outline-secondary btn-sm">
-                카드조각 보기
+                결제내역 보기
               </Link>
             }
           />
@@ -594,10 +711,10 @@ export function DashboardPage() {
             <span className="section-kicker">카테고리 흐름</span>
             <h2 className="section-title">사용자별 카테고리 사용내역</h2>
           </div>
-          {renderMonthSelect("사용자별 카테고리 사용내역 연월 선택")}
+          {renderScopeSelect("사용자별 카테고리 사용내역")}
         </div>
         <p className="mb-0 text-secondary">
-          선택한 연월의 실지출 기준으로 사용자별 소비를 나눠서 보고, 각 그룹 안에서는 전체 카테고리 구조를 그대로 카드로 보여줍니다.
+          선택한 기준의 실지출을 기준으로 사용자별 소비를 나눠서 보고, 각 그룹 안에서는 전체 카테고리 구조를 그대로 카드로 보여줍니다.
         </p>
 
         <div className="dashboard-category-person-stack">
@@ -628,7 +745,7 @@ export function DashboardPage() {
                       <p>
                         {personSection.transactionCount
                           ? `실지출 ${personSection.transactionCount}건 · 사용 카테고리 ${personSection.usedCategoryCount}개 / 전체 ${personSection.totalCategoryCount}개`
-                          : "이번 달 실지출이 아직 없습니다."}
+                          : "선택한 기준 실지출이 아직 없습니다."}
                       </p>
                     </div>
                     <div className="dashboard-category-person-side">
@@ -745,9 +862,9 @@ export function DashboardPage() {
             <span className="section-kicker">카드 흐름</span>
             <h2 className="section-title">사용자별 카드 사용내역</h2>
           </div>
-          {renderMonthSelect("사용자별 카드 사용내역 연월 선택")}
+          {renderScopeSelect("사용자별 카드 사용내역")}
         </div>
-        <p className="mb-0 text-secondary">선택한 연월의 카드 결제 실지출 기준으로 사용자별 카드 사용내역을 보여줍니다.</p>
+        <p className="mb-0 text-secondary">선택한 기준의 카드 결제 실지출을 기준으로 사용자별 카드 사용내역을 보여줍니다.</p>
 
         <div className="dashboard-category-person-stack">
           {personCardUsage.length ? (
@@ -760,7 +877,7 @@ export function DashboardPage() {
                     <p>
                       {personSection.transactionCount
                         ? `카드 실지출 ${personSection.transactionCount}건 · 사용 카드 ${personSection.usedCardCount}개 / 전체 ${personSection.totalCardCount}개`
-                        : "선택한 연월에 카드 실지출이 아직 없습니다."}
+                        : "선택한 기준에 카드 실지출이 아직 없습니다."}
                     </p>
                   </div>
                   <div className="dashboard-category-person-total">{formatCurrency(personSection.totalAmount)}</div>

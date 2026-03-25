@@ -137,7 +137,8 @@ type Action =
           isInternalTransfer?: boolean;
         };
       };
-    };
+    }
+  | { type: "deleteImportRecord"; payload: { workspaceId: string; importRecordId: string } };
 
 function createPersonDraft(input: string | Partial<PersonDraft>): PersonDraft {
   if (typeof input === "string") {
@@ -265,7 +266,7 @@ function normalizeAppState(rawState: AppState): AppState {
   const validAccountIds = new Set(rawState.accounts.map((account) => `${account.workspaceId}:${account.id}`));
   const normalizedState = {
     ...rawState,
-    schemaVersion: Math.max(rawState.schemaVersion ?? 0, 5),
+    schemaVersion: Math.max(rawState.schemaVersion ?? 0, 6),
     people: rawState.people.map((person) => ({
       ...person,
       displayName: person.displayName ?? person.name,
@@ -279,6 +280,7 @@ function normalizeAppState(rawState: AppState): AppState {
       alias: account.alias ?? "",
       usageType: account.usageType ?? (account.isShared ? "shared" : "daily"),
       memo: account.memo ?? "",
+      createdImportRecordId: account.createdImportRecordId ?? null,
       sortOrder: account.sortOrder ?? 0,
       isHidden: account.isHidden ?? false,
     })),
@@ -286,6 +288,7 @@ function normalizeAppState(rawState: AppState): AppState {
       ...card,
       cardType: card.cardType ?? "credit",
       memo: card.memo ?? "",
+      createdImportRecordId: card.createdImportRecordId ?? null,
       sortOrder: card.sortOrder ?? 0,
       isHidden: card.isHidden ?? false,
     })),
@@ -305,6 +308,18 @@ function normalizeAppState(rawState: AppState): AppState {
       budgetable: category.budgetable ?? true,
       reportable: category.reportable ?? true,
     })),
+    transactions: rawState.transactions.map((transaction) => ({
+      ...transaction,
+      importRecordId: transaction.importRecordId ?? null,
+    })),
+    reviews: rawState.reviews.map((review) => ({
+      ...review,
+      importRecordId: review.importRecordId ?? null,
+    })),
+    imports: rawState.imports.map((record) => ({
+      ...record,
+      statementMonth: record.statementMonth ?? null,
+    })),
   };
 
   return normalizeCategoryStructure(normalizedState);
@@ -312,6 +327,43 @@ function normalizeAppState(rawState: AppState): AppState {
 
 function normalizeKey(value: string) {
   return value.trim().toLowerCase();
+}
+
+function normalizeCardMatchKey(value: string) {
+  return normalizeKey(value).replace(/\s+/g, "");
+}
+
+function getVisibleCardIdentifier(cardNumberMasked: string) {
+  const trimmed = cardNumberMasked.trim();
+  if (!trimmed) return "";
+  return /\d/.test(trimmed) ? trimmed : "";
+}
+
+function findMatchedImportedCard(existingCards: Card[], incomingCard: Card, ownerPersonId: string | null) {
+  const matchInCandidates = (candidates: Card[]) => {
+    const incomingCardIdentifier = getVisibleCardIdentifier(incomingCard.cardNumberMasked);
+
+    return (
+      candidates.find(
+        (candidate) =>
+          candidate.issuerName === incomingCard.issuerName &&
+          getVisibleCardIdentifier(candidate.cardNumberMasked) &&
+          incomingCardIdentifier &&
+          normalizeCardMatchKey(getVisibleCardIdentifier(candidate.cardNumberMasked)) ===
+            normalizeCardMatchKey(incomingCardIdentifier),
+      ) ??
+      candidates.find((candidate) => normalizeCardMatchKey(candidate.name) === normalizeCardMatchKey(incomingCard.name)) ??
+      null
+    );
+  };
+
+  const ownedCards = existingCards.filter((card) => (card.ownerPersonId ?? null) === ownerPersonId);
+  if (!ownerPersonId) {
+    return matchInCandidates(ownedCards);
+  }
+
+  const unownedCards = existingCards.filter((card) => (card.ownerPersonId ?? null) === null);
+  return matchInCandidates(ownedCards) ?? matchInCandidates(unownedCards);
 }
 
 function normalizeCategoryLabelKey(value: string) {
@@ -668,6 +720,8 @@ function normalizeCategoryStructure(state: AppState): AppState {
 
 function rebaseImportedBundleIntoWorkspace(state: AppState, workspaceId: string, bundle: WorkspaceBundle): WorkspaceBundle {
   const scope = getWorkspaceScope(state, workspaceId);
+  const importRecordId = createId("import");
+  const statementMonth = bundle.imports[0]?.statementMonth ?? null;
 
   const categoryIdMap = new Map<string, string>();
   const categoriesToAdd = bundle.categories.flatMap((category) => {
@@ -712,7 +766,7 @@ function rebaseImportedBundleIntoWorkspace(state: AppState, workspaceId: string,
   };
 
   const accountIdMap = new Map<string, string>();
-  const accountsToAdd = bundle.accounts.flatMap((account) => {
+  const accountsToAdd: Account[] = bundle.accounts.flatMap<Account>((account) => {
     const matched = scope.accounts.find((item) => normalizeKey(item.name) === normalizeKey(account.name));
     const resolvedOwnerPersonId = resolveOwnerPersonId(account.ownerPersonId);
     if (matched) {
@@ -730,6 +784,7 @@ function rebaseImportedBundleIntoWorkspace(state: AppState, workspaceId: string,
         id: nextId,
         workspaceId,
         ownerPersonId: resolvedOwnerPersonId,
+        createdImportRecordId: importRecordId,
       },
     ];
   });
@@ -740,9 +795,9 @@ function rebaseImportedBundleIntoWorkspace(state: AppState, workspaceId: string,
   };
 
   const cardIdMap = new Map<string, string>();
-  const cardsToAdd = bundle.cards.flatMap((card) => {
-    const matched = scope.cards.find((item) => normalizeKey(item.name) === normalizeKey(card.name));
+  const cardsToAdd: Card[] = bundle.cards.flatMap<Card>((card) => {
     const resolvedOwnerPersonId = resolveOwnerPersonId(card.ownerPersonId);
+    const matched = findMatchedImportedCard(scope.cards, card, resolvedOwnerPersonId);
     if (matched) {
       cardIdMap.set(card.id, matched.id);
       if ((matched.ownerPersonId ?? null) === null && resolvedOwnerPersonId) {
@@ -759,6 +814,7 @@ function rebaseImportedBundleIntoWorkspace(state: AppState, workspaceId: string,
         workspaceId,
         ownerPersonId: resolvedOwnerPersonId,
         linkedAccountId: resolveAccountId(card.linkedAccountId),
+        createdImportRecordId: importRecordId,
       },
     ];
   });
@@ -772,6 +828,7 @@ function rebaseImportedBundleIntoWorkspace(state: AppState, workspaceId: string,
       ...transaction,
       id: nextId,
       workspaceId,
+      importRecordId,
       ownerPersonId: resolveOwnerPersonId(transaction.ownerPersonId),
       cardId: transaction.cardId ? (cardIdMap.get(transaction.cardId) ?? null) : null,
       accountId: resolveAccountId(transaction.accountId),
@@ -786,6 +843,7 @@ function rebaseImportedBundleIntoWorkspace(state: AppState, workspaceId: string,
     ...review,
     id: createId("review"),
     workspaceId,
+    importRecordId,
     primaryTransactionId: transactionIdMap.get(review.primaryTransactionId) ?? review.primaryTransactionId,
     relatedTransactionIds: review.relatedTransactionIds
       .map((relatedId) => transactionIdMap.get(relatedId))
@@ -805,9 +863,10 @@ function rebaseImportedBundleIntoWorkspace(state: AppState, workspaceId: string,
     reviews,
     imports: [
       {
-        id: createId("import"),
+        id: importRecordId,
         workspaceId,
         fileName: bundle.imports[0]?.fileName ?? bundle.workspace.name,
+        statementMonth,
         importedAt: new Date().toISOString(),
         parserId: bundle.imports[0]?.parserId ?? "household-v2-workbook",
         rowCount: transactions.length,
@@ -815,6 +874,60 @@ function rebaseImportedBundleIntoWorkspace(state: AppState, workspaceId: string,
       },
     ],
     settlements: [],
+  };
+}
+
+function deleteImportRecordFromState(state: AppState, workspaceId: string, importRecordId: string) {
+  const removedTransactionIds = new Set(
+    state.transactions
+      .filter((transaction) => transaction.workspaceId === workspaceId && transaction.importRecordId === importRecordId)
+      .map((transaction) => transaction.id),
+  );
+
+  if (!removedTransactionIds.size) {
+    return {
+      ...state,
+      imports: state.imports.filter((record) => !(record.workspaceId === workspaceId && record.id === importRecordId)),
+    };
+  }
+
+  const nextTransactions = state.transactions.filter((transaction) => !removedTransactionIds.has(transaction.id));
+  const remainingCardIds = new Set(nextTransactions.map((transaction) => transaction.cardId).filter((id): id is string => Boolean(id)));
+  const remainingAccountIds = new Set(
+    nextTransactions.flatMap((transaction) =>
+      [transaction.accountId, transaction.fromAccountId, transaction.toAccountId].filter((id): id is string => Boolean(id)),
+    ),
+  );
+
+  const nextCards = state.cards.filter((card) => {
+    if (card.workspaceId !== workspaceId || card.createdImportRecordId !== importRecordId) return true;
+    return remainingCardIds.has(card.id);
+  });
+
+  const linkedCardAccountIds = new Set(nextCards.map((card) => card.linkedAccountId).filter((id): id is string => Boolean(id)));
+  const categoryLinkedAccountIds = new Set(
+    state.categories.map((category) => category.linkedAccountId).filter((id): id is string => Boolean(id)),
+  );
+
+  const nextAccounts = state.accounts.filter((account) => {
+    if (account.workspaceId !== workspaceId || account.createdImportRecordId !== importRecordId) return true;
+    return remainingAccountIds.has(account.id) || linkedCardAccountIds.has(account.id) || categoryLinkedAccountIds.has(account.id);
+  });
+
+  return {
+    ...state,
+    accounts: nextAccounts,
+    cards: nextCards,
+    transactions: nextTransactions,
+    reviews: state.reviews.filter(
+      (review) =>
+        !(review.workspaceId === workspaceId && (
+          review.importRecordId === importRecordId ||
+          removedTransactionIds.has(review.primaryTransactionId) ||
+          review.relatedTransactionIds.some((transactionId) => removedTransactionIds.has(transactionId))
+        )),
+    ),
+    imports: state.imports.filter((record) => !(record.workspaceId === workspaceId && record.id === importRecordId)),
   };
 }
 
@@ -1784,6 +1897,8 @@ function reducer(state: AppState, action: Action): AppState {
             : transaction,
         ),
       };
+    case "deleteImportRecord":
+      return deleteImportRecordFromState(state, action.payload.workspaceId, action.payload.importRecordId);
     default:
       return state;
   }
@@ -1796,6 +1911,7 @@ interface AppStateContextValue {
   createDemoWorkspace: () => Promise<void>;
   previewWorkbookImport: (file: File) => Promise<WorkspaceBundle>;
   commitImportedBundle: (bundle: WorkspaceBundle, fileName: string) => void;
+  deleteImportRecord: (workspaceId: string, importRecordId: string) => void;
   loadGuideSampleData: () => void;
   clearGuideSampleData: () => void;
   setActiveWorkspace: (workspaceId: string) => void;
@@ -1932,6 +2048,10 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         dispatch({ type: "mergeBundle", payload });
         showToast(`${fileName} 업로드를 완료했습니다.`, "success");
       },
+      deleteImportRecord(workspaceId, importRecordId) {
+        dispatch({ type: "deleteImportRecord", payload: { workspaceId, importRecordId } });
+        showToast("명세서를 삭제했습니다.", "success");
+      },
       loadGuideSampleData() {
         const activeWorkspaceId = state.activeWorkspaceId;
         if (!activeWorkspaceId) return;
@@ -1957,7 +2077,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
           importIds: payload.imports.map((record) => record.id),
         });
         dispatch({ type: "mergeBundle", payload });
-        showToast("가이드용 샘플 카드조각을 불러왔습니다.", "success");
+        showToast("가이드용 샘플 결제내역을 불러왔습니다.", "success");
       },
       clearGuideSampleData() {
         const activeWorkspaceId = state.activeWorkspaceId;

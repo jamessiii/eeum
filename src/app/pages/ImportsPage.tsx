@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { Link } from "react-router-dom";
 import { AppModal } from "../components/AppModal";
-import type { Account, Card, WorkspaceBundle } from "../../shared/types/models";
+import type { Account, Card, ImportRecord, WorkspaceBundle } from "../../shared/types/models";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
@@ -20,7 +20,7 @@ function isWorkbookFile(file: File) {
   return /\.xlsx?$/.test(file.name.toLowerCase());
 }
 
-function findMatchedCard(existingCards: Card[], previewCard: Card) {
+function findMatchedCardInCandidates(existingCards: Card[], previewCard: Card) {
   const previewCardIdentifier = getVisibleCardIdentifier(previewCard.cardNumberMasked);
   return (
     existingCards.find(
@@ -33,6 +33,15 @@ function findMatchedCard(existingCards: Card[], previewCard: Card) {
     existingCards.find((existing) => normalizeCardKey(existing.name) === normalizeCardKey(previewCard.name)) ??
     null
   );
+}
+
+function findMatchedCard(existingCards: Card[], previewCard: Card, ownerPersonId: string | null) {
+  if (!ownerPersonId) return null;
+
+  const ownedCards = existingCards.filter((existing) => (existing.ownerPersonId ?? null) === ownerPersonId);
+  const unownedCards = existingCards.filter((existing) => (existing.ownerPersonId ?? null) === null);
+
+  return findMatchedCardInCandidates(ownedCards, previewCard) ?? findMatchedCardInCandidates(unownedCards, previewCard) ?? null;
 }
 
 function isCardPaymentAccount(account: Pick<Account, "usageType" | "name" | "alias">) {
@@ -104,15 +113,56 @@ function getPostImportLabel(bundle: WorkspaceBundle) {
   if (bundle.transactions.some((transaction) => transaction.isExpenseImpact && !transaction.categoryId)) {
     return "미분류 거래 정리";
   }
-  return "카드조각 보기";
+  return "결제내역 보기";
+}
+
+function formatMonthLabel(value: string) {
+  const [year, month] = value.split("-");
+  return `${year}년 ${Number(month)}월`;
+}
+
+function formatBillingMonthLabel(value: string) {
+  return `${formatMonthLabel(value)} 청구`;
+}
+
+function addMonthKey(value: string, monthsToAdd: number) {
+  const [year, month] = value.split("-").map(Number);
+  const nextDate = new Date(Date.UTC(year, month - 1 + monthsToAdd, 1));
+  return `${nextDate.getUTCFullYear()}-${String(nextDate.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function getUsageMonths(bundle: WorkspaceBundle | null) {
+  if (!bundle) return [];
+  const uniqueMonths = new Set(
+    bundle.transactions.map((transaction) => transaction.occurredAt.slice(0, 7)).filter((monthKey) => Boolean(monthKey)),
+  );
+  return [...uniqueMonths].sort((left, right) => left.localeCompare(right));
+}
+
+function getPreviewStatementMonthOptions(bundle: WorkspaceBundle | null) {
+  const usageMonths = getUsageMonths(bundle);
+  const latestUsageMonth = usageMonths.at(-1) ?? null;
+  if (!latestUsageMonth) return [];
+
+  if (usageMonths.length >= 3) {
+    return [addMonthKey(latestUsageMonth, -1), latestUsageMonth, addMonthKey(latestUsageMonth, 1)];
+  }
+
+  return [latestUsageMonth, addMonthKey(latestUsageMonth, 1)];
+}
+
+function getStatementRecordLabel(record: Pick<ImportRecord, "statementMonth" | "fileName">) {
+  if (record.statementMonth) return formatBillingMonthLabel(record.statementMonth);
+  return `${record.fileName} 기록`;
 }
 
 export function ImportsPage() {
-  const { commitImportedBundle, previewWorkbookImport, state } = useAppState();
+  const { commitImportedBundle, deleteImportRecord, previewWorkbookImport, state } = useAppState();
   const [previewBundle, setPreviewBundle] = useState<WorkspaceBundle | null>(null);
   const [previewFileName, setPreviewFileName] = useState("");
   const [isPreparingPreview, setIsPreparingPreview] = useState(false);
   const [selectedImportOwnerId, setSelectedImportOwnerId] = useState("");
+  const [selectedStatementMonth, setSelectedStatementMonth] = useState("");
   const [importCardNameDrafts, setImportCardNameDrafts] = useState<Record<string, string>>({});
   const [importCardLinkedAccountDrafts, setImportCardLinkedAccountDrafts] = useState<Record<string, string>>({});
   const [isImportHistoryOpen, setIsImportHistoryOpen] = useState(false);
@@ -120,22 +170,29 @@ export function ImportsPage() {
   const [isDropzoneActive, setIsDropzoneActive] = useState(false);
   const [isDropzoneInvalid, setIsDropzoneInvalid] = useState(false);
   const dragDepthRef = useRef(0);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const workspaceId = state.activeWorkspaceId!;
   const scope = useMemo(() => getWorkspaceScope(state, workspaceId), [state, workspaceId]);
-  const recentImports = [...scope.imports].sort((a, b) => b.importedAt.localeCompare(a.importedAt));
+  const recentImports = useMemo(() => [...scope.imports].sort((a, b) => b.importedAt.localeCompare(a.importedAt)), [scope.imports]);
+  const previewStatementMonthOptions = useMemo(() => getPreviewStatementMonthOptions(previewBundle), [previewBundle]);
+  const defaultPreviewStatementMonth = previewStatementMonthOptions.at(-1) ?? "";
+  const linkedImportRecordIds = useMemo(
+    () => new Set(scope.transactions.map((transaction) => transaction.importRecordId).filter((id): id is string => Boolean(id))),
+    [scope.transactions],
+  );
 
   const previewCardMatches = useMemo(
     () =>
       (previewBundle?.cards ?? []).map((card) => {
-        const matchedCard = findMatchedCard(scope.cards, card);
+        const matchedCard = findMatchedCard(scope.cards, card, selectedImportOwnerId || null);
         return {
           card,
           matchedCard,
           draftName: importCardNameDrafts[card.id] ?? card.name,
         };
       }),
-    [importCardNameDrafts, previewBundle, scope.cards],
+    [importCardNameDrafts, previewBundle, scope.cards, selectedImportOwnerId],
   );
   const previewCardMatchMap = useMemo(() => new Map(previewCardMatches.map((entry) => [entry.card.id, entry])), [previewCardMatches]);
   const newCreditPreviewCards = useMemo(
@@ -150,6 +207,34 @@ export function ImportsPage() {
     [previewBundle, scope.accounts, selectedImportOwnerId],
   );
   const shouldPromptLinkedAccounts = newCreditPreviewCards.length > 0 && linkedAccountCandidates.length > 0;
+
+  useEffect(() => {
+    if (!previewBundle) {
+      setSelectedImportOwnerId("");
+      return;
+    }
+
+    if (scope.people.length === 1) {
+      const onlyPersonId = scope.people[0]?.id ?? "";
+      if (selectedImportOwnerId !== onlyPersonId) {
+        setSelectedImportOwnerId(onlyPersonId);
+      }
+      return;
+    }
+
+    if (selectedImportOwnerId && scope.people.some((person) => person.id === selectedImportOwnerId)) return;
+    setSelectedImportOwnerId("");
+  }, [previewBundle, scope.people, selectedImportOwnerId]);
+
+  useEffect(() => {
+    if (!previewBundle) {
+      setSelectedStatementMonth("");
+      return;
+    }
+
+    if (selectedStatementMonth && previewStatementMonthOptions.includes(selectedStatementMonth)) return;
+    setSelectedStatementMonth(defaultPreviewStatementMonth);
+  }, [defaultPreviewStatementMonth, previewBundle, previewStatementMonthOptions, selectedStatementMonth]);
 
   useEffect(() => {
     if (!previewBundle || !shouldPromptLinkedAccounts) {
@@ -198,13 +283,21 @@ export function ImportsPage() {
     setIsDropzoneInvalid(false);
   };
 
+  const resetFileInput = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
   const clearPreview = () => {
     setPreviewBundle(null);
     setPreviewFileName("");
     setSelectedImportOwnerId("");
+    setSelectedStatementMonth("");
     setImportCardNameDrafts({});
     setImportCardLinkedAccountDrafts({});
     setIsLinkedAccountModalOpen(false);
+    resetFileInput();
   };
 
   const preparePreview = async (file: File) => {
@@ -215,6 +308,7 @@ export function ImportsPage() {
       setPreviewBundle(bundle);
       setPreviewFileName(file.name);
       setSelectedImportOwnerId("");
+      setSelectedStatementMonth("");
       setImportCardNameDrafts(Object.fromEntries(bundle.cards.map((card) => [card.id, card.name])));
       setImportCardLinkedAccountDrafts({});
       setIsLinkedAccountModalOpen(false);
@@ -265,7 +359,7 @@ export function ImportsPage() {
   };
 
   const commitPreview = () => {
-    if (!previewBundle || !selectedImportOwnerId) return;
+    if (!previewBundle || !selectedImportOwnerId || !selectedStatementMonth) return;
     const renamedCards = previewBundle.cards.map((card) => {
       const matchedCard = previewCardMatchMap.get(card.id)?.matchedCard ?? null;
       const selectedLinkedAccountId = importCardLinkedAccountDrafts[card.id] || null;
@@ -281,6 +375,14 @@ export function ImportsPage() {
     const normalizedBundle: WorkspaceBundle = {
       ...previewBundle,
       people: [],
+      imports: previewBundle.imports.map((record, index) =>
+        index === 0
+          ? {
+              ...record,
+              statementMonth: selectedStatementMonth,
+            }
+          : record,
+      ),
       accounts: previewBundle.accounts.map((account) => ({
         ...account,
         ownerPersonId: account.isShared ? null : selectedImportOwnerId,
@@ -301,12 +403,19 @@ export function ImportsPage() {
   };
 
   const handleCommitPreview = () => {
-    if (!previewBundle || !selectedImportOwnerId) return;
+    if (!previewBundle || !selectedImportOwnerId || !selectedStatementMonth) return;
     if (shouldPromptLinkedAccounts) {
       setIsLinkedAccountModalOpen(true);
       return;
     }
     commitPreview();
+  };
+
+  const handleDeleteImportRecord = (record: ImportRecord) => {
+    if (!linkedImportRecordIds.has(record.id)) return;
+    const confirmed = window.confirm(`${getStatementRecordLabel(record)} 명세서를 삭제할까요?\n관련 결제내역과 검토 기록도 함께 삭제됩니다.`);
+    if (!confirmed) return;
+    deleteImportRecord(workspaceId, record.id);
   };
 
   const dropzoneTitle = isDropzoneInvalid
@@ -323,13 +432,13 @@ export function ImportsPage() {
     <>
       <div className="page-stack">
         <section className="card shadow-sm" style={getMotionStyle(0)} data-guide-target="transactions-upload">
-          <div className="section-head">
-            <div>
-              <span className="section-kicker">업로드 센터</span>
-              <h2 className="section-title">카드 명세서 가져오기</h2>
-            </div>
+            <div className="section-head">
+              <div>
+                <span className="section-kicker">업로드 센터</span>
+                <h2 className="section-title">카드 명세서 가져오기</h2>
+              </div>
             <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setIsImportHistoryOpen(true)}>
-              히스토리
+              명세서 관리
             </button>
           </div>
           <p className="text-secondary">
@@ -355,13 +464,20 @@ export function ImportsPage() {
               <p className="mb-0 text-secondary">{dropzoneDescription}</p>
             </div>
             <input
+              ref={fileInputRef}
               hidden
               type="file"
               accept=".xlsx,.xls"
+              onClick={(event) => {
+                event.currentTarget.value = "";
+              }}
               onChange={async (event) => {
                 const file = event.target.files?.[0];
-                await handlePickedFile(file);
-                event.currentTarget.value = "";
+                try {
+                  await handlePickedFile(file);
+                } finally {
+                  event.currentTarget.value = "";
+                }
               }}
             />
           </label>
@@ -369,14 +485,14 @@ export function ImportsPage() {
           {isPreparingPreview ? <p className="text-secondary mt-3 mb-0">업로드 미리보기를 준비하고 있습니다.</p> : null}
 
           {previewBundle ? (
-            <div className="card shadow-sm mt-4">
+            <div className="card shadow-sm mt-4 import-preview-panel">
               <div className="section-head">
                 <div>
                   <span className="section-kicker">미리보기</span>
                   <h3 className="section-title">{previewFileName}</h3>
                 </div>
               </div>
-              <div className="stats-grid">
+              <div className="stats-grid import-preview-stats">
                 <article className="stat-card">
                   <span className="stat-label">거래</span>
                   <strong>{previewBundle.transactions.length}건</strong>
@@ -386,20 +502,15 @@ export function ImportsPage() {
                   <strong>{previewBundle.reviews.length}건</strong>
                 </article>
                 <article className="stat-card">
-                  <span className="stat-label">사용자</span>
-                  <strong>{previewBundle.people.length}명</strong>
-                </article>
-                <article className="stat-card">
-                  <span className="stat-label">계좌/카드</span>
-                  <strong>
-                    {previewBundle.accounts.length} / {previewBundle.cards.length}
-                  </strong>
+                  <span className="stat-label">카드</span>
+                  <strong>{previewBundle.cards.length}장</strong>
                 </article>
               </div>
 
-              <div className="mt-4">
+              <div className="import-preview-control-grid mt-4">
+                <div className="import-preview-control-card">
                 <label className="form-label" htmlFor="import-owner-person">
-                  사용자 선택
+                  누구의 카드인가요?
                 </label>
                 <select
                   id="import-owner-person"
@@ -415,62 +526,90 @@ export function ImportsPage() {
                     </option>
                   ))}
                 </select>
-                {!scope.people.length ? (
-                  <p className="text-secondary mt-2 mb-0">업로드 전에 사용자를 먼저 등록해야 합니다.</p>
-                ) : (
-                  <p className="text-secondary mt-2 mb-0">선택한 사용자에게 이번 명세서의 카드와 거래를 연결합니다.</p>
-                )}
+                </div>
+
+                <div className="import-preview-control-card">
+                <label className="form-label" htmlFor="import-statement-month">
+                  언제 청구된 명세서 인가요?
+                </label>
+                <select
+                  id="import-statement-month"
+                  className="form-select"
+                  value={selectedStatementMonth}
+                  onChange={(event) => setSelectedStatementMonth(event.target.value)}
+                  disabled={!previewStatementMonthOptions.length}
+                >
+                  {!previewStatementMonthOptions.length ? <option value="">청구월 후보를 만들 수 없습니다</option> : null}
+                  {previewStatementMonthOptions.map((month) => (
+                    <option key={month} value={month}>
+                      {formatBillingMonthLabel(month)}
+                    </option>
+                  ))}
+                </select>
+                </div>
               </div>
 
               {previewCardMatches.length ? (
-                <div className="mt-4">
-                  <label className="form-label mb-2">카드 확인</label>
-                  <div className="review-list">
+                <div className="people-subboard import-preview-card-section mt-4">
+                  <div className="people-subboard-head">
+                    <div>
+                      <span className="section-kicker">업로드 자산 확인</span>
+                      <h4>카드 확인</h4>
+                    </div>
+                  </div>
+                  <div className="board-case-section-body">
+                    <div className="category-case-grid import-preview-card-grid">
                     {previewCardMatches.map(({ card, matchedCard, draftName }) => (
-                      <article key={card.id} className="review-card">
-                        <div className="d-flex justify-content-between align-items-start gap-3 flex-wrap">
-                          <div>
-                            <h3 className="mb-1">{card.name}</h3>
-                            <p className="mb-0 text-secondary">
-                              {card.issuerName}
-                              {card.cardNumberMasked ? ` · ${card.cardNumberMasked}` : ""}
-                            </p>
-                          </div>
-                          {matchedCard ? (
-                            <span className="badge text-bg-success">기존 카드 사용</span>
+                      <article
+                        key={card.id}
+                        className="category-case-card people-board-card import-preview-card"
+                      >
+                        <div className="category-case-card-copy people-board-card-copy import-preview-card-copy">
+                          {!selectedImportOwnerId || matchedCard ? <strong>{card.name}</strong> : null}
+                          {selectedImportOwnerId && !matchedCard ? (
+                            <>
+                              <div className="import-preview-card-input-block">
+                                <input
+                                  id={`import-card-name-${card.id}`}
+                                  className="form-control"
+                                  value={draftName}
+                                  onChange={(event) =>
+                                    setImportCardNameDrafts((current) => ({
+                                      ...current,
+                                    [card.id]: event.target.value,
+                                  }))
+                                }
+                              />
+                            </div>
+                              <span>
+                                {card.issuerName}
+                                {card.cardNumberMasked ? ` (${card.cardNumberMasked})` : ""}
+                              </span>
+                            </>
                           ) : (
-                            <span className="badge text-bg-warning">새 카드 인식</span>
+                            <span>
+                              {card.issuerName}
+                              {card.cardNumberMasked ? ` (${card.cardNumberMasked})` : ""}
+                            </span>
                           )}
+                          {!selectedImportOwnerId ? <span>사용자를 선택하면 해당 사용자의 카드인지 확인합니다.</span> : null}
                         </div>
-                        {matchedCard ? (
-                          <p className="text-secondary mt-2 mb-0">
-                            기존 카드 <strong>{matchedCard.name}</strong>에 연결해서 가져옵니다.
-                          </p>
-                        ) : (
-                          <div className="mt-3 d-grid gap-2">
-                            <label className="form-label mb-1" htmlFor={`import-card-name-${card.id}`}>
-                              새 카드 이름
-                            </label>
-                            <input
-                              id={`import-card-name-${card.id}`}
-                              className="form-control"
-                              value={draftName}
-                              onChange={(event) =>
-                                setImportCardNameDrafts((current) => ({
-                                  ...current,
-                                  [card.id]: event.target.value,
-                                }))
-                              }
-                            />
-                            {card.cardType === "credit" && linkedAccountCandidates.length > 0 ? (
-                              <p className="mb-0 text-secondary">
-                                카드값 계좌 {linkedAccountCandidates.length}개를 찾았어요. 가져오기 전에 납부계좌를 빠르게 연결할 수 있습니다.
-                              </p>
-                            ) : null}
+                        <div className="import-preview-card-footer">
+                          <div
+                            className={`category-case-pill import-preview-card-pill${
+                              !selectedImportOwnerId
+                                ? ""
+                                : matchedCard
+                                  ? " is-success"
+                                  : " is-warning"
+                            }`}
+                          >
+                            {!selectedImportOwnerId ? "사용자 선택 후 확인" : matchedCard ? "기존 카드" : "새 카드"}
                           </div>
-                        )}
+                        </div>
                       </article>
                     ))}
+                    </div>
                   </div>
                 </div>
               ) : null}
@@ -480,7 +619,7 @@ export function ImportsPage() {
                   className="btn btn-primary"
                   type="button"
                   onClick={handleCommitPreview}
-                  disabled={!selectedImportOwnerId || !scope.people.length}
+                  disabled={!selectedImportOwnerId || !selectedStatementMonth || !scope.people.length}
                 >
                   {getPostImportLabel(previewBundle)}
                 </button>
@@ -495,29 +634,46 @@ export function ImportsPage() {
 
       <AppModal
         open={isImportHistoryOpen}
-        title="가져온 기록"
-        description="가져온 파일과 반영된 거래 수, 검토 수를 확인할 수 있습니다."
+        title="명세서 관리"
+        description="가져온 명세서를 청구월별로 관리하고, 결제내역으로 이동하거나 삭제할 수 있습니다."
         onClose={() => setIsImportHistoryOpen(false)}
       >
         {!recentImports.length ? (
-          <p className="text-secondary mb-0">아직 가져온 기록이 없습니다.</p>
+          <p className="text-secondary mb-0">아직 가져온 명세서가 없습니다.</p>
         ) : (
-          <div className="review-list">
-            {recentImports.map((item, index) => (
-              <article key={item.id} className="review-card review-card--compact" style={getMotionStyle(index + 1)}>
-                <div className="d-flex justify-content-between align-items-start gap-3">
-                  <div>
-                    <h3>{item.fileName}</h3>
-                    <p className="mb-1 text-secondary">{item.importedAt.slice(0, 16).replace("T", " ")}</p>
-                    <p className="mb-0 text-secondary">
-                      거래 {item.rowCount}건 · 검토 {item.reviewCount}건
-                    </p>
+          <div className="import-record-list" role="list">
+            {recentImports.map((item) => (
+              <article key={item.id} className="import-record-row" role="listitem">
+                <div className="import-record-row-copy">
+                  <div className="import-record-row-title">
+                    <strong>{getStatementRecordLabel(item)}</strong>
+                    {!linkedImportRecordIds.has(item.id) ? <span className="badge text-bg-light">기존 기록</span> : null}
                   </div>
-                  {item.reviewCount > 0 ? (
-                    <Link className="btn btn-outline-secondary btn-sm" to="/collections/card" onClick={() => setIsImportHistoryOpen(false)}>
-                      카드조각에서 검토하기
+                  <p className="import-record-row-file">{item.fileName}</p>
+                  <div className="import-record-row-meta">
+                    <span>{item.importedAt.slice(0, 16).replace("T", " ")}</span>
+                    <span>거래 {item.rowCount}건</span>
+                    <span>검토 {item.reviewCount}건</span>
+                  </div>
+                </div>
+                <div className="import-record-row-actions">
+                  {linkedImportRecordIds.has(item.id) ? (
+                    <Link
+                      className="btn btn-outline-secondary btn-sm"
+                      to={`/collections/card?statementId=${item.id}`}
+                      onClick={() => setIsImportHistoryOpen(false)}
+                    >
+                      결제내역 보기
                     </Link>
                   ) : null}
+                  <button
+                    type="button"
+                    className="btn btn-outline-danger btn-sm"
+                    disabled={!linkedImportRecordIds.has(item.id)}
+                    onClick={() => handleDeleteImportRecord(item)}
+                  >
+                    삭제
+                  </button>
                 </div>
               </article>
             ))}

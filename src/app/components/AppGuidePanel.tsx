@@ -257,7 +257,7 @@ export function AppGuidePanel({
           ? "메인 가이드를 다시 시작할 수 있어요"
           : "기본 가이드가 완료되었습니다.";
   const panelCopy = isGuidePromptVisible
-    ? "메뉴와 주요 페이지를 짧게 둘러본 뒤, 카드조각 화면에서 샘플 업로드와 검토, 미분류 수정까지 직접 따라갈 수 있습니다."
+    ? "메뉴와 주요 페이지를 짧게 둘러본 뒤, 결제내역 화면에서 샘플 업로드와 검토, 미분류 수정까지 직접 따라갈 수 있습니다."
     : primarySupportTip
       ? primarySupportTip.description
       : currentStep
@@ -679,7 +679,7 @@ export function AppGuidePanel({
                 <div>
                   <span className="section-kicker">샘플로 따라오기</span>
                   <h4>업로드 파일이 없어도 가이드를 이어갈 수 있어요</h4>
-                  <p>작은 샘플 카드조각을 불러와서 업로드, 검토, 미분류 정리 단계를 직접 따라가 볼 수 있습니다.</p>
+                  <p>작은 샘플 결제내역을 불러와서 업로드, 검토, 미분류 정리 단계를 직접 따라가 볼 수 있습니다.</p>
                 </div>
                 <AppButton variant="outlinePrimary" size="sm" onClick={handleLoadGuideSample}>
                   샘플 불러오기

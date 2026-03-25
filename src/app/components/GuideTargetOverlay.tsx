@@ -10,6 +10,19 @@ type MeasuredTarget = {
   insideTopbar: boolean;
 };
 
+function isSameMeasuredTarget(left: MeasuredTarget | null, right: MeasuredTarget | null) {
+  if (!left && !right) return true;
+  if (!left || !right) return false;
+
+  return (
+    left.top === right.top &&
+    left.left === right.left &&
+    left.width === right.width &&
+    left.height === right.height &&
+    left.insideTopbar === right.insideTopbar
+  );
+}
+
 function measureTarget(selector: string): MeasuredTarget | null {
   if (typeof document === "undefined") return null;
   const target = document.querySelector<HTMLElement>(selector);
@@ -46,7 +59,10 @@ export function GuideTargetOverlay({
 
     const updateTarget = () => {
       frameId = 0;
-      setTargetRect(measureTarget(selector));
+      setTargetRect((current) => {
+        const next = measureTarget(selector);
+        return isSameMeasuredTarget(current, next) ? current : next;
+      });
     };
 
     const scheduleUpdate = () => {
@@ -63,7 +79,9 @@ export function GuideTargetOverlay({
           })
         : null;
 
-    mutationObserver?.observe(document.body, {
+    const observerRoot = document.querySelector(".app-shell") ?? document.body;
+
+    mutationObserver?.observe(observerRoot, {
       childList: true,
       subtree: true,
     });

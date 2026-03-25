@@ -533,6 +533,10 @@ function sameAmount(a: number, b: number): boolean {
   return Math.abs(a - b) < 1;
 }
 
+function createStableDateIso(year: number, month: number, day: number) {
+  return new Date(Date.UTC(year, month - 1, day, 12, 0, 0)).toISOString();
+}
+
 function parseStatementDate(value: unknown, fallbackYear = new Date().getFullYear()): string | null {
   const normalized = normalizeText(value);
   if (!normalized || normalized === "-") return null;
@@ -540,13 +544,13 @@ function parseStatementDate(value: unknown, fallbackYear = new Date().getFullYea
   const fullMatch = normalized.match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
   if (fullMatch) {
     const [, year, month, day] = fullMatch;
-    return new Date(Number(year), Number(month) - 1, Number(day)).toISOString();
+    return createStableDateIso(Number(year), Number(month), Number(day));
   }
 
   const shortMatch = normalized.match(/(\d{1,2})\.(\d{1,2})/);
   if (shortMatch) {
     const [, month, day] = shortMatch;
-    return new Date(fallbackYear, Number(month) - 1, Number(day)).toISOString();
+    return createStableDateIso(fallbackYear, Number(month), Number(day));
   }
 
   return null;

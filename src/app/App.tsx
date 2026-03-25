@@ -3,7 +3,6 @@ import { HashRouter, Navigate, NavLink, Route, Routes, useLocation } from "react
 import { GUIDE_V1_RESET_EVENT, readGuideRuntime } from "../domain/guidance/guideRuntime";
 import { Fragment } from "react";
 import { Link } from "react-router-dom";
-import { getWorkspaceHeaderSummary } from "../domain/workspace/summary";
 import { MotionProvider } from "./motion/MotionProvider";
 import { AppModal } from "./components/AppModal";
 import { AppGuidePanel } from "./components/AppGuidePanel";
@@ -11,7 +10,7 @@ import { EmptyStateCallout } from "./components/EmptyStateCallout";
 import { EmptyWorkspaceScreen, ONBOARDING_COMPLETE_KEY, WORKSPACE_SETUP_KEY } from "./pages/EmptyWorkspaceScreen";
 import { LoadingScreen } from "./pages/LoadingScreen";
 import { AppStateProvider, useAppState } from "./state/AppStateProvider";
-import { getActiveWorkspace, getWorkspaceScope } from "./state/selectors";
+import { getActiveWorkspace } from "./state/selectors";
 import { ToastProvider, useToast } from "./toast/ToastProvider";
 import { useThemeMode } from "./useThemeMode";
 
@@ -51,8 +50,8 @@ const baseNavItems: NavItem[] = [
     to: "/collections",
     label: "조각모음",
     subItems: [
-      { key: "card", label: "카드조각", to: "/collections/card" },
-      { key: "transfer", label: "이체조각", to: "/collections/transfer" },
+      { key: "card", label: "결제내역", to: "/collections/card" },
+      { key: "transfer", label: "이체내역", to: "/collections/transfer" },
     ],
   },
   {
@@ -544,13 +543,6 @@ function AppFrame() {
     closeCreateWorkspaceModal();
   };
 
-  const scope = getWorkspaceScope(state, activeWorkspace.id);
-  const headerSummary = getWorkspaceHeaderSummary({
-    imports: scope.imports,
-    reviews: scope.reviews,
-    transactions: scope.transactions,
-    peopleCount: scope.people.length,
-  });
   return (
     <div className={`app-shell${isOnboardingEntering ? " is-onboarding-entering" : ""}`}>
       <header className="app-topbar condensed">
@@ -563,12 +555,9 @@ function AppFrame() {
             <p className="sidebar-copy">이음은 빠르게 기록하고 자연스럽게 정리하는 생활 가계부 서비스입니다.</p>
           </div>
           <div className="app-topbar-compact-header">
-            <Link to="/collections/card" className="app-topbar-logo-link" aria-label="이음 카드조각으로 이동" onClick={registerUnlockTap}>
+            <Link to="/collections/card" className="app-topbar-logo-link" aria-label="이음 결제내역으로 이동" onClick={registerUnlockTap}>
               <img className="app-topbar-logo-image" src={`${import.meta.env.BASE_URL}logo.png`} alt="이음" />
             </Link>
-            <span className="app-topbar-compact-meta">
-              카드조각 {headerSummary.transactionsCount}건 · 검토 {headerSummary.openReviewCount}건 · 사용자 {headerSummary.peopleCount}명
-            </span>
           </div>
           <div className="app-topbar-actions">
             <AppTopNav isDeveloperModeUnlocked={isDeveloperModeUnlocked} />

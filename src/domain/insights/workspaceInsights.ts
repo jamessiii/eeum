@@ -1,4 +1,3 @@
-import { monthKey } from "../../shared/utils/date";
 import type { AppState, FinancialProfile, Transaction } from "../../shared/types/models";
 import { getRecurringMerchantSuggestionCount } from "../classification/suggestions";
 import { isDiagnosisReady } from "./diagnosisReady";
@@ -9,9 +8,17 @@ import { getDominantSourceBreakdown, getSourceBreakdown } from "../transactions/
 import { getOpenReviewCount } from "../workspace/health";
 
 export type InsightTone = "stable" | "caution" | "warning";
+export type WorkspaceInsightBasis = "month" | "statement";
+
+export interface WorkspaceInsightsInput {
+  basis: WorkspaceInsightBasis;
+  label: string;
+  transactions: Transaction[];
+}
 
 export interface WorkspaceInsights {
-  month: string;
+  basis: WorkspaceInsightBasis;
+  label: string;
   transactionCount: number;
   income: number;
   expense: number;
@@ -84,13 +91,22 @@ function getRecordedMonthlyIncome(transactions: Transaction[]) {
   }, 0);
 }
 
-export function getWorkspaceInsights(state: AppState, workspaceId: string, baseMonth = monthKey(new Date())): WorkspaceInsights {
-  const transactions = state.transactions.filter(
-    (item) => item.workspaceId === workspaceId && monthKey(item.occurredAt) === baseMonth,
-  );
+export function getWorkspaceInsights(
+  state: AppState,
+  workspaceId: string,
+  { basis, label, transactions }: WorkspaceInsightsInput,
+): WorkspaceInsights {
   const activeTransactions = getActiveTransactions(transactions);
   const expenseStats = getExpenseImpactStats(transactions);
-  const reviewCount = getOpenReviewCount(state.reviews.filter((item) => item.workspaceId === workspaceId));
+  const transactionIds = new Set(transactions.map((transaction) => transaction.id));
+  const reviewCount = getOpenReviewCount(
+    state.reviews.filter((item) => {
+      if (item.workspaceId !== workspaceId) return false;
+      if (!transactionIds.size) return false;
+      if (transactionIds.has(item.primaryTransactionId)) return true;
+      return item.relatedTransactionIds.some((transactionId) => transactionIds.has(transactionId));
+    }),
+  );
   const financialProfile = state.financialProfiles.find((item) => item.workspaceId === workspaceId) ?? null;
   const monthlyIncomeBasis = getRecordedMonthlyIncome(transactions);
   const hasIncomeBasis = monthlyIncomeBasis > 0;
@@ -123,7 +139,7 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
     const biggest = topCategories[0];
     headlineCards.push({
       title: "가장 큰 지출 원인",
-      description: `${biggest.categoryName}이(가) 이번 달 소비의 ${Math.round((biggest.amount / expense) * 100)}%를 차지합니다.`,
+      description: `${biggest.categoryName}이(가) 선택한 기준 소비의 ${Math.round((biggest.amount / expense) * 100)}%를 차지합니다.`,
     });
   }
   if (dominantSource) {
@@ -140,7 +156,7 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
   }
   if (!headlineCards.length) {
     headlineCards.push({
-      title: "이번 달 요약",
+      title: "선택 기준 요약",
       description: "검토와 분류가 안정적으로 정리되어 현재 수치를 비교적 믿고 볼 수 있습니다.",
     });
   }
@@ -155,19 +171,19 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
   if (reviewCount > 0) nextSteps.push(`검토함 ${reviewCount}건을 먼저 정리해보세요.`);
   if (expenseStats.uncategorizedCount > 0) nextSteps.push(`미분류 거래 ${expenseStats.uncategorizedCount}건을 정리하면 통계가 더 정확해집니다.`);
   if (expenseStats.internalTransferCount > 0) nextSteps.push(`내부이체 ${expenseStats.internalTransferCount}건을 점검하면 소비 통계가 더 깔끔해집니다.`);
-  if (!hasIncomeBasis) nextSteps.push("이체조각에 수입 흐름이 들어오면 월수입 기준과 저축 해석이 함께 계산됩니다.");
+  if (!hasIncomeBasis) nextSteps.push("이체내역에 수입 흐름이 들어오면 월수입 기준과 저축 해석이 함께 계산됩니다.");
   if (recurringSuggestionCount > 0) nextSteps.push(`반복 지출 제안 ${recurringSuggestionCount}개를 확인하면 분류 속도가 빨라집니다.`);
   if (!nextSteps.length) nextSteps.push("데이터가 안정적으로 쌓이고 있습니다. 상위 지출 카테고리부터 점검해보세요.");
 
   let coaching = "현재 데이터 흐름이 안정적으로 쌓이고 있습니다.";
   if (!hasIncomeBasis) {
-    coaching = "이체조각에 수입 흐름이 아직 없어 월수입 기준과 저축 해석이 0원 기준으로 표시됩니다.";
+    coaching = "이체내역에 수입 흐름이 아직 없어 월수입 기준과 저축 해석이 0원 기준으로 표시됩니다.";
   } else if (!financialProfile) {
     coaching = "목표 저축률과 경고 기준을 설정하면 대시보드 해석이 더 정확해집니다.";
   } else if (reviewCount > 0 || expenseStats.uncategorizedCount > 0) {
-    coaching = "검토와 분류가 조금 더 정리되면 이번 달 숫자를 훨씬 안정적으로 읽을 수 있습니다.";
+    coaching = "검토와 분류가 조금 더 정리되면 선택한 기준 숫자를 훨씬 안정적으로 읽을 수 있습니다.";
   } else if (spendRate > financialProfile.warningSpendRate) {
-    coaching = "이번 달 지출률이 높습니다. 상위 지출 카테고리부터 먼저 점검해보세요.";
+    coaching = "선택한 기준 지출률이 높습니다. 상위 지출 카테고리부터 먼저 점검해보세요.";
   } else if (savingsRate < financialProfile.targetSavingsRate) {
     coaching = "저축률이 목표보다 낮습니다. 변동지출 쪽에서 줄일 수 있는 항목을 찾아보세요.";
   } else if (fixedExpenseRate > financialProfile.warningFixedCostRate) {
@@ -175,7 +191,8 @@ export function getWorkspaceInsights(state: AppState, workspaceId: string, baseM
   }
 
   return {
-    month: baseMonth,
+    basis,
+    label,
     transactionCount: getActiveTransactionCount(transactions),
     income: monthlyIncomeBasis,
     expense,

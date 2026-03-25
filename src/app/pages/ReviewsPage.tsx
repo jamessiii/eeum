@@ -154,7 +154,7 @@ export function ReviewsPage() {
                   필터 초기화
                 </button>
                 <Link className="btn btn-outline-primary btn-sm" to="/collections/card">
-                  카드조각 보기
+                  결제내역 보기
                 </Link>
               </>
             ) : undefined

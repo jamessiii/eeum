@@ -7,7 +7,7 @@ import {
 } from "../../domain/reviews/transactionWorkflow";
 import { getFilteredTransactions, type TransactionFilters } from "../../domain/transactions/filters";
 import { getSourceTypeLabel } from "../../domain/transactions/sourceTypes";
-import type { ReviewItem, Transaction } from "../../shared/types/models";
+import type { ImportRecord, ReviewItem, Transaction } from "../../shared/types/models";
 import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
@@ -36,13 +36,18 @@ type ReviewWorkflowState = {
   queuedReviewIds: string[];
   preservedFilters: {
     filters: TransactionFilters;
-    selectedMonth: string;
+    selectedStatementId: string;
   };
 };
 
 function formatMonthLabel(value: string) {
   const [year, month] = value.split("-");
   return `${year}년 ${Number(month)}월`;
+}
+
+function getStatementLabel(record: Pick<ImportRecord, "statementMonth" | "fileName">) {
+  if (record.statementMonth) return `${formatMonthLabel(record.statementMonth)} 청구`;
+  return `${record.fileName} 기록`;
 }
 
 function getNextQueuedReviewId(queueIds: string[], currentId: string) {
@@ -77,7 +82,7 @@ export function TransactionsPage() {
   const { applyReviewSuggestion, assignCategory, clearCategory, dismissReview, state, updateTransactionDetails } = useAppState();
   const [searchParams, setSearchParams] = useSearchParams();
   const workspaceId = state.activeWorkspaceId!;
-  const scope = getWorkspaceScope(state, workspaceId);
+  const scope = useMemo(() => getWorkspaceScope(state, workspaceId), [state, workspaceId]);
   const categoryMap = new Map(scope.categories.map((item) => [item.id, item]));
   const leafCategories = getLeafCategories(scope.categories);
   const categories = new Map(leafCategories.map((item) => [item.id, getCategoryLabel(item, categoryMap)]));
@@ -86,32 +91,68 @@ export function TransactionsPage() {
   const accountMap = new Map(scope.accounts.map((account) => [account.id, account.alias || account.name]));
   const cardMap = new Map(scope.cards.map((card) => [card.id, card.name]));
   const transactionMap = useMemo(() => new Map(scope.transactions.map((transaction) => [transaction.id, transaction])), [scope.transactions]);
-  const monthOptions = useMemo(
-    () =>
-      Array.from(new Set(scope.transactions.map((transaction) => transaction.occurredAt.slice(0, 7)).filter(Boolean))).sort((a, b) =>
-        b.localeCompare(a),
-      ),
+  const recentImportRecords = useMemo(() => [...scope.imports].sort((a, b) => b.importedAt.localeCompare(a.importedAt)), [scope.imports]);
+  const linkedImportRecordIds = useMemo(
+    () => new Set(scope.transactions.map((transaction) => transaction.importRecordId).filter((id): id is string => Boolean(id))),
     [scope.transactions],
   );
+  const statementOptions = useMemo(() => {
+    const options = recentImportRecords
+      .filter((record) => linkedImportRecordIds.has(record.id))
+      .map((record) => ({
+        id: record.id,
+        label: getStatementLabel(record),
+      }));
+
+    if (scope.transactions.some((transaction) => !transaction.importRecordId)) {
+      options.push({
+        id: "legacy",
+        label: "기존 데이터",
+      });
+    }
+
+    return options;
+  }, [linkedImportRecordIds, recentImportRecords, scope.transactions]);
 
   const [filters, setFilters] = useState<TransactionFilters>(DEFAULT_CARD_TRANSACTION_FILTERS);
-  const [selectedMonth, setSelectedMonth] = useState("all");
+  const [selectedStatementId, setSelectedStatementId] = useState("");
   const [reviewWorkflow, setReviewWorkflow] = useState<ReviewWorkflowState | null>(null);
-
-  const baseTransactions = useMemo(() => getFilteredTransactions(scope.transactions, filters), [filters, scope.transactions]);
-  const filteredTransactions = useMemo(
-    () => (selectedMonth === "all" ? baseTransactions : baseTransactions.filter((transaction) => transaction.occurredAt.slice(0, 7) === selectedMonth)),
-    [baseTransactions, selectedMonth],
+  const effectiveSelectedStatementId = selectedStatementId || statementOptions[0]?.id || "all";
+  const statementTransactions = useMemo(() => {
+    if (effectiveSelectedStatementId === "legacy") {
+      return scope.transactions.filter((transaction) => !transaction.importRecordId);
+    }
+    if (effectiveSelectedStatementId === "all") return scope.transactions;
+    return scope.transactions.filter((transaction) => transaction.importRecordId === effectiveSelectedStatementId);
+  }, [effectiveSelectedStatementId, scope.transactions]);
+  const statementTransactionIdSet = useMemo(
+    () => new Set(statementTransactions.map((transaction) => transaction.id)),
+    [statementTransactions],
   );
+  const selectedStatementLabel = useMemo(
+    () => statementOptions.find((option) => option.id === effectiveSelectedStatementId)?.label ?? "전체 결제내역",
+    [effectiveSelectedStatementId, statementOptions],
+  );
+
+  const baseTransactions = useMemo(() => getFilteredTransactions(statementTransactions, filters), [filters, statementTransactions]);
+  const filteredTransactions = baseTransactions;
   const uncategorizedGuideTransactionId =
     !reviewWorkflow && filters.nature === "uncategorized" ? filteredTransactions.find((transaction) => !transaction.categoryId)?.id ?? null : null;
   const uncategorizedTransactionCount = useMemo(
-    () => scope.transactions.filter((transaction) => !transaction.categoryId).length,
-    [scope.transactions],
+    () => statementTransactions.filter((transaction) => !transaction.categoryId).length,
+    [statementTransactions],
   );
   const openTransactionReviews = useMemo(
-    () => getOpenTransactionWorkflowReviews(scope.reviews, transactionMap),
-    [scope.reviews, transactionMap],
+    () =>
+      getOpenTransactionWorkflowReviews(
+        scope.reviews.filter(
+          (review) =>
+            statementTransactionIdSet.has(review.primaryTransactionId) ||
+            review.relatedTransactionIds.some((transactionId) => statementTransactionIdSet.has(transactionId)),
+        ),
+        transactionMap,
+      ),
+    [scope.reviews, statementTransactionIdSet, transactionMap],
   );
   const transactionWorkflowReviews = useMemo(() => {
     if (!reviewWorkflow) return [];
@@ -163,28 +204,28 @@ export function TransactionsPage() {
     const cleanup = searchParams.get("cleanup");
     const nature = searchParams.get("nature");
     const ownerPersonId = searchParams.get("ownerPersonId");
-    const month = searchParams.get("month");
+    const statementId = searchParams.get("statementId");
     const matchedNature = cleanup === "uncategorized" ? "uncategorized" : nature === "uncategorized" ? "uncategorized" : null;
     const matchedOwnerPersonId =
       ownerPersonId === "all" ? "all" : ownerPersonId && people.some((person) => person.id === ownerPersonId) ? ownerPersonId : null;
-    const matchedMonth = month === "all" ? "all" : month && monthOptions.includes(month) ? month : null;
+    const matchedStatementId = statementId && statementOptions.some((option) => option.id === statementId) ? statementId : null;
 
-    if (matchedNature || ownerPersonId === "all" || matchedOwnerPersonId || matchedMonth) {
+    if (matchedNature || ownerPersonId === "all" || matchedOwnerPersonId || matchedStatementId) {
       setFilters((current) => ({
         ...current,
         nature: matchedNature ?? current.nature,
         ownerPersonId: matchedOwnerPersonId ?? current.ownerPersonId,
       }));
-      if (matchedMonth) setSelectedMonth(matchedMonth);
+      if (matchedStatementId) setSelectedStatementId(matchedStatementId);
       setSearchParams({}, { replace: true });
     }
-  }, [monthOptions, people, searchParams, setSearchParams]);
+  }, [people, searchParams, setSearchParams, statementOptions]);
 
   useEffect(() => {
-    if (selectedMonth !== "all" && !monthOptions.includes(selectedMonth)) {
-      setSelectedMonth("all");
+    if (selectedStatementId && !statementOptions.some((option) => option.id === selectedStatementId)) {
+      setSelectedStatementId(statementOptions[0]?.id ?? "");
     }
-  }, [monthOptions, selectedMonth]);
+  }, [selectedStatementId, statementOptions]);
 
   useEffect(() => {
     if (!reviewWorkflow) return;
@@ -192,7 +233,7 @@ export function TransactionsPage() {
     const availableReviewIds = transactionWorkflowReviews.map((review) => review.id);
     if (!availableReviewIds.length) {
       setFilters(reviewWorkflow.preservedFilters.filters);
-      setSelectedMonth(reviewWorkflow.preservedFilters.selectedMonth);
+      setSelectedStatementId(reviewWorkflow.preservedFilters.selectedStatementId);
       setReviewWorkflow(null);
       return;
     }
@@ -261,7 +302,6 @@ export function TransactionsPage() {
       nature: "all",
       searchQuery: "",
     }));
-    setSelectedMonth("all");
   };
 
   const startAutoReviewWorkflow = () => {
@@ -270,7 +310,7 @@ export function TransactionsPage() {
 
     const preservedFilters = {
       filters,
-      selectedMonth,
+      selectedStatementId: effectiveSelectedStatementId,
     };
 
     setReviewWorkflow({
@@ -281,14 +321,13 @@ export function TransactionsPage() {
 
     if (!reviewWorkflow) {
       setFilters(DEFAULT_TRANSACTION_FILTERS);
-      setSelectedMonth("all");
     }
   };
 
   const exitReviewWorkflow = () => {
     if (!reviewWorkflow) return;
     setFilters(reviewWorkflow.preservedFilters.filters);
-    setSelectedMonth(reviewWorkflow.preservedFilters.selectedMonth);
+    setSelectedStatementId(reviewWorkflow.preservedFilters.selectedStatementId);
     setReviewWorkflow(null);
   };
 
@@ -365,9 +404,9 @@ export function TransactionsPage() {
       <section className="card shadow-sm" style={getMotionStyle(0)} data-guide-target="transactions-page-overview">
         <div className="section-head transaction-grid-head">
           <div>
-            <h2 className="section-title">카드조각</h2>
+            <h2 className="section-title">결제내역</h2>
             <p className="transaction-grid-meta">
-              전체 {scope.transactions.length}건 · 미분류 {uncategorizedTransactionCount}건
+              {selectedStatementLabel} · 거래 {statementTransactions.length}건 · 미분류 {uncategorizedTransactionCount}건
               {reviewWorkflow ? ` · 자동검토 ${transactionWorkflowReviews.length}건 진행 중` : ""}
             </p>
           </div>
@@ -413,19 +452,19 @@ export function TransactionsPage() {
                 </option>
               ))}
             </select>
-            <select
-              className="form-select"
-              value={selectedMonth}
-              disabled={Boolean(reviewWorkflow)}
-              onChange={(event) => setSelectedMonth(event.target.value)}
-            >
-              <option value="all">전체 월</option>
-              {monthOptions.map((month) => (
-                <option key={month} value={month}>
-                  {formatMonthLabel(month)}
-                </option>
-              ))}
-            </select>
+            {!reviewWorkflow && statementOptions.length ? (
+              <select
+                className="form-select transaction-month-select"
+                value={effectiveSelectedStatementId === "all" ? statementOptions[0]?.id ?? "" : effectiveSelectedStatementId}
+                onChange={(event) => setSelectedStatementId(event.target.value)}
+              >
+                {statementOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            ) : null}
             <input
               className="form-control toolbar-search"
               value={filters.searchQuery}
@@ -439,8 +478,8 @@ export function TransactionsPage() {
         {!scope.transactions.length ? (
           <EmptyStateCallout
             kicker="거래 없음"
-            title="아직 입력된 카드조각이 없습니다"
-            description="카드조각 상단에서 카드 명세서를 가져오면 검토와 통계가 시작됩니다."
+            title="아직 입력된 결제내역이 없습니다"
+            description="결제내역 상단에서 카드 명세서를 가져오면 검토와 통계가 시작됩니다."
             actions={
               <Link to="/connections/assets" className="btn btn-outline-secondary btn-sm">
                 사용자 관리 보기
@@ -450,11 +489,11 @@ export function TransactionsPage() {
         ) : !transactions.length ? (
           <EmptyStateCallout
             kicker="결과 없음"
-            title={reviewWorkflow ? "자동검토 대상 거래가 지금은 없습니다" : "조건에 맞는 카드조각이 없습니다"}
+            title={reviewWorkflow ? "자동검토 대상 거래가 지금은 없습니다" : "조건에 맞는 결제내역이 없습니다"}
             description={
               reviewWorkflow
                 ? "현재 자동검토 큐에 남아 있는 거래가 없습니다. 검토 모드를 종료하거나 일반 필터로 돌아가 보세요."
-                : "미분류 보기, 사용자, 월, 검색 조건을 조정해보세요."
+                : "미분류 보기, 사용자, 명세서, 검색 조건을 조정해보세요."
             }
             actions={
               reviewWorkflow ? (

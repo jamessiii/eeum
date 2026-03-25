@@ -108,6 +108,20 @@ a {
     color 220ms ease;
 }
 
+html.app-modal-open,
+body.app-modal-open {
+  overflow: hidden;
+}
+
+html.app-modal-open .hero-panel,
+html.app-modal-open .card,
+html.app-modal-open .quick-add-card,
+html.app-modal-open .review-card,
+html.app-modal-open .resource-card,
+html.app-modal-open .stat-card {
+  backdrop-filter: none;
+}
+
 .card:hover,
 .quick-add-card:hover,
 .review-card:hover,
@@ -1950,7 +1964,7 @@ label,
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   margin-bottom: 0.5rem;
-  padding: 0.65rem 0.9rem 0.65rem 1.2rem;
+  padding: 0.55rem 0.9rem 0.55rem 1.2rem;
   border-radius: 1rem;
 }
 
@@ -1959,7 +1973,7 @@ label,
 }
 
 .app-topbar.condensed .app-topbar-compact-header {
-  gap: 0.18rem;
+  gap: 0;
 }
 
 .app-topbar.condensed .app-topbar-logo-image {
@@ -1969,10 +1983,6 @@ label,
 .app-topbar.condensed .app-topbar-compact-header strong {
   font-size: 1rem;
   letter-spacing: -0.04em;
-}
-
-.app-topbar.condensed .app-topbar-compact-meta {
-  font-size: 0.8rem;
 }
 
 .app-topbar.condensed .sidebar-kicker,
@@ -2100,7 +2110,7 @@ label,
 .app-main {
   display: grid;
   justify-items: center;
-  padding: 9.8rem 2.3rem 2.6rem;
+  padding: 8.55rem 2.3rem 2.6rem;
 }
 
 .app-header-sentinel {
@@ -2728,6 +2738,13 @@ label,
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.dashboard-section-basis-select {
+  min-width: 108px;
+  width: auto;
 }
 
 .dashboard-section-month-select {
@@ -3310,6 +3327,10 @@ label,
 .transaction-grid-toolbar .form-select {
   width: auto;
   min-width: 9rem;
+}
+
+.transaction-month-select {
+  min-width: 8.5rem !important;
 }
 
 .transaction-auto-review-button {
@@ -3925,6 +3946,110 @@ label,
   grid-template-columns: 1fr;
 }
 
+.import-preview-stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.import-preview-stats .stat-card {
+  min-height: 6.2rem;
+  padding: 0.95rem 1rem;
+}
+
+.import-preview-stats .stat-card strong {
+  margin-top: 0.3rem;
+  font-size: 1.28rem;
+}
+
+.import-preview-control-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+  align-items: start;
+}
+
+.import-preview-control-card {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.95rem 1rem;
+  border: 1px solid rgba(23, 32, 51, 0.08);
+  border-radius: 1rem;
+  background: var(--app-panel-strong);
+}
+
+.import-preview-control-card .form-label {
+  margin-bottom: 0.45rem;
+}
+
+.import-preview-control-card .text-secondary {
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.import-preview-card-section {
+  gap: 0.8rem;
+}
+
+.import-preview-card-grid {
+  align-items: stretch;
+}
+
+.import-preview-card {
+  width: 196px;
+  min-height: 136px;
+}
+
+.import-preview-card-copy {
+  padding-right: 0.35rem;
+  padding-bottom: 0;
+}
+
+.import-preview-card-copy > span:last-child {
+  line-height: 1.45;
+}
+
+.import-preview-card-input-block {
+  display: grid;
+  gap: 0.3rem;
+  margin-top: 0;
+}
+
+.import-preview-card-input-block .form-control {
+  min-height: 2.2rem;
+  padding: 0.45rem 0.7rem;
+  font-size: 0.82rem;
+}
+
+.import-preview-card-input-block > span {
+  font-size: 0.74rem;
+  line-height: 1.4;
+}
+
+.import-preview-card-footer {
+  display: flex;
+  align-items: flex-end;
+  margin-top: 0.55rem;
+}
+
+.import-preview-card-pill {
+  position: static;
+  right: auto;
+  bottom: auto;
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+.import-preview-card-pill.is-success {
+  border-color: rgba(16, 185, 129, 0.24);
+  background: rgba(16, 185, 129, 0.12);
+  color: #188062;
+}
+
+.import-preview-card-pill.is-warning {
+  border-color: rgba(245, 158, 11, 0.28);
+  background: rgba(245, 158, 11, 0.14);
+  color: #a16207;
+}
+
 .import-linked-account-modal {
   display: grid;
   gap: 1rem;
@@ -3949,6 +4074,64 @@ label,
 .import-linked-account-summary span {
   color: var(--app-muted);
   font-size: 0.92rem;
+}
+
+.import-record-list {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.import-record-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.95rem 1rem;
+  border: 1px solid rgba(23, 32, 51, 0.08);
+  border-radius: 1rem;
+  background: rgba(248, 250, 252, 0.82);
+}
+
+.import-record-row-copy {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.import-record-row-title {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.import-record-row-title strong {
+  font-size: 0.98rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.import-record-row-file {
+  margin: 0;
+  color: var(--app-text);
+  font-size: 0.92rem;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.import-record-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.9rem;
+  color: var(--app-muted);
+  font-size: 0.86rem;
+}
+
+.import-record-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.55rem;
 }
 
 .import-linked-account-list {
@@ -4365,6 +4548,7 @@ label,
   .review-list {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+
 }
 
 .guide-progress {
@@ -5630,8 +5814,7 @@ textarea:focus {
   display: grid;
   place-items: center;
   padding: 1.25rem;
-  background: rgba(2, 6, 23, 0.48);
-  backdrop-filter: blur(10px);
+  background: rgba(2, 6, 23, 0.56);
   animation: modal-fade 180ms ease;
 }
 
@@ -5644,7 +5827,7 @@ textarea:focus {
   border-radius: 1.5rem;
   background: var(--app-panel-strong);
   box-shadow: var(--app-shadow-strong);
-  animation: modal-pop 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: modal-fade 140ms ease;
   transition:
     background 260ms ease,
     border-color 220ms ease,
@@ -7134,7 +7317,7 @@ textarea:focus {
   }
 
   .app-main {
-    padding: 9.85rem 1rem 5.8rem;
+    padding: 8.65rem 1rem 5.8rem;
   }
 
   .hero-panel {
@@ -7154,6 +7337,10 @@ textarea:focus {
   .stats-grid,
   .insight-status-grid {
     gap: 0.75rem;
+  }
+
+  .import-preview-control-grid {
+    grid-template-columns: 1fr;
   }
 
   .stat-card,
@@ -7254,6 +7441,14 @@ textarea:focus {
   .transaction-review-inline-actions .btn {
     width: 100%;
     justify-content: center;
+  }
+
+  .import-record-row {
+    grid-template-columns: 1fr;
+  }
+
+  .import-record-row-actions {
+    justify-content: flex-start;
   }
 
   .transaction-review-inline-panel {
@@ -8802,6 +8997,7 @@ textarea:focus {
     justify-content: flex-start;
   }
 
+  .dashboard-section-basis-select,
   .dashboard-section-month-select {
     width: 100%;
   }

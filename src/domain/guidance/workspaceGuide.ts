@@ -68,7 +68,7 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
       activeLabel: "확인했습니다",
       tips: [
         "메뉴 소개를 마치면 대시보드부터 페이지별 역할을 순서대로 안내합니다.",
-        "소개가 끝나면 카드조각 화면에서 샘플 업로드와 검토 정리까지 바로 이어집니다.",
+        "소개가 끝나면 결제내역 화면에서 샘플 업로드와 검토 정리까지 바로 이어집니다.",
       ],
       completed: false,
       requiresTargetVisit: true,
@@ -119,7 +119,7 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
       activeLabel: "확인했습니다",
       tips: [
         "카테고리는 보드 구조로 정리되어 있어서 그룹 이동과 숨기기 흐름을 같이 이해하면 좋습니다.",
-        "실습 단계에서는 여기서 만든 구조가 카드조각 분류에 그대로 연결됩니다.",
+        "실습 단계에서는 여기서 만든 구조가 결제내역 분류에 그대로 연결됩니다.",
       ],
       completed: false,
       requiresTargetVisit: true,
@@ -144,15 +144,15 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
     },
     {
       id: "account-transfers-overview",
-      title: "이체조각 소개",
+      title: "이체내역 소개",
       description: "수입과 계좌 흐름이 앞으로 이 화면을 중심으로 정리될 것이라는 점만 먼저 짚고 넘어갑니다.",
       targetPath: "/collections/transfer",
       targetSelector: '[data-guide-target="account-transfers-entry"]',
       fallbackSelector: '[data-guide-target="nav-collections"]',
-      ctaLabel: "이체조각 보기",
+      ctaLabel: "이체내역 보기",
       activeLabel: "확인했습니다",
       tips: [
-        "지금 버전에서는 소개 중심으로만 보고, 실제 실습은 카드조각 화면에서 진행합니다.",
+        "지금 버전에서는 소개 중심으로만 보고, 실제 실습은 결제내역 화면에서 진행합니다.",
         "월수입과 계좌 흐름 설계는 이후 확장 단계에서 이 화면에 더 붙을 예정입니다.",
       ],
       completed: false,
@@ -161,12 +161,12 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
     },
     {
       id: "transactions-overview",
-      title: "카드조각 소개",
+      title: "결제내역 소개",
       description: "업로드, 검토, 미분류 정리가 한 화면에서 이어지는 현재 핵심 작업 공간을 먼저 보여줍니다.",
       targetPath: "/collections/card",
       targetSelector: '[data-guide-target="transactions-page-overview"]',
       fallbackSelector: '[data-guide-target="nav-collections"]',
-      ctaLabel: "카드조각 보기",
+      ctaLabel: "결제내역 보기",
       activeLabel: "확인했습니다",
       tips: [
         "이 화면이 앞으로 거래 정리의 중심입니다.",
@@ -179,7 +179,7 @@ export function getWorkspaceGuide(state: AppState, workspaceId: string): Workspa
     {
       id: "transactions-upload",
       title: "샘플 업로드 따라하기",
-      description: "이제 직접 해봅니다. 샘플 카드조각을 불러오면 검토와 미분류 정리가 같은 흐름으로 이어집니다.",
+      description: "이제 직접 해봅니다. 샘플 결제내역을 불러오면 검토와 미분류 정리가 같은 흐름으로 이어집니다.",
       targetPath: "/collections/card",
       targetSelector: '[data-guide-target="transactions-upload-action"]',
       fallbackSelector: '[data-guide-target="transactions-upload"]',

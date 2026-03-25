@@ -41,6 +41,7 @@ export interface Account {
   usageType: "daily" | "salary" | "shared" | "card_payment" | "savings" | "investment" | "loan" | "other";
   isShared: boolean;
   memo: string;
+  createdImportRecordId?: ID | null;
   sortOrder?: number;
   isHidden?: boolean;
 }
@@ -55,6 +56,7 @@ export interface Card {
   linkedAccountId: ID | null;
   cardType: "credit" | "check" | "debit" | "prepaid" | "other";
   memo: string;
+  createdImportRecordId?: ID | null;
   sortOrder?: number;
   isHidden?: boolean;
 }
@@ -85,6 +87,7 @@ export interface Tag {
 export interface Transaction {
   id: ID;
   workspaceId: ID;
+  importRecordId?: ID | null;
   occurredAt: string;
   settledAt: string | null;
   transactionType: "expense" | "income" | "transfer" | "adjustment";
@@ -111,6 +114,7 @@ export interface Transaction {
 export interface ReviewItem {
   id: ID;
   workspaceId: ID;
+  importRecordId?: ID | null;
   reviewType:
     | "duplicate_candidate"
     | "refund_candidate"
@@ -130,6 +134,7 @@ export interface ImportRecord {
   id: ID;
   workspaceId: ID;
   fileName: string;
+  statementMonth?: string | null;
   importedAt: string;
   parserId: string;
   rowCount: number;

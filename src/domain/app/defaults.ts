@@ -12,7 +12,7 @@ function mergeById<T extends { id: string }>(current: T[], incoming: T[]) {
 
 export function createEmptyState(): AppState {
   return {
-    schemaVersion: 5,
+    schemaVersion: 6,
     activeWorkspaceId: null,
     workspaces: [],
     financialProfiles: [],
