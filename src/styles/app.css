@@ -2674,6 +2674,52 @@ label,
   transition: transform 220ms ease, color 220ms ease;
 }
 
+.stat-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.dashboard-stat-badge {
+  flex: 0 0 auto;
+}
+
+.stat-delta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.28rem;
+  margin-top: 0.3rem;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.35;
+  width: fit-content;
+  text-align: left;
+}
+
+.stat-delta::after {
+  font-size: 0.76rem;
+  line-height: 1;
+}
+
+.stat-delta.is-up::after {
+  content: "▲";
+}
+
+.stat-delta.is-down::after {
+  content: "▼";
+}
+
+.stat-delta.is-positive {
+  color: var(--app-primary);
+}
+
+.stat-delta.is-negative {
+  color: #dc2626;
+}
+
 .stat-card:hover strong,
 .insight-status-card:hover strong {
   transform: translateY(-1px);
@@ -3023,6 +3069,10 @@ label,
   font-size: 0.76rem;
   font-weight: 700;
   white-space: nowrap;
+}
+
+.dashboard-category-card.is-clickable {
+  cursor: pointer;
 }
 
 .dashboard-card-usage-grid {
@@ -3733,7 +3783,9 @@ label,
 .transaction-grid-table th:nth-child(5),
 .transaction-grid-table td:nth-child(5),
 .transaction-grid-table th:nth-child(6),
-.transaction-grid-table td:nth-child(6) {
+.transaction-grid-table td:nth-child(6),
+.transaction-grid-table th:nth-child(7),
+.transaction-grid-table td:nth-child(7) {
   white-space: nowrap;
 }
 
@@ -4823,6 +4875,19 @@ label,
 .compact-summary-panel {
   align-items: center;
   gap: 0.9rem;
+}
+
+.dashboard-summary-action-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dashboard-summary-action {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 0 auto;
 }
 
 .compact-action-row {
@@ -6012,6 +6077,28 @@ textarea:focus {
     box-shadow 220ms ease;
 }
 
+.app-modal-dialog.dashboard-category-usage-modal {
+  width: min(78rem, calc(100vw - 2rem));
+  max-height: min(44rem, calc(100vh - 2.5rem));
+  overflow: hidden;
+}
+
+.app-modal-dialog.dashboard-category-usage-modal .app-modal-body {
+  max-height: min(34rem, calc(100vh - 11rem));
+  overflow: hidden;
+}
+
+.app-modal-dialog.dashboard-category-usage-modal .app-modal-footer {
+  justify-content: flex-end;
+}
+
+.dashboard-category-usage-table-wrap {
+  max-height: min(32rem, calc(100vh - 13rem));
+  overflow: auto;
+  scrollbar-gutter: stable;
+  border-radius: 1.2rem;
+}
+
 .app-modal-header,
 .app-modal-footer {
   display: flex;
@@ -6022,6 +6109,10 @@ textarea:focus {
 
 .app-modal-header {
   margin-bottom: 1rem;
+}
+
+.app-modal-footer {
+  margin-top: 1rem;
 }
 
 .app-modal-header h3 {

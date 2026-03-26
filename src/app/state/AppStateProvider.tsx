@@ -480,6 +480,7 @@ function normalizeCategoryStructure(state: AppState): AppState {
 
   let categoriesChanged = false;
   const remappedCategoryIds = new Map<string, string>();
+  const transactionCategoryReferenceRemaps = new Map<string, string>();
   const normalizedCategories: Category[] = [];
   const workspaceIds = Array.from(new Set(state.categories.map((category) => category.workspaceId)));
 
@@ -689,6 +690,32 @@ function normalizeCategoryStructure(state: AppState): AppState {
 
     workspaceCategories = workspaceCategories.filter((category) => resolveCategoryRemap(category.id, remappedCategoryIds) === category.id);
 
+    const leafCategoriesByParentId = new Map<string, Category[]>();
+    workspaceCategories.forEach((category) => {
+      if (category.categoryType !== "category" || !isValidGroupId(category.parentCategoryId)) return;
+      const parentId = category.parentCategoryId!;
+      const siblings = leafCategoriesByParentId.get(parentId) ?? [];
+      siblings.push(category);
+      leafCategoriesByParentId.set(parentId, siblings);
+    });
+
+    workspaceCategories.forEach((category) => {
+      if (category.categoryType !== "group") return;
+
+      const childCategories = leafCategoriesByParentId.get(category.id) ?? [];
+      if (!childCategories.length) return;
+
+      const sameNameChildren = childCategories.filter(
+        (childCategory) => normalizeKey(childCategory.name) === normalizeKey(category.name),
+      );
+      const preferredChildCategory =
+        sameNameChildren.length === 1 ? sameNameChildren[0] : childCategories.length === 1 ? childCategories[0] : null;
+
+      if (preferredChildCategory) {
+        transactionCategoryReferenceRemaps.set(category.id, preferredChildCategory.id);
+      }
+    });
+
     const siblingBuckets = new Map<string, Category[]>();
     workspaceCategories.forEach((category) => {
       const key = category.parentCategoryId ?? "__root__";
@@ -722,9 +749,10 @@ function normalizeCategoryStructure(state: AppState): AppState {
   const normalizedTransactions = state.transactions.map((transaction) => {
     if (!transaction.categoryId) return transaction;
     const resolvedCategoryId = resolveCategoryRemap(transaction.categoryId, remappedCategoryIds);
-    if (resolvedCategoryId === transaction.categoryId) return transaction;
+    const normalizedCategoryId = transactionCategoryReferenceRemaps.get(resolvedCategoryId) ?? resolvedCategoryId;
+    if (normalizedCategoryId === transaction.categoryId) return transaction;
     transactionsChanged = true;
-    return { ...transaction, categoryId: resolvedCategoryId };
+    return { ...transaction, categoryId: normalizedCategoryId };
   });
 
   return {

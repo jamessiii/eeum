@@ -7,9 +7,10 @@ type AppModalProps = PropsWithChildren<{
   description?: string;
   footer?: ReactNode;
   onClose: () => void;
+  dialogClassName?: string;
 }>;
 
-export function AppModal({ open, title, description, footer, onClose, children }: AppModalProps) {
+export function AppModal({ open, title, description, footer, onClose, children, dialogClassName }: AppModalProps) {
   useEffect(() => {
     if (!open || typeof document === "undefined") return;
 
@@ -42,7 +43,7 @@ export function AppModal({ open, title, description, footer, onClose, children }
   const modal = (
     <div className="app-modal-backdrop" role="presentation" onClick={onClose}>
       <section
-        className="app-modal-dialog"
+        className={`app-modal-dialog${dialogClassName ? ` ${dialogClassName}` : ""}`}
         role="dialog"
         aria-modal="true"
         aria-label={title}

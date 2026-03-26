@@ -1,4 +1,4 @@
-import type { AppState, FinancialProfile, Transaction } from "../../shared/types/models";
+import type { AppState, FinancialProfile, IncomeEntry, Transaction } from "../../shared/types/models";
 import { getRecurringMerchantSuggestionCount } from "../classification/suggestions";
 import { isDiagnosisReady } from "./diagnosisReady";
 import { getExpenseImpactStats } from "../transactions/expenseImpactStats";
@@ -14,6 +14,7 @@ export interface WorkspaceInsightsInput {
   basis: WorkspaceInsightBasis;
   label: string;
   transactions: Transaction[];
+  incomeEntries?: IncomeEntry[];
 }
 
 export interface WorkspaceInsights {
@@ -81,7 +82,11 @@ function getFixedTone(profile: FinancialProfile | null, fixedExpenseRate: number
   return "stable";
 }
 
-function getRecordedMonthlyIncome(transactions: Transaction[]) {
+function getRecordedMonthlyIncome(transactions: Transaction[], incomeEntries: IncomeEntry[] = []) {
+  if (incomeEntries.length) {
+    return incomeEntries.reduce((sum, entry) => sum + Math.abs(entry.amount), 0);
+  }
+
   return transactions.reduce((sum, transaction) => {
     if (transaction.status !== "active") return sum;
     if (transaction.sourceType !== "account") return sum;
@@ -94,7 +99,7 @@ function getRecordedMonthlyIncome(transactions: Transaction[]) {
 export function getWorkspaceInsights(
   state: AppState,
   workspaceId: string,
-  { basis, label, transactions }: WorkspaceInsightsInput,
+  { basis, label, transactions, incomeEntries = [] }: WorkspaceInsightsInput,
 ): WorkspaceInsights {
   const activeTransactions = getActiveTransactions(transactions);
   const expenseStats = getExpenseImpactStats(transactions);
@@ -108,7 +113,7 @@ export function getWorkspaceInsights(
     }),
   );
   const financialProfile = state.financialProfiles.find((item) => item.workspaceId === workspaceId) ?? null;
-  const monthlyIncomeBasis = getRecordedMonthlyIncome(transactions);
+  const monthlyIncomeBasis = getRecordedMonthlyIncome(transactions, incomeEntries);
   const hasIncomeBasis = monthlyIncomeBasis > 0;
   const expense = expenseStats.expenseImpactAmount;
   const savings = Math.max(0, monthlyIncomeBasis - expense);

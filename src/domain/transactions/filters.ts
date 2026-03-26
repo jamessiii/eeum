@@ -9,6 +9,7 @@ export interface TransactionFilters {
   transactionType: "all" | Transaction["transactionType"];
   sourceType: "all" | Transaction["sourceType"];
   ownerPersonId: string;
+  categoryId: string;
   status: "all" | Transaction["status"];
   nature: "all" | "expense" | "internal_transfer" | "uncategorized";
   searchQuery: string;
@@ -36,6 +37,7 @@ export function getFilteredTransactions(transactions: Transaction[], filters: Tr
     .filter((item) => (filters.transactionType === "all" ? true : item.transactionType === filters.transactionType))
     .filter((item) => (filters.sourceType === "all" ? true : item.sourceType === filters.sourceType))
     .filter((item) => (filters.ownerPersonId === "all" ? true : item.ownerPersonId === filters.ownerPersonId))
+    .filter((item) => (filters.categoryId === "all" ? true : item.categoryId === filters.categoryId))
     .filter((item) => (filters.status === "all" ? true : item.status === filters.status))
     .filter((item) => {
       if (filters.nature === "all") return true;

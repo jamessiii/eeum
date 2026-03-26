@@ -47,9 +47,10 @@ type NavItem = {
 };
 
 const baseNavItems: NavItem[] = [
+  { to: "/dashboard", label: "첫장" },
   {
     to: "/collections",
-    label: "조각모음",
+    label: "조각",
     subItems: [
       { key: "income", label: "수입", to: "/collections/income" },
       { key: "card", label: "결제내역", to: "/collections/card" },
@@ -63,7 +64,7 @@ const baseNavItems: NavItem[] = [
       { key: "categories", label: "분류", to: "/connections/categories" },
     ],
   },
-  { to: "/settlements", label: "맺음" },
+  { to: "/settlements", label: "흐름" },
   {
     to: "/records",
     label: "기록",
@@ -77,6 +78,7 @@ const baseNavItems: NavItem[] = [
 const developerNavItem: NavItem = { to: "/dev", label: "DEV" };
 
 const navGuideTargetMap: Record<string, string> = {
+  "/dashboard": "nav-dashboard",
   "/collections": "nav-collections",
   "/connections": "nav-connections",
   "/settlements": "nav-settlements",
@@ -130,6 +132,11 @@ function AppTopNav({ isDeveloperModeUnlocked }: { isDeveloperModeUnlocked: boole
 
   const activeKey = useMemo<string | null>(() => {
     const pathname = location.pathname || "/";
+    if (
+      pathname === "/dashboard"
+    ) {
+      return "/dashboard";
+    }
     if (
       pathname === "/" ||
       pathname.startsWith("/collections") ||
@@ -267,6 +274,21 @@ function AppTopNav({ isDeveloperModeUnlocked }: { isDeveloperModeUnlocked: boole
   );
 }
 
+function RouteSideEffectCleanup() {
+  const location = useLocation();
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+
+    delete document.body.dataset.appModalCount;
+    document.body.classList.remove("app-modal-open");
+    document.documentElement.classList.remove("app-modal-open");
+    document.querySelectorAll(".app-modal-backdrop").forEach((node) => node.remove());
+  }, [location.pathname, location.search]);
+
+  return null;
+}
+
 function AppRoutes({
   isDeveloperModeUnlocked,
   lockDeveloperMode,
@@ -276,8 +298,10 @@ function AppRoutes({
 }) {
   return (
     <Suspense fallback={<LoadingScreen message="화면을 준비하는 중입니다." />}>
+      <RouteSideEffectCleanup />
       <Routes>
-        <Route path="/" element={<SectionIndexRedirect defaultPath="/collections/card" />} />
+        <Route path="/" element={<SectionIndexRedirect defaultPath="/dashboard" />} />
+        <Route path="/dashboard" element={<DashboardPage mode="dashboard" />} />
         <Route path="/collections" element={<SectionIndexRedirect defaultPath="/collections/card" />} />
         <Route path="/collections/card" element={<TransactionsPage />} />
         <Route path="/collections/transfer" element={<AccountTransfersPage />} />
@@ -368,7 +392,7 @@ function RecordsPage({ view }: { view: "moon" | "sun" }) {
   return (
     <>
       {view === "moon" ? (
-        <DashboardPage />
+        <DashboardPage mode="moon" />
       ) : (
         <div className="page-stack">
           <EmptyStateCallout

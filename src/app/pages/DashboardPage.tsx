@@ -1,16 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { monthKey } from "../../shared/utils/date";
-import type { Card, Category, ImportRecord, Person } from "../../shared/types/models";
+import type { Card, Category, ImportRecord, Person, Transaction } from "../../shared/types/models";
 import { getWorkspaceInsights, type WorkspaceInsightBasis } from "../../domain/insights/workspaceInsights";
+import { getMonthlySharedSettlementSummary, getSettlementBalanceSummary } from "../../domain/settlements/summary";
 import { getExpenseImpactStats } from "../../domain/transactions/expenseImpactStats";
 import { getSourceTypeLabel } from "../../domain/transactions/sourceTypes";
 import { formatCurrency, formatPercent } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { useAppState } from "../state/AppStateProvider";
+import { AppModal } from "../components/AppModal";
 import { BoardCaseSection } from "../components/BoardCase";
 import { CompletionBanner } from "../components/CompletionBanner";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
+import { TransactionRowHeader } from "../components/TransactionRowHeader";
 import { getWorkspaceScope } from "../state/selectors";
 
 function toneClass(tone: "stable" | "caution" | "warning") {
@@ -77,6 +80,13 @@ type DashboardScopeOption = {
   label: string;
 };
 
+type CategoryUsageModalState = {
+  personId: string;
+  personName: string;
+  categoryId: string;
+  categoryName: string;
+};
+
 type StatementScopeOption = DashboardScopeOption & {
   importRecordIds: Set<string>;
 };
@@ -129,6 +139,33 @@ function formatStatementMonthLabel(value: string) {
   return `${formatMonthLabel(value)} 청구`;
 }
 
+function getPreviousMonthKey(value: string) {
+  const [year, month] = value.split("-").map(Number);
+  if (!year || !month) return value;
+  const date = new Date(year, month - 2, 1);
+  return monthKey(date);
+}
+
+function formatDeltaAmount(amount: number) {
+  if (amount === 0) return formatCurrency(0);
+  return formatCurrency(Math.abs(amount));
+}
+
+function getDeltaBadge(value: number, goodWhenIncrease = true) {
+  if (value === 0) {
+    return { label: "유지", className: "text-bg-light" };
+  }
+
+  const isIncrease = value > 0;
+  const isGood = goodWhenIncrease ? isIncrease : !isIncrease;
+  return { label: isIncrease ? "증가" : "감소", className: isGood ? "text-bg-success" : "text-bg-warning" };
+}
+
+function getCompletionBadge(count: number) {
+  const isComplete = count === 0;
+  return { label: isComplete ? "완료" : "미완료", className: isComplete ? "text-bg-success" : "text-bg-warning" };
+}
+
 function getStatementScopeOptions(imports: ImportRecord[], linkedImportRecordIds: Set<string>): StatementScopeOption[] {
   const statementMap = new Map<string, StatementScopeOption>();
   const unspecifiedImportRecordIds = new Set<string>();
@@ -168,8 +205,9 @@ function getStatementScopeOptions(imports: ImportRecord[], linkedImportRecordIds
   return options;
 }
 
-export function DashboardPage() {
+export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" }) {
   const { state } = useAppState();
+  const navigate = useNavigate();
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const currentMonth = monthKey(new Date());
@@ -204,6 +242,8 @@ export function DashboardPage() {
   const [selectedDashboardStatement, setSelectedDashboardStatement] = useState(() => statementScopeOptions[0]?.value ?? "");
   const [expandedCategoryGroupKeys, setExpandedCategoryGroupKeys] = useState<Set<string>>(() => new Set());
   const [showAllCategoryPersonKeys, setShowAllCategoryPersonKeys] = useState<Set<string>>(() => new Set());
+  const [categoryUsageModal, setCategoryUsageModal] = useState<CategoryUsageModalState | null>(null);
+  const [pendingCategoryUsageNavigation, setPendingCategoryUsageNavigation] = useState<string | null>(null);
 
   useEffect(() => {
     const nextSelectedMonth = monthOptions.includes(selectedDashboardMonth)
@@ -231,6 +271,12 @@ export function DashboardPage() {
     }
   }, [selectedDashboardBasis, selectedDashboardStatement, statementScopeOptions]);
 
+  useEffect(() => {
+    if (categoryUsageModal || !pendingCategoryUsageNavigation) return;
+    navigate(pendingCategoryUsageNavigation);
+    setPendingCategoryUsageNavigation(null);
+  }, [categoryUsageModal, navigate, pendingCategoryUsageNavigation]);
+
   const selectedDashboardScopeOptions = selectedDashboardBasis === "statement" ? statementScopeOptions : monthScopeOptions;
   const selectedDashboardScopeValue =
     selectedDashboardBasis === "statement" ? selectedDashboardStatement : selectedDashboardMonth;
@@ -248,6 +294,11 @@ export function DashboardPage() {
 
     return scope.transactions.filter((transaction) => monthKey(transaction.occurredAt) === selectedDashboardMonth);
   }, [scope.transactions, selectedDashboardBasis, selectedDashboardMonth, selectedDashboardStatement, statementScopeOptions]);
+  const selectedDashboardIncomeEntries = useMemo(() => {
+    const targetMonth = selectedDashboardBasis === "statement" ? selectedDashboardStatement : selectedDashboardMonth;
+    if (!targetMonth || targetMonth === UNSPECIFIED_STATEMENT_KEY) return [];
+    return scope.incomeEntries.filter((entry) => monthKey(entry.occurredAt) === targetMonth);
+  }, [scope.incomeEntries, selectedDashboardBasis, selectedDashboardMonth, selectedDashboardStatement]);
   const selectedDashboardExpenseTransactions = useMemo(
     () => getExpenseImpactStats(selectedDashboardTransactions).activeExpenseTransactions,
     [selectedDashboardTransactions],
@@ -257,24 +308,138 @@ export function DashboardPage() {
     basis: selectedDashboardBasis,
     label: selectedDashboardScopeLabel,
     transactions: selectedDashboardTransactions,
+    incomeEntries: selectedDashboardIncomeEntries,
   });
+  const currentMonthTransactions = useMemo(
+    () => scope.transactions.filter((transaction) => monthKey(transaction.occurredAt) === currentMonth),
+    [currentMonth, scope.transactions],
+  );
+  const previousMonth = useMemo(() => getPreviousMonthKey(currentMonth), [currentMonth]);
+  const previousMonthTransactions = useMemo(
+    () => scope.transactions.filter((transaction) => monthKey(transaction.occurredAt) === previousMonth),
+    [previousMonth, scope.transactions],
+  );
+  const currentMonthIncomeEntries = useMemo(
+    () => scope.incomeEntries.filter((entry) => monthKey(entry.occurredAt) === currentMonth),
+    [currentMonth, scope.incomeEntries],
+  );
+  const previousMonthIncomeEntries = useMemo(
+    () => scope.incomeEntries.filter((entry) => monthKey(entry.occurredAt) === previousMonth),
+    [previousMonth, scope.incomeEntries],
+  );
+  const currentMonthInsights = getWorkspaceInsights(state, workspaceId, {
+    basis: "month",
+    label: formatMonthLabel(currentMonth),
+    transactions: currentMonthTransactions,
+    incomeEntries: currentMonthIncomeEntries,
+  });
+  const previousMonthInsights = getWorkspaceInsights(state, workspaceId, {
+    basis: "month",
+    label: formatMonthLabel(previousMonth),
+    transactions: previousMonthTransactions,
+    incomeEntries: previousMonthIncomeEntries,
+  });
+  const currentMonthIncomeDelta = currentMonthInsights.income - previousMonthInsights.income;
+  const currentMonthExpenseDelta = currentMonthInsights.expense - previousMonthInsights.expense;
+  const currentMonthSavingsDelta = currentMonthInsights.savings - previousMonthInsights.savings;
+  const incomeDeltaBadge = getDeltaBadge(currentMonthIncomeDelta, true);
+  const expenseDeltaBadge = getDeltaBadge(currentMonthExpenseDelta, false);
+  const savingsDeltaBadge = getDeltaBadge(currentMonthSavingsDelta, true);
+  const reviewBadge = getCompletionBadge(currentMonthInsights.reviewCount);
+  const uncategorizedBadge = getCompletionBadge(currentMonthInsights.uncategorizedCount);
   const dominantCategory = insights.topCategories[0] ?? null;
   const dominantCategoryShare =
     dominantCategory && insights.expense > 0 ? Math.round((dominantCategory.amount / insights.expense) * 100) : null;
   const dominantSource = insights.sourceBreakdown[0] ?? null;
   const activePeopleCount = scope.people.filter((person) => person.isActive).length;
+  const activePeople = useMemo(() => scope.people.filter((person) => person.isActive), [scope.people]);
   const ownedAccountCount = scope.accounts.filter((account) => account.ownerPersonId || account.isShared).length;
   const linkedCardCount = scope.cards.filter((card) => card.ownerPersonId && card.linkedAccountId).length;
   const unmappedAccountCount = scope.accounts.length - ownedAccountCount;
   const unmappedCardCount = scope.cards.length - linkedCardCount;
   const peopleSetupRemaining = activePeopleCount > 0 ? 0 : 1;
   const foundationRemainingCount = peopleSetupRemaining + unmappedAccountCount + unmappedCardCount;
+  const currentMonthSettlementSummary = useMemo(
+    () => getMonthlySharedSettlementSummary(currentMonthTransactions, activePeople.length, currentMonth),
+    [activePeople.length, currentMonth, currentMonthTransactions],
+  );
+  const currentMonthSettlementRowsBase = useMemo(
+    () =>
+      currentMonthSettlementSummary.baseRows.map((row) => ({
+        ...row,
+        name: scope.people.find((person) => person.id === row.personId)?.displayName || scope.people.find((person) => person.id === row.personId)?.name || "공동 계정",
+      })),
+    [currentMonthSettlementSummary.baseRows, scope.people],
+  );
+  const currentMonthSettlementBalance = useMemo(
+    () => getSettlementBalanceSummary(currentMonthSettlementRowsBase, scope.settlements, currentMonth),
+    [currentMonth, currentMonthSettlementRowsBase, scope.settlements],
+  );
+  const currentMonthSettlementRows = currentMonthSettlementBalance.rows;
+  const currentMonthSettlementHistory = currentMonthSettlementBalance.settlementHistory;
+  const settlementReceiver = currentMonthSettlementRows.find((row) => row.remainingDelta > 0);
+  const settlementSender = currentMonthSettlementRows.find((row) => row.remainingDelta < 0);
+  const suggestedSettlementAmount =
+    settlementReceiver && settlementSender ? Math.min(settlementReceiver.remainingDelta, Math.abs(settlementSender.remainingDelta)) : 0;
+  const settlementReceiverName = settlementReceiver
+    ? scope.people.find((person) => person.id === settlementReceiver.personId)?.displayName ||
+      scope.people.find((person) => person.id === settlementReceiver.personId)?.name ||
+      "공동 계정"
+    : null;
+  const settlementSenderName = settlementSender
+    ? scope.people.find((person) => person.id === settlementSender.personId)?.displayName ||
+      scope.people.find((person) => person.id === settlementSender.personId)?.name ||
+      "공동 계정"
+    : null;
+  const settlementStatusTitle = !currentMonthSettlementSummary.sharedTransactions.length
+    ? "이번 달 공동지출이 아직 없습니다"
+    : settlementReceiver && settlementSender && suggestedSettlementAmount > 0
+      ? `${settlementSenderName}에서 ${settlementReceiverName}에게 ${formatCurrency(suggestedSettlementAmount)} 정리가 필요합니다`
+      : "이번 달 흐름이 거의 정리되었습니다";
+  const settlementStatusDescription = !currentMonthSettlementSummary.sharedTransactions.length
+    ? "공동지출 거래가 생기면 흐름에서 바로 정리 상태를 볼 수 있습니다."
+    : settlementReceiver && settlementSender && suggestedSettlementAmount > 0
+      ? `공동지출 ${currentMonthSettlementSummary.sharedTransactions.length}건 기준으로 남은 최소 정리 금액입니다.`
+      : currentMonthSettlementHistory.length
+        ? `완료 기록 ${currentMonthSettlementHistory.length}건이 반영되어 남은 차이가 거의 없습니다.`
+        : "추가 정리 없이 현재 공동지출 흐름을 볼 수 있습니다.";
   const visiblePeople = useMemo(() => scope.people.filter((person) => !person.isHidden).sort(compareBySortOrder), [scope.people]);
   const visibleCards = useMemo(() => scope.cards.filter((card) => !card.isHidden).sort(compareBySortOrder), [scope.cards]);
   const accountNameMap = useMemo(
     () => new Map(scope.accounts.map((account) => [account.id, account.alias || account.name])),
     [scope.accounts],
   );
+  const categoryNameMap = useMemo(
+    () => new Map(scope.categories.map((category) => [category.id, category.name])),
+    [scope.categories],
+  );
+  const dashboardGroupCategories = useMemo(() => getOrderedCategoryGroups(scope.categories), [scope.categories]);
+  const dashboardGroupChildrenMap = useMemo(
+    () => new Map(dashboardGroupCategories.map((group) => [group.id, getOrderedChildCategories(scope.categories, group.id)])),
+    [dashboardGroupCategories, scope.categories],
+  );
+  const dashboardGroupCategoryMap = useMemo(
+    () => new Map(dashboardGroupCategories.map((group) => [group.id, group])),
+    [dashboardGroupCategories],
+  );
+  const dashboardLeafCategoryMap = useMemo(
+    () => new Map(scope.categories.filter((category) => category.categoryType === "category").map((category) => [category.id, category])),
+    [scope.categories],
+  );
+
+  const resolveDashboardCategoryId = (categoryId: string | null) => {
+    if (!categoryId) return UNCATEGORIZED_CATEGORY_KEY;
+    if (dashboardLeafCategoryMap.has(categoryId)) return categoryId;
+
+    const groupCategory = dashboardGroupCategoryMap.get(categoryId);
+    if (!groupCategory) return categoryId;
+
+    const childCategories = dashboardGroupChildrenMap.get(groupCategory.id) ?? [];
+    const sameNameChildren = childCategories.filter((childCategory) => childCategory.name === groupCategory.name);
+    if (sameNameChildren.length === 1) return sameNameChildren[0].id;
+    if (childCategories.length === 1) return childCategories[0].id;
+    return categoryId;
+  };
 
   const renderScopeSelect = (ariaLabel: string) => (
     <div className="dashboard-section-toolbar">
@@ -350,13 +515,67 @@ export function DashboardPage() {
     });
   };
 
+  const categoryUsageModalTransactions = useMemo<Transaction[]>(() => {
+    if (!categoryUsageModal) return [];
+
+    return selectedDashboardExpenseTransactions.filter((transaction) => {
+      const matchesPerson =
+        categoryUsageModal.personId === UNASSIGNED_PERSON_KEY
+          ? !transaction.ownerPersonId
+          : transaction.ownerPersonId === categoryUsageModal.personId;
+      if (!matchesPerson) return false;
+
+      if (categoryUsageModal.categoryId === UNCATEGORIZED_CATEGORY_KEY) {
+        return !transaction.categoryId;
+      }
+
+      return resolveDashboardCategoryId(transaction.categoryId) === categoryUsageModal.categoryId;
+    });
+  }, [categoryUsageModal, selectedDashboardExpenseTransactions]);
+
+  const openCategoryUsageModal = (personId: string, personName: string, categoryId: string, categoryName: string) => {
+    setCategoryUsageModal({ personId, personName, categoryId, categoryName });
+  };
+
+  const openCategoryUsageInTransactions = () => {
+    if (!categoryUsageModal) return;
+
+    const nextParams = new URLSearchParams();
+    nextParams.set("openFromCategoryUsage", "1");
+    if (categoryUsageModal.personId !== UNASSIGNED_PERSON_KEY) {
+      nextParams.set("ownerPersonId", categoryUsageModal.personId);
+    }
+    if (categoryUsageModal.categoryId !== UNCATEGORIZED_CATEGORY_KEY) {
+      nextParams.set("categoryId", categoryUsageModal.categoryId);
+    } else {
+      nextParams.set("nature", "uncategorized");
+    }
+    if (selectedDashboardBasis === "statement" && selectedDashboardStatement) {
+      nextParams.set("statementId", selectedDashboardStatement);
+    }
+
+    setPendingCategoryUsageNavigation(`/collections/card?${nextParams.toString()}`);
+    if (typeof document !== "undefined") {
+      delete document.body.dataset.appModalCount;
+      document.body.classList.remove("app-modal-open");
+      document.documentElement.classList.remove("app-modal-open");
+    }
+    setCategoryUsageModal(null);
+  };
+
+  const getDashboardTransactionOwnerLabel = (transaction: Transaction) => {
+    if (!transaction.ownerPersonId) return "-";
+    const owner = visiblePeople.find((person) => person.id === transaction.ownerPersonId);
+    return owner ? getPersonLabel(owner) : "-";
+  };
+
+  const getDashboardTransactionCategoryLabel = (transaction: Transaction) => {
+    if (!transaction.categoryId) return "미분류";
+    return categoryNameMap.get(transaction.categoryId) ?? "알 수 없는 카테고리";
+  };
+
   const personCategoryUsage = useMemo<DashboardPersonCategoryUsage[]>(() => {
     const personMap = new Map(visiblePeople.map((person) => [person.id, person]));
-    const groupCategories = getOrderedCategoryGroups(scope.categories);
-    const groupChildrenMap = new Map(groupCategories.map((group) => [group.id, getOrderedChildCategories(scope.categories, group.id)]));
-    const leafCategoryMap = new Map(
-      scope.categories.filter((category) => category.categoryType === "category").map((category) => [category.id, category]),
-    );
     const usedPersonIds = new Set(
       selectedDashboardExpenseTransactions
         .map((transaction) => transaction.ownerPersonId)
@@ -375,7 +594,7 @@ export function DashboardPage() {
 
     for (const transaction of selectedDashboardExpenseTransactions) {
       const personKey = transaction.ownerPersonId && personMap.has(transaction.ownerPersonId) ? transaction.ownerPersonId : UNASSIGNED_PERSON_KEY;
-      const categoryKey = transaction.categoryId ?? UNCATEGORIZED_CATEGORY_KEY;
+      const categoryKey = resolveDashboardCategoryId(transaction.categoryId);
       const personUsage = ensureUsageMap(personKey);
       const current = personUsage.get(categoryKey) ?? { amount: 0, transactionCount: 0 };
       current.amount += Math.abs(transaction.amount);
@@ -388,8 +607,8 @@ export function DashboardPage() {
       const consumedCategoryIds = new Set<string>();
       const groups: DashboardCategoryUsageGroup[] = [];
 
-      for (const group of groupCategories) {
-        const categories = (groupChildrenMap.get(group.id) ?? []).map<DashboardCategoryUsageCard>((category) => {
+      for (const group of dashboardGroupCategories) {
+        const categories = (dashboardGroupChildrenMap.get(group.id) ?? []).map<DashboardCategoryUsageCard>((category) => {
             const stats = usage.get(category.id) ?? { amount: 0, transactionCount: 0 };
             consumedCategoryIds.add(category.id);
             return {
@@ -435,8 +654,8 @@ export function DashboardPage() {
         .filter(([categoryId]) => categoryId !== UNCATEGORIZED_CATEGORY_KEY && !consumedCategoryIds.has(categoryId))
         .map<DashboardCategoryUsageCard>(([categoryId, stats]) => ({
           id: categoryId,
-          name: leafCategoryMap.get(categoryId)?.name ?? "알 수 없는 카테고리",
-          fixedOrVariable: leafCategoryMap.get(categoryId)?.fixedOrVariable ?? "variable",
+          name: dashboardLeafCategoryMap.get(categoryId)?.name ?? "알 수 없는 카테고리",
+          fixedOrVariable: dashboardLeafCategoryMap.get(categoryId)?.fixedOrVariable ?? "variable",
           amount: stats.amount,
           transactionCount: stats.transactionCount,
         }))
@@ -478,7 +697,7 @@ export function DashboardPage() {
     }
 
     return sections;
-  }, [scope.categories, selectedDashboardExpenseTransactions, visiblePeople]);
+  }, [dashboardGroupCategories, dashboardGroupChildrenMap, dashboardLeafCategoryMap, selectedDashboardExpenseTransactions, visiblePeople]);
 
   const personCardUsage = useMemo<DashboardPersonCardUsage[]>(() => {
     const personMap = new Map(visiblePeople.map((person) => [person.id, person]));
@@ -598,6 +817,8 @@ export function DashboardPage() {
 
   return (
     <div className="page-stack">
+      {mode === "moon" ? (
+        <>
       <section className="card shadow-sm" style={getMotionStyle(0)} data-guide-target="dashboard-summary">
         <div className="section-head">
           <div>
@@ -709,9 +930,9 @@ export function DashboardPage() {
         <div className="section-head">
           <div>
             <span className="section-kicker">카테고리 흐름</span>
-            <h2 className="section-title">사용자별 카테고리 사용내역</h2>
+            <h2 className="section-title">카테고리별 사용내역</h2>
           </div>
-          {renderScopeSelect("사용자별 카테고리 사용내역")}
+          {renderScopeSelect("카테고리별 사용내역")}
         </div>
         <p className="mb-0 text-secondary">
           선택한 기준의 실지출을 기준으로 사용자별 소비를 나눠서 보고, 각 그룹 안에서는 전체 카테고리 구조를 그대로 카드로 보여줍니다.
@@ -806,7 +1027,26 @@ export function DashboardPage() {
                             <div className="dashboard-category-group-collapse-inner">
                               <div className="category-case-grid dashboard-category-group-grid">
                                 {group.visibleCategories.map((category) => (
-                                  <article key={category.id} className="category-case-card dashboard-category-card">
+                                  <article
+                                    key={category.id}
+                                    className={`category-case-card dashboard-category-card${category.transactionCount > 0 ? " is-clickable" : ""}`}
+                                    role={category.transactionCount > 0 ? "button" : undefined}
+                                    tabIndex={category.transactionCount > 0 ? 0 : undefined}
+                                    onClick={
+                                      category.transactionCount > 0
+                                        ? () => openCategoryUsageModal(personSection.id, personSection.name, category.id, category.name)
+                                        : undefined
+                                    }
+                                    onKeyDown={
+                                      category.transactionCount > 0
+                                        ? (event) => {
+                                            if (event.key !== "Enter" && event.key !== " ") return;
+                                            event.preventDefault();
+                                            openCategoryUsageModal(personSection.id, personSection.name, category.id, category.name);
+                                          }
+                                        : undefined
+                                    }
+                                  >
                                     <div className="category-case-card-copy dashboard-category-card-copy">
                                       <strong>{category.name}</strong>
                                       <span>{category.fixedOrVariable === "fixed" ? "고정 지출" : "변동 지출"}</span>
@@ -860,9 +1100,9 @@ export function DashboardPage() {
         <div className="section-head">
           <div>
             <span className="section-kicker">카드 흐름</span>
-            <h2 className="section-title">사용자별 카드 사용내역</h2>
+            <h2 className="section-title">카드별 사용내역</h2>
           </div>
-          {renderScopeSelect("사용자별 카드 사용내역")}
+          {renderScopeSelect("카드별 사용내역")}
         </div>
         <p className="mb-0 text-secondary">선택한 기준의 카드 결제 실지출을 기준으로 사용자별 카드 사용내역을 보여줍니다.</p>
 
@@ -927,12 +1167,108 @@ export function DashboardPage() {
           )}
         </div>
       </section>
+        </>
+      ) : null}
 
-      <section className="card shadow-sm" style={getMotionStyle(3)}>
+      {mode === "dashboard" ? (
+        <>
+      <section className="card shadow-sm" style={getMotionStyle(0)} data-guide-target="dashboard-summary">
         <div className="section-head">
           <div>
-            <span className="section-kicker">기본 정보</span>
-            <h2 className="section-title">자산 설정 현황</h2>
+            <span className="section-kicker">이번 달 조각</span>
+            <h2 className="section-title">이번 달 조각 상태</h2>
+          </div>
+        </div>
+
+        <div className="stats-grid">
+          <article className="stat-card" style={getMotionStyle(1)}>
+            <div className="stat-card-head">
+              <span className="stat-label">이번 달 수입</span>
+              <span className={`badge dashboard-stat-badge ${incomeDeltaBadge.className}`}>
+                {incomeDeltaBadge.label}
+              </span>
+            </div>
+            <strong>{formatCurrency(currentMonthInsights.income)}</strong>
+            <span
+              className={`stat-delta${currentMonthIncomeDelta > 0 ? " is-up is-positive" : currentMonthIncomeDelta < 0 ? " is-down is-negative" : ""}`}
+            >
+              {formatDeltaAmount(currentMonthIncomeDelta)}
+            </span>
+          </article>
+          <article className="stat-card" style={getMotionStyle(2)}>
+            <div className="stat-card-head">
+              <span className="stat-label">이번 달 지출</span>
+              <span className={`badge dashboard-stat-badge ${expenseDeltaBadge.className}`}>
+                {expenseDeltaBadge.label}
+              </span>
+            </div>
+            <strong>{formatCurrency(currentMonthInsights.expense)}</strong>
+            <span
+              className={`stat-delta${currentMonthExpenseDelta > 0 ? " is-up is-negative" : currentMonthExpenseDelta < 0 ? " is-down is-positive" : ""}`}
+            >
+              {formatDeltaAmount(currentMonthExpenseDelta)}
+            </span>
+          </article>
+          <article className="stat-card" style={getMotionStyle(3)}>
+            <div className="stat-card-head">
+              <span className="stat-label">잔액</span>
+              <span className={`badge dashboard-stat-badge ${savingsDeltaBadge.className}`}>
+                {savingsDeltaBadge.label}
+              </span>
+            </div>
+            <strong>{formatCurrency(currentMonthInsights.savings)}</strong>
+            <span
+              className={`stat-delta${currentMonthSavingsDelta > 0 ? " is-up is-positive" : currentMonthSavingsDelta < 0 ? " is-down is-negative" : ""}`}
+            >
+              {formatDeltaAmount(currentMonthSavingsDelta)}
+            </span>
+          </article>
+          <article className="stat-card" style={getMotionStyle(4)}>
+            <div className="stat-card-head">
+              <span className="stat-label">검토 필요</span>
+              <span className={`badge dashboard-stat-badge ${reviewBadge.className}`}>
+                {reviewBadge.label}
+              </span>
+            </div>
+            <strong>{currentMonthInsights.reviewCount}건</strong>
+          </article>
+          <article className="stat-card" style={getMotionStyle(5)}>
+            <div className="stat-card-head">
+              <span className="stat-label">미분류</span>
+              <span className={`badge dashboard-stat-badge ${uncategorizedBadge.className}`}>
+                {uncategorizedBadge.label}
+              </span>
+            </div>
+            <strong>{currentMonthInsights.uncategorizedCount}건</strong>
+          </article>
+        </div>
+
+        <div className="review-summary-panel compact-summary-panel dashboard-summary-action-panel mt-4">
+          <div className="review-summary-copy">
+            <strong>
+              {currentMonthInsights.isDiagnosisReady
+                ? "이번 달 조각이 안정적으로 정리되어 있습니다"
+                : "이번 달 조각을 더 정리해야 합니다"}
+            </strong>
+            <p className="mb-0 text-secondary">
+              {currentMonthInsights.nextSteps.length
+                ? currentMonthInsights.nextSteps[0]
+                : "결제내역에서 이번 달 거래를 계속 정리할 수 있습니다."}
+            </p>
+          </div>
+          <div className="dashboard-summary-action">
+            <Link to="/collections/card" className="btn btn-outline-secondary btn-sm">
+              결제내역 보기
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <section className="card shadow-sm" style={getMotionStyle(1)}>
+        <div className="section-head">
+          <div>
+            <span className="section-kicker">이음 준비</span>
+            <h2 className="section-title">이음 준비</h2>
           </div>
         </div>
         <div className="review-summary-panel mb-4">
@@ -970,7 +1306,7 @@ export function DashboardPage() {
             </span>
             <p className="mb-0 text-secondary">{unmappedAccountCount ? "소유자가 없는 계좌가 남아 있습니다." : "계좌 정보가 준비되었습니다."}</p>
             <Link to="/connections/assets" className="btn btn-outline-primary btn-sm mt-3">
-              자산 설정
+              계좌 관리
             </Link>
           </article>
           <article className="resource-card" style={getMotionStyle(4)}>
@@ -981,11 +1317,121 @@ export function DashboardPage() {
             </span>
             <p className="mb-0 text-secondary">{unmappedCardCount ? "카드 연결 정보가 덜 정리되었습니다." : "카드 정보가 준비되었습니다."}</p>
             <Link to="/connections/assets" className="btn btn-outline-primary btn-sm mt-3">
-              자산 설정
+              카드 관리
             </Link>
           </article>
         </div>
       </section>
+      <section className="card shadow-sm" style={getMotionStyle(2)}>
+        <div className="section-head">
+          <div>
+            <span className="section-kicker">이번 달 흐름</span>
+            <h2 className="section-title">흐름 현황</h2>
+          </div>
+        </div>
+        <div className="review-summary-panel">
+          <div className="review-summary-copy">
+            <strong>{settlementStatusTitle}</strong>
+            <p className="mb-0 text-secondary">{settlementStatusDescription}</p>
+          </div>
+          <Link to="/settlements" className="btn btn-outline-secondary btn-sm">
+            흐름 보기
+          </Link>
+        </div>
+        <div className="resource-grid mt-4">
+          <article className="resource-card" style={getMotionStyle(3)}>
+            <h3>공동지출</h3>
+            <p className="mb-0 text-secondary">이번 달 공동지출 거래 {currentMonthSettlementSummary.sharedTransactions.length}건</p>
+          </article>
+          <article className="resource-card" style={getMotionStyle(4)}>
+            <h3>완료 기록</h3>
+            <p className="mb-0 text-secondary">이번 달 흐름 완료 기록 {currentMonthSettlementHistory.length}건</p>
+          </article>
+          <article className="resource-card" style={getMotionStyle(5)}>
+            <h3>추천 정리 금액</h3>
+            <p className="mb-0 text-secondary">
+              {suggestedSettlementAmount > 0 ? formatCurrency(suggestedSettlementAmount) : "추가 정리 없음"}
+            </p>
+          </article>
+        </div>
+      </section>
+        </>
+      ) : null}
+
+      <AppModal
+        open={Boolean(categoryUsageModal)}
+        title={
+          categoryUsageModal
+            ? `${categoryUsageModal.personName} · ${categoryUsageModal.categoryName} 거래내역`
+            : "카테고리 거래내역"
+        }
+        description={categoryUsageModal ? `${categoryUsageModalTransactions.length}건 거래` : undefined}
+        onClose={() => setCategoryUsageModal(null)}
+        dialogClassName="dashboard-category-usage-modal"
+        footer={
+          <>
+            <button type="button" className="btn btn-outline-secondary" onClick={() => setCategoryUsageModal(null)}>
+              닫기
+            </button>
+            <button type="button" className="btn btn-primary" onClick={openCategoryUsageInTransactions}>
+              결제내역에서 보기
+            </button>
+          </>
+        }
+      >
+        {categoryUsageModalTransactions.length ? (
+          <div className="table-responsive dashboard-category-usage-table-wrap">
+            <table className="table align-middle transaction-grid-table">
+              <colgroup>
+                <col className="transaction-grid-col-date" />
+                <col className="transaction-grid-col-merchant" />
+                <col className="transaction-grid-col-original-amount" />
+                <col className="transaction-grid-col-discount" />
+                <col className="transaction-grid-col-paid-amount" />
+                <col className="transaction-grid-col-owner" />
+                <col className="transaction-grid-col-category" />
+                <col className="transaction-grid-col-note" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>사용일</th>
+                  <th>가맹점</th>
+                  <th className="text-end">원금액</th>
+                  <th className="text-end">할인</th>
+                  <th className="text-end">결제금액</th>
+                  <th>사용자</th>
+                  <th>카테고리</th>
+                  <th>비고</th>
+                </tr>
+              </thead>
+              <tbody>
+                {categoryUsageModalTransactions.map((transaction, index) => (
+                  <tr key={transaction.id} style={getMotionStyle(index)}>
+                    <td>{transaction.occurredAt.slice(0, 10)}</td>
+                    <td>
+                      <TransactionRowHeader merchantName={transaction.merchantName} />
+                    </td>
+                    <td className="text-end transaction-amount-cell">
+                      <strong>{formatCurrency(transaction.originalAmount ?? transaction.amount)}</strong>
+                    </td>
+                    <td className="text-end transaction-amount-cell">
+                      <strong>{transaction.discountAmount ? formatCurrency(transaction.discountAmount) : "-"}</strong>
+                    </td>
+                    <td className="text-end transaction-amount-cell">
+                      <strong>{formatCurrency(transaction.amount)}</strong>
+                    </td>
+                    <td>{getDashboardTransactionOwnerLabel(transaction)}</td>
+                    <td>{getDashboardTransactionCategoryLabel(transaction)}</td>
+                    <td>{transaction.description || "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="mb-0 text-secondary">해당 카테고리에 연결된 거래가 없습니다.</p>
+        )}
+      </AppModal>
     </div>
   );
 }

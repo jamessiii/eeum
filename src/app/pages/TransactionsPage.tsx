@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { getCategoryLabel, getLeafCategories } from "../../domain/categories/meta";
+import { getCategoryGroups, getCategoryLabel, getChildCategories, getLeafCategories } from "../../domain/categories/meta";
 import {
   getOpenTransactionWorkflowReviews,
   getTransactionWorkflowTransactionIds,
@@ -22,6 +22,7 @@ const DEFAULT_TRANSACTION_FILTERS: TransactionFilters = {
   transactionType: "all",
   sourceType: "all",
   ownerPersonId: "all",
+  categoryId: "all",
   status: "all",
   nature: "all",
   searchQuery: "",
@@ -85,9 +86,29 @@ export function TransactionsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const workspaceId = state.activeWorkspaceId!;
   const scope = useMemo(() => getWorkspaceScope(state, workspaceId), [state, workspaceId]);
-  const categoryMap = new Map(scope.categories.map((item) => [item.id, item]));
-  const leafCategories = getLeafCategories(scope.categories);
-  const categories = new Map(leafCategories.map((item) => [item.id, getCategoryLabel(item, categoryMap)]));
+  const categoryMap = useMemo(() => new Map(scope.categories.map((item) => [item.id, item])), [scope.categories]);
+  const leafCategories = useMemo(() => getLeafCategories(scope.categories), [scope.categories]);
+  const categories = useMemo(
+    () => new Map(leafCategories.map((item) => [item.id, getCategoryLabel(item, categoryMap)])),
+    [categoryMap, leafCategories],
+  );
+  const categoryOptions = useMemo(
+    () => {
+      const grouped = getCategoryGroups(scope.categories).flatMap((group) =>
+        getChildCategories(scope.categories, group.id).map((item) => ({
+          id: item.id,
+          label: getCategoryLabel(item, categoryMap),
+        })),
+      );
+      const groupedIds = new Set(grouped.map((item) => item.id));
+      const ungrouped = leafCategories
+        .filter((item) => !groupedIds.has(item.id))
+        .map((item) => ({ id: item.id, label: getCategoryLabel(item, categoryMap) }));
+      return [...grouped, ...ungrouped];
+    },
+    [categoryMap, leafCategories, scope.categories],
+  );
+  const [categoryFilterInput, setCategoryFilterInput] = useState("");
   const people = scope.people;
   const peopleMap = new Map(people.map((person) => [person.id, person.displayName || person.name]));
   const accountMap = new Map(scope.accounts.map((account) => [account.id, account.alias || account.name]));
@@ -203,25 +224,34 @@ export function TransactionsPage() {
   const hasOpenTransactionReviews = openTransactionReviews.length > 0;
 
   useEffect(() => {
+    setCategoryFilterInput(filters.categoryId === "all" ? "" : categories.get(filters.categoryId) ?? "");
+  }, [categories, filters.categoryId]);
+
+  useEffect(() => {
     const cleanup = searchParams.get("cleanup");
     const nature = searchParams.get("nature");
     const ownerPersonId = searchParams.get("ownerPersonId");
+    const categoryId = searchParams.get("categoryId");
     const statementId = searchParams.get("statementId");
+    const openFromCategoryUsage = searchParams.get("openFromCategoryUsage") === "1";
     const matchedNature = cleanup === "uncategorized" ? "uncategorized" : nature === "uncategorized" ? "uncategorized" : null;
     const matchedOwnerPersonId =
       ownerPersonId === "all" ? "all" : ownerPersonId && people.some((person) => person.id === ownerPersonId) ? ownerPersonId : null;
+    const matchedCategoryId =
+      categoryId === "all" ? "all" : categoryId && categoryOptions.some((option) => option.id === categoryId) ? categoryId : null;
     const matchedStatementId = statementId && statementOptions.some((option) => option.id === statementId) ? statementId : null;
 
-    if (matchedNature || ownerPersonId === "all" || matchedOwnerPersonId || matchedStatementId) {
+    if (matchedNature || openFromCategoryUsage || ownerPersonId === "all" || matchedOwnerPersonId || categoryId === "all" || matchedCategoryId || matchedStatementId) {
       setFilters((current) => ({
         ...current,
-        nature: matchedNature ?? current.nature,
+        nature: openFromCategoryUsage ? matchedNature ?? "all" : matchedNature ?? current.nature,
         ownerPersonId: matchedOwnerPersonId ?? current.ownerPersonId,
+        categoryId: matchedCategoryId ?? current.categoryId,
       }));
       if (matchedStatementId) setSelectedStatementId(matchedStatementId);
       setSearchParams({}, { replace: true });
     }
-  }, [people, searchParams, setSearchParams, statementOptions]);
+  }, [categoryOptions, people, searchParams, setSearchParams, statementOptions]);
 
   useEffect(() => {
     if (selectedStatementId && !statementOptions.some((option) => option.id === selectedStatementId)) {
@@ -301,9 +331,33 @@ export function TransactionsPage() {
     setFilters((current) => ({
       ...current,
       ownerPersonId: "all",
+      categoryId: "all",
       nature: "all",
       searchQuery: "",
     }));
+  };
+
+  const commitCategoryFilterInput = (rawValue: string) => {
+    const normalizedValue = rawValue.trim().toLowerCase();
+    if (!normalizedValue) {
+      setFilters((current) => ({ ...current, categoryId: "all" }));
+      setCategoryFilterInput("");
+      return;
+    }
+
+    const exactMatch = categoryOptions.find((option) => option.label.trim().toLowerCase() === normalizedValue);
+    const prefixMatch =
+      exactMatch ?? categoryOptions.find((option) => option.label.trim().toLowerCase().startsWith(normalizedValue));
+    const partialMatch =
+      prefixMatch ?? categoryOptions.find((option) => option.label.trim().toLowerCase().includes(normalizedValue));
+
+    if (!partialMatch) {
+      setCategoryFilterInput(filters.categoryId === "all" ? "" : categories.get(filters.categoryId) ?? "");
+      return;
+    }
+
+    setFilters((current) => ({ ...current, categoryId: partialMatch.id }));
+    setCategoryFilterInput(partialMatch.label);
   };
 
   const startAutoReviewWorkflow = () => {
@@ -463,6 +517,25 @@ export function TransactionsPage() {
                 </option>
               ))}
             </select>
+            <input
+              className="form-control"
+              list="transactions-category-filter-options"
+              value={categoryFilterInput}
+              disabled={Boolean(reviewWorkflow)}
+              placeholder="카테고리 입력"
+              onChange={(event) => setCategoryFilterInput(event.target.value)}
+              onBlur={(event) => commitCategoryFilterInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter") return;
+                event.preventDefault();
+                commitCategoryFilterInput(event.currentTarget.value);
+              }}
+            />
+            <datalist id="transactions-category-filter-options">
+              {categoryOptions.map((option) => (
+                <option key={option.id} value={option.label} />
+              ))}
+            </datalist>
             {statementOptions.length ? (
               <select
                 className="form-select transaction-month-select"
