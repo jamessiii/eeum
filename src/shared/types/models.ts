@@ -145,8 +145,9 @@ export interface SettlementRecord {
   id: ID;
   workspaceId: ID;
   month: string;
-  fromPersonId: ID | null;
-  toPersonId: ID | null;
+  transferKey: string;
+  fromAccountId: ID | null;
+  toAccountId: ID | null;
   amount: number;
   note: string;
   completedAt: string;

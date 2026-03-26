@@ -4176,6 +4176,50 @@ label,
   grid-template-columns: 1fr;
 }
 
+.settlement-flow-list {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.85rem;
+}
+
+.settlement-flow-item {
+  width: 100%;
+  max-width: none;
+  flex: 0 0 auto;
+}
+
+.settlement-flow-item > .d-flex {
+  width: 100%;
+}
+
+.settlement-flow-actions {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: flex-end;
+  gap: 0.45rem;
+}
+
+.settlement-flow-inline-amount {
+  flex: 0 0 auto;
+}
+
+.settlement-flow-item .badge {
+  margin-bottom: 0.55rem;
+}
+
+.settlement-flow-action-row {
+  display: flex;
+  gap: 0.45rem;
+  margin-top: auto;
+}
+
+.settlement-flow-actions .btn {
+  margin-top: 0;
+}
+
 .import-preview-stats {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }

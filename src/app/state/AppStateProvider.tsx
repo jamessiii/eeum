@@ -63,8 +63,9 @@ type FinancialProfileInput = Pick<
 type SettlementInput = {
   workspaceId: string;
   month: string;
-  fromPersonId: string | null;
-  toPersonId: string | null;
+  transferKey: string;
+  fromAccountId: string | null;
+  toAccountId: string | null;
   amount: number;
   note: string;
 };
@@ -106,6 +107,7 @@ type Action =
   | { type: "addTag"; payload: { workspaceId: string; name: string } }
   | { type: "setFinancialProfile"; payload: { workspaceId: string; values: FinancialProfileInput } }
   | { type: "addSettlement"; payload: SettlementInput }
+  | { type: "removeSettlement"; payload: { settlementId: string } }
   | { type: "addIncomeEntry"; payload: IncomeEntryInput }
   | { type: "deleteIncomeEntry"; payload: { workspaceId: string; incomeEntryId: string } }
   | { type: "addTransaction"; payload: NewTransactionInput }
@@ -329,6 +331,14 @@ function normalizeAppState(rawState: AppState): AppState {
     imports: rawState.imports.map((record) => ({
       ...record,
       statementMonth: record.statementMonth ?? null,
+    })),
+    settlements: (rawState.settlements ?? []).map((record) => ({
+      ...record,
+      transferKey:
+        record.transferKey ??
+        (record.fromAccountId && record.toAccountId ? `${record.fromAccountId}->${record.toAccountId}` : createId("settlement-legacy")),
+      fromAccountId: record.fromAccountId ?? null,
+      toAccountId: record.toAccountId ?? null,
     })),
     incomeEntries: (rawState.incomeEntries ?? []).map((entry) => ({
       ...entry,
@@ -1740,13 +1750,19 @@ function reducer(state: AppState, action: Action): AppState {
             id: createId("settlement"),
             workspaceId: action.payload.workspaceId,
             month: action.payload.month,
-            fromPersonId: action.payload.fromPersonId,
-            toPersonId: action.payload.toPersonId,
+            transferKey: action.payload.transferKey,
+            fromAccountId: action.payload.fromAccountId,
+            toAccountId: action.payload.toAccountId,
             amount: Math.abs(action.payload.amount),
             note: action.payload.note,
             completedAt: new Date().toISOString(),
           },
         ],
+      };
+    case "removeSettlement":
+      return {
+        ...state,
+        settlements: state.settlements.filter((item) => item.id !== action.payload.settlementId),
       };
     case "addIncomeEntry":
       return {
@@ -2010,6 +2026,7 @@ interface AppStateContextValue {
   addTag: (workspaceId: string, name: string) => void;
   setFinancialProfile: (workspaceId: string, values: FinancialProfileInput) => void;
   addSettlement: (input: SettlementInput) => void;
+  removeSettlement: (settlementId: string) => void;
   addIncomeEntry: (input: IncomeEntryInput) => void;
   deleteIncomeEntry: (workspaceId: string, incomeEntryId: string) => void;
   addTransaction: (input: NewTransactionInput) => void;
@@ -2325,7 +2342,11 @@ export function AppStateProvider({ children }: PropsWithChildren) {
       },
       addSettlement(input) {
         dispatch({ type: "addSettlement", payload: input });
-        showToast("정산 완료 내역을 기록했습니다.", "success");
+        showToast("이체 확인 내역을 기록했습니다.", "success");
+      },
+      removeSettlement(settlementId) {
+        dispatch({ type: "removeSettlement", payload: { settlementId } });
+        showToast("이체 확인을 취소했습니다.", "info");
       },
       addTransaction(input) {
         dispatch({ type: "addTransaction", payload: input });
@@ -2376,7 +2397,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         dispatch({ type: "updateTransactionFlags", payload: { workspaceId, transactionId, patch } });
         if (typeof patch.isSharedExpense === "boolean") {
           showToast(
-            patch.isSharedExpense ? "거래를 공동지출로 표시했습니다." : "거래의 공동지출 표시를 해제했습니다.",
+            patch.isSharedExpense ? "거래 흐름 표시를 바꿨습니다." : "거래 흐름 표시를 해제했습니다.",
             "success",
           );
           return;

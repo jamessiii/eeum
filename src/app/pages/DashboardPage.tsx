@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { monthKey } from "../../shared/utils/date";
 import type { Card, Category, ImportRecord, Person, Transaction } from "../../shared/types/models";
@@ -146,6 +146,21 @@ function getPreviousMonthKey(value: string) {
   return monthKey(date);
 }
 
+function getStatementImportIdsForMonth(
+  imports: ImportRecord[],
+  targetMonth: string,
+) {
+  return new Set(
+    imports
+      .filter((record) => {
+        const statementMonth = record.statementMonth?.trim();
+        if (statementMonth) return statementMonth === targetMonth;
+        return record.importedAt.slice(0, 7) === targetMonth;
+      })
+      .map((record) => record.id),
+  );
+}
+
 function formatDeltaAmount(amount: number) {
   if (amount === 0) return formatCurrency(0);
   return formatCurrency(Math.abs(amount));
@@ -211,6 +226,44 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" }
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const currentMonth = monthKey(new Date());
+  const previousMonth = useMemo(() => getPreviousMonthKey(currentMonth), [currentMonth]);
+  const currentMonthStatementImportIds = useMemo(
+    () => getStatementImportIdsForMonth(scope.imports, currentMonth),
+    [currentMonth, scope.imports],
+  );
+  const previousMonthStatementImportIds = useMemo(
+    () => getStatementImportIdsForMonth(scope.imports, previousMonth),
+    [previousMonth, scope.imports],
+  );
+  const currentMonthStatementImportCount = useMemo(
+    () => currentMonthStatementImportIds.size,
+    [currentMonthStatementImportIds],
+  );
+  const currentMonthStatementExpenseTotal = useMemo(
+    () =>
+      scope.transactions.reduce((sum, transaction) => {
+        if (!transaction.importRecordId || !currentMonthStatementImportIds.has(transaction.importRecordId)) return sum;
+        if (transaction.status !== "active" || transaction.transactionType !== "expense") return sum;
+        return sum + transaction.amount;
+      }, 0),
+    [currentMonthStatementImportIds, scope.transactions],
+  );
+  const previousMonthStatementExpenseTotal = useMemo(
+    () =>
+      scope.transactions.reduce((sum, transaction) => {
+        if (!transaction.importRecordId || !previousMonthStatementImportIds.has(transaction.importRecordId)) return sum;
+        if (transaction.status !== "active" || transaction.transactionType !== "expense") return sum;
+        return sum + transaction.amount;
+      }, 0),
+    [previousMonthStatementImportIds, scope.transactions],
+  );
+  const currentMonthStatementTransactions = useMemo(
+    () =>
+      scope.transactions.filter(
+        (transaction) => Boolean(transaction.importRecordId && currentMonthStatementImportIds.has(transaction.importRecordId)),
+      ),
+    [currentMonthStatementImportIds, scope.transactions],
+  );
   const monthOptions = useMemo(
     () =>
       Array.from(new Set(scope.transactions.map((transaction) => transaction.occurredAt.slice(0, 7)).filter(Boolean))).sort((a, b) =>
@@ -314,7 +367,6 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" }
     () => scope.transactions.filter((transaction) => monthKey(transaction.occurredAt) === currentMonth),
     [currentMonth, scope.transactions],
   );
-  const previousMonth = useMemo(() => getPreviousMonthKey(currentMonth), [currentMonth]);
   const previousMonthTransactions = useMemo(
     () => scope.transactions.filter((transaction) => monthKey(transaction.occurredAt) === previousMonth),
     [previousMonth, scope.transactions],
@@ -333,6 +385,12 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" }
     transactions: currentMonthTransactions,
     incomeEntries: currentMonthIncomeEntries,
   });
+  const currentMonthStatementInsights = getWorkspaceInsights(state, workspaceId, {
+    basis: "statement",
+    label: formatStatementMonthLabel(currentMonth),
+    transactions: currentMonthStatementTransactions,
+    incomeEntries: currentMonthIncomeEntries,
+  });
   const previousMonthInsights = getWorkspaceInsights(state, workspaceId, {
     basis: "month",
     label: formatMonthLabel(previousMonth),
@@ -340,13 +398,15 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" }
     incomeEntries: previousMonthIncomeEntries,
   });
   const currentMonthIncomeDelta = currentMonthInsights.income - previousMonthInsights.income;
-  const currentMonthExpenseDelta = currentMonthInsights.expense - previousMonthInsights.expense;
-  const currentMonthSavingsDelta = currentMonthInsights.savings - previousMonthInsights.savings;
+  const currentMonthExpenseDelta = currentMonthStatementExpenseTotal - previousMonthStatementExpenseTotal;
+  const currentMonthStatementBalance = currentMonthInsights.income - currentMonthStatementExpenseTotal;
+  const previousMonthStatementBalance = previousMonthInsights.income - previousMonthStatementExpenseTotal;
+  const currentMonthSavingsDelta = currentMonthStatementBalance - previousMonthStatementBalance;
   const incomeDeltaBadge = getDeltaBadge(currentMonthIncomeDelta, true);
   const expenseDeltaBadge = getDeltaBadge(currentMonthExpenseDelta, false);
   const savingsDeltaBadge = getDeltaBadge(currentMonthSavingsDelta, true);
-  const reviewBadge = getCompletionBadge(currentMonthInsights.reviewCount);
-  const uncategorizedBadge = getCompletionBadge(currentMonthInsights.uncategorizedCount);
+  const reviewBadge = getCompletionBadge(currentMonthStatementInsights.reviewCount);
+  const uncategorizedBadge = getCompletionBadge(currentMonthStatementInsights.uncategorizedCount);
   const dominantCategory = insights.topCategories[0] ?? null;
   const dominantCategoryShare =
     dominantCategory && insights.expense > 0 ? Math.round((dominantCategory.amount / insights.expense) * 100) : null;
@@ -1176,7 +1236,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" }
         <div className="section-head">
           <div>
             <span className="section-kicker">이번 달 조각</span>
-            <h2 className="section-title">이번 달 조각 상태</h2>
+            <h2 className="section-title">이번 달 조각모음</h2>
           </div>
         </div>
 
@@ -1197,12 +1257,12 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" }
           </article>
           <article className="stat-card" style={getMotionStyle(2)}>
             <div className="stat-card-head">
-              <span className="stat-label">이번 달 지출</span>
+              <span className="stat-label">이번 달 결제금액</span>
               <span className={`badge dashboard-stat-badge ${expenseDeltaBadge.className}`}>
                 {expenseDeltaBadge.label}
               </span>
             </div>
-            <strong>{formatCurrency(currentMonthInsights.expense)}</strong>
+            <strong>{formatCurrency(currentMonthStatementExpenseTotal)}</strong>
             <span
               className={`stat-delta${currentMonthExpenseDelta > 0 ? " is-up is-negative" : currentMonthExpenseDelta < 0 ? " is-down is-positive" : ""}`}
             >
@@ -1216,7 +1276,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" }
                 {savingsDeltaBadge.label}
               </span>
             </div>
-            <strong>{formatCurrency(currentMonthInsights.savings)}</strong>
+            <strong>{formatCurrency(currentMonthStatementBalance)}</strong>
             <span
               className={`stat-delta${currentMonthSavingsDelta > 0 ? " is-up is-positive" : currentMonthSavingsDelta < 0 ? " is-down is-negative" : ""}`}
             >
@@ -1225,34 +1285,40 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" }
           </article>
           <article className="stat-card" style={getMotionStyle(4)}>
             <div className="stat-card-head">
+              <span className="stat-label">명세서 업로드</span>
+            </div>
+            <strong>{currentMonthStatementImportCount}건</strong>
+          </article>
+          <article className="stat-card" style={getMotionStyle(5)}>
+            <div className="stat-card-head">
               <span className="stat-label">검토 필요</span>
               <span className={`badge dashboard-stat-badge ${reviewBadge.className}`}>
                 {reviewBadge.label}
               </span>
             </div>
-            <strong>{currentMonthInsights.reviewCount}건</strong>
+            <strong>{currentMonthStatementInsights.reviewCount}건</strong>
           </article>
-          <article className="stat-card" style={getMotionStyle(5)}>
+          <article className="stat-card" style={getMotionStyle(6)}>
             <div className="stat-card-head">
               <span className="stat-label">미분류</span>
               <span className={`badge dashboard-stat-badge ${uncategorizedBadge.className}`}>
                 {uncategorizedBadge.label}
               </span>
             </div>
-            <strong>{currentMonthInsights.uncategorizedCount}건</strong>
+            <strong>{currentMonthStatementInsights.uncategorizedCount}건</strong>
           </article>
         </div>
 
         <div className="review-summary-panel compact-summary-panel dashboard-summary-action-panel mt-4">
           <div className="review-summary-copy">
             <strong>
-              {currentMonthInsights.isDiagnosisReady
+              {currentMonthStatementInsights.isDiagnosisReady
                 ? "이번 달 조각이 안정적으로 정리되어 있습니다"
                 : "이번 달 조각을 더 정리해야 합니다"}
             </strong>
             <p className="mb-0 text-secondary">
-              {currentMonthInsights.nextSteps.length
-                ? currentMonthInsights.nextSteps[0]
+              {currentMonthStatementInsights.nextSteps.length
+                ? currentMonthStatementInsights.nextSteps[0]
                 : "결제내역에서 이번 달 거래를 계속 정리할 수 있습니다."}
             </p>
           </div>
@@ -1326,7 +1392,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" }
         <div className="section-head">
           <div>
             <span className="section-kicker">이번 달 흐름</span>
-            <h2 className="section-title">흐름 현황</h2>
+            <h2 className="section-title">이번 달 돈의 흐름</h2>
           </div>
         </div>
         <div className="review-summary-panel">

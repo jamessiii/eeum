@@ -61,10 +61,6 @@ export function getTransactionFlowSummary(
     return "내부이체로 처리되어 소비 통계에서는 제외됩니다.";
   }
 
-  if (transaction.isSharedExpense) {
-    return "공동지출로 계산되어 정산 화면에도 함께 반영됩니다.";
-  }
-
   if (transaction.isExpenseImpact) {
     return "실지출로 계산되어 소비 통계와 진단에 반영됩니다.";
   }

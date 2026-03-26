@@ -1,600 +1,372 @@
-import { Link, useSearchParams } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { getFlowStatusSummary, getMonthlyFlowSummary } from "../../domain/settlements/summary";
 import { monthKey } from "../../shared/utils/date";
-import { getMonthlySharedSettlementSummary, getSettlementBalanceSummary } from "../../domain/settlements/summary";
-import { getSourceTypeLabel } from "../../domain/transactions/sourceTypes";
 import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
+import type { ImportRecord } from "../../shared/types/models";
 import { CompletionBanner } from "../components/CompletionBanner";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { NextStepCallout } from "../components/NextStepCallout";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
 
-interface SettlementHeadlineCard {
-  title: string;
-  description: string;
+function formatMonthLabel(value: string) {
+  const [year, month] = value.split("-");
+  return `${year}년 ${Number(month)}월`;
+}
+
+function getStatementMonthOptions(imports: ImportRecord[]) {
+  return Array.from(
+    new Set(
+      imports
+        .map((record) => record.statementMonth?.trim() ?? "")
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ).sort((left, right) => right.localeCompare(left));
+}
+
+function getStatementImportIds(imports: ImportRecord[], statementMonth: string) {
+  return new Set(
+    imports
+      .filter((record) => record.statementMonth?.trim() === statementMonth)
+      .map((record) => record.id),
+  );
+}
+
+function formatCardSummary(items: Array<{ name: string; amount: number; transactionCount: number }>) {
+  return items.map((item) => `${item.name} ${formatCurrency(item.amount)} (${item.transactionCount}건)`).join(" · ");
+}
+
+function formatCategorySummary(items: Array<{ name: string; amount: number }>) {
+  return items.map((item) => `${item.name} ${formatCurrency(item.amount)}`).join(" · ");
+}
+
+function formatAccountMeta(account?: { institutionName: string; accountNumberMasked: string } | null) {
+  if (!account) return "";
+  const parts = [account.institutionName, account.accountNumberMasked].filter(Boolean);
+  return parts.length ? ` (${parts.join(" · ")})` : "";
 }
 
 export function SettlementsPage() {
-  const { addSettlement, state } = useAppState();
-  const [searchParams] = useSearchParams();
+  const { addSettlement, removeSettlement, state } = useAppState();
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
-  const activePeople = scope.people.filter((person) => person.isActive);
-  const peopleMap = new Map(scope.people.map((person) => [person.id, person.displayName || person.name]));
-  const accountMap = new Map(scope.accounts.map((account) => [account.id, account.alias || account.name]));
-  const cardMap = new Map(scope.cards.map((card) => [card.id, card.name]));
-
-  const activeSourceType = (() => {
-    const value = searchParams.get("sourceType");
-    return value === "card" || value === "account" || value === "manual" || value === "import" ? value : null;
-  })();
-  const activeOwnerPersonId = (() => {
-    const value = searchParams.get("ownerPersonId");
-    return value && scope.people.some((person) => person.id === value) ? value : null;
-  })();
-  const activeTagId = (() => {
-    const value = searchParams.get("tagId");
-    return value && scope.tags.some((tag) => tag.id === value) ? value : null;
-  })();
-  const activeSettlementFilterSummary =
-    [
-      activeSourceType ? `수단 ${getSourceTypeLabel(activeSourceType)}` : null,
-      activeOwnerPersonId ? `사용자 ${peopleMap.get(activeOwnerPersonId) ?? "-"}` : null,
-      activeTagId ? `태그 ${scope.tags.find((tag) => tag.id === activeTagId)?.name ?? "-"}` : null,
-    ]
-      .filter(Boolean)
-      .join(" · ") || null;
-  const appendCurrentTransactionFilters = (path: string) => {
-    const [pathname, queryString = ""] = path.split("?");
-    const searchParams = new URLSearchParams();
-    for (const [key, value] of new URLSearchParams(queryString).entries()) {
-      searchParams.set(key, value);
-    }
-    if (activeSourceType && !searchParams.has("sourceType")) searchParams.set("sourceType", activeSourceType);
-    if (activeOwnerPersonId && !searchParams.has("ownerPersonId")) searchParams.set("ownerPersonId", activeOwnerPersonId);
-    if (activeTagId && !searchParams.has("tagId")) searchParams.set("tagId", activeTagId);
-    const query = searchParams.toString();
-    return query ? `${pathname}?${query}` : pathname;
-  };
-  const getTransactionListLink = (params: {
-    nature?: "shared" | "internal_transfer";
-    sourceType?: "card" | "account";
-    ownerPersonId?: string | null;
-  }) => {
-    const transactionSearchParams = new URLSearchParams();
-    if (params.nature) transactionSearchParams.set("nature", params.nature);
-    if (params.sourceType) transactionSearchParams.set("sourceType", params.sourceType);
-    if ("ownerPersonId" in params) {
-      if (params.ownerPersonId) {
-        transactionSearchParams.set("ownerPersonId", params.ownerPersonId);
-      } else {
-        transactionSearchParams.set("ownerPersonId", "all");
-      }
-    }
-    const query = transactionSearchParams.toString();
-    return appendCurrentTransactionFilters(query ? `/collections/card?${query}` : "/collections/card");
-  };
-  const getTransactionConnectionSummary = (transaction: { ownerPersonId: string | null; accountId: string | null; cardId: string | null }) =>
-    [
-      `사용자 ${(transaction.ownerPersonId ? peopleMap.get(transaction.ownerPersonId) : null) ?? "공동"}`,
-      transaction.cardId ? `카드 ${cardMap.get(transaction.cardId) ?? "-"}` : null,
-      transaction.accountId ? `계좌 ${accountMap.get(transaction.accountId) ?? "-"}` : null,
-    ]
-      .filter(Boolean)
-      .join(" · ");
-
   const currentMonth = monthKey(new Date());
-  const settlementSummary = getMonthlySharedSettlementSummary(scope.transactions, activePeople.length, currentMonth);
-  const sharedTransactions = settlementSummary.sharedTransactions;
-  const scopedSharedTransactions = sharedTransactions.filter((transaction) => {
-    if (activeSourceType && transaction.sourceType !== activeSourceType) return false;
-    if (activeOwnerPersonId && transaction.ownerPersonId !== activeOwnerPersonId) return false;
-    if (activeTagId && !transaction.tagIds.includes(activeTagId)) return false;
-    return true;
-  });
-  const hasScopedSettlementContext = Boolean(activeSettlementFilterSummary);
-  const visibleSharedTransactionCount = hasScopedSettlementContext ? scopedSharedTransactions.length : sharedTransactions.length;
-
-  const visibleSettlementSummary = hasScopedSettlementContext
-    ? getMonthlySharedSettlementSummary(scopedSharedTransactions, activePeople.length, currentMonth)
-    : settlementSummary;
-  const totalSharedExpense = visibleSettlementSummary.totalSharedExpense;
-  const splitTarget = visibleSettlementSummary.splitTarget;
-
-  const baseRows = visibleSettlementSummary.baseRows
-    .map((row) => ({
-      ...row,
-      name: peopleMap.get(row.personId) ?? "공동 계정",
-    }));
-  const settlementRecordsForView = hasScopedSettlementContext ? [] : scope.settlements;
-
-  const { settlementHistory, completedSettlementAmount, rows } = getSettlementBalanceSummary(
-    baseRows,
-    settlementRecordsForView,
-    currentMonth,
+  const statementMonthOptions = useMemo(() => getStatementMonthOptions(scope.imports), [scope.imports]);
+  const [selectedStatementMonth, setSelectedStatementMonth] = useState(
+    statementMonthOptions.includes(currentMonth) ? currentMonth : statementMonthOptions[0] ?? currentMonth,
   );
-  const settlementRows = rows.map((row) => ({
-    ...row,
-    name: peopleMap.get(row.personId) ?? "공동 계정",
-  }));
+  const [expandedTransferKeys, setExpandedTransferKeys] = useState<Set<string>>(() => new Set());
 
-  const receiver = settlementRows.find((row) => row.remainingDelta > 0);
-  const sender = settlementRows.find((row) => row.remainingDelta < 0);
-  const suggestedSettlementAmount =
-    receiver && sender ? Math.min(receiver.remainingDelta, Math.abs(sender.remainingDelta)) : 0;
-  const canRecordSuggestedSettlement = !hasScopedSettlementContext && Boolean(receiver && sender && suggestedSettlementAmount > 0);
-  const settlementHeadlineCards = settlementRows.length
-    ? [
-        receiver
-          ? {
-              title: "가장 많이 부담한 사용자",
-              description: `${receiver.name}이(가) 현재 기준으로 ${formatCurrency(receiver.amount)}를 부담했고, 아직 ${formatCurrency(
-                receiver.remainingDelta,
-              )} 더 부담한 상태입니다.`,
-            }
-          : null,
-        sender
-          ? {
-              title: "정산이 가장 필요한 사용자",
-              description: `${sender.name}은(는) 현재 ${formatCurrency(Math.abs(sender.remainingDelta))}만큼 덜 부담한 상태로 계산됩니다.`,
-            }
-          : null,
-        {
-          title: "정산 진행 상태",
-          description: hasScopedSettlementContext
-            ? "현재 맥락에서는 부담 차이만 먼저 확인합니다."
-            : settlementHistory.length
-              ? `이번 달 정산 ${settlementHistory.length}건이 이미 기록되어 있고, 완료 금액은 ${formatCurrency(completedSettlementAmount)}입니다.`
-              : "아직 기록된 정산이 없습니다.",
-        },
-      ].filter((card): card is SettlementHeadlineCard => Boolean(card))
-    : [];
-  const nextSettlementAction = !visibleSharedTransactionCount
-    ? {
-        title: hasScopedSettlementContext ? "현재 맥락에선 공동지출이 없습니다" : "지금 가장 먼저 할 일",
-        description: hasScopedSettlementContext
-          ? "현재 조건에 맞는 공동지출이 없습니다."
-          : "공동지출 거래가 있는지 먼저 확인해보세요.",
-        to: "/collections/card?nature=shared",
-        actionLabel: hasScopedSettlementContext ? "현재 맥락 공동지출 보기" : "공동지출 거래 보기",
-      }
-    : sharedTransactions.length
-    ? receiver && sender && suggestedSettlementAmount > 0
-      ? {
-          title: "지금 가장 먼저 할 일",
-          description: hasScopedSettlementContext
-            ? `${sender.name} → ${receiver.name} ${formatCurrency(suggestedSettlementAmount)} 차이가 보입니다.`
-            : `${sender.name} → ${receiver.name} ${formatCurrency(suggestedSettlementAmount)} 정산 흐름이 잡혀 있습니다.`,
-          to: "/collections/card?nature=shared",
-          actionLabel: hasScopedSettlementContext ? "현재 맥락 공동지출 점검" : "공동지출 점검하기",
-        }
-      : {
-          title: "지금 가장 먼저 할 일",
-          description: "남은 정산 편차는 크지 않습니다.",
-          to: "/collections/card?nature=shared",
-          actionLabel: hasScopedSettlementContext ? "현재 맥락 공동지출 보기" : "공동지출 거래 보기",
-        }
-    : {
-        title: "지금 가장 먼저 할 일",
-        description: "거래 화면에서 공동지출 흐름을 다시 확인해보세요.",
-        to: "/collections/card",
-        actionLabel: hasScopedSettlementContext ? "현재 맥락 거래 보기" : "거래 화면 보기",
-      };
-  const isSettlementBalanced = visibleSharedTransactionCount > 0 && !receiver && !sender;
-  const settlementQuickStatus =
-    !visibleSharedTransactionCount
-      ? {
-          title: hasScopedSettlementContext ? "현재 맥락에서는 공동지출이 없습니다" : "아직 이번 달 공동지출이 없습니다",
-          description: hasScopedSettlementContext
-            ? "현재 조건에 맞는 공동지출이 없어 정산 후보도 비어 있습니다."
-            : "공동지출 거래가 생기면 여기서 바로 정산 흐름을 볼 수 있습니다.",
-        }
-      : receiver && sender && suggestedSettlementAmount > 0
-        ? {
-            title: "추천 정산 금액이 바로 계산되었습니다",
-            description: `${sender.name}에서 ${receiver.name} 쪽으로 ${formatCurrency(suggestedSettlementAmount)} 정산하면 현재 차이를 가장 빠르게 줄일 수 있습니다.`,
-          }
-        : {
-            title: "공동지출은 있지만 추가 정산은 거의 남지 않았습니다",
-            description: "잔여 차이가 작아서 거래 확인만 해도 충분한 상태입니다.",
-          };
+  useEffect(() => {
+    const nextMonth = statementMonthOptions.includes(selectedStatementMonth)
+      ? selectedStatementMonth
+      : statementMonthOptions.includes(currentMonth)
+        ? currentMonth
+        : statementMonthOptions[0] ?? currentMonth;
+
+    if (nextMonth !== selectedStatementMonth) {
+      setSelectedStatementMonth(nextMonth);
+    }
+  }, [currentMonth, selectedStatementMonth, statementMonthOptions]);
+
+  useEffect(() => {
+    setExpandedTransferKeys(new Set());
+  }, [selectedStatementMonth]);
+
+  const selectedStatementImportIds = useMemo(
+    () => getStatementImportIds(scope.imports, selectedStatementMonth),
+    [scope.imports, selectedStatementMonth],
+  );
+  const selectedImports = useMemo(
+    () => scope.imports.filter((record) => selectedStatementImportIds.has(record.id)),
+    [scope.imports, selectedStatementImportIds],
+  );
+  const selectedStatementTransactions = useMemo(
+    () =>
+      scope.transactions.filter(
+        (transaction) => Boolean(transaction.importRecordId && selectedStatementImportIds.has(transaction.importRecordId)),
+      ),
+    [scope.transactions, selectedStatementImportIds],
+  );
+
+  const flowSummary = useMemo(
+    () => getMonthlyFlowSummary(selectedStatementTransactions, scope.categories, scope.cards, scope.accounts),
+    [scope.accounts, scope.cards, scope.categories, selectedStatementTransactions],
+  );
+  const flowStatus = useMemo(
+    () => getFlowStatusSummary(flowSummary.rows, scope.settlements, selectedStatementMonth),
+    [flowSummary.rows, scope.settlements, selectedStatementMonth],
+  );
+  const unconfirmedRows = flowStatus.rows.filter((row) => !row.isConfirmed);
+  const allConfirmed = flowStatus.rows.length > 0 && unconfirmedRows.length === 0;
+  const selectedStatementExpenseTotal = useMemo(
+    () =>
+      selectedStatementTransactions.reduce((sum, transaction) => {
+        if (transaction.status !== "active" || transaction.transactionType !== "expense") return sum;
+        return sum + transaction.amount;
+      }, 0),
+    [selectedStatementTransactions],
+  );
+  const selectedStatementLabel = `${formatMonthLabel(selectedStatementMonth)} 청구분`;
 
   return (
     <div className="page-stack">
       <section className="card shadow-sm" style={getMotionStyle(0)}>
         <div className="section-head">
           <div>
-            <span className="section-kicker">공동지출 정산</span>
-            <h2 className="section-title">{hasScopedSettlementContext ? "현재 맥락 정산 흐름" : "이번 달 정산 흐름"}</h2>
+            <span className="section-kicker">돈의 흐름</span>
+            <h2 className="section-title">카드값 이체를 확인하는 마지막 단계</h2>
           </div>
+          <select
+            className="form-select"
+            value={selectedStatementMonth}
+            onChange={(event) => setSelectedStatementMonth(event.target.value)}
+            style={{ maxWidth: 180 }}
+            aria-label="흐름 기준 연월"
+          >
+            {statementMonthOptions.map((option) => (
+              <option key={option} value={option}>
+                {formatMonthLabel(option)}
+              </option>
+            ))}
+          </select>
         </div>
         <p className="text-secondary mb-0">
-          {hasScopedSettlementContext
-            ? "현재 맥락의 공동지출만 다시 모아 부담 차이만 먼저 봅니다."
-            : "공동지출 기준으로 이번 달 정산 흐름을 봅니다."}
+          {selectedStatementLabel} 명세서에 연결된 거래를 기준으로, 카테고리 연결 계좌에서 카드값 계좌로 얼마를 이체해야 하는지 정리하고
+          이체 여부를 확인하는 곳입니다.
         </p>
-        <div className="review-summary-panel mt-4">
-          <div className="review-summary-copy">
-            <strong>{settlementQuickStatus.title}</strong>
-            <p className="mb-0 text-secondary">{settlementQuickStatus.description}</p>
-          </div>
-          <div className="status-badge-row">
-            <span className="badge text-bg-light">공동지출 {visibleSharedTransactionCount}건</span>
-            <span className="badge text-bg-light">{hasScopedSettlementContext ? "전체 기록 별도 확인" : `완료 기록 ${settlementHistory.length}건`}</span>
-            {visibleSharedTransactionCount > 0 && suggestedSettlementAmount > 0 ? (
-              <span className="badge text-bg-warning">추천 정산 {formatCurrency(suggestedSettlementAmount)}</span>
-            ) : null}
-          </div>
-          <Link
-            to={appendCurrentTransactionFilters(visibleSharedTransactionCount ? "/collections/card?nature=shared" : "/collections/card")}
-            className="btn btn-outline-secondary btn-sm"
-          >
-            {visibleSharedTransactionCount
-              ? hasScopedSettlementContext
-                ? "현재 맥락 공동지출 보기"
-                : "공동지출 거래 보기"
-              : hasScopedSettlementContext
-                ? "현재 맥락 거래 보기"
-                : "거래 화면 보기"}
-          </Link>
+
+        <div className="stats-grid mt-4">
+          <article className="stat-card">
+            <span className="stat-label">명세서 업로드</span>
+            <strong>{selectedImports.length}건</strong>
+          </article>
+          <article className="stat-card">
+            <span className="stat-label">이번 달 결제금액</span>
+            <strong>{formatCurrency(selectedStatementExpenseTotal)}</strong>
+          </article>
+          <article className="stat-card">
+            <span className="stat-label">확인할 이체</span>
+            <strong>{flowStatus.rows.length}건</strong>
+          </article>
+          <article className="stat-card">
+            <span className="stat-label">확인 완료</span>
+            <strong>{flowStatus.confirmedCount}건</strong>
+          </article>
+          <article className="stat-card">
+            <span className="stat-label">이체 필요 금액</span>
+            <strong>{formatCurrency(flowSummary.totalAmount)}</strong>
+          </article>
+          <article className="stat-card">
+            <span className="stat-label">확인 완료 금액</span>
+            <strong>{formatCurrency(flowStatus.confirmedAmount)}</strong>
+          </article>
         </div>
-        {activeSettlementFilterSummary ? (
-          <div className="review-summary-panel compact-summary-panel mt-3">
-            <div className="review-summary-copy">
-              <strong>현재 이어진 맥락</strong>
-              <p className="mb-0 text-secondary">{activeSettlementFilterSummary}</p>
-            </div>
-            <Link className="btn btn-outline-secondary btn-sm" to="/settlements">
-              전체 정산으로 돌아가기
-            </Link>
-          </div>
-        ) : null}
+
         <NextStepCallout
           className="mt-4"
-          title={nextSettlementAction.title}
-          description={nextSettlementAction.description}
-          actionLabel={nextSettlementAction.actionLabel}
-          to={appendCurrentTransactionFilters(nextSettlementAction.to)}
+          title={allConfirmed ? `${selectedStatementLabel} 흐름 정리가 완료되었습니다` : "아직 확인이 남은 이체가 있습니다"}
+          description={
+            allConfirmed
+              ? "모든 이체 항목 확인이 끝나서 이 달의 돈 흐름 정리가 마무리되었습니다."
+              : `아직 ${unconfirmedRows.length}건의 이체 확인이 남아 있습니다.`
+          }
+          actionLabel={flowStatus.rows.length ? "결제내역 다시 보기" : "이음 준비 확인하기"}
+          to={flowStatus.rows.length ? "/collections/card" : "/connections/assets"}
         />
-        {isSettlementBalanced ? (
+
+        {allConfirmed ? (
           <CompletionBanner
             className="mt-3"
-            title={hasScopedSettlementContext ? "현재 맥락의 부담 균형이 맞춰졌습니다" : "이번 달 정산 균형이 맞춰졌습니다"}
-            description={
-              hasScopedSettlementContext
-                ? "현재 범위에서는 남은 편차가 거의 없습니다."
-                : "남아 있는 정산 편차는 거의 없습니다."
-            }
+            title={`${selectedStatementLabel} 돈의 흐름 정리가 완료되었습니다`}
+            description="모든 이체 항목을 확인했습니다. 이제 이 달의 기록을 한 번에 돌아볼 수 있습니다."
             actions={
               <>
-                {hasScopedSettlementContext ? (
-                  <Link to="/settlements" className="btn btn-outline-secondary btn-sm">
-                    전체 정산으로 돌아가기
-                  </Link>
-                ) : null}
-                <Link to={appendCurrentTransactionFilters("/collections/card?nature=shared")} className="btn btn-outline-primary btn-sm">
-                  {hasScopedSettlementContext ? "현재 맥락 공동지출 보기" : "공동지출 거래 보기"}
+                <Link to="/records/moon" className="btn btn-outline-primary btn-sm">
+                  월 기록 보기
                 </Link>
-                {!hasScopedSettlementContext ? (
-                  <Link to="/records/moon" className="btn btn-outline-secondary btn-sm">
-                    대시보드 보기
-                  </Link>
-                ) : null}
+                <Link to="/collections/card" className="btn btn-outline-secondary btn-sm">
+                  결제내역 보기
+                </Link>
               </>
             }
           />
         ) : null}
       </section>
 
-      {settlementHeadlineCards.length ? (
+      {!statementMonthOptions.length ? (
+        <section className="card shadow-sm" style={getMotionStyle(1)}>
+          <EmptyStateCallout
+            kicker="흐름 준비 중"
+            title="먼저 청구분 명세서를 올려 주세요"
+            description="흐름 페이지는 청구분이 지정된 명세서 업로드를 기준으로 이체 금액과 확인 상태를 계산합니다."
+            actions={
+              <Link to="/collections/card" className="btn btn-outline-primary btn-sm">
+                결제내역 보기
+              </Link>
+            }
+          />
+        </section>
+      ) : !flowStatus.rows.length ? (
+        <section className="card shadow-sm" style={getMotionStyle(1)}>
+          <EmptyStateCallout
+            kicker="흐름 준비 중"
+            title={`${selectedStatementLabel}에 확인할 이체가 아직 없습니다`}
+            description="선택한 청구분 명세서를 아직 불러오지 않았거나, 카드와 카테고리 연결 기준으로 이체가 필요한 항목이 없습니다."
+            actions={
+              <>
+                <Link to="/connections/assets" className="btn btn-outline-secondary btn-sm">
+                  자산 보기
+                </Link>
+                <Link to="/connections/categories" className="btn btn-outline-secondary btn-sm">
+                  카테고리 보기
+                </Link>
+                <Link to="/collections/card" className="btn btn-outline-primary btn-sm">
+                  결제내역 보기
+                </Link>
+              </>
+            }
+          />
+        </section>
+      ) : (
         <section className="card shadow-sm" style={getMotionStyle(1)}>
           <div className="section-head">
             <div>
-              <span className="section-kicker">핵심 해석</span>
-              <h2 className="section-title">정산에서 먼저 볼 포인트</h2>
+              <span className="section-kicker">이체 확인</span>
+              <h2 className="section-title">{selectedStatementLabel} 계좌별 이체 정리</h2>
             </div>
           </div>
-          <div className="resource-grid">
-            {settlementHeadlineCards.map((card, index) => (
-              <article key={card.title} className="resource-card" style={getMotionStyle(index + 2)}>
-                <h3>{card.title}</h3>
-                <p className="mb-0 text-secondary">{card.description}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-      ) : null}
+          <div className="review-list settlement-flow-list">
+            {flowStatus.rows.map((row, index) => {
+              const isExpanded = expandedTransferKeys.has(row.transferKey);
+              const confirmationRecord = row.confirmationRecord;
+              const toAccount = scope.accounts.find((account) => account.id === row.toAccountId);
 
-      <div className="page-grid">
-        <section className="card shadow-sm" style={getMotionStyle(settlementHeadlineCards.length ? 2 : 1)}>
-          <div className="section-head">
-            <div>
-              <span className="section-kicker">정산 요약</span>
-              <h2 className="section-title">누가 더 냈는지 보기</h2>
-            </div>
-          </div>
-          {!settlementRows.length ? (
-            <>
-            <div className="review-summary-panel mb-4">
-              <div className="review-summary-copy">
-                <strong>
-                  {hasScopedSettlementContext
-                    ? "현재 맥락에 공동지출이 잡히면 여기서 바로 부담 차이를 확인할 수 있습니다"
-                    : "공동지출 거래가 생기면 여기서 바로 정산 흐름이 시작됩니다"}
-                </strong>
-                <p className="mb-0 text-secondary">
-                  {hasScopedSettlementContext
-                    ? "같은 조건의 거래에서 공동지출 체크만 먼저 확인하면 됩니다."
-                    : "거래에서 공동지출 체크를 먼저 붙이면 됩니다."}
-                </p>
-              </div>
-              <div className="action-row">
-                <Link to={appendCurrentTransactionFilters("/collections/card")} className="btn btn-outline-primary btn-sm">
-                  {hasScopedSettlementContext ? "현재 맥락 거래 보기" : "거래 화면 보기"}
-                </Link>
-                {hasScopedSettlementContext ? (
-                  <Link to="/settlements" className="btn btn-outline-secondary btn-sm">
-                    전체 정산으로 돌아가기
-                  </Link>
-                ) : null}
-                <Link to="/connections/assets" className="btn btn-outline-secondary btn-sm">
-                  사용자 관리 보기
-                </Link>
-                {!hasScopedSettlementContext ? (
-                  <Link to="/records/moon" className="btn btn-outline-secondary btn-sm">
-                    대시보드 보기
-                  </Link>
-                ) : null}
-              </div>
-            </div>
-            <EmptyStateCallout
-              kicker="정산 대기"
-              title={hasScopedSettlementContext ? "현재 맥락에 공동지출이 없습니다" : "아직 공동지출 데이터가 없습니다"}
-              description={
-                hasScopedSettlementContext
-                  ? "현재 조건에 맞는 공동지출이 없어 정산 후보를 계산하지 않았습니다."
-                  : "공동지출 체크가 생기면 여기서 정산 후보를 계산합니다."
-              }
-            />
-            </>
-          ) : (
-            <>
-              <div className="stats-grid">
-                <article className="stat-card">
-                  <span className="stat-label">공동지출 총액</span>
-                  <strong>{formatCurrency(totalSharedExpense)}</strong>
-                </article>
-                <article className="stat-card">
-                  <span className="stat-label">1인 기준 부담액</span>
-                  <strong>{formatCurrency(splitTarget)}</strong>
-                </article>
-                <article className="stat-card">
-                  <span className="stat-label">공동지출 건수</span>
-                  <strong>{visibleSharedTransactionCount}건</strong>
-                </article>
-                <article className="stat-card">
-                  <span className="stat-label">완료된 정산</span>
-                  <strong>{formatCurrency(completedSettlementAmount)}</strong>
-                </article>
-              </div>
-
-              <div className="settlement-summary-box mt-4">
-                <span className="section-kicker">남은 정산 기준</span>
-                <h3 className="settlement-summary-title">
-                  {receiver && sender
-                    ? `${sender.name} → ${receiver.name} ${formatCurrency(suggestedSettlementAmount)}`
-                    : "현재는 남은 정산 후보가 없습니다"}
-                </h3>
-                <p className="text-secondary mb-0">
-                  {receiver && sender
-                    ? "기록된 정산을 반영한 뒤 남은 최소 정산 흐름입니다."
-                    : settlementHistory.length
-                      ? "현재 기록 기준으로는 이번 달 정산이 거의 끝난 상태입니다."
-                      : "공동지출이 더 쌓이면 정산 방향을 자동 제안합니다."}
-                </p>
-                <div className="status-badge-row mt-3">
-                  <span className="badge text-bg-light">완료 금액 {formatCurrency(completedSettlementAmount)}</span>
-                  <span className="badge text-bg-light">남은 후보 {receiver && sender ? "있음" : "없음"}</span>
-                </div>
-                {canRecordSuggestedSettlement && receiver && sender ? (
-                  <div className="action-row mt-3">
-                    <button
-                      className="btn btn-primary btn-sm"
-                      onClick={() =>
-                        addSettlement({
-                          workspaceId,
-                          month: currentMonth,
-                          fromPersonId: sender.personId === "shared" ? null : sender.personId,
-                          toPersonId: receiver.personId === "shared" ? null : receiver.personId,
-                          amount: suggestedSettlementAmount,
-                          note: "자동 제안 기준 정산 완료",
-                        })
-                      }
-                    >
-                      추천 정산 완료로 기록
-                    </button>
-                  </div>
-                ) : hasScopedSettlementContext && receiver && sender ? (
-                  <p className="small text-secondary mt-3 mb-0">
-                    현재 맥락 요약에서는 완료 정산 기록을 바로 남기지 않습니다. 실제 기록은 전체 정산 화면에서 확인해 주세요.
-                  </p>
-                ) : null}
-              </div>
-
-              <div className="review-summary-panel mt-4">
-                <div className="review-summary-copy">
-                  <strong>최근 공동지출 근거 거래</strong>
-                  <p className="mb-0 text-secondary">
-                    정산 계산에 들어간 최근 공동지출을 바로 확인할 수 있습니다. 흐름이 어색하면 먼저 공동지출 표기부터 다시 점검해보세요.
-                  </p>
-                </div>
-                <div className="action-row">
-                  <Link to={appendCurrentTransactionFilters("/collections/card?nature=shared")} className="btn btn-outline-primary btn-sm">
-                    {hasScopedSettlementContext ? "현재 맥락 공동지출 보기" : "공동지출 거래 보기"}
-                  </Link>
-                </div>
-              </div>
-
-              {scopedSharedTransactions.length ? (
-              <div className="review-list mt-4">
-                {scopedSharedTransactions.slice(0, 8).map((transaction, index) => (
-                  <article key={transaction.id} className="review-card" style={getMotionStyle(index + 2)}>
-                    <div className="d-flex justify-content-between align-items-start gap-3">
-                      <div className="review-card-main">
-                        <span className="review-type">공동지출 근거</span>
-                        <h3>{transaction.merchantName}</h3>
-                        <p className="mb-1 text-secondary">
-                          {transaction.occurredAt.slice(0, 10)} · {(transaction.ownerPersonId ? peopleMap.get(transaction.ownerPersonId) : "공동") ?? "공동"}
-                        </p>
-                        <p className="mb-1 text-secondary">{getTransactionConnectionSummary(transaction)}</p>
-                        <p className="mb-0 text-secondary">{transaction.description || "설명 없음"}</p>
-                      </div>
-                      <div className="review-card-side">
-                        <strong>{formatCurrency(transaction.amount)}</strong>
-                        {transaction.cardId ? (
-                          <Link
-                            to={getTransactionListLink({ nature: "shared", sourceType: "card", ownerPersonId: transaction.ownerPersonId })}
-                            className="btn btn-outline-secondary btn-sm"
-                          >
-                            {hasScopedSettlementContext ? "현재 맥락 카드 보기" : "카드 거래 보기"}
-                          </Link>
-                        ) : null}
-                        {transaction.accountId ? (
-                          <Link
-                            to={getTransactionListLink({ nature: "shared", sourceType: "account", ownerPersonId: transaction.ownerPersonId })}
-                            className="btn btn-outline-secondary btn-sm"
-                          >
-                            {hasScopedSettlementContext ? "현재 맥락 계좌 보기" : "계좌 거래 보기"}
-                          </Link>
-                        ) : null}
-                        {transaction.ownerPersonId ? (
-                          <Link
-                            to={getTransactionListLink({ nature: "shared", ownerPersonId: transaction.ownerPersonId })}
-                            className="btn btn-outline-secondary btn-sm"
-                          >
-                            {hasScopedSettlementContext ? "현재 맥락 사용자 보기" : "이 사용자 거래 보기"}
-                          </Link>
-                        ) : null}
-                      </div>
-                    </div>
-                  </article>
-                ))}
-              </div>
-              ) : activeSettlementFilterSummary ? (
-                <EmptyStateCallout
-                  kicker="?꾩옱 留ν씫 寃곌낵 ?놁쓬"
-                  title="?꾩옱 ?대뼱吏?議곌굔?먯꽌??怨듬룞吏異?洹쇨굅 嫄곕옒媛 ?놁뒿?덈떎"
-                  description={`${activeSettlementFilterSummary} 湲곗??쇰줈??怨듬룞吏異?嫄곕옒媛 ?μ옉?섏? ?딆븯?듬땲?? ?꾩껜 ?뺤궛???ㅼ떆 蹂닿굅??嫄곕옒 ?붾㈃?먯꽌 議곌굔??醫뗭엫 寃?좊낫?몄슂.`}
-                  actions={
-                    <>
-                      <Link className="btn btn-outline-secondary btn-sm" to="/settlements">
-                        전체 정산으로 돌아가기
-                      </Link>
-                      <Link className="btn btn-outline-secondary btn-sm" to={appendCurrentTransactionFilters("/collections/card?nature=shared")}>
-                        {hasScopedSettlementContext ? "현재 맥락 공동지출 보기" : "공동지출 거래 보기"}
-                      </Link>
-                    </>
-                  }
-                />
-              ) : null}
-
-              <div className="review-list mt-4">
-                {settlementRows.map((row, index) => (
-                  <article key={row.personId} className="review-card" style={getMotionStyle(index + 2)}>
-                    <div className="d-flex justify-content-between align-items-start gap-3">
-                      <div className="review-card-main">
-                        <span className="review-type">정산 요약</span>
-                        <h3>{row.name}</h3>
-                        <p className="mb-1 text-secondary">현재 부담액 {formatCurrency(row.amount)}</p>
-                        <p className="mb-0 text-secondary">
-                          정산 전 편차 {formatCurrency(Math.abs(row.delta))} · 남은 편차 {formatCurrency(Math.abs(row.remainingDelta))}
-                        </p>
-                      </div>
-                      <div className="review-card-side">
-                        <span className={`badge ${row.remainingDelta > 0 ? "text-bg-warning" : "text-bg-success"}`}>
-                          {row.remainingDelta > 0
-                            ? `${formatCurrency(row.remainingDelta)} 더 부담`
-                            : `${formatCurrency(Math.abs(row.remainingDelta))} 덜 부담`}
-                        </span>
-                        {row.personId !== "shared" ? (
-                          <Link
-                            to={getTransactionListLink({ nature: "shared", ownerPersonId: row.personId })}
-                            className="btn btn-outline-secondary btn-sm"
-                          >
-                            {hasScopedSettlementContext ? "현재 맥락 사용자 보기" : "이 사용자 공동지출 보기"}
-                          </Link>
-                        ) : null}
-                      </div>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </>
-          )}
-        </section>
-
-        <section className="card shadow-sm" style={getMotionStyle(settlementHeadlineCards.length ? 3 : 2)}>
-          <div className="section-head">
-            <div>
-              <span className="section-kicker">이번 달 정산 기록</span>
-              <h2 className="section-title">{hasScopedSettlementContext ? "전체 정산 기록 안내" : "완료된 정산 내역"}</h2>
-            </div>
-          </div>
-          {!settlementHistory.length ? (
-            <EmptyStateCallout
-              kicker="기록 없음"
-              title={hasScopedSettlementContext ? "필터 맥락에서는 정산 기록을 따로 보여주지 않습니다" : "아직 완료로 남긴 정산이 없습니다"}
-              description={
-                hasScopedSettlementContext
-                  ? "현재 화면은 공동지출 근거와 부담 차이 확인용입니다. 실제 정산 기록은 전체 정산 화면에서 확인해 주세요."
-                  : "추천 정산이 맞다면 완료로 기록해서 이번 달 정산 내역을 남겨보세요."
-              }
-              actions={
-                <>
-                  {hasScopedSettlementContext ? (
-                    <Link to="/settlements" className="btn btn-outline-secondary btn-sm">
-                      전체 정산으로 돌아가기
-                    </Link>
-                  ) : null}
-                  <Link to={appendCurrentTransactionFilters("/collections/card?nature=shared")} className="btn btn-outline-primary btn-sm">
-                    {hasScopedSettlementContext ? "현재 맥락 공동지출 보기" : "공동지출 거래 보기"}
-                  </Link>
-                </>
-              }
-            />
-          ) : (
-            <div className="review-list">
-              {settlementHistory.map((item, index) => (
-                <article key={item.id} className="review-card" style={getMotionStyle(index + 3)}>
+              return (
+                <article
+                  key={row.transferKey}
+                  className="review-card review-card--compact settlement-flow-item"
+                  style={getMotionStyle(index + 2)}
+                >
                   <div className="d-flex justify-content-between align-items-start gap-3">
                     <div className="review-card-main">
-                      <span className="review-type">정산 완료</span>
-                      <h3>
-                        {(item.fromPersonId ? peopleMap.get(item.fromPersonId) : "공동") ?? "공동"} →{" "}
-                        {(item.toPersonId ? peopleMap.get(item.toPersonId) : "공동") ?? "공동"}
-                      </h3>
-                      <p className="mb-1 text-secondary">{formatCurrency(item.amount)}</p>
-                      <p className="mb-0 text-secondary">
-                        {item.completedAt.slice(0, 19).replace("T", " ")} · {item.note || "메모 없음"}
-                      </p>
+                      <span className={`badge ${row.isConfirmed ? "text-bg-success" : "text-bg-warning"}`}>
+                        {row.isConfirmed ? "확인 완료" : "확인 필요"}
+                      </span>
+                      <h3>{`${row.fromAccountName} → ${row.toAccountName}${formatAccountMeta(toAccount)}`}</h3>
+                      <p className="mb-1 text-secondary">{`${formatCurrency(row.amount)} (${row.transactionCount}건)`}</p>
+                      <p className="mb-0 text-secondary">{formatCardSummary(row.cardAmounts)}</p>
+                      {confirmationRecord && !row.isConfirmed ? (
+                        <p className="small text-secondary mt-2 mb-0">
+                          이전 확인 금액은 {formatCurrency(confirmationRecord.amount)}이었고 현재 계산 금액과 달라 다시 확인이 필요합니다.
+                        </p>
+                      ) : null}
+                      {isExpanded ? (
+                        <div className="small text-secondary mt-2">{formatCategorySummary(row.categoryAmounts)}</div>
+                      ) : null}
+                    </div>
+
+                    <div className="review-card-side settlement-flow-actions">
+                      <strong className="settlement-flow-inline-amount">{formatCurrency(row.amount)}</strong>
+                      <div className="settlement-flow-action-row">
+                        <button
+                          type="button"
+                          className="btn btn-outline-secondary btn-sm settlement-flow-detail-button"
+                          onClick={() =>
+                            setExpandedTransferKeys((current) => {
+                              const next = new Set(current);
+                              if (next.has(row.transferKey)) next.delete(row.transferKey);
+                              else next.add(row.transferKey);
+                              return next;
+                            })
+                          }
+                        >
+                          {isExpanded ? "상세닫기" : "상세보기"}
+                        </button>
+                        {row.isConfirmed && confirmationRecord ? (
+                          <button
+                            type="button"
+                            className="btn btn-outline-secondary btn-sm"
+                            onClick={() => removeSettlement(confirmationRecord.id)}
+                          >
+                            확인 취소
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-sm"
+                            onClick={() =>
+                              addSettlement({
+                                workspaceId,
+                                month: selectedStatementMonth,
+                                transferKey: row.transferKey,
+                                fromAccountId: row.fromAccountId,
+                                toAccountId: row.toAccountId,
+                                amount: row.amount,
+                                note: "흐름 페이지에서 이체 여부를 확인함",
+                              })
+                            }
+                          >
+                            이체 확인
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </article>
-              ))}
-            </div>
-          )}
-
-          <div className="guide-progress mt-4">
-            <span className="section-kicker">정산 가이드</span>
-            <ul className="next-step-list mt-3">
-              <li>공동지출이 맞는 거래만 표시해야 정산 금액이 과하게 잡히지 않습니다.</li>
-              <li>생활비 계좌에서 나간 결제는 개인 부담인지 공동 부담인지 함께 확인해보세요.</li>
-              <li>다음 단계에서는 분담 비율 조정과 정산 취소/수정 기능을 붙일 수 있습니다.</li>
-            </ul>
+              );
+            })}
           </div>
+
+          {!!flowStatus.confirmationHistory.length && (
+            <>
+              <hr className="my-4" />
+              <div className="section-head">
+                <div>
+                  <span className="section-kicker">확인 기록</span>
+                  <h2 className="section-title">{selectedStatementLabel} 이체 완료 기록</h2>
+                </div>
+              </div>
+              <div className="review-list settlement-flow-list">
+                {flowStatus.confirmationHistory.map((item, index) => {
+                  const fromAccount = scope.accounts.find((account) => account.id === item.fromAccountId);
+                  const toAccount = scope.accounts.find((account) => account.id === item.toAccountId);
+                  return (
+                    <article
+                      key={item.id}
+                      className="review-card review-card--compact settlement-flow-item"
+                      style={getMotionStyle(index + 3)}
+                    >
+                      <div className="d-flex justify-content-between align-items-start gap-3">
+                        <div className="review-card-main">
+                          <span className="badge text-bg-success">확인 완료</span>
+                          <h3>{`${fromAccount?.alias || fromAccount?.name || "출금 계좌"} → ${toAccount?.alias || toAccount?.name || "카드값 계좌"}${formatAccountMeta(toAccount)}`}</h3>
+                          <p className="mb-1 text-secondary">{formatCurrency(item.amount)}</p>
+                          <p className="mb-0 text-secondary">{`${item.completedAt.slice(0, 19).replace("T", " ")} · ${item.note || "메모 없음"}`}</p>
+                        </div>
+                        <div className="review-card-side settlement-flow-actions">
+                          <strong className="settlement-flow-inline-amount">{formatCurrency(item.amount)}</strong>
+                          <div className="settlement-flow-action-row">
+                            <button
+                              type="button"
+                              className="btn btn-outline-secondary btn-sm"
+                              onClick={() => removeSettlement(item.id)}
+                            >
+                              확인 취소
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </section>
-      </div>
+      )}
     </div>
   );
 }
