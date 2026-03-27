@@ -1333,8 +1333,8 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" }
       <section className="card shadow-sm" style={getMotionStyle(1)}>
         <div className="section-head">
           <div>
-            <span className="section-kicker">이음 준비</span>
-            <h2 className="section-title">이음 준비</h2>
+            <span className="section-kicker">연결 된 것들</span>
+            <h2 className="section-title">연결 된 것들</h2>
           </div>
         </div>
         <div className="review-summary-panel mb-4">
@@ -1392,7 +1392,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" }
         <div className="section-head">
           <div>
             <span className="section-kicker">이번 달 흐름</span>
-            <h2 className="section-title">이번 달 돈의 흐름</h2>
+            <h2 className="section-title">이번달 자산 흐름</h2>
           </div>
         </div>
         <div className="review-summary-panel">

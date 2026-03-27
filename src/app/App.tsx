@@ -58,7 +58,7 @@ const baseNavItems: NavItem[] = [
   },
   {
     to: "/connections",
-    label: "이음",
+    label: "연결",
     subItems: [
       { key: "assets", label: "자산", to: "/connections/assets" },
       { key: "categories", label: "분류", to: "/connections/categories" },
