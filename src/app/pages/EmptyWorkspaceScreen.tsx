@@ -6,24 +6,21 @@ import { useAppState } from "../state/AppStateProvider";
 export const WORKSPACE_SETUP_KEY = "household-webapp.workspace-setup";
 export const ONBOARDING_COMPLETE_KEY = "household-webapp.onboarding-complete";
 
-type SetupPhase = "intro" | "workspace" | "person" | "creating";
+type SetupPhase = "intro" | "person" | "creating";
 type CreatingStage = "idle" | "text-fading" | "beacon-exiting";
 
 export function EmptyWorkspaceScreen() {
   const navigate = useNavigate();
   const { createEmptyWorkspace } = useAppState();
-  const [workspaceName, setWorkspaceName] = useState("");
   const [personName, setPersonName] = useState("");
   const [phase, setPhase] = useState<SetupPhase>("intro");
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [introIndex, setIntroIndex] = useState(0);
   const [creatingStage, setCreatingStage] = useState<CreatingStage>("idle");
-  const workspaceInputRef = useRef<HTMLInputElement | null>(null);
   const personInputRef = useRef<HTMLInputElement | null>(null);
   const transitionTimersRef = useRef<number[]>([]);
-  const trimmedWorkspaceName = workspaceName.trim();
   const trimmedPersonName = personName.trim();
-  const introLines = ["흩어졌던 것들이", "하나의 이야기로 남습니다"];
+  const introLines = ["흩어진 조각을 모아", "하나의 흐름으로 이어 기록합니다."];
 
   const moveToPhase = (nextPhase: SetupPhase) => {
     if (isTransitioning) return;
@@ -35,10 +32,6 @@ export function EmptyWorkspaceScreen() {
   };
 
   useEffect(() => {
-    if (phase === "workspace") {
-      window.requestAnimationFrame(() => workspaceInputRef.current?.focus());
-    }
-
     if (phase === "person") {
       window.requestAnimationFrame(() => personInputRef.current?.focus());
     }
@@ -72,12 +65,12 @@ export function EmptyWorkspaceScreen() {
       window.sessionStorage.setItem(
         WORKSPACE_SETUP_KEY,
         JSON.stringify({
-          workspaceName: trimmedWorkspaceName,
+          workspaceName: "",
           personName: trimmedPersonName,
         }),
       );
       window.sessionStorage.setItem(ONBOARDING_COMPLETE_KEY, "true");
-      createEmptyWorkspace(trimmedWorkspaceName);
+      createEmptyWorkspace();
       void navigate("/", { replace: true });
     }, textFadeDuration + beaconExitDelayAfterText + beaconExitDuration + navigateDelayAfterExit);
 
@@ -108,7 +101,7 @@ export function EmptyWorkspaceScreen() {
             setIsTransitioning(true);
             window.setTimeout(() => {
               if (introIndex >= introLines.length - 1) {
-                setPhase("workspace");
+                setPhase("person");
               } else {
                 setIntroIndex((current) => current + 1);
               }
@@ -125,74 +118,37 @@ export function EmptyWorkspaceScreen() {
             </span>
           </div>
         </button>
-      ) : phase === "workspace" || phase === "person" ? (
+      ) : phase === "person" ? (
         <section
-          key={phase}
           className={`empty-workspace-onboarding${isTransitioning ? " is-transitioning" : ""}`}
           aria-labelledby="empty-workspace-title"
         >
-          {phase === "workspace" ? (
-            <form
-              className="empty-workspace-form"
-              onSubmit={(event) => {
-                event.preventDefault();
-                if (!trimmedWorkspaceName) return;
-                moveToPhase("person");
-              }}
-            >
-              <span className="hero-kicker">Step 1</span>
-              <h1 id="empty-workspace-title">이야기의 이름을 입력해주세요.</h1>
-              <input
-                ref={workspaceInputRef}
-                className="form-control empty-workspace-input"
-                value={workspaceName}
-                onChange={(event) => setWorkspaceName(event.target.value)}
-                placeholder="예: 2026 우리집 이야기"
-                maxLength={40}
-              />
-              <div className="empty-workspace-helper-row">
-                <p className="empty-workspace-helper" />
-                <button className="btn btn-primary empty-workspace-start-button" type="submit" disabled={!trimmedWorkspaceName}>
-                  다음
-                </button>
-              </div>
-            </form>
-          ) : null}
-
-          {phase === "person" ? (
-            <form
-              className="empty-workspace-form"
-              onSubmit={(event) => {
-                event.preventDefault();
-                if (!trimmedPersonName) return;
-                setCreatingStage("idle");
-                moveToPhase("creating");
-              }}
-            >
-              <span className="hero-kicker">Step 2</span>
-              <h1 id="empty-workspace-title">이야기의 주인공은</h1>
-              <input
-                ref={personInputRef}
-                className="form-control empty-workspace-input"
-                value={personName}
-                onChange={(event) => setPersonName(event.target.value)}
-                placeholder="예: 지민"
-                maxLength={24}
-              />
-              <div className="empty-workspace-helper-row">
-                <button
-                  type="button"
-                  className="btn empty-workspace-back-button"
-                  onClick={() => moveToPhase("workspace")}
-                >
-                  이전
-                </button>
-                <button className="btn btn-primary empty-workspace-start-button" type="submit" disabled={!trimmedPersonName}>
-                  시작하기
-                </button>
-              </div>
-            </form>
-          ) : null}
+          <form
+            className="empty-workspace-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!trimmedPersonName) return;
+              setCreatingStage("idle");
+              moveToPhase("creating");
+            }}
+          >
+            <span className="hero-kicker">이음 시작</span>
+            <h1 id="empty-workspace-title">당신의 이름은?</h1>
+            <input
+              ref={personInputRef}
+              className="form-control empty-workspace-input"
+              value={personName}
+              onChange={(event) => setPersonName(event.target.value)}
+              placeholder="이름 입력"
+              maxLength={24}
+            />
+            <div className="empty-workspace-helper-row">
+              <p className="empty-workspace-helper" />
+              <button className="btn btn-primary empty-workspace-start-button" type="submit" disabled={!trimmedPersonName}>
+                시작하기
+              </button>
+            </div>
+          </form>
         </section>
       ) : null}
 
@@ -213,8 +169,9 @@ export function EmptyWorkspaceScreen() {
             finalizeOnboarding();
           }}
         >
-          <div className="empty-workspace-intro-lines" aria-label="지금 바로 시작합니다.">
-            <span className="empty-workspace-intro-line is-active">지금 바로 시작합니다.</span>
+          <div className="empty-workspace-intro-lines" aria-label="올바른 소비습관으로 이어지는 여정, 이음에서 시작합니다">
+            <span className="empty-workspace-intro-line is-active">올바른 소비습관으로 이어지는 여정,</span>
+            <span className="empty-workspace-intro-line is-active">이음에서 시작합니다</span>
           </div>
         </button>
       ) : null}
