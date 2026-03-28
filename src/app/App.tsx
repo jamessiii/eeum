@@ -6,7 +6,6 @@ import { Link } from "react-router-dom";
 import { MotionProvider } from "./motion/MotionProvider";
 import { AppModal } from "./components/AppModal";
 import { AppGuidePanel } from "./components/AppGuidePanel";
-import { EmptyStateCallout } from "./components/EmptyStateCallout";
 import { EmptyWorkspaceScreen, ONBOARDING_COMPLETE_KEY, WORKSPACE_SETUP_KEY } from "./pages/EmptyWorkspaceScreen";
 import { LoadingScreen } from "./pages/LoadingScreen";
 import { AppStateProvider, useAppState } from "./state/AppStateProvider";
@@ -394,13 +393,7 @@ function RecordsPage({ view }: { view: "moon" | "sun" }) {
       {view === "moon" ? (
         <DashboardPage mode="moon" />
       ) : (
-        <div className="page-stack">
-          <EmptyStateCallout
-            kicker="해 기록"
-            title="한 해의 흐름을 곧 더 길게 돌아볼 수 있어요"
-            description="지금은 달 기록을 중심으로 보여주고 있어요. 해 기록은 한 해의 소비 흐름과 맺음의 변화를 차분히 모아볼 수 있게 이어서 준비할게요."
-          />
-        </div>
+        <DashboardPage mode="sun" />
       )}
     </>
   );

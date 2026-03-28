@@ -20,10 +20,12 @@ function parseAmount(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function maskText(value: string) {
-  const trimmed = value.trim();
-  if (!trimmed) return "";
-  return trimmed.length <= 4 ? trimmed : trimmed.slice(-4);
+function normalizeAccountNumber(value: string) {
+  return value.trim();
+}
+
+function normalizePersonNameForMatch(value: string) {
+  return value.replace(/\s+/g, "").trim();
 }
 
 function extractCardNumberMasked(value: string) {
@@ -682,7 +684,7 @@ export async function parseHouseholdWorkbook(file: File, context?: ImportClassif
       name: normalized,
       alias: normalized,
       institutionName: normalizeText(institution) || "미정 금융기관",
-      accountNumberMasked: maskText(number),
+      accountNumberMasked: normalizeAccountNumber(number),
       accountType: "checking",
       usageType: isShared ? "shared" : "daily",
       isShared,
@@ -872,6 +874,67 @@ export async function parseHouseholdWorkbook(file: File, context?: ImportClassif
         },
         { createUncategorizedReview: !normalizeText(row[categoryColumn]) },
       );
+    });
+  };
+
+  const parseDetectedHouseholdTransferSheets = () => {
+    workbook.SheetNames.filter((sheetName) => {
+      const normalized = normalizeText(sheetName);
+      return normalized.endsWith("이체") && normalized !== "계좌";
+    }).forEach((sheetName) => {
+      const ownerName = normalizeText(sheetName).replace(/\s*이체$/u, "").trim();
+      if (!ownerName) return;
+      parseHouseholdTransferSheet(sheetName, ownerName);
+    });
+  };
+
+  const parseDetectedHouseholdCardSheets = () => {
+    workbook.SheetNames.filter((sheetName) => {
+      const normalized = normalizeText(sheetName);
+      return normalized.endsWith("카드") && normalized !== "카드";
+    }).forEach((sheetName) => {
+      const ownerName = normalizeText(sheetName).replace(/\s*카드$/u, "").trim();
+      if (!ownerName) return;
+
+      const sheet = workbook.Sheets[sheetName];
+      if (!sheet) return;
+
+      const rows = XLSX.utils.sheet_to_json<(string | null)[]>(sheet, { header: 1, defval: null });
+      const headerRow = rows.find((row) => row.some((cell) => normalizeText(cell).length > 0)) ?? [];
+      const normalizedHeaders = headerRow.map((cell) => normalizeText(cell));
+
+      if (
+        normalizedHeaders.includes("이용일") &&
+        normalizedHeaders.includes("이용카드") &&
+        normalizedHeaders.includes("이용가맹점") &&
+        normalizedHeaders.includes("이용금액")
+      ) {
+        parseHouseholdCardSheet(sheetName, ownerName, "이용일", "이용카드", "이용가맹점", "이용금액", "카테고리");
+        return;
+      }
+
+      if (
+        normalizedHeaders.includes("이용일자") &&
+        normalizedHeaders.includes("카드번호") &&
+        normalizedHeaders.includes("사용처/가맹점") &&
+        normalizedHeaders.includes("이용금액")
+      ) {
+        parseHouseholdCardSheet(sheetName, ownerName, "이용일자", "카드번호", "사용처/가맹점", "이용금액", "카테고리");
+      }
+    });
+  };
+
+  const finalizePrimaryOwner = () => {
+    const preferredOwner = [...peopleByName.values()].find((person) =>
+      normalizePersonNameForMatch(`${person.displayName} ${person.name}`).includes("형준"),
+    );
+    if (!preferredOwner) return;
+
+    peopleByName.forEach((person, key) => {
+      peopleByName.set(key, {
+        ...person,
+        role: person.id === preferredOwner.id ? "owner" : "member",
+      });
     });
   };
 
@@ -1236,6 +1299,8 @@ export async function parseHouseholdWorkbook(file: File, context?: ImportClassif
   };
 
   parseHouseholdAccountSheet();
+  parseDetectedHouseholdTransferSheets();
+  parseDetectedHouseholdCardSheets();
   parseHouseholdTransferSheet("정민 이체", "정민");
   parseHouseholdTransferSheet("태정 이체", "태정");
   parseHouseholdCardSheet("정민 카드", "정민", "이용일", "이용카드", "이용가맹점", "이용금액", "카테고리");
@@ -1253,6 +1318,8 @@ export async function parseHouseholdWorkbook(file: File, context?: ImportClassif
   if (transactions.length === 0) {
     parseLegacyHyundaiCardActivityStatement();
   }
+
+  finalizePrimaryOwner();
 
   for (let index = transactions.length - 1; index >= 0; index -= 1) {
     const transaction = transactions[index];

@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { getFlowStatusSummary, getMonthlyFlowSummary } from "../../domain/settlements/summary";
+import type { ImportRecord } from "../../shared/types/models";
 import { monthKey } from "../../shared/utils/date";
 import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
-import type { ImportRecord } from "../../shared/types/models";
-import { CompletionBanner } from "../components/CompletionBanner";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { NextStepCallout } from "../components/NextStepCallout";
 import { useAppState } from "../state/AppStateProvider";
@@ -38,12 +37,9 @@ function formatCardSummary(items: Array<{ name: string; amount: number; transact
   return items.map((item) => `${item.name} ${formatCurrency(item.amount)} (${item.transactionCount}건)`).join(" · ");
 }
 
-function formatCategorySummary(items: Array<{ name: string; amount: number }>) {
-  return items.map((item) => `${item.name} ${formatCurrency(item.amount)}`).join(" · ");
-}
-
 function formatAccountMeta(account?: { institutionName: string; accountNumberMasked: string } | null) {
   if (!account) return "";
+
   const parts = [account.institutionName, account.accountNumberMasked].filter(Boolean);
   return parts.length ? ` (${parts.join(" · ")})` : "";
 }
@@ -79,10 +75,12 @@ export function SettlementsPage() {
     () => getStatementImportIds(scope.imports, selectedStatementMonth),
     [scope.imports, selectedStatementMonth],
   );
+
   const selectedImports = useMemo(
     () => scope.imports.filter((record) => selectedStatementImportIds.has(record.id)),
     [scope.imports, selectedStatementImportIds],
   );
+
   const selectedStatementTransactions = useMemo(
     () =>
       scope.transactions.filter(
@@ -95,12 +93,15 @@ export function SettlementsPage() {
     () => getMonthlyFlowSummary(selectedStatementTransactions, scope.categories, scope.cards, scope.accounts),
     [scope.accounts, scope.cards, scope.categories, selectedStatementTransactions],
   );
+
   const flowStatus = useMemo(
     () => getFlowStatusSummary(flowSummary.rows, scope.settlements, selectedStatementMonth),
     [flowSummary.rows, scope.settlements, selectedStatementMonth],
   );
+
   const unconfirmedRows = flowStatus.rows.filter((row) => !row.isConfirmed);
   const allConfirmed = flowStatus.rows.length > 0 && unconfirmedRows.length === 0;
+
   const selectedStatementExpenseTotal = useMemo(
     () =>
       selectedStatementTransactions.reduce((sum, transaction) => {
@@ -109,6 +110,7 @@ export function SettlementsPage() {
       }, 0),
     [selectedStatementTransactions],
   );
+
   const selectedStatementLabel = `${formatMonthLabel(selectedStatementMonth)} 청구분`;
 
   return (
@@ -116,7 +118,7 @@ export function SettlementsPage() {
       <section className="card shadow-sm" style={getMotionStyle(0)}>
         <div className="section-head">
           <div>
-            <span className="section-kicker">돈의 흐름</span>
+            <span className="section-kicker">이번달 자산 흐름</span>
             <h2 className="section-title">카드값 이체를 확인하는 마지막 단계</h2>
           </div>
           <select
@@ -124,7 +126,7 @@ export function SettlementsPage() {
             value={selectedStatementMonth}
             onChange={(event) => setSelectedStatementMonth(event.target.value)}
             style={{ maxWidth: 180 }}
-            aria-label="흐름 기준 연월"
+            aria-label="청구분 기준 연월"
           >
             {statementMonthOptions.map((option) => (
               <option key={option} value={option}>
@@ -133,9 +135,10 @@ export function SettlementsPage() {
             ))}
           </select>
         </div>
+
         <p className="text-secondary mb-0">
-          {selectedStatementLabel} 명세서에 연결된 거래를 기준으로, 카테고리 연결 계좌에서 카드값 계좌로 얼마를 이체해야 하는지 정리하고
-          이체 여부를 확인하는 곳입니다.
+          {selectedStatementLabel} 명세서에 연결된 거래를 기준으로, 카테고리별 연결 계좌에서 카드값 계좌로 얼마를 이체해야 하는지
+          정리하고 이체 여부를 확인하는 곳입니다.
         </p>
 
         <div className="stats-grid mt-4">
@@ -170,30 +173,18 @@ export function SettlementsPage() {
           title={allConfirmed ? `${selectedStatementLabel} 흐름 정리가 완료되었습니다` : "아직 확인이 남은 이체가 있습니다"}
           description={
             allConfirmed
-              ? "모든 이체 항목 확인이 끝나서 이 달의 돈 흐름 정리가 마무리되었습니다."
+              ? "모든 이체 항목을 확인했습니다. 이제 이 달의 기록을 한 번에 돌아볼 수 있습니다."
               : `아직 ${unconfirmedRows.length}건의 이체 확인이 남아 있습니다.`
           }
-          actionLabel={flowStatus.rows.length ? "결제내역 다시 보기" : "이음 준비 확인하기"}
-          to={flowStatus.rows.length ? "/collections/card" : "/connections/assets"}
+          actions={
+            allConfirmed
+              ? [
+                  { label: "달 기록 보기", to: "/records/moon", variant: "primary" },
+                  { label: "결제내역 보기", to: "/collections/card", variant: "secondary" },
+                ]
+              : [{ label: "결제내역 다시 보기", to: "/collections/card", variant: "primary" }]
+          }
         />
-
-        {allConfirmed ? (
-          <CompletionBanner
-            className="mt-3"
-            title={`${selectedStatementLabel} 돈의 흐름 정리가 완료되었습니다`}
-            description="모든 이체 항목을 확인했습니다. 이제 이 달의 기록을 한 번에 돌아볼 수 있습니다."
-            actions={
-              <>
-                <Link to="/records/moon" className="btn btn-outline-primary btn-sm">
-                  월 기록 보기
-                </Link>
-                <Link to="/collections/card" className="btn btn-outline-secondary btn-sm">
-                  결제내역 보기
-                </Link>
-              </>
-            }
-          />
-        ) : null}
       </section>
 
       {!statementMonthOptions.length ? (
@@ -221,7 +212,7 @@ export function SettlementsPage() {
                   자산 보기
                 </Link>
                 <Link to="/connections/categories" className="btn btn-outline-secondary btn-sm">
-                  카테고리 보기
+                  분류 보기
                 </Link>
                 <Link to="/collections/card" className="btn btn-outline-primary btn-sm">
                   결제내역 보기
@@ -238,6 +229,7 @@ export function SettlementsPage() {
               <h2 className="section-title">{selectedStatementLabel} 계좌별 이체 정리</h2>
             </div>
           </div>
+
           <div className="review-list settlement-flow-list">
             {flowStatus.rows.map((row, index) => {
               const isExpanded = expandedTransferKeys.has(row.transferKey);
@@ -255,17 +247,26 @@ export function SettlementsPage() {
                       <span className={`badge ${row.isConfirmed ? "text-bg-success" : "text-bg-warning"}`}>
                         {row.isConfirmed ? "확인 완료" : "확인 필요"}
                       </span>
-                      <h3>{`${row.fromAccountName} → ${row.toAccountName}${formatAccountMeta(toAccount)}`}</h3>
+                      <h3>{`${row.fromAccountName}→${row.toAccountName}${formatAccountMeta(toAccount)}`}</h3>
                       <p className="mb-1 text-secondary">{`${formatCurrency(row.amount)} (${row.transactionCount}건)`}</p>
                       <p className="mb-0 text-secondary">{formatCardSummary(row.cardAmounts)}</p>
                       {confirmationRecord && !row.isConfirmed ? (
                         <p className="small text-secondary mt-2 mb-0">
-                          이전 확인 금액은 {formatCurrency(confirmationRecord.amount)}이었고 현재 계산 금액과 달라 다시 확인이 필요합니다.
+                          이전 확인 금액은 {formatCurrency(confirmationRecord.amount)}이었고 현재 계산 금액과 달라 다시 확인이
+                          필요합니다.
                         </p>
                       ) : null}
-                      {isExpanded ? (
-                        <div className="small text-secondary mt-2">{formatCategorySummary(row.categoryAmounts)}</div>
-                      ) : null}
+
+                      <div className={`settlement-flow-details${isExpanded ? " is-expanded" : ""}`}>
+                        <div className="settlement-flow-category-grid mt-2">
+                          {row.categoryAmounts.map((item) => (
+                            <article key={item.categoryId} className="settlement-flow-category-card">
+                              <span>{item.name}</span>
+                              <strong>{formatCurrency(item.amount)}</strong>
+                            </article>
+                          ))}
+                        </div>
+                      </div>
                     </div>
 
                     <div className="review-card-side settlement-flow-actions">
@@ -273,7 +274,7 @@ export function SettlementsPage() {
                       <div className="settlement-flow-action-row">
                         <button
                           type="button"
-                          className="btn btn-outline-secondary btn-sm settlement-flow-detail-button"
+                          className="btn btn-outline-secondary btn-sm"
                           onClick={() =>
                             setExpandedTransferKeys((current) => {
                               const next = new Set(current);
@@ -283,7 +284,7 @@ export function SettlementsPage() {
                             })
                           }
                         >
-                          {isExpanded ? "상세닫기" : "상세보기"}
+                          {isExpanded ? "상세 닫기" : "상세보기"}
                         </button>
                         {row.isConfirmed && confirmationRecord ? (
                           <button
@@ -319,52 +320,6 @@ export function SettlementsPage() {
               );
             })}
           </div>
-
-          {!!flowStatus.confirmationHistory.length && (
-            <>
-              <hr className="my-4" />
-              <div className="section-head">
-                <div>
-                  <span className="section-kicker">확인 기록</span>
-                  <h2 className="section-title">{selectedStatementLabel} 이체 완료 기록</h2>
-                </div>
-              </div>
-              <div className="review-list settlement-flow-list">
-                {flowStatus.confirmationHistory.map((item, index) => {
-                  const fromAccount = scope.accounts.find((account) => account.id === item.fromAccountId);
-                  const toAccount = scope.accounts.find((account) => account.id === item.toAccountId);
-                  return (
-                    <article
-                      key={item.id}
-                      className="review-card review-card--compact settlement-flow-item"
-                      style={getMotionStyle(index + 3)}
-                    >
-                      <div className="d-flex justify-content-between align-items-start gap-3">
-                        <div className="review-card-main">
-                          <span className="badge text-bg-success">확인 완료</span>
-                          <h3>{`${fromAccount?.alias || fromAccount?.name || "출금 계좌"} → ${toAccount?.alias || toAccount?.name || "카드값 계좌"}${formatAccountMeta(toAccount)}`}</h3>
-                          <p className="mb-1 text-secondary">{formatCurrency(item.amount)}</p>
-                          <p className="mb-0 text-secondary">{`${item.completedAt.slice(0, 19).replace("T", " ")} · ${item.note || "메모 없음"}`}</p>
-                        </div>
-                        <div className="review-card-side settlement-flow-actions">
-                          <strong className="settlement-flow-inline-amount">{formatCurrency(item.amount)}</strong>
-                          <div className="settlement-flow-action-row">
-                            <button
-                              type="button"
-                              className="btn btn-outline-secondary btn-sm"
-                              onClick={() => removeSettlement(item.id)}
-                            >
-                              확인 취소
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            </>
-          )}
         </section>
       )}
     </div>

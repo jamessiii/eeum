@@ -34,7 +34,8 @@ export function SettingsPage() {
   const { exportState, importState, setFinancialProfile, state } = useAppState();
   const { themeMode, toggleThemeMode } = useThemeMode();
   const workspaceId = state.activeWorkspaceId!;
-  const profile = getWorkspaceScope(state, workspaceId).financialProfile;
+  const scope = getWorkspaceScope(state, workspaceId);
+  const profile = scope.financialProfile;
   const [profileDraft, setProfileDraft] = useState<ProfileDraftState>(() => createProfileDraft(profile));
   const [activeProfileField, setActiveProfileField] = useState<EditableProfileField | null>(null);
 
