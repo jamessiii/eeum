@@ -3,6 +3,9 @@ import { useEffect } from "react";
 import { useRef } from "react";
 import { createPortal } from "react-dom";
 import { getPersonUsageSummary } from "../../domain/assets/usageSummary";
+import { GUIDE_SAMPLE_MEMO } from "../../domain/guidance/guideSampleBundle";
+import { getWorkspaceGuide } from "../../domain/guidance/workspaceGuide";
+import { completeGuideStepAction, revertGuideStepAction } from "../../domain/guidance/guideRuntime";
 import { getActiveTransactions } from "../../domain/transactions/meta";
 import type { Category } from "../../shared/types/models";
 import { getMotionStyle } from "../../shared/utils/motion";
@@ -109,10 +112,43 @@ type CategoryLinkPanelSize = {
 };
 
 type CategoryLinkPanelResizeDirection = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
+type PendingGuideDragTransaction = {
+  pickStepId: "people-hidden-hide-pick" | "people-hidden-restore-pick" | "people-category-link-pick";
+  completed: boolean;
+};
 
 let transparentDragImage: HTMLCanvasElement | null = null;
 
 const CATEGORY_LINK_PANEL_RESIZE_DIRECTIONS: CategoryLinkPanelResizeDirection[] = ["n", "s", "e", "w", "ne", "nw", "se", "sw"];
+const GUIDE_HIGHLIGHT_CHANGE_EVENT = "household-webapp:guide-highlight-change";
+const HIDDEN_GUIDE_SELECTORS = new Set([
+  '[data-guide-target="people-hidden-toggle"]',
+  '[data-guide-target="people-hide-guide-card"]',
+  '[data-guide-target="people-hide-zone"]',
+  '[data-guide-target="people-hidden-guide-card"]',
+  '[data-guide-target="people-restore-drop"]',
+]);
+const CATEGORY_LINK_GUIDE_SELECTORS = new Set([
+  '[data-guide-target="people-category-link-panel"]',
+  '[data-guide-target="people-category-link-panel-head"]',
+  '[data-guide-target="people-category-link-resize-handle"]',
+  '[data-guide-target="people-category-link-guide-item"]',
+  '[data-guide-target="people-category-link-account-card"]',
+]);
+const HIDDEN_GUIDE_STEP_IDS = new Set([
+  "people-hidden-assets",
+  "people-hidden-hide-pick",
+  "people-hidden-hide-drop",
+  "people-hidden-restore-pick",
+  "people-hidden-restore-drop",
+]);
+const CATEGORY_LINK_GUIDE_STEP_IDS = new Set([
+  "people-category-link-panel",
+  "people-category-link-move",
+  "people-category-link-resize",
+  "people-category-link-pick",
+  "people-category-link-drop",
+]);
 
 const EMPTY_PERSON_ACCOUNT_DRAFT: PersonAccountDraftState = {
   name: "",
@@ -385,6 +421,8 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   const categoryLinkPanelRef = useRef<HTMLElement | null>(null);
   const categoryLinkPanelScrollRef = useRef<HTMLDivElement | null>(null);
   const categoryLinkPanelSizeRef = useRef<CategoryLinkPanelSize | null>(null);
+  const categoryLinkPanelPositionRef = useRef<{ left: number; top: number } | null>(null);
+  const categoryLinkPanelGuideResizeStartRef = useRef<{ width: number; height: number } | null>(null);
   const categoryLinkPanelDragStateRef = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null);
   const categoryLinkPanelResizeStateRef = useRef<{
     pointerId: number;
@@ -396,8 +434,13 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
     startLeft: number;
     startTop: number;
   } | null>(null);
+  const categoryLinkPanelGuideMoveStartRef = useRef<{ left: number; top: number } | null>(null);
+  const pendingGuideDragTransactionRef = useRef<PendingGuideDragTransaction | null>(null);
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
+  const currentGuideStep = useMemo(() => getWorkspaceGuide(state, workspaceId).currentStep, [state, workspaceId]);
+  const isCategoryLinkGuideActive = currentGuideStep ? CATEGORY_LINK_GUIDE_STEP_IDS.has(currentGuideStep.id) : false;
+  const shouldRenderCategoryLinkPanel = isCategoryLinkPanelOpen || isCategoryLinkGuideActive;
   const people = scope.people.filter((person) => !person.isHidden);
   const hiddenPeople = scope.people.filter((person) => person.isHidden);
   const hiddenAccounts = scope.accounts.filter((account) => account.isHidden && !account.isShared);
@@ -439,6 +482,39 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   }, [scope.categories, visibleLeafCategories]);
   const maxCategoryLinkGroupSize = useMemo(
     () => categoryLinkGroups.reduce((max, entry) => Math.max(max, entry.categories.length), 1),
+    [categoryLinkGroups],
+  );
+  const guideHideTargetCardId = useMemo(
+    () =>
+      scope.cards.find((card) => !card.isHidden && card.memo === GUIDE_SAMPLE_MEMO && card.cardType === "credit")?.id ??
+      scope.cards.find((card) => !card.isHidden)?.id ??
+      null,
+    [scope.cards],
+  );
+  const guideCategoryLinkAccountId = useMemo(
+    () =>
+      scope.accounts.find((account) => !account.isHidden && account.memo === GUIDE_SAMPLE_MEMO && account.usageType === "card_payment")?.id ??
+      scope.accounts.find((account) => !account.isHidden)?.id ??
+      null,
+    [scope.accounts],
+  );
+  const guideHiddenRestoreCardId = useMemo(
+    () =>
+      hiddenCards.find((card) => card.memo === GUIDE_SAMPLE_MEMO && card.cardType === "credit")?.id ??
+      hiddenAccounts.find((account) => account.memo === GUIDE_SAMPLE_MEMO && account.usageType === "daily")?.id ??
+      hiddenPeople[0]?.id ??
+      hiddenAccounts[0]?.id ??
+      hiddenCards[0]?.id ??
+      null,
+    [hiddenAccounts, hiddenCards, hiddenPeople],
+  );
+  const guideCategoryLinkCategoryId = useMemo(
+    () =>
+      categoryLinkGroups
+        .flatMap((entry) => entry.categories)
+        .find((category) => !category.linkedAccountId)?.id ??
+      categoryLinkGroups.flatMap((entry) => entry.categories)[0]?.id ??
+      null,
     [categoryLinkGroups],
   );
   const linkedCategoriesByAccountId = useMemo(() => {
@@ -487,7 +563,11 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   }, [categoryLinkPanelSize]);
 
   useEffect(() => {
-    if (!isCategoryLinkPanelOpen || typeof window === "undefined") {
+    categoryLinkPanelPositionRef.current = categoryLinkPanelPosition;
+  }, [categoryLinkPanelPosition]);
+
+  useEffect(() => {
+    if (!shouldRenderCategoryLinkPanel || typeof window === "undefined") {
       setCategoryLinkColumnCount(1);
       return;
     }
@@ -535,7 +615,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
       window.removeEventListener("resize", queueColumnCountUpdate);
       resizeObserver?.disconnect();
     };
-  }, [isCategoryLinkPanelOpen, maxCategoryLinkGroupSize, categoryLinkPanelSize]);
+  }, [shouldRenderCategoryLinkPanel, maxCategoryLinkGroupSize, categoryLinkPanelSize]);
 
   const accountsByPersonId = new Map(
     scope.people.map((person) => [person.id, scope.accounts.filter((account) => account.ownerPersonId === person.id && !account.isHidden)]),
@@ -599,9 +679,10 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   }, [pendingInlinePersonName, people]);
 
   useEffect(() => {
-    if (!isCategoryLinkPanelOpen || typeof window === "undefined") {
+    if (!shouldRenderCategoryLinkPanel || typeof window === "undefined") {
       categoryLinkPanelDragStateRef.current = null;
       categoryLinkPanelResizeStateRef.current = null;
+      categoryLinkPanelGuideResizeStartRef.current = null;
       setIsCategoryLinkPanelDragging(false);
       setIsCategoryLinkPanelResizing(false);
       return;
@@ -691,13 +772,36 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
     const handlePointerUp = (event: PointerEvent) => {
       const resizeState = categoryLinkPanelResizeStateRef.current;
       if (resizeState && resizeState.pointerId === event.pointerId) {
+        const resizeStart = categoryLinkPanelGuideResizeStartRef.current;
+        const nextSize = categoryLinkPanelSizeRef.current ?? {
+          width: resizeState.startWidth,
+          height: resizeState.startHeight,
+        };
         categoryLinkPanelResizeStateRef.current = null;
+        categoryLinkPanelGuideResizeStartRef.current = null;
         setIsCategoryLinkPanelResizing(false);
+        if (resizeStart) {
+          const deltaWidth = nextSize.width - resizeStart.width;
+          const deltaHeight = nextSize.height - resizeStart.height;
+          if (Math.hypot(deltaWidth, deltaHeight) >= 12) {
+            completeGuideStepAction(workspaceId, "people-category-link-resize");
+          }
+        }
       }
 
       const dragState = categoryLinkPanelDragStateRef.current;
       if (!dragState || dragState.pointerId !== event.pointerId) return;
+      const moveStart = categoryLinkPanelGuideMoveStartRef.current;
+      const nextPosition = categoryLinkPanelPositionRef.current ?? categoryLinkPanelPosition ?? moveStart;
       categoryLinkPanelDragStateRef.current = null;
+      categoryLinkPanelGuideMoveStartRef.current = null;
+      if (moveStart && nextPosition) {
+        const deltaX = nextPosition.left - moveStart.left;
+        const deltaY = nextPosition.top - moveStart.top;
+        if (Math.hypot(deltaX, deltaY) >= 8) {
+          completeGuideStepAction(workspaceId, "people-category-link-move");
+        }
+      }
       setIsCategoryLinkPanelDragging(false);
     };
 
@@ -720,10 +824,54 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
       window.removeEventListener("resize", handleResize);
       categoryLinkPanelDragStateRef.current = null;
       categoryLinkPanelResizeStateRef.current = null;
+      categoryLinkPanelGuideMoveStartRef.current = null;
+      categoryLinkPanelGuideResizeStartRef.current = null;
       setIsCategoryLinkPanelDragging(false);
       setIsCategoryLinkPanelResizing(false);
     };
-  }, [isCategoryLinkPanelOpen]);
+  }, [shouldRenderCategoryLinkPanel, workspaceId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleGuideHighlightChange = (event: Event) => {
+      const detail = (event as CustomEvent<{ selector?: string | null; stepId?: string | null }>).detail;
+      const selector = detail?.selector ?? null;
+      const stepId = detail?.stepId ?? null;
+
+      if (stepId && HIDDEN_GUIDE_STEP_IDS.has(stepId)) {
+        setIsHiddenPanelOpen(true);
+        setIsCategoryLinkPanelOpen(false);
+        return;
+      }
+
+      if (stepId && CATEGORY_LINK_GUIDE_STEP_IDS.has(stepId)) {
+        setIsCategoryLinkPanelOpen(true);
+        setIsHiddenPanelOpen(false);
+        return;
+      }
+
+      if (!selector) return;
+
+      if (HIDDEN_GUIDE_SELECTORS.has(selector)) {
+        setIsHiddenPanelOpen(true);
+        setIsCategoryLinkPanelOpen(false);
+        return;
+      }
+
+      if (CATEGORY_LINK_GUIDE_SELECTORS.has(selector)) {
+        setIsCategoryLinkPanelOpen(true);
+        setIsHiddenPanelOpen(false);
+        return;
+      }
+
+      setIsHiddenPanelOpen(false);
+      setIsCategoryLinkPanelOpen(false);
+    };
+
+    window.addEventListener(GUIDE_HIGHLIGHT_CHANGE_EVENT, handleGuideHighlightChange as EventListener);
+    return () => window.removeEventListener(GUIDE_HIGHLIGHT_CHANGE_EVENT, handleGuideHighlightChange as EventListener);
+  }, []);
 
   useEffect(() => {
     if (dragItem && !isCategoryConnectionDragItem(dragItem)) {
@@ -812,6 +960,10 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   }, []);
 
   const resetDragState = () => {
+    if (pendingGuideDragTransactionRef.current && !pendingGuideDragTransactionRef.current.completed) {
+      revertGuideStepAction(workspaceId, pendingGuideDragTransactionRef.current.pickStepId);
+    }
+    pendingGuideDragTransactionRef.current = null;
     if (dragGhostRef.current) {
       dragGhostRef.current.remove();
       dragGhostRef.current = null;
@@ -821,6 +973,18 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
     setActiveCardLinkTargetId(null);
     setActiveCategoryLinkTargetId(null);
     setIsCategoryLinkResetZoneActive(false);
+  };
+
+  const startGuideDragTransaction = (pickStepId: PendingGuideDragTransaction["pickStepId"]) => {
+    completeGuideStepAction(workspaceId, pickStepId);
+    pendingGuideDragTransactionRef.current = { pickStepId, completed: false };
+  };
+
+  const completeGuideDragTransaction = (dropStepId: string) => {
+    if (pendingGuideDragTransactionRef.current) {
+      pendingGuideDragTransactionRef.current.completed = true;
+    }
+    completeGuideStepAction(workspaceId, dropStepId);
   };
 
   const applyHiddenState = (item: DragItem, isHidden: boolean) => {
@@ -852,6 +1016,9 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
       offsetX: event.clientX - panelRect.left,
       offsetY: event.clientY - panelRect.top,
     };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    categoryLinkPanelGuideMoveStartRef.current = { left: panelRect.left, top: panelRect.top };
+    categoryLinkPanelPositionRef.current = { left: panelRect.left, top: panelRect.top };
     setIsCategoryLinkPanelDragging(true);
     event.preventDefault();
   };
@@ -875,6 +1042,11 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
       startHeight: panelRect.height,
       startLeft: panelRect.left,
       startTop: panelRect.top,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    categoryLinkPanelGuideResizeStartRef.current = {
+      width: panelRect.width,
+      height: panelRect.height,
     };
     setCategoryLinkPanelPosition({ left: panelRect.left, top: panelRect.top });
     setCategoryLinkPanelSize({ width: panelRect.width, height: panelRect.height });
@@ -940,6 +1112,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
     const targetIndex = getInsertIndexByVerticalPointer(event, personIndex);
     if (dragItem.isHidden) {
       applyHiddenState(dragItem, false);
+      completeGuideDragTransaction("people-hidden-restore-drop");
     }
     movePerson(workspaceId, dragItem.id, targetIndex);
     resetDragState();
@@ -951,6 +1124,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
     event.preventDefault();
     if (dragItem.isHidden) {
       applyHiddenState(dragItem, false);
+      completeGuideDragTransaction("people-hidden-restore-drop");
     }
     movePerson(workspaceId, dragItem.id, itemCount);
     resetDragState();
@@ -963,6 +1137,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
     const targetIndex = getInsertIndexByHorizontalPointer(event, accountIndex);
     if (dragItem.isHidden) {
       applyHiddenState(dragItem, false);
+      completeGuideDragTransaction("people-hidden-restore-drop");
     }
     moveAccount(workspaceId, dragItem.id, ownerPersonId, targetIndex);
     resetDragState();
@@ -974,6 +1149,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
     event.preventDefault();
     if (dragItem.isHidden) {
       applyHiddenState(dragItem, false);
+      completeGuideDragTransaction("people-hidden-restore-drop");
     }
     moveAccount(workspaceId, dragItem.id, ownerPersonId, itemCount);
     resetDragState();
@@ -986,6 +1162,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
     const targetIndex = getInsertIndexByHorizontalPointer(event, cardIndex);
     if (dragItem.isHidden) {
       applyHiddenState(dragItem, false);
+      completeGuideDragTransaction("people-hidden-restore-drop");
     }
     moveCard(workspaceId, dragItem.id, ownerPersonId, targetIndex);
     resetDragState();
@@ -997,6 +1174,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
     event.preventDefault();
     if (dragItem.isHidden) {
       applyHiddenState(dragItem, false);
+      completeGuideDragTransaction("people-hidden-restore-drop");
     }
     moveCard(workspaceId, dragItem.id, ownerPersonId, itemCount);
     resetDragState();
@@ -1008,6 +1186,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
     event.stopPropagation();
     if (dragItem.isHidden) {
       applyHiddenState(dragItem, false);
+      completeGuideDragTransaction("people-hidden-restore-drop");
     }
     updateCard(workspaceId, cardId, { linkedAccountId: dragItem.id });
     linkedAccountFlashSequenceRef.current += 1;
@@ -1045,6 +1224,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
         updateCategory(workspaceId, category.id, { linkedAccountId: accountId });
       }
     });
+    completeGuideDragTransaction("people-category-link-drop");
     resetDragState();
   };
 
@@ -1117,7 +1297,12 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
             <button
               type="button"
               className={`board-case-action-button${isCategoryLinkPanelOpen ? " is-active is-strong" : ""}`}
-              onClick={() => setIsCategoryLinkPanelOpen((current) => !current)}
+              data-guide-target="people-category-link-toggle"
+              onClick={() => {
+                setIsCategoryLinkPanelOpen(true);
+                setIsHiddenPanelOpen(false);
+                completeGuideStepAction(workspaceId, "people-category-link-toggle");
+              }}
             >
               카테고리 연결
             </button>
@@ -1125,7 +1310,10 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
               type="button"
               className={`board-case-action-button${isHiddenPanelOpen ? " is-active" : ""}`}
               data-guide-target="people-hidden-toggle"
-              onClick={() => setIsHiddenPanelOpen((current) => !current)}
+              onClick={() => {
+                setIsHiddenPanelOpen((current) => !current);
+                completeGuideStepAction(workspaceId, "people-hidden-assets");
+              }}
             >
               숨김 {hiddenPeople.length + hiddenAccounts.length + hiddenCards.length}
             </button>
@@ -1141,6 +1329,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
       ) : (
         <div
           className="board-case-stack"
+          data-guide-target="people-restore-drop"
           onDragOver={(event) => {
             if (dragItem?.itemType !== "person") return;
             event.preventDefault();
@@ -1153,9 +1342,13 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
               <section
                 key={section.id}
                 className={`board-case-section category-case-section people-case-section${getDragStateClassName(section.id)}`}
+                data-guide-target="people-visible-asset-card"
                 style={getMotionStyle(index + 2)}
                 draggable={!isInlineEditing}
-                onDragStart={(event) => startDrag({ id: section.person.id, itemType: "person", ownerPersonId: null, isHidden: false }, event)}
+                onDragStart={(event) => {
+                  startGuideDragTransaction("people-hidden-hide-pick");
+                  startDrag({ id: section.person.id, itemType: "person", ownerPersonId: null, isHidden: false }, event);
+                }}
                 onDragEnd={resetDragState}
                 onDragOver={(event) => {
                   if (dragItem?.itemType !== "person") return;
@@ -1211,7 +1404,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                   <p>{`계좌 ${section.linkedAccounts.length}개 · 카드 ${section.linkedCards.length}개`}</p>
                 </div>
                 <div className="board-case-section-body">
-                <div className="people-subboard">
+                <div className="people-subboard" data-guide-target="people-accounts-board">
                   <div className="people-subboard-head">
                     <div>
                       <span className="section-kicker">사용자 하위 자산</span>
@@ -1252,8 +1445,17 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                           className={`category-case-card people-board-card${
                             isCategoryConnectionDragItem(dragItem) ? " is-category-link-target" : ""
                           }${isActiveCategoryLinkTarget ? " is-category-link-active" : ""}${getDragStateClassName(account.id)}`}
+                          data-guide-target={
+                            account.id === guideCategoryLinkAccountId
+                              ? "people-category-link-account-card"
+                              : "people-visible-asset-card"
+                          }
+                          data-guide-category-link-account-drop="true"
                           draggable
-                          onDragStart={(event) => startDrag({ id: account.id, itemType: "account", ownerPersonId: account.ownerPersonId ?? null, isHidden: false }, event)}
+                          onDragStart={(event) => {
+                            startGuideDragTransaction("people-hidden-hide-pick");
+                            startDrag({ id: account.id, itemType: "account", ownerPersonId: account.ownerPersonId ?? null, isHidden: false }, event);
+                          }}
                           onDragEnd={resetDragState}
                           onDragEnter={() => {
                             if (!isCategoryConnectionDragItem(dragItem)) return;
@@ -1356,8 +1558,12 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                           className={`category-case-card people-board-card${
                             dragItem?.itemType === "account" && dragItem.ownerPersonId === section.person.id ? " is-account-link-target" : ""
                           }${isActiveCardLinkTarget ? " is-account-link-active" : ""}${getDragStateClassName(card.id)}`}
+                          data-guide-target={card.id === guideHideTargetCardId ? "people-hide-guide-card" : "people-visible-asset-card"}
                           draggable
-                          onDragStart={(event) => startDrag({ id: card.id, itemType: "card", ownerPersonId: card.ownerPersonId ?? null, isHidden: false }, event)}
+                          onDragStart={(event) => {
+                            startGuideDragTransaction("people-hidden-hide-pick");
+                            startDrag({ id: card.id, itemType: "card", ownerPersonId: card.ownerPersonId ?? null, isHidden: false }, event);
+                          }}
                           onDragEnd={resetDragState}
                           onDragEnter={() => {
                             if (dragItem?.itemType !== "account" || dragItem.ownerPersonId !== section.person.id) return;
@@ -1448,7 +1654,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
     </BoardCase>
 
     {isHiddenPanelOpen ? (
-      <aside className="category-hidden-panel">
+        <aside className="category-hidden-panel" data-guide-target="people-hidden-panel">
         <div className="category-hidden-panel-head">
           <div>
             <span className="section-kicker">숨김 보관함</span>
@@ -1466,8 +1672,12 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
               <article
                 key={person.id}
                 className={`category-hidden-card${getDragStateClassName(person.id)}`}
+                data-guide-target={person.id === guideHiddenRestoreCardId ? "people-hidden-guide-card" : "people-hidden-card"}
                 draggable
-                onDragStart={(event) => startDrag({ id: person.id, itemType: "person", ownerPersonId: null, isHidden: true }, event)}
+                onDragStart={(event) => {
+                  startGuideDragTransaction("people-hidden-restore-pick");
+                  startDrag({ id: person.id, itemType: "person", ownerPersonId: null, isHidden: true }, event);
+                }}
                 onDragEnd={resetDragState}
               >
                 <strong>{person.displayName || person.name}</strong>
@@ -1483,8 +1693,12 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
               <article
                 key={account.id}
                 className={`category-hidden-card${getDragStateClassName(account.id)}`}
+                data-guide-target={account.id === guideHiddenRestoreCardId ? "people-hidden-guide-card" : "people-hidden-card"}
                 draggable
-                onDragStart={(event) => startDrag({ id: account.id, itemType: "account", ownerPersonId: account.ownerPersonId ?? null, isHidden: true }, event)}
+                onDragStart={(event) => {
+                  startGuideDragTransaction("people-hidden-restore-pick");
+                  startDrag({ id: account.id, itemType: "account", ownerPersonId: account.ownerPersonId ?? null, isHidden: true }, event);
+                }}
                 onDragEnd={resetDragState}
               >
                 <strong>{account.alias || account.name}</strong>
@@ -1500,8 +1714,12 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
               <article
                 key={card.id}
                 className={`category-hidden-card${getDragStateClassName(card.id)}`}
+                data-guide-target={card.id === guideHiddenRestoreCardId ? "people-hidden-guide-card" : "people-hidden-card"}
                 draggable
-                onDragStart={(event) => startDrag({ id: card.id, itemType: "card", ownerPersonId: card.ownerPersonId ?? null, isHidden: true }, event)}
+                onDragStart={(event) => {
+                  startGuideDragTransaction("people-hidden-restore-pick");
+                  startDrag({ id: card.id, itemType: "card", ownerPersonId: card.ownerPersonId ?? null, isHidden: true }, event);
+                }}
                 onDragEnd={resetDragState}
               >
                 <strong>{card.name}</strong>
@@ -1515,7 +1733,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
       </aside>
     ) : null}
 
-    {isCategoryLinkPanelOpen && typeof document !== "undefined"
+    {shouldRenderCategoryLinkPanel && typeof document !== "undefined"
       ? createPortal(
           <>
             <aside
@@ -1523,6 +1741,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
               className={`people-category-link-panel${isCategoryLinkPanelDragging ? " is-dragging" : ""}${
                 isCategoryLinkPanelResizing ? " is-resizing" : ""
               }`}
+              data-guide-target="people-category-link-panel"
               style={
                 categoryLinkPanelPosition || categoryLinkPanelSize
                   ? {
@@ -1536,7 +1755,11 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
               }
               aria-labelledby="peopleCategoryLinkTitle"
             >
-            <div className="people-category-link-panel-head" onPointerDown={handleCategoryLinkPanelPointerDown}>
+            <div
+              className="people-category-link-panel-head"
+              data-guide-target="people-category-link-panel-head"
+              onPointerDown={handleCategoryLinkPanelPointerDown}
+            >
               <div>
                 <span className="section-kicker">정산 소스 계좌</span>
                 <h3 id="peopleCategoryLinkTitle">카테고리 연결</h3>
@@ -1609,10 +1832,12 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                               className={`people-category-link-item${!category.linkedAccountId ? " is-unlinked" : ""}${
                                 dragItem?.itemType === "categoryLink" && dragItem.id === category.id ? " is-dragging" : ""
                               }`}
+                              data-guide-target={category.id === guideCategoryLinkCategoryId ? "people-category-link-guide-item" : undefined}
                               draggable
-                              onDragStart={(event) =>
-                                startDrag({ id: category.id, itemType: "categoryLink", ownerPersonId: null, isHidden: false }, event)
-                              }
+                              onDragStart={(event) => {
+                                startGuideDragTransaction("people-category-link-pick");
+                                startDrag({ id: category.id, itemType: "categoryLink", ownerPersonId: null, isHidden: false }, event);
+                              }}
                               onDragEnd={resetDragState}
                             >
                               <strong>{category.name}</strong>
@@ -1634,6 +1859,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                 <span
                   key={direction}
                   className={`people-category-link-resize-handle is-${direction}`}
+                  data-guide-target={direction === "se" ? "people-category-link-resize-handle" : undefined}
                   onPointerDown={(event) => handleCategoryLinkPanelResizePointerDown(direction, event)}
                   aria-hidden="true"
                 />
@@ -1649,6 +1875,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
           <>
             <div
               className={`category-side-zone category-side-zone-left${isDragOverlayActive ? " is-visible" : ""}${activeDropZone === "hide" ? " is-active" : ""}`}
+              data-guide-target="people-hide-zone"
               onDragOver={(event) => {
                 event.preventDefault();
                 setActiveDropZone("hide");
@@ -1658,6 +1885,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                 event.preventDefault();
                 if (!dragItem) return;
                 applyHiddenState(dragItem, true);
+                completeGuideDragTransaction("people-hidden-hide-drop");
                 resetDragState();
               }}
             >
@@ -1675,6 +1903,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                 event.preventDefault();
                 if (!dragItem) return;
                 requestDeleteItem(dragItem);
+                completeGuideStepAction(workspaceId, "people-delete-flow");
                 resetDragState();
               }}
             >

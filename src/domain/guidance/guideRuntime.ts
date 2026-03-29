@@ -1,6 +1,6 @@
 export const GUIDE_V1_RESET_EVENT = "household-webapp:guide-v1-reset";
 
-export type GuideFlowMode = "prompt" | "active" | "tips";
+export type GuideFlowMode = "prompt" | "active" | "tips" | "completed";
 
 type GuideRuntimeSnapshot = {
   flowMode: GuideFlowMode;
@@ -33,7 +33,7 @@ function canUseStorage() {
 }
 
 function isGuideFlowMode(value: unknown): value is GuideFlowMode {
-  return value === "prompt" || value === "active" || value === "tips";
+  return value === "prompt" || value === "active" || value === "tips" || value === "completed";
 }
 
 export function readGuideRuntime(workspaceId: string): GuideRuntimeState {
@@ -81,8 +81,11 @@ export function startGuideFlow(workspaceId: string) {
   }
 
   writeGuideRuntime(workspaceId, {
-    ...current,
     flowMode: "active",
+    replayStepIndex: null,
+    visitedStepIds: [],
+    dismissedTipIds: [],
+    replaySnapshot: null,
   });
   dispatchGuideReset(workspaceId);
 }
@@ -95,6 +98,19 @@ export function snoozeGuideFlow(workspaceId: string) {
     ...current,
     flowMode: "tips",
   });
+}
+
+export function finishGuideFlow(workspaceId: string) {
+  const current = readGuideRuntime(workspaceId);
+  if (current.flowMode === "completed") return;
+
+  writeGuideRuntime(workspaceId, {
+    ...current,
+    flowMode: "completed",
+    replayStepIndex: null,
+    replaySnapshot: null,
+  });
+  dispatchGuideReset(workspaceId);
 }
 
 export function startGuideReplay(workspaceId: string) {
@@ -163,6 +179,21 @@ export function markGuideStepVisited(workspaceId: string, stepId: string) {
     ...current,
     visitedStepIds: [...current.visitedStepIds, stepId],
   });
+}
+
+export function completeGuideStepAction(workspaceId: string, stepId: string) {
+  markGuideStepVisited(workspaceId, stepId);
+  dispatchGuideReset(workspaceId);
+}
+
+export function revertGuideStepAction(workspaceId: string, stepId: string) {
+  const current = readGuideRuntime(workspaceId);
+  if (!current.visitedStepIds.includes(stepId)) return;
+  writeGuideRuntime(workspaceId, {
+    ...current,
+    visitedStepIds: current.visitedStepIds.filter((visitedStepId) => visitedStepId !== stepId),
+  });
+  dispatchGuideReset(workspaceId);
 }
 
 export function dismissGuideTip(workspaceId: string, tipId: string) {

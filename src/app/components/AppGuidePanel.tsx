@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -7,8 +7,10 @@ import {
   advanceGuideReplay,
   dismissGuideTip,
   finishGuideReplay,
+  finishGuideFlow,
   markGuideStepVisited,
   readGuideRuntime,
+  revertGuideStepAction,
   rewindGuideReplay,
   snoozeGuideFlow,
   startGuideFlow,
@@ -36,6 +38,7 @@ const GUIDE_PANEL_MORPH_MS = 520;
 const GUIDE_BEACON_RETURN_MS = GUIDE_BEACON_ENTER_MS;
 const GUIDE_PANEL_RELOCATE_OUT_MS = 180;
 const GUIDE_PANEL_RELOCATE_IN_MS = 260;
+const GUIDE_HIGHLIGHT_CHANGE_EVENT = "household-webapp:guide-highlight-change";
 
 function isGuideDragBlocked(target: EventTarget | null) {
   if (!(target instanceof Element)) return false;
@@ -53,7 +56,13 @@ function hasGuideTarget(selector?: string | null) {
 }
 
 function resolveStepTargetSelector(step: GuideStep, currentPath: string) {
+  const shouldPreferExactTarget = Boolean(step.interactionKind);
+
   if (matchesGuideTargetPath(currentPath, step.targetPath) && hasGuideTarget(step.targetSelector)) {
+    return step.targetSelector;
+  }
+
+  if (matchesGuideTargetPath(currentPath, step.targetPath) && shouldPreferExactTarget) {
     return step.targetSelector;
   }
 
@@ -68,7 +77,79 @@ function scrollToGuideTarget(selector?: string | null) {
   if (!selector || typeof document === "undefined") return;
   const target = document.querySelector<HTMLElement>(selector);
   if (!target) return;
-  target.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+
+  const topbar = document.querySelector<HTMLElement>(".app-topbar");
+  const topbarHeight = topbar?.getBoundingClientRect().height ?? 0;
+  const viewportPadding = 20;
+  const targetRect = target.getBoundingClientRect();
+  const absoluteTargetTop = window.scrollY + targetRect.top;
+  const availableViewportHeight = Math.max(120, window.innerHeight - topbarHeight - viewportPadding * 2);
+  const desiredOffsetWithinViewport =
+    targetRect.height >= availableViewportHeight
+      ? viewportPadding
+      : viewportPadding + Math.max(0, (availableViewportHeight - targetRect.height) / 2);
+  const rawTop = absoluteTargetTop - topbarHeight - desiredOffsetWithinViewport;
+  const maxTop = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+  const nextTop = Math.min(Math.max(0, rawTop), maxTop);
+
+  window.scrollTo({
+    top: nextTop,
+    behavior: "smooth",
+  });
+}
+
+function renderGuideInlineRichText(text: string, keyPrefix: string) {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, index) => {
+    if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
+      return (
+        <strong className="guide-rich-strong" key={`${keyPrefix}-${index}`}>
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    return <Fragment key={`${keyPrefix}-${index}`}>{part}</Fragment>;
+  });
+}
+
+function splitLeadSentence(text: string) {
+  const match = text.match(/^(.+?[.!?])(\s+|$)([\s\S]*)$/);
+  if (!match) {
+    return { lead: text.trim(), rest: "" };
+  }
+
+  return {
+    lead: match[1].trim(),
+    rest: match[3].trim(),
+  };
+}
+
+function renderGuideRichText(text: string, options?: { emphasizeLeadSentence?: boolean }) {
+  const paragraphs = text
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+
+  return paragraphs.map((paragraph, index) => {
+    const paragraphKey = `guide-rich-paragraph-${index}`;
+    const shouldEmphasizeLead = Boolean(options?.emphasizeLeadSentence) && !paragraph.includes("**");
+
+    if (!shouldEmphasizeLead) {
+      return (
+        <span className="guide-rich-paragraph" key={paragraphKey}>
+          {renderGuideInlineRichText(paragraph, paragraphKey)}
+        </span>
+      );
+    }
+
+    const { lead, rest } = splitLeadSentence(paragraph);
+    return (
+      <span className="guide-rich-paragraph" key={paragraphKey}>
+        <strong className="guide-rich-lead">{lead}</strong>
+        {rest ? <> {renderGuideInlineRichText(rest, `${paragraphKey}-rest`)}</> : null}
+      </span>
+    );
+  });
 }
 
 export function AppGuidePanel({
@@ -104,6 +185,8 @@ export function AppGuidePanel({
   const relocationTimersRef = useRef<number[]>([]);
   const panelMorphTimersRef = useRef<number[]>([]);
   const panelRelocationTimersRef = useRef<number[]>([]);
+  const autoScrollKeyRef = useRef<string | null>(null);
+  const guideSampleModeRef = useRef<"sample" | "live" | null>(null);
   const dragStartXRef = useRef<number | null>(null);
   const isDraggingRef = useRef(false);
   const suppressClickRef = useRef(false);
@@ -190,24 +273,37 @@ export function AppGuidePanel({
   const isReplayActive = replayIndex !== null;
   const isGuidePromptVisible = !isReplayActive && guideRuntime.flowMode === "prompt";
   const blockingSteps = guide.steps.filter((step) => step.blocking !== false);
-  const availableBlockingSteps = blockingSteps.filter((step) => step.available !== false);
-  const completedBlockingCount = availableBlockingSteps.filter(isStepComplete).length;
+  const actionableBlockingSteps = blockingSteps.filter((step) => step.available !== false);
+  const totalBlockingCount = blockingSteps.length;
+  const visitedBlockingCount = blockingSteps.filter((step) => guideRuntime.visitedStepIds.includes(step.id)).length;
+  const completedBlockingCount = blockingSteps.filter(isStepComplete).length;
   const liveCurrentStep =
     !isGuidePromptVisible && guideRuntime.flowMode === "active"
-      ? availableBlockingSteps.find((step) => !isStepComplete(step)) ?? null
+      ? actionableBlockingSteps.find((step) => !isStepComplete(step)) ?? null
       : null;
   const currentStep = isReplayActive ? replaySteps[replayIndex] ?? null : liveCurrentStep;
+  const currentLiveStepIndex = currentStep ? actionableBlockingSteps.findIndex((step) => step.id === currentStep.id) : -1;
+  const previousLiveStep = currentLiveStepIndex > 0 ? actionableBlockingSteps[currentLiveStepIndex - 1] ?? null : null;
   const currentPath = `${location.pathname || "/"}${location.search || ""}`;
   const isCurrentStepActive = currentStep ? matchesGuideTargetPath(currentPath, currentStep.targetPath) : false;
   const primaryStepTargetSelector = currentStep ? resolveStepTargetSelector(currentStep, currentPath) : null;
-  const totalProgressCount = isReplayActive ? replaySteps.length : guide.totalCount;
-  const completedProgressCount = isReplayActive ? replayIndex ?? 0 : isGuidePromptVisible ? 0 : completedBlockingCount;
+  const totalProgressCount = isReplayActive ? replaySteps.length : totalBlockingCount;
+  const isMainGuideComplete = !isReplayActive && completedBlockingCount >= totalBlockingCount;
+  const isMainGuideFinished = !isReplayActive && guideRuntime.flowMode === "completed";
+  const canInterruptMainGuide = !isReplayActive && !isGuidePromptVisible && guideRuntime.flowMode === "active" && !isMainGuideComplete;
+  const completedProgressCount = isReplayActive
+    ? replayIndex ?? 0
+    : isGuidePromptVisible
+      ? 0
+      : isMainGuideComplete
+        ? totalBlockingCount
+        : Math.min(totalBlockingCount, visitedBlockingCount);
   const progressRatio = totalProgressCount ? completedProgressCount / totalProgressCount : 1;
   const shouldShowSupportTips =
     !isGuidePromptVisible &&
     !isReplayActive &&
     guideRuntime.flowMode === "tips" &&
-    completedBlockingCount >= totalProgressCount;
+    completedBlockingCount >= totalBlockingCount;
   const orderedSupportTips = !shouldShowSupportTips
     ? []
     : [...guide.supportTips]
@@ -223,9 +319,9 @@ export function AppGuidePanel({
   const highlightSelector = isGuidePromptVisible ? null : primarySupportTip ? primarySupportTip.targetSelector : primaryStepTargetSelector;
   const highlightLabel = isGuidePromptVisible ? "가이드 시작" : primarySupportTip?.title ?? currentStep?.title ?? "가이드";
   const currentStepIndex = currentStep ? replaySteps.findIndex((step) => step.id === currentStep.id) : -1;
-  const nextStep = currentStep && currentStepIndex >= 0 ? replaySteps[currentStepIndex + 1] ?? null : null;
   const canResumeMainGuide =
-    !isReplayActive && guideRuntime.flowMode === "tips" && !primarySupportTip && completedBlockingCount < totalProgressCount;
+    !isReplayActive && guideRuntime.flowMode === "tips" && !primarySupportTip && completedBlockingCount < totalBlockingCount;
+  const canRestartMainGuide = isMainGuideFinished && !primarySupportTip;
   const canLoadGuideSample = Boolean(
     currentStep?.id === "transactions-upload" &&
       workspaceScope &&
@@ -246,6 +342,9 @@ export function AppGuidePanel({
       ? { left: "0.35rem", right: "auto", bottom: "0.2rem" }
       : undefined;
   const oppositeAnchorSide: GuideAnchorSide = anchorSide === "left" ? "right" : "left";
+  const activeInteractionKind = currentStep?.interactionKind ?? null;
+  const activeInteractionLabel = currentStep?.interactionLabel ?? null;
+  const activeInteractionSelectors = currentStep?.allowedInteractionSelectors ?? (primaryStepTargetSelector ? [primaryStepTargetSelector] : []);
 
   const panelTitle = isGuidePromptVisible
     ? "짧은 튜토리얼을 시작할까요?"
@@ -272,9 +371,7 @@ export function AppGuidePanel({
       : currentStep
         ? isReplayActive
           ? "실제 데이터는 건드리지 않고 단계만 테스트합니다. 종료하면 실제 진행 상태로 돌아갑니다."
-          : nextStep
-            ? `다음: ${nextStep.title}`
-            : `${formatPercent(progressRatio)} 진행`
+          : ""
         : canResumeMainGuide
           ? "소개 흐름을 멈춘 상태라서, 원할 때 다시 시작할 수 있습니다."
           : "메인 흐름은 끝났고, 편의 기능 팁은 페이지에 따라 이어집니다.";
@@ -289,35 +386,137 @@ export function AppGuidePanel({
               ? "가이드 종료"
               : "다음 단계"
             : currentStep.ctaLabel
-          : isCurrentStepActive
+          : currentStep.interactionKind && isCurrentStepActive
+            ? null
+            : isCurrentStepActive
             ? currentStep.activeLabel ?? (currentStep.requiresTargetVisit ? "확인했습니다" : "이 위치 보기")
             : currentStep.ctaLabel
         : canResumeMainGuide
           ? "메인 가이드 시작"
           : null;
-  const secondaryActionLabel = isGuidePromptVisible ? "나중에 보기" : null;
+  const secondaryActionLabel = isGuidePromptVisible
+    ? "나중에 보기"
+    : previousLiveStep && !isReplayActive && !isMainGuideComplete && guideRuntime.flowMode === "active"
+      ? "이전"
+      : null;
   const primaryActionVariant = primarySupportTip ? "primary" : currentStep && isCurrentStepActive ? "outlinePrimary" : "primary";
+  const displayPrimaryActionLabel = canRestartMainGuide && !primaryActionLabel ? "?????? ??? ???" : primaryActionLabel;
 
   useEffect(() => {
-    if (!workspaceId || guideRuntime.replayStepIndex !== null) return;
+    if (!currentStep?.interactionKind || !activeInteractionSelectors.length || typeof document === "undefined") return;
 
-    const newlyCompletedStepIds = guide.steps
-      .filter((step) => step.completed && !guideRuntime.visitedStepIds.includes(step.id))
-      .map((step) => step.id);
+    const isAllowedInteractionTarget = (target: EventTarget | null) => {
+      if (!(target instanceof Element)) return false;
+      if (target.closest('[data-guide-anchor="panel"], [data-guide-anchor="fab"]')) return true;
+      return activeInteractionSelectors.some((selector) =>
+        Array.from(document.querySelectorAll(selector)).some((element) => element === target || element.contains(target)),
+      );
+    };
 
-    if (!newlyCompletedStepIds.length) return;
+    const blockInteraction = (event: Event) => {
+      if (isAllowedInteractionTarget(event.target)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation?.();
+    };
 
-    newlyCompletedStepIds.forEach((stepId) => {
-      markGuideStepVisited(workspaceId, stepId);
-    });
-    refreshGuideRuntime();
-  }, [guide.steps, guideRuntime.replayStepIndex, guideRuntime.visitedStepIds, workspaceId]);
+    document.addEventListener("click", blockInteraction, true);
+    document.addEventListener("pointerdown", blockInteraction, true);
+    document.addEventListener("dragstart", blockInteraction, true);
+
+    return () => {
+      document.removeEventListener("click", blockInteraction, true);
+      document.removeEventListener("pointerdown", blockInteraction, true);
+      document.removeEventListener("dragstart", blockInteraction, true);
+    };
+  }, [activeInteractionSelectors, currentStep?.interactionKind]);
 
   useEffect(() => {
-    if (!workspaceId || isReplayActive || isGuidePromptVisible) return;
-    if (completedBlockingCount < totalProgressCount) return;
+    if (typeof window === "undefined") return;
+
+    window.dispatchEvent(
+      new CustomEvent(GUIDE_HIGHLIGHT_CHANGE_EVENT, {
+        detail: {
+          selector: highlightSelector,
+          stepId: currentStep?.id ?? null,
+        },
+      }),
+    );
+
+    return () => {
+      window.dispatchEvent(
+        new CustomEvent(GUIDE_HIGHLIGHT_CHANGE_EVENT, {
+          detail: {
+            selector: null,
+            stepId: currentStep?.id ?? null,
+          },
+        }),
+      );
+    };
+  }, [currentStep?.id, highlightSelector]);
+
+  useEffect(() => {
+    if (!workspaceId) return;
+
+    guideSampleModeRef.current = null;
+  }, [workspaceId]);
+
+  useEffect(() => {
+    if (!workspaceId) return;
+
+    const shouldUseGuideSample = isReplayActive || (guideRuntime.flowMode === "active" && !isMainGuideComplete);
+    const shouldRestoreLiveData =
+      !shouldUseGuideSample &&
+      (guideRuntime.flowMode === "prompt" || guideRuntime.flowMode === "tips" || guideRuntime.flowMode === "completed" || isMainGuideComplete);
+    const nextGuideSampleMode = shouldUseGuideSample ? "sample" : shouldRestoreLiveData ? "live" : null;
+
+    if (guideSampleModeRef.current === nextGuideSampleMode) return;
+    guideSampleModeRef.current = nextGuideSampleMode;
+
+    if (nextGuideSampleMode === "sample") {
+      loadGuideSampleData();
+      return;
+    }
+
+    if (nextGuideSampleMode === "live") {
+      clearGuideSampleData();
+    }
+  }, [clearGuideSampleData, guideRuntime.flowMode, isMainGuideComplete, isReplayActive, loadGuideSampleData, workspaceId]);
+
+  useEffect(() => {
+    if (!workspaceId || isReplayActive) return;
+    if (guideRuntime.flowMode !== "active" || !isMainGuideComplete) return;
+
     clearGuideSampleData();
-  }, [clearGuideSampleData, completedBlockingCount, isGuidePromptVisible, isReplayActive, totalProgressCount, workspaceId]);
+    finishGuideFlow(workspaceId);
+    navigate("/dashboard");
+    refreshGuideRuntime();
+  }, [clearGuideSampleData, finishGuideFlow, guideRuntime.flowMode, isMainGuideComplete, isReplayActive, navigate, workspaceId]);
+
+  useEffect(() => {
+    if (isGuidePromptVisible || !currentStep || !isCurrentStepActive || !primaryStepTargetSelector) {
+      autoScrollKeyRef.current = null;
+      return;
+    }
+
+    const autoScrollKey = `${currentStep.id}:${currentPath}:${primaryStepTargetSelector}`;
+    if (autoScrollKeyRef.current === autoScrollKey) return;
+
+    autoScrollKeyRef.current = autoScrollKey;
+    let frameA = 0;
+    let frameB = 0;
+
+    frameA = window.requestAnimationFrame(() => {
+      frameB = window.requestAnimationFrame(() => {
+        scrollToGuideTarget(primaryStepTargetSelector);
+      });
+    });
+
+    return () => {
+      if (frameA) window.cancelAnimationFrame(frameA);
+      if (frameB) window.cancelAnimationFrame(frameB);
+    };
+  }, [currentPath, currentStep, isCurrentStepActive, isGuidePromptVisible, primaryStepTargetSelector]);
 
   useEffect(() => {
     if (isRelocating) {
@@ -515,6 +714,12 @@ export function AppGuidePanel({
       return;
     }
 
+    if (canRestartMainGuide) {
+      startGuideFlow(workspaceId);
+      refreshGuideRuntime();
+      return;
+    }
+
     if (primarySupportTip) {
       dismissGuideTip(workspaceId, primarySupportTip.id);
       refreshGuideRuntime();
@@ -546,6 +751,11 @@ export function AppGuidePanel({
       return;
     }
 
+    if (currentStep.interactionKind) {
+      scrollToGuideTarget(primaryStepTargetSelector ?? currentStep.targetSelector);
+      return;
+    }
+
     if (currentStep.requiresTargetVisit) {
       markGuideStepVisited(workspaceId, currentStep.id);
       refreshGuideRuntime();
@@ -556,10 +766,17 @@ export function AppGuidePanel({
   };
 
   const handleSecondaryAction = () => {
-    if (!isGuidePromptVisible) return;
-    snoozeGuideFlow(workspaceId);
-    refreshGuideRuntime();
-    setIsCollapsed(true);
+    if (isGuidePromptVisible) {
+      snoozeGuideFlow(workspaceId);
+      refreshGuideRuntime();
+      setIsCollapsed(true);
+      return;
+    }
+
+    if (previousLiveStep && !isReplayActive && guideRuntime.flowMode === "active") {
+      revertGuideStepAction(workspaceId, previousLiveStep.id);
+      refreshGuideRuntime();
+    }
   };
 
   const handleReplayBack = () => {
@@ -575,6 +792,13 @@ export function AppGuidePanel({
     refreshGuideRuntime();
   };
 
+  const handleGuideStop = () => {
+    if (!canInterruptMainGuide) return;
+    clearGuideSampleData();
+    snoozeGuideFlow(workspaceId);
+    refreshGuideRuntime();
+  };
+
   const handleLoadGuideSample = () => {
     if (!canLoadGuideSample) return;
     loadGuideSampleData();
@@ -583,7 +807,12 @@ export function AppGuidePanel({
 
   const floatingGuide = (
     <>
-      <GuideTargetOverlay selector={highlightSelector} label={highlightLabel} />
+      <GuideTargetOverlay
+        selector={highlightSelector}
+        label={highlightLabel}
+        interactionKind={activeInteractionKind}
+        interactionLabel={activeInteractionLabel}
+      />
       {shouldRenderPanel ? (
         <div
           className={`floating-guide-panel-shell floating-guide-panel-shell--${panelMorphState}${anchorSide === "left" ? " is-left" : ""}${
@@ -610,12 +839,17 @@ export function AppGuidePanel({
                 {isGuidePromptVisible ? "튜토리얼 제안" : primarySupportTip ? "편의 기능 안내" : isReplayActive ? "가이드 테스트" : "메인 가이드"}
               </span>
               <div className="floating-guide-kicker-actions">
-                <strong>
-                  {completedProgressCount}/{totalProgressCount}
-                </strong>
+                <strong>{completedProgressCount}/{totalProgressCount}</strong>
+              </div>
+              <div className="floating-guide-kicker-buttons">
                 {isReplayActive ? (
                   <button type="button" className="floating-guide-toggle" onClick={handleReplayStop}>
                     테스트 종료
+                  </button>
+                ) : null}
+                {canInterruptMainGuide ? (
+                  <button type="button" className="floating-guide-toggle" onClick={handleGuideStop}>
+                    중단
                   </button>
                 ) : null}
                 <button
@@ -631,14 +865,24 @@ export function AppGuidePanel({
             </div>
             <div className="guide-progress-bar" aria-hidden="true">
               <div className="guide-progress-fill" style={{ width: `${progressRatio * 100}%` }} />
+              {!isGuidePromptVisible && !primarySupportTip ? (
+                <span className="guide-progress-label">{formatPercent(progressRatio)}</span>
+              ) : null}
             </div>
             <div className="floating-guide-body guide-panel-main">
+              {currentStep?.illustration === "drag-drop" ? (
+                <div className="guide-action-illustration" aria-hidden="true">
+                  <span className="guide-action-illustration-pill">잡고 끌기</span>
+                  <span className="guide-action-illustration-arrow">→</span>
+                  <span className="guide-action-illustration-pill">여기에 놓기</span>
+                </div>
+              ) : null}
               <div className="guide-panel-copy-block">
                 <h3 className="guide-panel-title">{panelTitle}</h3>
-                <p className="guide-panel-copy">{panelCopy}</p>
-                <div className="small text-secondary">{panelMeta}</div>
+                <p className="guide-panel-copy">{renderGuideRichText(panelCopy, { emphasizeLeadSentence: true })}</p>
+                {panelMeta ? <div className="small text-secondary">{renderGuideRichText(panelMeta)}</div> : null}
               </div>
-              {primaryActionLabel ? (
+              {displayPrimaryActionLabel ? (
                 <div className="floating-guide-action-group">
                   <div className="floating-guide-action-group-left">
                     {isReplayActive ? (
@@ -665,7 +909,7 @@ export function AppGuidePanel({
                       className="floating-guide-action"
                       onClick={handlePrimaryAction}
                     >
-                      {primaryActionLabel}
+                      {displayPrimaryActionLabel}
                     </AppButton>
                   </div>
                 </div>
@@ -679,7 +923,11 @@ export function AppGuidePanel({
                 <div>
                   <span className="section-kicker">샘플로 따라오기</span>
                   <h4>업로드 파일이 없어도 가이드를 이어갈 수 있어요</h4>
-                  <p>작은 샘플 결제내역을 불러와서 업로드, 검토, 미분류 정리 단계를 직접 따라가 볼 수 있습니다.</p>
+                  <p>
+                    {renderGuideRichText("작은 샘플 결제내역을 불러와서 **업로드**, **검토**, **미분류 정리** 단계를 직접 따라가 볼 수 있습니다.", {
+                      emphasizeLeadSentence: true,
+                    })}
+                  </p>
                 </div>
                 <AppButton variant="outlinePrimary" size="sm" onClick={handleLoadGuideSample}>
                   샘플 불러오기
@@ -692,7 +940,7 @@ export function AppGuidePanel({
                 <div>
                   <span className="section-kicker">추가 팁</span>
                   <h4>{secondarySupportTip.title}</h4>
-                  <p>{secondarySupportTip.description}</p>
+                  <p>{renderGuideRichText(secondarySupportTip.description, { emphasizeLeadSentence: true })}</p>
                 </div>
                 <AppButton
                   variant="secondary"

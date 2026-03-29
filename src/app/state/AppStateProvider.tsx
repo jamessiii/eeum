@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useReducer, useState, type PropsWithChildren } from "react";
+import { createContext, useContext, useEffect, useMemo, useReducer, useRef, useState, type PropsWithChildren } from "react";
 import { clearAppState, loadAppState, saveAppState } from "../../data/db/appDb";
 import {
   createEmptyState,
@@ -10,6 +10,7 @@ import {
 } from "../../domain/app/defaults";
 import { isActiveExpenseTransaction } from "../../domain/transactions/meta";
 import { clearGuideSampleState, hasGuideSampleState, readGuideSampleState, writeGuideSampleState } from "../../domain/guidance/guideSampleState";
+import { clearGuideSampleBackup, readGuideSampleBackup, writeGuideSampleBackup } from "../../domain/guidance/guideSampleBackup";
 import { createGuideSampleBundle, GUIDE_SAMPLE_MEMO, GUIDE_SAMPLE_PARSER_ID } from "../../domain/guidance/guideSampleBundle";
 import type { Account, AppState, Card, Category, FinancialProfile, Person, ReviewItem, Transaction, WorkspaceBundle } from "../../shared/types/models";
 import { createId } from "../../shared/utils/id";
@@ -932,6 +933,99 @@ function rebaseImportedBundleIntoWorkspace(state: AppState, workspaceId: string,
   };
 }
 
+function createWorkspaceBundleSnapshot(state: AppState, workspaceId: string): WorkspaceBundle | null {
+  const workspace = state.workspaces.find((item) => item.id === workspaceId) ?? null;
+  if (!workspace) return null;
+
+  const scope = getWorkspaceScope(state, workspaceId);
+  return {
+    workspace,
+    financialProfile: scope.financialProfile ?? createFinancialProfileBase(workspaceId),
+    people: scope.people,
+    accounts: scope.accounts,
+    cards: scope.cards,
+    categories: scope.categories,
+    tags: scope.tags,
+    transactions: scope.transactions,
+    reviews: scope.reviews,
+    imports: scope.imports,
+    settlements: scope.settlements,
+    incomeEntries: scope.incomeEntries,
+  };
+}
+
+function adaptBundleToWorkspace(
+  bundle: WorkspaceBundle,
+  workspaceId: string,
+  currentWorkspace: AppState["workspaces"][number],
+  currentFinancialProfile: FinancialProfile | null,
+): WorkspaceBundle {
+  return {
+    workspace: {
+      ...currentWorkspace,
+      updatedAt: new Date().toISOString(),
+    },
+    financialProfile: {
+      ...(currentFinancialProfile ?? bundle.financialProfile),
+      workspaceId,
+    },
+    people: bundle.people.map((person) => ({ ...person, workspaceId })),
+    accounts: bundle.accounts.map((account) => ({ ...account, workspaceId })),
+    cards: bundle.cards.map((card) => ({ ...card, workspaceId })),
+    categories: bundle.categories.map((category) => ({ ...category, workspaceId })),
+    tags: bundle.tags.map((tag) => ({ ...tag, workspaceId })),
+    transactions: bundle.transactions.map((transaction) => ({ ...transaction, workspaceId })),
+    reviews: bundle.reviews.map((review) => ({ ...review, workspaceId })),
+    imports: bundle.imports.map((record) => ({ ...record, workspaceId })),
+    settlements: bundle.settlements.map((record) => ({ ...record, workspaceId })),
+    incomeEntries: bundle.incomeEntries.map((entry) => ({ ...entry, workspaceId })),
+  };
+}
+
+function replaceWorkspaceBundleInState(state: AppState, workspaceId: string, bundle: WorkspaceBundle): AppState {
+  const currentWorkspace = state.workspaces.find((item) => item.id === workspaceId) ?? null;
+  if (!currentWorkspace) return state;
+
+  const currentFinancialProfile = state.financialProfiles.find((profile) => profile.workspaceId === workspaceId) ?? null;
+  const nextBundle = adaptBundleToWorkspace(bundle, workspaceId, currentWorkspace, currentFinancialProfile);
+
+  return normalizeCategoryStructure({
+    ...state,
+    workspaces: state.workspaces.map((workspace) => (workspace.id === workspaceId ? nextBundle.workspace : workspace)),
+    financialProfiles: [...state.financialProfiles.filter((profile) => profile.workspaceId !== workspaceId), nextBundle.financialProfile],
+    people: [...state.people.filter((person) => person.workspaceId !== workspaceId), ...nextBundle.people],
+    accounts: [...state.accounts.filter((account) => account.workspaceId !== workspaceId), ...nextBundle.accounts],
+    cards: [...state.cards.filter((card) => card.workspaceId !== workspaceId), ...nextBundle.cards],
+    categories: [...state.categories.filter((category) => category.workspaceId !== workspaceId), ...nextBundle.categories],
+    tags: [...state.tags.filter((tag) => tag.workspaceId !== workspaceId), ...nextBundle.tags],
+    transactions: [...state.transactions.filter((transaction) => transaction.workspaceId !== workspaceId), ...nextBundle.transactions],
+    reviews: [...state.reviews.filter((review) => review.workspaceId !== workspaceId), ...nextBundle.reviews],
+    imports: [...state.imports.filter((record) => record.workspaceId !== workspaceId), ...nextBundle.imports],
+    settlements: [...state.settlements.filter((record) => record.workspaceId !== workspaceId), ...nextBundle.settlements],
+    incomeEntries: [...state.incomeEntries.filter((entry) => entry.workspaceId !== workspaceId), ...nextBundle.incomeEntries],
+  });
+}
+
+function restoreGuideSampleBackupsInState(state: AppState) {
+  let nextState = state;
+  let restoredWorkspaceCount = 0;
+
+  state.workspaces.forEach((workspace) => {
+    const backup = readGuideSampleBackup(workspace.id);
+    if (!backup?.workspaceBundle) return;
+
+    nextState = replaceWorkspaceBundleInState(nextState, workspace.id, backup.workspaceBundle);
+    clearGuideSampleBackup(workspace.id);
+    clearGuideSampleState(workspace.id);
+    restoredWorkspaceCount += 1;
+  });
+
+  return {
+    nextState,
+    restoredWorkspaceCount,
+  };
+}
+
 function deleteImportRecordFromState(state: AppState, workspaceId: string, importRecordId: string) {
   const removedTransactionIds = new Set(
     state.transactions
@@ -1043,6 +1137,17 @@ function removeGuideSampleDataFromState(state: AppState, workspaceId: string) {
           .filter((record) => record.workspaceId === workspaceId && record.parserId === GUIDE_SAMPLE_PARSER_ID)
           .map((record) => record.id),
   );
+  const sampleIncomeIds = new Set(
+    hasGuideSampleState(storedSampleState)
+      ? storedSampleState.incomeIds
+      : state.incomeEntries
+          .filter(
+            (entry) =>
+              entry.workspaceId === workspaceId &&
+              ((entry.ownerPersonId && samplePersonIds.has(entry.ownerPersonId)) || entry.sourceName.includes("가이드")),
+          )
+          .map((entry) => entry.id),
+  );
 
   const hasSampleData =
     samplePersonIds.size > 0 ||
@@ -1050,7 +1155,8 @@ function removeGuideSampleDataFromState(state: AppState, workspaceId: string) {
     sampleCardIds.size > 0 ||
     sampleTransactionIds.size > 0 ||
     sampleReviewIds.size > 0 ||
-    sampleImportIds.size > 0;
+    sampleImportIds.size > 0 ||
+    sampleIncomeIds.size > 0;
 
   if (!hasSampleData) {
     return { nextState: state, removed: false };
@@ -1065,6 +1171,7 @@ function removeGuideSampleDataFromState(state: AppState, workspaceId: string) {
       transactions: state.transactions.filter((transaction) => !sampleTransactionIds.has(transaction.id)),
       reviews: state.reviews.filter((review) => !sampleReviewIds.has(review.id)),
       imports: state.imports.filter((record) => !sampleImportIds.has(record.id)),
+      incomeEntries: state.incomeEntries.filter((entry) => !sampleIncomeIds.has(entry.id)),
     },
     removed: true,
   };
@@ -2071,10 +2178,18 @@ export function AppStateProvider({ children }: PropsWithChildren) {
   const [state, dispatch] = useReducer(reducer, createEmptyState());
   const [isReady, setIsReady] = useState(false);
   const { showToast } = useToast();
+  const stateRef = useRef(state);
+  const guideSampleRestoreLockRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   useEffect(() => {
     void loadAppState(createEmptyState()).then((stored) => {
-      dispatch({ type: "hydrate", payload: normalizeAppState(stored) });
+      const normalized = normalizeAppState(stored);
+      const { nextState } = restoreGuideSampleBackupsInState(normalized);
+      dispatch({ type: "hydrate", payload: nextState });
       setIsReady(true);
     });
   }, []);
@@ -2116,7 +2231,8 @@ export function AppStateProvider({ children }: PropsWithChildren) {
       },
       async previewWorkbookImport(file) {
         const { parseHouseholdWorkbook } = await import("../../domain/imports/householdWorkbook");
-        const activeWorkspaceId = state.activeWorkspaceId;
+        const latestState = stateRef.current;
+        const activeWorkspaceId = latestState.activeWorkspaceId;
         const classificationContext = activeWorkspaceId ? getWorkspaceScope(state, activeWorkspaceId) : null;
         const bundle = await parseHouseholdWorkbook(
           file,
@@ -2131,7 +2247,8 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         return bundle;
       },
       commitImportedBundle(bundle, fileName) {
-        const activeWorkspaceId = state.activeWorkspaceId;
+        const latestState = stateRef.current;
+        const activeWorkspaceId = latestState.activeWorkspaceId;
         const payload = activeWorkspaceId ? rebaseImportedBundleIntoWorkspace(state, activeWorkspaceId, bundle) : bundle;
         dispatch({ type: "mergeBundle", payload });
         showToast(`${fileName} 업로드를 완료했습니다.`, "success");
@@ -2141,37 +2258,66 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         showToast("명세서를 삭제했습니다.", "success");
       },
       loadGuideSampleData() {
-        const activeWorkspaceId = state.activeWorkspaceId;
+        const latestState = stateRef.current;
+        const activeWorkspaceId = latestState.activeWorkspaceId;
         if (!activeWorkspaceId) return;
 
-        const scope = getWorkspaceScope(state, activeWorkspaceId);
-        if (scope.transactions.length > 0 || scope.imports.length > 0) {
-          showToast("가이드 샘플은 거래가 없는 가계부에서만 불러올 수 있습니다.", "info");
-          return;
-        }
+        if (readGuideSampleBackup(activeWorkspaceId)) return;
+
+        guideSampleRestoreLockRef.current.delete(activeWorkspaceId);
+
+        const snapshot = createWorkspaceBundleSnapshot(latestState, activeWorkspaceId);
+        if (!snapshot) return;
+
+        const scope = getWorkspaceScope(latestState, activeWorkspaceId);
 
         const primaryPerson =
           scope.people.find((person) => !person.isHidden && person.isActive !== false) ?? scope.people[0] ?? null;
         const bundle = createGuideSampleBundle({
           ownerName: primaryPerson?.displayName?.trim() || primaryPerson?.name?.trim() || null,
         });
-        const payload = rebaseImportedBundleIntoWorkspace(state, activeWorkspaceId, bundle);
-        writeGuideSampleState(activeWorkspaceId, {
-          personIds: payload.people.map((person) => person.id),
-          accountIds: payload.accounts.map((account) => account.id),
-          cardIds: payload.cards.map((card) => card.id),
-          transactionIds: payload.transactions.map((transaction) => transaction.id),
-          reviewIds: payload.reviews.map((review) => review.id),
-          importIds: payload.imports.map((record) => record.id),
+        const nextState = replaceWorkspaceBundleInState(latestState, activeWorkspaceId, bundle);
+        const nextScope = getWorkspaceScope(nextState, activeWorkspaceId);
+
+        writeGuideSampleBackup(activeWorkspaceId, {
+          workspaceBundle: snapshot,
         });
-        dispatch({ type: "mergeBundle", payload });
-        showToast("가이드용 샘플 결제내역을 불러왔습니다.", "success");
+        writeGuideSampleState(activeWorkspaceId, {
+          personIds: nextScope.people.map((person) => person.id),
+          accountIds: nextScope.accounts.map((account) => account.id),
+          cardIds: nextScope.cards.map((card) => card.id),
+          transactionIds: nextScope.transactions.map((transaction) => transaction.id),
+          reviewIds: nextScope.reviews.map((review) => review.id),
+          importIds: nextScope.imports.map((record) => record.id),
+          incomeIds: nextScope.incomeEntries.map((entry) => entry.id),
+        });
+        dispatch({ type: "replaceState", payload: nextState });
+        showToast("튜토리얼용 샘플 데이터를 적용했습니다. 실제 데이터는 잠시 백업해 두었습니다.", "success");
       },
       clearGuideSampleData() {
-        const activeWorkspaceId = state.activeWorkspaceId;
+        const latestState = stateRef.current;
+        const activeWorkspaceId = latestState.activeWorkspaceId;
         if (!activeWorkspaceId) return;
 
-        const { nextState, removed } = removeGuideSampleDataFromState(state, activeWorkspaceId);
+        const backup = readGuideSampleBackup(activeWorkspaceId);
+        if (backup?.workspaceBundle) {
+          guideSampleRestoreLockRef.current.add(activeWorkspaceId);
+          dispatch({
+            type: "replaceState",
+            payload: replaceWorkspaceBundleInState(latestState, activeWorkspaceId, backup.workspaceBundle),
+          });
+          window.setTimeout(() => {
+            clearGuideSampleBackup(activeWorkspaceId);
+            clearGuideSampleState(activeWorkspaceId);
+            guideSampleRestoreLockRef.current.delete(activeWorkspaceId);
+          }, 0);
+          showToast("튜토리얼을 닫고 실제 데이터를 복원했습니다.", "success");
+          return;
+        }
+
+        if (guideSampleRestoreLockRef.current.has(activeWorkspaceId)) return;
+
+        const { nextState, removed } = removeGuideSampleDataFromState(latestState, activeWorkspaceId);
         clearGuideSampleState(activeWorkspaceId);
         if (!removed) return;
 

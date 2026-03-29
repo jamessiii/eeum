@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { completeGuideStepAction } from "../../domain/guidance/guideRuntime";
 import { getFlowStatusSummary, getMonthlyFlowSummary } from "../../domain/settlements/summary";
 import type { ImportRecord } from "../../shared/types/models";
 import { monthKey } from "../../shared/utils/date";
@@ -115,7 +116,7 @@ export function SettlementsPage() {
 
   return (
     <div className="page-stack">
-      <section className="card shadow-sm" style={getMotionStyle(0)}>
+      <section className="card shadow-sm" style={getMotionStyle(0)} data-guide-target="settlements-page-overview">
         <div className="section-head">
           <div>
             <span className="section-kicker">이번달 자산 흐름</span>
@@ -123,6 +124,7 @@ export function SettlementsPage() {
           </div>
           <select
             className="form-select"
+            data-guide-target="settlements-month-select"
             value={selectedStatementMonth}
             onChange={(event) => setSelectedStatementMonth(event.target.value)}
             style={{ maxWidth: 180 }}
@@ -230,8 +232,12 @@ export function SettlementsPage() {
             </div>
           </div>
 
-          <div className="review-list settlement-flow-list">
-            {flowStatus.rows.map((row, index) => {
+          <div className="review-list settlement-flow-list" data-guide-target="settlements-transfer-list">
+            {(() => {
+              const firstPendingTransferKey =
+                flowStatus.rows.find((candidate) => !candidate.isConfirmed)?.transferKey ?? flowStatus.rows[0]?.transferKey;
+
+              return flowStatus.rows.map((row, index) => {
               const isExpanded = expandedTransferKeys.has(row.transferKey);
               const confirmationRecord = row.confirmationRecord;
               const toAccount = scope.accounts.find((account) => account.id === row.toAccountId);
@@ -298,7 +304,8 @@ export function SettlementsPage() {
                           <button
                             type="button"
                             className="btn btn-primary btn-sm"
-                            onClick={() =>
+                            data-guide-target={row.transferKey === firstPendingTransferKey ? "settlements-confirm-action" : undefined}
+                            onClick={() => {
                               addSettlement({
                                 workspaceId,
                                 month: selectedStatementMonth,
@@ -307,8 +314,9 @@ export function SettlementsPage() {
                                 toAccountId: row.toAccountId,
                                 amount: row.amount,
                                 note: "흐름 페이지에서 이체 여부를 확인함",
-                              })
-                            }
+                              });
+                              completeGuideStepAction(workspaceId, "settlements-confirm-action");
+                            }}
                           >
                             이체 확인
                           </button>
@@ -318,7 +326,8 @@ export function SettlementsPage() {
                   </div>
                 </article>
               );
-            })}
+              });
+            })()}
           </div>
         </section>
       )}

@@ -31,6 +31,7 @@ const DeveloperPage = lazy(() => import("./pages/DeveloperPage").then((module) =
 
 const DEVELOPER_MODE_KEY = "household-webapp.developer-mode";
 const CREATE_WORKSPACE_OPTION = "__create_workspace__";
+const GUIDE_HIGHLIGHT_CHANGE_EVENT = "household-webapp:guide-highlight-change";
 
 type NavSubItem = {
   key: string;
@@ -84,6 +85,20 @@ const navGuideTargetMap: Record<string, string> = {
   "/records": "nav-records",
 };
 
+function getForcedSubnavKeyFromGuideSelector(selector?: string | null) {
+  if (!selector) return null;
+  if (selector.includes('data-guide-target="nav-sub-card"') || selector.includes('data-guide-target="nav-sub-income"')) {
+    return "/collections";
+  }
+  if (selector.includes('data-guide-target="nav-sub-assets"') || selector.includes('data-guide-target="nav-sub-categories"')) {
+    return "/connections";
+  }
+  if (selector.includes('data-guide-target="nav-sub-moon"') || selector.includes('data-guide-target="nav-sub-sun"')) {
+    return "/records";
+  }
+  return null;
+}
+
 function useDeveloperMode() {
   const [isDeveloperModeUnlocked, setIsDeveloperModeUnlocked] = useState(false);
   const [, setUnlockAttempts] = useState<number[]>([]);
@@ -128,6 +143,7 @@ function AppTopNav({ isDeveloperModeUnlocked }: { isDeveloperModeUnlocked: boole
     [isDeveloperModeUnlocked],
   );
   const [openSubnavKey, setOpenSubnavKey] = useState<string | null>(null);
+  const [guideHighlightSelector, setGuideHighlightSelector] = useState<string | null>(null);
 
   const activeKey = useMemo<string | null>(() => {
     const pathname = location.pathname || "/";
@@ -186,6 +202,23 @@ function AppTopNav({ isDeveloperModeUnlocked }: { isDeveloperModeUnlocked: boole
     return null;
   }, [activeKey, location.pathname]);
 
+  const forcedOpenSubnavKey = useMemo(
+    () => getForcedSubnavKeyFromGuideSelector(guideHighlightSelector),
+    [guideHighlightSelector],
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleGuideHighlightChange = (event: Event) => {
+      const detail = (event as CustomEvent<{ selector?: string | null }>).detail;
+      setGuideHighlightSelector(detail?.selector ?? null);
+    };
+
+    window.addEventListener(GUIDE_HIGHLIGHT_CHANGE_EVENT, handleGuideHighlightChange as EventListener);
+    return () => window.removeEventListener(GUIDE_HIGHLIGHT_CHANGE_EVENT, handleGuideHighlightChange as EventListener);
+  }, []);
+
   useEffect(() => {
     setOpenSubnavKey(null);
   }, [location.pathname, location.search]);
@@ -195,7 +228,7 @@ function AppTopNav({ isDeveloperModeUnlocked }: { isDeveloperModeUnlocked: boole
       {navItems.map((item, index) => {
         const subItems = item.subItems ?? [];
         const hasSubnav = subItems.length > 0;
-        const isSubnavOpen = openSubnavKey === item.to;
+        const isSubnavOpen = openSubnavKey === item.to || forcedOpenSubnavKey === item.to;
 
         return (
           <Fragment key={item.to}>
@@ -250,12 +283,17 @@ function AppTopNav({ isDeveloperModeUnlocked }: { isDeveloperModeUnlocked: boole
                 </NavLink>
               )}
               {hasSubnav ? (
-                <div className="app-top-subnav" aria-label={`${item.label} 하위 메뉴`}>
+                <div
+                  className="app-top-subnav"
+                  aria-label={`${item.label} 하위 메뉴`}
+                  data-guide-target={`nav-subnav-${item.to.replaceAll("/", "-").replace(/^-/, "")}`}
+                >
                   {subItems.map((subItem) => (
                     <Fragment key={subItem.key}>
                       <Link
                         to={subItem.to}
                         className={`nav-link nav-sub-link${activeSubKey === subItem.key ? " active" : ""}`}
+                        data-guide-target={`nav-sub-${subItem.key}`}
                         aria-current={activeSubKey === subItem.key ? "page" : undefined}
                         onClick={() => setOpenSubnavKey(null)}
                       >

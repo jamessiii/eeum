@@ -338,11 +338,17 @@ export function CategoriesPage({ embedded = false }: { embedded?: boolean }) {
             <button
               type="button"
               className={`board-case-action-button${isHiddenPanelOpen ? " is-active" : ""}`}
+              data-guide-target="categories-hidden-toggle"
               onClick={() => setIsHiddenPanelOpen((current) => !current)}
             >
               숨김 {hiddenCategories.length}
             </button>
-            <button type="button" className="board-case-action-button" onClick={() => setIsResetDefaultsModalOpen(true)}>
+            <button
+              type="button"
+              className="board-case-action-button"
+              data-guide-target="categories-reset-defaults"
+              onClick={() => setIsResetDefaultsModalOpen(true)}
+            >
               기본값 초기화
             </button>
           </>
@@ -354,7 +360,7 @@ export function CategoriesPage({ embedded = false }: { embedded?: boolean }) {
             title="먼저 카테고리 그룹을 만들어주세요"
             description="생활비 같은 상위 그룹을 만들고, 그 아래에 실제 거래가 매핑되는 하위 카테고리를 추가하면 됩니다."
             actions={
-              <button type="button" className="btn btn-primary btn-sm" onClick={createGroupSection}>
+              <button type="button" className="btn btn-primary btn-sm" data-guide-target="categories-create-group" onClick={createGroupSection}>
                 그룹 만들기
               </button>
             }
@@ -488,7 +494,7 @@ export function CategoriesPage({ embedded = false }: { embedded?: boolean }) {
           </div>
         )}
 
-        <button type="button" className="category-case-group-add" onClick={createGroupSection}>
+        <button type="button" className="category-case-group-add" data-guide-target="categories-create-group" onClick={createGroupSection}>
           <span>+</span>
           <strong>새 그룹 추가</strong>
         </button>

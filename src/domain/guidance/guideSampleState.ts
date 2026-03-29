@@ -5,6 +5,7 @@ type GuideSampleState = {
   transactionIds: string[];
   reviewIds: string[];
   importIds: string[];
+  incomeIds: string[];
 };
 
 const DEFAULT_GUIDE_SAMPLE_STATE: GuideSampleState = {
@@ -14,6 +15,7 @@ const DEFAULT_GUIDE_SAMPLE_STATE: GuideSampleState = {
   transactionIds: [],
   reviewIds: [],
   importIds: [],
+  incomeIds: [],
 };
 
 function getGuideSampleStateKey(workspaceId: string) {
@@ -42,6 +44,7 @@ export function readGuideSampleState(workspaceId: string): GuideSampleState {
       transactionIds: normalizeIdList(parsed.transactionIds),
       reviewIds: normalizeIdList(parsed.reviewIds),
       importIds: normalizeIdList(parsed.importIds),
+      incomeIds: normalizeIdList(parsed.incomeIds),
     };
   } catch {
     return DEFAULT_GUIDE_SAMPLE_STATE;
@@ -65,6 +68,7 @@ export function hasGuideSampleState(state: GuideSampleState) {
     state.cardIds.length > 0 ||
     state.transactionIds.length > 0 ||
     state.reviewIds.length > 0 ||
-    state.importIds.length > 0
+    state.importIds.length > 0 ||
+    state.incomeIds.length > 0
   );
 }

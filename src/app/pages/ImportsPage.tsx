@@ -437,7 +437,12 @@ export function ImportsPage() {
                 <span className="section-kicker">업로드 센터</span>
                 <h2 className="section-title">카드 명세서 가져오기</h2>
               </div>
-            <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setIsImportHistoryOpen(true)}>
+            <button
+              type="button"
+              className="btn btn-outline-secondary btn-sm"
+              data-guide-target="transactions-import-history"
+              onClick={() => setIsImportHistoryOpen(true)}
+            >
               명세서 관리
             </button>
           </div>
@@ -485,7 +490,7 @@ export function ImportsPage() {
           {isPreparingPreview ? <p className="text-secondary mt-3 mb-0">업로드 미리보기를 준비하고 있습니다.</p> : null}
 
           {previewBundle ? (
-            <div className="card shadow-sm mt-4 import-preview-panel">
+            <div className="card shadow-sm mt-4 import-preview-panel" data-guide-target="transactions-upload-preview">
               <div className="section-head">
                 <div>
                   <span className="section-kicker">미리보기</span>
@@ -618,6 +623,7 @@ export function ImportsPage() {
                 <button
                   className="btn btn-primary"
                   type="button"
+                  data-guide-target="transactions-upload-commit"
                   onClick={handleCommitPreview}
                   disabled={!selectedImportOwnerId || !selectedStatementMonth || !scope.people.length}
                 >

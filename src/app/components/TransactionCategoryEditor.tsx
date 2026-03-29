@@ -7,6 +7,7 @@ interface TransactionCategoryEditorProps {
   categories: Category[];
   categoryName: string | null;
   onCategoryChange: (categoryId: string) => void;
+  onCategoryCommit?: (categoryId: string) => void;
   guideTarget?: string;
   reviewSuggestionLabel?: string | null;
   isReviewFocused?: boolean;
@@ -17,6 +18,7 @@ export function TransactionCategoryEditor({
   categories,
   categoryName,
   onCategoryChange,
+  onCategoryCommit,
   guideTarget,
   reviewSuggestionLabel,
   isReviewFocused = false,
@@ -61,6 +63,21 @@ export function TransactionCategoryEditor({
     [categoryMap, leafCategories],
   );
 
+  const resolveExactCategoryId = useMemo(
+    () => (rawValue: string) => {
+      const normalizedValue = rawValue.trim().toLowerCase();
+      if (!normalizedValue) return "";
+
+      const resolveLabel = (category: Category) => getCategoryLabel(category, categoryMap).trim().toLowerCase();
+      const exactMatch = leafCategories.find((category) => {
+        return category.name.trim().toLowerCase() === normalizedValue || resolveLabel(category) === normalizedValue;
+      });
+
+      return exactMatch?.id ?? null;
+    },
+    [categoryMap, leafCategories],
+  );
+
   const commitCategoryChange = () => {
     const resolvedCategoryId = resolveCategoryId(draftValue);
     if (resolvedCategoryId === null) {
@@ -69,6 +86,7 @@ export function TransactionCategoryEditor({
     }
 
     onCategoryChange(resolvedCategoryId);
+    onCategoryCommit?.(resolvedCategoryId);
     const nextLabel = resolvedCategoryId
       ? (() => {
           const matchedCategory = leafCategories.find((category) => category.id === resolvedCategoryId);
@@ -110,7 +128,10 @@ export function TransactionCategoryEditor({
       };
 
   return (
-    <div className={`transaction-category-editor${isReviewFocused ? " is-review-focused" : ""}`}>
+    <div
+      className={`transaction-category-editor${isReviewFocused ? " is-review-focused" : ""}`}
+      data-guide-target={guideTarget}
+    >
       <input
         ref={inputRef}
         className="form-control form-control-sm"
@@ -124,9 +145,19 @@ export function TransactionCategoryEditor({
         }}
         list={listId}
         value={draftValue}
-        data-guide-target={guideTarget}
         data-transaction-grid-editor="true"
-        onChange={(event) => setDraftValue(event.target.value)}
+        onChange={(event) => {
+          const nextValue = event.target.value;
+          setDraftValue(nextValue);
+
+          if (isComposingRef.current) return;
+
+          const exactCategoryId = resolveExactCategoryId(nextValue);
+          if (exactCategoryId) {
+            onCategoryChange(exactCategoryId);
+            onCategoryCommit?.(exactCategoryId);
+          }
+        }}
         onBlur={() => {
           setIsFocused(false);
           if (skipNextBlurCommitRef.current) {

@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { getCategoryGroups, getCategoryLabel, getChildCategories, getLeafCategories } from "../../domain/categories/meta";
+import { completeGuideStepAction } from "../../domain/guidance/guideRuntime";
 import {
   getOpenTransactionWorkflowReviews,
   getTransactionWorkflowTransactionIds,
@@ -30,7 +31,7 @@ const DEFAULT_TRANSACTION_FILTERS: TransactionFilters = {
 
 const DEFAULT_CARD_TRANSACTION_FILTERS: TransactionFilters = {
   ...DEFAULT_TRANSACTION_FILTERS,
-  nature: "uncategorized",
+  nature: "all",
 };
 
 type ReviewWorkflowState = {
@@ -378,6 +379,7 @@ export function TransactionsPage() {
     if (!reviewWorkflow) {
       setFilters(DEFAULT_TRANSACTION_FILTERS);
     }
+    completeGuideStepAction(workspaceId, "transactions-review-trigger");
   };
 
   const exitReviewWorkflow = () => {
@@ -389,6 +391,7 @@ export function TransactionsPage() {
 
   const handleActiveReviewDecision = (decision: "apply" | "resolve") => {
     if (!reviewWorkflow || !activeWorkflowReview) return;
+    completeGuideStepAction(workspaceId, "transactions-review-actions");
 
     const nextReviewId = getNextQueuedReviewId(reviewWorkflow.queuedReviewIds, activeWorkflowReview.id);
     setReviewWorkflow((current) =>
@@ -410,6 +413,7 @@ export function TransactionsPage() {
 
   const deferActiveReview = () => {
     if (!reviewWorkflow || !activeWorkflowReview) return;
+    completeGuideStepAction(workspaceId, "transactions-review-actions");
 
     const remainingReviewIds = reviewWorkflow.queuedReviewIds.filter((reviewId) => reviewId !== activeWorkflowReview.id);
     if (!remainingReviewIds.length) {
@@ -484,10 +488,16 @@ export function TransactionsPage() {
                 checked={filters.nature === "uncategorized"}
                 disabled={Boolean(reviewWorkflow)}
                 onChange={(event) =>
-                  setFilters((current) => ({
-                    ...current,
-                    nature: event.target.checked ? "uncategorized" : "all",
-                  }))
+                  {
+                    const nextChecked = event.target.checked;
+                    setFilters((current) => ({
+                      ...current,
+                      nature: nextChecked ? "uncategorized" : "all",
+                    }));
+                    if (nextChecked) {
+                      completeGuideStepAction(workspaceId, "transactions-filter-toggle");
+                    }
+                  }
                 }
               />
               <span className="transaction-filter-toggle-switch" aria-hidden="true" />
@@ -496,6 +506,7 @@ export function TransactionsPage() {
               <button
                 type="button"
                 className={`btn btn-sm transaction-auto-review-button${reviewWorkflow ? " is-active" : ""}`}
+                data-guide-target="transactions-review-trigger"
                 onClick={reviewWorkflow ? exitReviewWorkflow : startAutoReviewWorkflow}
               >
                 <span className="transaction-auto-review-button-label">{reviewWorkflow ? "검토 종료" : "자동검토"}</span>
@@ -667,6 +678,10 @@ export function TransactionsPage() {
                                 ? "transactions-uncategorized-category-input"
                                 : undefined
                             }
+                            onCategoryCommit={(categoryId) => {
+                              if (uncategorizedGuideTransactionId !== transaction.id || !categoryId) return;
+                              completeGuideStepAction(workspaceId, "transactions-uncategorized");
+                            }}
                             onCategoryChange={(categoryId) => {
                               if (!categoryId) {
                                 clearCategory(workspaceId, transaction.id);
@@ -714,7 +729,7 @@ export function TransactionsPage() {
                       {inlineReview ? (
                         <tr className="transaction-review-inline-row">
                           <td colSpan={8} className="transaction-review-inline-cell">
-                            <div className="transaction-review-inline-panel">
+                            <div className="transaction-review-inline-panel" data-guide-target="transactions-review-card">
                               <div className="transaction-review-inline-meta">
                                 <span className="transaction-review-inline-badge">
                                   신뢰도 {Math.round(inlineReview.confidenceScore * 100)}%
@@ -731,14 +746,29 @@ export function TransactionsPage() {
                                   <strong>{getInlineReviewPrompt(inlineReview)}</strong>
                                 )}
                               </div>
-                              <div className="transaction-review-inline-actions">
-                                <button type="button" className="btn btn-outline-secondary btn-sm" onClick={deferActiveReview}>
+                              <div className="transaction-review-inline-actions" data-guide-target="transactions-review-actions">
+                                <button
+                                  type="button"
+                                  className="btn btn-outline-secondary btn-sm"
+                                  data-guide-target="transactions-review-defer"
+                                  onClick={deferActiveReview}
+                                >
                                   보류
                                 </button>
-                                <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => handleActiveReviewDecision("resolve")}>
+                                <button
+                                  type="button"
+                                  className="btn btn-outline-danger btn-sm"
+                                  data-guide-target="transactions-review-resolve"
+                                  onClick={() => handleActiveReviewDecision("resolve")}
+                                >
                                   아니오
                                 </button>
-                                <button type="button" className="btn btn-primary btn-sm" onClick={() => handleActiveReviewDecision("apply")}>
+                                <button
+                                  type="button"
+                                  className="btn btn-primary btn-sm"
+                                  data-guide-target="transactions-review-apply"
+                                  onClick={() => handleActiveReviewDecision("apply")}
+                                >
                                   예
                                 </button>
                               </div>

@@ -8,6 +8,7 @@ import { getMonthlySharedSettlementSummary, getSettlementBalanceSummary } from "
 import { getExpenseImpactStats } from "../../domain/transactions/expenseImpactStats";
 import { getSourceTypeLabel } from "../../domain/transactions/sourceTypes";
 import { formatCurrency, formatPercent } from "../../shared/utils/format";
+import { completeGuideStepAction } from "../../domain/guidance/guideRuntime";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { useAppState } from "../state/AppStateProvider";
 import { AppModal } from "../components/AppModal";
@@ -1321,7 +1322,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
   if (mode === "sun") {
     return (
       <div className="page-stack">
-        <section className="card shadow-sm" style={getMotionStyle(0)}>
+        <section className="card shadow-sm" style={getMotionStyle(0)} data-guide-target="records-sun-overview">
           <div className="section-head">
             <div>
               <span className="section-kicker">해 기록 통계</span>
@@ -1348,7 +1349,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
           </div>
 
           <div className="dashboard-year-grid">
-            <article className="dashboard-year-card dashboard-year-card--wide" style={getMotionStyle(1)}>
+            <article className="dashboard-year-card dashboard-year-card--wide" style={getMotionStyle(1)} data-guide-target="records-sun-annual-chart">
               <div className="dashboard-visual-card-head">
                 <div>
                   <span className="stat-label">연간 수입 대비 소비</span>
@@ -1631,7 +1632,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
     <div className="page-stack">
       {mode === "moon" ? (
         <>
-      <section className="card shadow-sm" style={getMotionStyle(0)}>
+      <section className="card shadow-sm" style={getMotionStyle(0)} data-guide-target="records-moon-overview">
         <div className="section-head">
           <div>
             <span className="section-kicker">달 기록 통계</span>
@@ -1695,11 +1696,14 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
                 <span className="stat-label">카테고리별 소비</span>
                 <h3>실제로 쓴 항목 전체</h3>
               </div>
-              <div className="dashboard-chart-toggle" role="tablist" aria-label="카테고리 그래프 보기 방식">
+              <div className="dashboard-chart-toggle" role="tablist" aria-label="카테고리 그래프 보기 방식" data-guide-target="records-moon-category-toggle">
                 <button
                   type="button"
                   className={`dashboard-chart-toggle-button${categoryChartMode === "bar" ? " is-active" : ""}`}
-                  onClick={() => setCategoryChartMode("bar")}
+                  onClick={() => {
+                    setCategoryChartMode("bar");
+                    completeGuideStepAction(workspaceId, "records-moon-category-toggle");
+                  }}
                   aria-pressed={categoryChartMode === "bar"}
                 >
                   막대
@@ -1707,7 +1711,10 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
                 <button
                   type="button"
                   className={`dashboard-chart-toggle-button${categoryChartMode === "circle" ? " is-active" : ""}`}
-                  onClick={() => setCategoryChartMode("circle")}
+                  onClick={() => {
+                    setCategoryChartMode("circle");
+                    completeGuideStepAction(workspaceId, "records-moon-category-toggle");
+                  }}
                   aria-pressed={categoryChartMode === "circle"}
                 >
                   원형
@@ -2207,7 +2214,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
 
       {mode === "dashboard" ? (
         <>
-      <section className="card shadow-sm" style={getMotionStyle(0)} data-guide-target="dashboard-summary">
+      <section className="card shadow-sm" style={getMotionStyle(0)} data-guide-target="dashboard-month-summary">
         <div className="section-head">
           <div>
             <span className="section-kicker">이번 달 조각</span>
@@ -2429,7 +2436,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
         ) : null}
       </section>
 
-      <section className="card shadow-sm" style={getMotionStyle(1)}>
+      <section className="card shadow-sm" style={getMotionStyle(1)} data-guide-target="dashboard-foundation-overview">
         <div className="section-head">
           <div>
             <span className="section-kicker">연결 된 것들</span>
@@ -2487,7 +2494,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
           </article>
         </div>
       </section>
-      <section className="card shadow-sm" style={getMotionStyle(2)}>
+      <section className="card shadow-sm" style={getMotionStyle(2)} data-guide-target="dashboard-flow-overview">
         <div className="section-head">
           <div>
             <span className="section-kicker">이번 달 흐름</span>

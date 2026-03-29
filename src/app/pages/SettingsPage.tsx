@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { startGuideReplay } from "../../domain/guidance/guideRuntime";
+import { completeGuideStepAction } from "../../domain/guidance/guideRuntime";
 import { formatPercent } from "../../shared/utils/format";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
@@ -105,7 +105,7 @@ export function SettingsPage() {
         </div>
         <div className="settings-shell-body">
           <section className="settings-section-block">
-            <div className="settings-summary-row">
+            <div className="settings-summary-row" data-guide-target="settings-profile-summary">
               {profileCards.map((card) => (
                 <article key={card.key} className="resource-card settings-profile-card">
                   <h3>{card.title}</h3>
@@ -143,7 +143,7 @@ export function SettingsPage() {
                         className="board-case-edit-button settings-profile-edit-button"
                         onMouseDown={(event) => event.preventDefault()}
                         onClick={commitProfileDraft}
-                        aria-label="Save setting"
+                        aria-label={`${card.title} 저장`}
                       >
                         ✓
                       </button>
@@ -155,7 +155,7 @@ export function SettingsPage() {
                         type="button"
                         className="board-case-edit-button settings-profile-edit-button"
                         onClick={() => setActiveProfileField(card.key)}
-                        aria-label="Edit setting"
+                        aria-label={`${card.title} 수정`}
                       >
                         ✎
                       </button>
@@ -165,11 +165,11 @@ export function SettingsPage() {
               ))}
             </div>
 
-            <article className="resource-card settings-panel-card">
+            <article className="resource-card settings-panel-card" data-guide-target="settings-backup">
               <div>
                 <span className="section-kicker">백업</span>
                 <h3 className="mb-1">데이터 내보내기와 가져오기</h3>
-                <p className="mb-0 text-secondary">현재 가계부의 데이터를 JSON 파일로 저장하거나 다시 불러옵니다.</p>
+                <p className="mb-0 text-secondary">현재 가계부 데이터를 JSON 파일로 저장하거나 다시 불러옵니다.</p>
               </div>
               <div className="d-flex flex-wrap gap-2">
                 <button className="btn btn-primary" onClick={() => exportState()}>
@@ -191,49 +191,24 @@ export function SettingsPage() {
               </div>
             </article>
 
-            <article className="resource-card settings-panel-card">
+            <article className="resource-card settings-panel-card" data-guide-target="settings-theme">
               <div>
-                <span className="section-kicker">앱 관리</span>
+                <span className="section-kicker">화면 관리</span>
                 <h3 className="mb-1">테마</h3>
                 <p className="mb-0 text-secondary">앱에서 사용할 기본 테마를 전환합니다.</p>
               </div>
               <div className="d-flex flex-wrap gap-2">
-                <button type="button" className="theme-toggle-button" onClick={toggleThemeMode}>
+                <button
+                  type="button"
+                  className="theme-toggle-button"
+                  data-guide-target="settings-theme-toggle"
+                  onClick={() => {
+                    toggleThemeMode();
+                    completeGuideStepAction(workspaceId, "settings-theme");
+                  }}
+                >
                   <span className="theme-toggle-button-label">테마</span>
                   <strong>{themeMode === "dark" ? "Light" : "Dark"}</strong>
-                </button>
-              </div>
-            </article>
-
-            <article className="resource-card settings-panel-card">
-              <div>
-                <span className="section-kicker">앱 관리</span>
-                <h3 className="mb-1">실험실</h3>
-                <p className="mb-0 text-secondary">이음 Lab에서 실험 중인 기능과 도구를 새 탭으로 엽니다.</p>
-              </div>
-              <div className="d-flex flex-wrap gap-2">
-                <a
-                  className="btn btn-outline-secondary"
-                  href="https://jamessiii.github.io/eeumlab/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  실험실 열기
-                </a>
-              </div>
-            </article>
-
-            <article className="resource-card settings-panel-card">
-              <div>
-                <span className="section-kicker">가이드</span>
-                <h3 className="mb-1">가이드 테스트 시작</h3>
-                <p className="mb-0 text-secondary">
-                  메인 가이드를 단계별로 다시 재생해서 흐름을 직접 테스트할 수 있습니다. 테스트를 끝내면 실제 진행 상태로 돌아갑니다.
-                </p>
-              </div>
-              <div className="d-flex flex-wrap gap-2">
-                <button type="button" className="btn btn-outline-secondary" onClick={() => startGuideReplay(workspaceId)}>
-                  테스트 시작
                 </button>
               </div>
             </article>
