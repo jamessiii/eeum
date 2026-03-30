@@ -10,6 +10,7 @@ import { getActiveTransactions } from "../../domain/transactions/meta";
 import type { Category } from "../../shared/types/models";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { AppModal } from "../components/AppModal";
+import { AppSelect } from "../components/AppSelect";
 import { BoardCase } from "../components/BoardCase";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { useAppState } from "../state/AppStateProvider";
@@ -1980,17 +1981,15 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
             </label>
             <label>
               금융기관
-              <select
-                className="form-select"
+              <AppSelect
                 value={accountDraft.institutionName}
-                onChange={(event) => patchAccountDraft({ institutionName: event.target.value }, setAccountDraft, accountOwnerPersonId)}
-              >
-                {getFinancialInstitutionOptions(accountDraft.institutionName).map((institutionName) => (
-                  <option key={institutionName} value={institutionName}>
-                    {institutionName === "직접입력" ? "직접 입력" : institutionName}
-                  </option>
-                ))}
-              </select>
+                onChange={(nextValue) => patchAccountDraft({ institutionName: nextValue }, setAccountDraft, accountOwnerPersonId)}
+                options={getFinancialInstitutionOptions(accountDraft.institutionName).map((institutionName) => ({
+                  value: institutionName,
+                  label: institutionName === "직접입력" ? "직접 입력" : institutionName,
+                }))}
+                ariaLabel="금융기관 선택"
+              />
             </label>
             <label>
               계좌 번호
@@ -1998,37 +1997,27 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
             </label>
             <label>
               계좌 유형
-              <select
-                className="form-select"
+              <AppSelect
                 value={accountDraft.accountType}
-                onChange={(event) =>
+                onChange={(nextValue) =>
                   patchAccountDraft(
-                    { accountType: event.target.value as PersonAccountDraftState["accountType"] },
+                    { accountType: nextValue as PersonAccountDraftState["accountType"] },
                     setAccountDraft,
                     accountOwnerPersonId,
                   )
                 }
-              >
-                {ACCOUNT_TYPE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+                options={ACCOUNT_TYPE_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
+                ariaLabel="계좌 유형 선택"
+              />
             </label>
             <label>
               용도
-              <select
-                className="form-select"
+              <AppSelect
                 value={accountDraft.usageType}
-                onChange={(event) => patchAccountDraft({ usageType: event.target.value as AccountUsageType }, setAccountDraft, accountOwnerPersonId)}
-              >
-                {ACCOUNT_USAGE_FORM_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+                onChange={(nextValue) => patchAccountDraft({ usageType: nextValue as AccountUsageType }, setAccountDraft, accountOwnerPersonId)}
+                options={ACCOUNT_USAGE_FORM_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
+                ariaLabel="계좌 용도 선택"
+              />
             </label>
             <label style={{ gridColumn: "1 / -1" }}>
               메모
@@ -2070,17 +2059,15 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
             </label>
             <label>
               금융기관
-              <select
-                className="form-select"
+              <AppSelect
                 value={editAccountDraft.institutionName}
-                onChange={(event) => patchAccountDraft({ institutionName: event.target.value }, setEditAccountDraft, editingAccount.ownerPersonId)}
-              >
-                {getFinancialInstitutionOptions(editAccountDraft.institutionName).map((institutionName) => (
-                  <option key={institutionName} value={institutionName}>
-                    {institutionName === "직접입력" ? "직접 입력" : institutionName}
-                  </option>
-                ))}
-              </select>
+                onChange={(nextValue) => patchAccountDraft({ institutionName: nextValue }, setEditAccountDraft, editingAccount.ownerPersonId)}
+                options={getFinancialInstitutionOptions(editAccountDraft.institutionName).map((institutionName) => ({
+                  value: institutionName,
+                  label: institutionName === "직접입력" ? "직접 입력" : institutionName,
+                }))}
+                ariaLabel="금융기관 선택"
+              />
             </label>
             <label>
               계좌 번호
@@ -2088,37 +2075,27 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
             </label>
             <label>
               계좌 유형
-              <select
-                className="form-select"
+              <AppSelect
                 value={editAccountDraft.accountType}
-                onChange={(event) =>
+                onChange={(nextValue) =>
                   patchAccountDraft(
-                    { accountType: event.target.value as PersonAccountDraftState["accountType"] },
+                    { accountType: nextValue as PersonAccountDraftState["accountType"] },
                     setEditAccountDraft,
                     editingAccount.ownerPersonId,
                   )
                 }
-              >
-                {ACCOUNT_TYPE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+                options={ACCOUNT_TYPE_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
+                ariaLabel="계좌 유형 선택"
+              />
             </label>
             <label>
               용도
-              <select
-                className="form-select"
+              <AppSelect
                 value={editAccountDraft.usageType}
-                onChange={(event) => patchAccountDraft({ usageType: event.target.value as AccountUsageType }, setEditAccountDraft, editingAccount.ownerPersonId)}
-              >
-                {ACCOUNT_USAGE_FORM_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+                onChange={(nextValue) => patchAccountDraft({ usageType: nextValue as AccountUsageType }, setEditAccountDraft, editingAccount.ownerPersonId)}
+                options={ACCOUNT_USAGE_FORM_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
+                ariaLabel="계좌 용도 선택"
+              />
             </label>
             <label style={{ gridColumn: "1 / -1" }}>
               메모
@@ -2196,25 +2173,29 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
             </label>
             <label>
               {getCardAccountLabel(editCardDraft.cardType)}
-              <select className="form-select" value={editCardDraft.linkedAccountId} onChange={(event) => setEditCardDraft((current) => ({ ...current, linkedAccountId: event.target.value }))}>
-                <option value="">연결 안 함</option>
-                {scope.accounts.filter((account) => !account.isShared).map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.alias || account.name}
-                    {account.ownerPersonId ? ` · ${personNameMap.get(account.ownerPersonId) ?? "사용자 없음"}` : ""}
-                  </option>
-                ))}
-              </select>
+              <AppSelect
+                value={editCardDraft.linkedAccountId}
+                onChange={(nextValue) => setEditCardDraft((current) => ({ ...current, linkedAccountId: nextValue }))}
+                options={[
+                  { value: "", label: "연결 안 함" },
+                  ...scope.accounts
+                    .filter((account) => !account.isShared)
+                    .map((account) => ({
+                      value: account.id,
+                      label: `${account.alias || account.name}${account.ownerPersonId ? ` · ${personNameMap.get(account.ownerPersonId) ?? "사용자 없음"}` : ""}`,
+                    })),
+                ]}
+                ariaLabel="연결 계좌 선택"
+              />
             </label>
             <label>
               카드 종류
-              <select className="form-select" value={editCardDraft.cardType} onChange={(event) => setEditCardDraft((current) => ({ ...current, cardType: event.target.value as PersonCardDraftState["cardType"] }))}>
-                {CARD_TYPE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+              <AppSelect
+                value={editCardDraft.cardType}
+                onChange={(nextValue) => setEditCardDraft((current) => ({ ...current, cardType: nextValue as PersonCardDraftState["cardType"] }))}
+                options={CARD_TYPE_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
+                ariaLabel="카드 종류 선택"
+              />
             </label>
             <label style={{ gridColumn: "1 / -1" }}>
               메모

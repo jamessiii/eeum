@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+﻿import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { Link } from "react-router-dom";
 import { AppModal } from "../components/AppModal";
 import type { Account, Card, ImportRecord, WorkspaceBundle } from "../../shared/types/models";
 import { getMotionStyle } from "../../shared/utils/motion";
+import { AppSelect } from "../components/AppSelect";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
 
@@ -514,43 +515,36 @@ export function ImportsPage() {
 
               <div className="import-preview-control-grid mt-4">
                 <div className="import-preview-control-card">
-                <label className="form-label" htmlFor="import-owner-person">
+                <label className="form-label">
                   누구의 카드인가요?
                 </label>
-                <select
-                  id="import-owner-person"
-                  className="form-select"
+                <AppSelect
                   value={selectedImportOwnerId}
-                  onChange={(event) => setSelectedImportOwnerId(event.target.value)}
+                  onChange={setSelectedImportOwnerId}
                   disabled={!scope.people.length}
-                >
-                  <option value="">누구의 명세서인지 선택</option>
-                  {scope.people.map((person) => (
-                    <option key={person.id} value={person.id}>
-                      {person.displayName || person.name}
-                    </option>
-                  ))}
-                </select>
+                  options={[
+                    { value: "", label: "누구의 명세서인지 선택" },
+                    ...scope.people.map((person) => ({ value: person.id, label: person.displayName || person.name })),
+                  ]}
+                  ariaLabel="가져올 카드 소유자 선택"
+                />
                 </div>
 
                 <div className="import-preview-control-card">
-                <label className="form-label" htmlFor="import-statement-month">
+                <label className="form-label">
                   언제 청구된 명세서 인가요?
                 </label>
-                <select
-                  id="import-statement-month"
-                  className="form-select"
+                <AppSelect
                   value={selectedStatementMonth}
-                  onChange={(event) => setSelectedStatementMonth(event.target.value)}
+                  onChange={setSelectedStatementMonth}
                   disabled={!previewStatementMonthOptions.length}
-                >
-                  {!previewStatementMonthOptions.length ? <option value="">청구월 후보를 만들 수 없습니다</option> : null}
-                  {previewStatementMonthOptions.map((month) => (
-                    <option key={month} value={month}>
-                      {formatBillingMonthLabel(month)}
-                    </option>
-                  ))}
-                </select>
+                  options={
+                    !previewStatementMonthOptions.length
+                      ? [{ value: "", label: "청구월 후보를 만들 수 없습니다" }]
+                      : previewStatementMonthOptions.map((month) => ({ value: month, label: formatBillingMonthLabel(month) }))
+                  }
+                  ariaLabel="예상 청구월 명세서 선택"
+                />
                 </div>
               </div>
 
@@ -787,3 +781,4 @@ export function ImportsPage() {
     </>
   );
 }
+

@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+﻿import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { monthKey } from "../../shared/utils/date";
 import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { AppModal } from "../components/AppModal";
+import { AppSelect } from "../components/AppSelect";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
@@ -267,13 +268,12 @@ export function IncomePage() {
             <form className="manual-transaction-form income-entry-form mt-4" onSubmit={handleSubmit}>
               <label>
                 <span>사용자</span>
-                <select className="form-select" value={ownerPersonId} onChange={(event) => setOwnerPersonId(event.target.value)} required>
-                  {visiblePeople.map((person) => (
-                    <option key={person.id} value={person.id}>
-                      {person.displayName || person.name}
-                    </option>
-                  ))}
-                </select>
+                <AppSelect
+                  value={ownerPersonId}
+                  onChange={setOwnerPersonId}
+                  options={visiblePeople.map((person) => ({ value: person.id, label: person.displayName || person.name }))}
+                  ariaLabel="사용자 선택"
+                />
               </label>
               <label>
                 <span>수입일</span>
@@ -362,18 +362,13 @@ export function IncomePage() {
           <div>
             <h2 className="section-title">{selectedHistoryYear}년 수입 입력 내역</h2>
           </div>
-          <select
-            className="form-select toolbar-select"
-            aria-label="수입 입력 내역 연도 선택"
-            value={selectedHistoryYear}
-            onChange={(event) => setSelectedHistoryYear(Number(event.target.value))}
-          >
-            {incomeHistoryYears.map((year) => (
-              <option key={year} value={year}>
-                {year}년
-              </option>
-            ))}
-          </select>
+          <AppSelect
+            className="toolbar-select"
+            ariaLabel="수입 입력 내역 연도 선택"
+            value={String(selectedHistoryYear)}
+            onChange={(nextValue) => setSelectedHistoryYear(Number(nextValue))}
+            options={incomeHistoryYears.map((year) => ({ value: String(year), label: `${year}년` }))}
+          />
         </div>
 
         <div className="stats-grid">

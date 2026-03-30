@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { BoardCase, BoardCaseSection } from "../components/BoardCase";
 import { AppModal } from "../components/AppModal";
+import { AppSelect } from "../components/AppSelect";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
@@ -684,19 +685,20 @@ export function CategoriesPage({ embedded = false }: { embedded?: boolean }) {
           </label>
           <label>
             지출 성격
-            <select
-              className="form-select"
+            <AppSelect
               value={categoryDraft.fixedOrVariable}
-              onChange={(event) =>
+              onChange={(nextValue) =>
                 setCategoryDraft((current) => ({
                   ...current,
-                  fixedOrVariable: event.target.value === "fixed" ? "fixed" : "variable",
+                  fixedOrVariable: nextValue === "fixed" ? "fixed" : "variable",
                 }))
               }
-            >
-              <option value="variable">변동 지출</option>
-              <option value="fixed">고정 지출</option>
-            </select>
+              options={[
+                { value: "variable", label: "변동 지출" },
+                { value: "fixed", label: "고정 지출" },
+              ]}
+              ariaLabel="지출 성격 선택"
+            />
           </label>
           <div className="d-flex justify-content-end" style={{ gridColumn: "1 / -1" }}>
             <button className="btn btn-primary" type="submit">
@@ -708,3 +710,4 @@ export function CategoriesPage({ embedded = false }: { embedded?: boolean }) {
     </div>
   );
 }
+
