@@ -11,6 +11,7 @@ import {
 import { isActiveExpenseTransaction } from "../../domain/transactions/meta";
 import { clearGuideSampleState, hasGuideSampleState, readGuideSampleState, writeGuideSampleState } from "../../domain/guidance/guideSampleState";
 import { clearGuideSampleBackup, readGuideSampleBackup, writeGuideSampleBackup } from "../../domain/guidance/guideSampleBackup";
+import { clearGuideActionBackup, readGuideActionBackup, writeGuideActionBackup } from "../../domain/guidance/guideActionBackup";
 import { createGuideSampleBundle, GUIDE_SAMPLE_MEMO, GUIDE_SAMPLE_PARSER_ID } from "../../domain/guidance/guideSampleBundle";
 import type { Account, AppState, Card, Category, FinancialProfile, Person, ReviewItem, Transaction, WorkspaceBundle } from "../../shared/types/models";
 import { createId } from "../../shared/utils/id";
@@ -108,7 +109,7 @@ type Action =
   | { type: "addTag"; payload: { workspaceId: string; name: string } }
   | { type: "setFinancialProfile"; payload: { workspaceId: string; values: FinancialProfileInput } }
   | { type: "addSettlement"; payload: SettlementInput }
-  | { type: "removeSettlement"; payload: { settlementId: string } }
+  | { type: "removeSettlement"; payload: { workspaceId: string; month: string; transferKey: string } }
   | { type: "addIncomeEntry"; payload: IncomeEntryInput }
   | { type: "deleteIncomeEntry"; payload: { workspaceId: string; incomeEntryId: string } }
   | { type: "addTransaction"; payload: NewTransactionInput }
@@ -1869,7 +1870,14 @@ function reducer(state: AppState, action: Action): AppState {
     case "removeSettlement":
       return {
         ...state,
-        settlements: state.settlements.filter((item) => item.id !== action.payload.settlementId),
+        settlements: state.settlements.filter(
+          (item) =>
+            !(
+              item.workspaceId === action.payload.workspaceId &&
+              item.month === action.payload.month &&
+              item.transferKey === action.payload.transferKey
+            ),
+        ),
       };
     case "addIncomeEntry":
       return {
@@ -2105,6 +2113,8 @@ interface AppStateContextValue {
   deleteImportRecord: (workspaceId: string, importRecordId: string) => void;
   loadGuideSampleData: () => void;
   clearGuideSampleData: () => void;
+  snapshotGuideActionState: (workspaceId: string, stepId: string) => void;
+  restoreGuideActionState: (workspaceId: string, stepId: string) => void;
   setActiveWorkspace: (workspaceId: string) => void;
   renameWorkspace: (workspaceId: string, name: string) => void;
   resetApp: () => Promise<void>;
@@ -2133,7 +2143,7 @@ interface AppStateContextValue {
   addTag: (workspaceId: string, name: string) => void;
   setFinancialProfile: (workspaceId: string, values: FinancialProfileInput) => void;
   addSettlement: (input: SettlementInput) => void;
-  removeSettlement: (settlementId: string) => void;
+  removeSettlement: (workspaceId: string, month: string, transferKey: string) => void;
   addIncomeEntry: (input: IncomeEntryInput) => void;
   deleteIncomeEntry: (workspaceId: string, incomeEntryId: string) => void;
   addTransaction: (input: NewTransactionInput) => void;
@@ -2324,6 +2334,26 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         dispatch({ type: "replaceState", payload: nextState });
         showToast("튜토리얼 샘플 데이터를 정리했습니다.", "success");
       },
+      snapshotGuideActionState(workspaceId, stepId) {
+        const latestState = stateRef.current;
+        const snapshot = createWorkspaceBundleSnapshot(latestState, workspaceId);
+        if (!snapshot) return;
+        if (readGuideActionBackup(workspaceId, stepId)) return;
+        writeGuideActionBackup(workspaceId, stepId, {
+          stepId,
+          workspaceBundle: snapshot,
+        });
+      },
+      restoreGuideActionState(workspaceId, stepId) {
+        const latestState = stateRef.current;
+        const backup = readGuideActionBackup(workspaceId, stepId);
+        if (!backup?.workspaceBundle) return;
+        dispatch({
+          type: "replaceState",
+          payload: replaceWorkspaceBundleInState(latestState, workspaceId, backup.workspaceBundle),
+        });
+        clearGuideActionBackup(workspaceId, stepId);
+      },
       setActiveWorkspace(workspaceId) {
         dispatch({ type: "setActiveWorkspace", payload: workspaceId });
         const workspace = state.workspaces.find((item) => item.id === workspaceId);
@@ -2490,8 +2520,8 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         dispatch({ type: "addSettlement", payload: input });
         showToast("이체 확인 내역을 기록했습니다.", "success");
       },
-      removeSettlement(settlementId) {
-        dispatch({ type: "removeSettlement", payload: { settlementId } });
+      removeSettlement(workspaceId, month, transferKey) {
+        dispatch({ type: "removeSettlement", payload: { workspaceId, month, transferKey } });
         showToast("이체 확인을 취소했습니다.", "info");
       },
       addTransaction(input) {

@@ -1,7 +1,7 @@
 import { forwardRef, type ButtonHTMLAttributes } from "react";
 import clsx from "clsx";
 
-type AppButtonVariant = "primary" | "secondary" | "outlinePrimary";
+type AppButtonVariant = "primary" | "secondary" | "neutral" | "outlinePrimary" | "danger" | "outlineDanger";
 type AppButtonSize = "md" | "sm";
 
 type AppButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -12,7 +12,10 @@ type AppButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 const variantClassNameMap: Record<AppButtonVariant, string> = {
   primary: "btn-primary",
   secondary: "btn-outline-secondary",
+  neutral: "btn-outline-secondary",
   outlinePrimary: "btn-outline-primary",
+  danger: "btn-danger",
+  outlineDanger: "btn-outline-danger",
 };
 
 export const AppButton = forwardRef<HTMLButtonElement, AppButtonProps>(function AppButton(

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { completeGuideStepAction } from "../../domain/guidance/guideRuntime";
 import { formatPercent } from "../../shared/utils/format";
+import { AppModal } from "../components/AppModal";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
 import { useThemeMode } from "../useThemeMode";
@@ -38,6 +39,7 @@ export function SettingsPage() {
   const profile = scope.financialProfile;
   const [profileDraft, setProfileDraft] = useState<ProfileDraftState>(() => createProfileDraft(profile));
   const [activeProfileField, setActiveProfileField] = useState<EditableProfileField | null>(null);
+  const [isExportConfirmOpen, setIsExportConfirmOpen] = useState(false);
 
   useEffect(() => {
     setProfileDraft(createProfileDraft(profile));
@@ -165,14 +167,14 @@ export function SettingsPage() {
               ))}
             </div>
 
-            <article className="resource-card settings-panel-card" data-guide-target="settings-backup">
-              <div>
+            <article className="resource-card settings-panel-card settings-panel-card--actions" data-guide-target="settings-backup">
+              <div className="settings-panel-copy">
                 <span className="section-kicker">백업</span>
                 <h3 className="mb-1">데이터 내보내기와 가져오기</h3>
                 <p className="mb-0 text-secondary">현재 가계부 데이터를 JSON 파일로 저장하거나 다시 불러옵니다.</p>
               </div>
-              <div className="d-flex flex-wrap gap-2">
-                <button className="btn btn-primary" onClick={() => exportState()}>
+              <div className="settings-panel-actions">
+                <button className="btn btn-primary" onClick={() => setIsExportConfirmOpen(true)}>
                   전체 데이터 내보내기
                 </button>
                 <label className="btn btn-outline-primary">
@@ -191,20 +193,20 @@ export function SettingsPage() {
               </div>
             </article>
 
-            <article className="resource-card settings-panel-card" data-guide-target="settings-theme">
-              <div>
+            <article className="resource-card settings-panel-card settings-panel-card--actions" data-guide-target="settings-theme">
+              <div className="settings-panel-copy">
                 <span className="section-kicker">화면 관리</span>
                 <h3 className="mb-1">테마</h3>
                 <p className="mb-0 text-secondary">앱에서 사용할 기본 테마를 전환합니다.</p>
               </div>
-              <div className="d-flex flex-wrap gap-2">
+              <div className="settings-panel-actions">
                 <button
                   type="button"
                   className="theme-toggle-button"
                   data-guide-target="settings-theme-toggle"
                   onClick={() => {
                     toggleThemeMode();
-                    completeGuideStepAction(workspaceId, "settings-theme");
+                    completeGuideStepAction(workspaceId, themeMode === "dark" ? "settings-theme-return" : "settings-theme");
                   }}
                 >
                   <span className="theme-toggle-button-label">테마</span>
@@ -215,6 +217,31 @@ export function SettingsPage() {
           </section>
         </div>
       </section>
+      <AppModal
+        open={isExportConfirmOpen}
+        title="전체 데이터 내보내기"
+        description="전체 데이터를 백업 파일로 내보내시겠습니까?"
+        onClose={() => setIsExportConfirmOpen(false)}
+        footer={
+          <>
+            <button type="button" className="btn btn-outline-secondary" onClick={() => setIsExportConfirmOpen(false)}>
+              취소
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => {
+                exportState();
+                setIsExportConfirmOpen(false);
+              }}
+            >
+              내보내기
+            </button>
+          </>
+        }
+      >
+        <p className="mb-0 text-secondary">현재 워크스페이스 데이터가 JSON 백업 파일로 저장됩니다.</p>
+      </AppModal>
     </div>
   );
 }

@@ -182,6 +182,8 @@ export function markGuideStepVisited(workspaceId: string, stepId: string) {
 }
 
 export function completeGuideStepAction(workspaceId: string, stepId: string) {
+  const current = readGuideRuntime(workspaceId);
+  if (current.flowMode !== "active" && current.replayStepIndex === null) return;
   markGuideStepVisited(workspaceId, stepId);
   dispatchGuideReset(workspaceId);
 }

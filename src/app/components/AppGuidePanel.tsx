@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+﻿import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -19,6 +19,7 @@ import { getWorkspaceGuide, type GuideStep } from "../../domain/guidance/workspa
 import { formatPercent } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { AppButton } from "./AppButton";
+import { AppModal } from "./AppModal";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
 import { GuideBeaconScene } from "./GuideBeaconScene";
@@ -30,6 +31,12 @@ type GuideDragSurface = "beacon" | "panel";
 type PanelMorphState = "closed" | "opening" | "open" | "closing";
 type BeaconMorphState = "hidden" | "entering" | "idle" | "exiting";
 type PanelRelocationPhase = "out" | "in";
+
+const LEFT_ANCHORED_GUIDE_STEP_IDS = new Set([
+  "transactions-review-actions",
+  "transactions-uncategorized",
+  "settlements-confirm-action",
+]);
 
 const GUIDE_ANCHOR_SIDE_KEY = "household-webapp.guide-anchor-side";
 const GUIDE_BEACON_EXIT_MS = 220;
@@ -152,6 +159,8 @@ function renderGuideRichText(text: string, options?: { emphasizeLeadSentence?: b
   });
 }
 
+const GUIDE_RESTORABLE_ACTION_STEP_IDS = new Set(["transactions-review-actions", "transactions-uncategorized"]);
+
 export function AppGuidePanel({
   beaconState = "idle",
   showBeacon = true,
@@ -163,7 +172,7 @@ export function AppGuidePanel({
   expandSignal?: number;
   forceCollapsed?: boolean;
 }) {
-  const { clearGuideSampleData, loadGuideSampleData, state } = useAppState();
+  const { clearGuideSampleData, loadGuideSampleData, restoreGuideActionState, state } = useAppState();
   const navigate = useNavigate();
   const location = useLocation();
   const workspaceId = state.activeWorkspaceId;
@@ -191,6 +200,7 @@ export function AppGuidePanel({
   const isDraggingRef = useRef(false);
   const suppressClickRef = useRef(false);
   const [panelMorphState, setPanelMorphState] = useState<PanelMorphState>(() => (forceCollapsed ? "closed" : "open"));
+  const [isCompletionModalOpen, setIsCompletionModalOpen] = useState(false);
 
   const guide = useMemo(() => {
     if (!workspaceId) return null;
@@ -298,6 +308,15 @@ export function AppGuidePanel({
       : isMainGuideComplete
         ? totalBlockingCount
         : Math.min(totalBlockingCount, visitedBlockingCount);
+  const displayProgressCount = isReplayActive
+    ? Math.min(totalProgressCount, Math.max(1, (replayIndex ?? 0) + 1))
+    : isGuidePromptVisible
+      ? Math.min(totalProgressCount, 1)
+      : isMainGuideComplete || isMainGuideFinished
+        ? totalProgressCount
+        : currentLiveStepIndex >= 0
+          ? Math.min(totalProgressCount, currentLiveStepIndex + 1)
+          : Math.min(totalProgressCount, Math.max(1, completedProgressCount));
   const progressRatio = totalProgressCount ? completedProgressCount / totalProgressCount : 1;
   const shouldShowSupportTips =
     !isGuidePromptVisible &&
@@ -400,7 +419,9 @@ export function AppGuidePanel({
       ? "이전"
       : null;
   const primaryActionVariant = primarySupportTip ? "primary" : currentStep && isCurrentStepActive ? "outlinePrimary" : "primary";
-  const displayPrimaryActionLabel = canRestartMainGuide && !primaryActionLabel ? "?????? ??? ???" : primaryActionLabel;
+  const displayPrimaryActionLabel = canRestartMainGuide && !primaryActionLabel ? "튜토리얼 다시 시작" : primaryActionLabel;
+  const hasActionGroup = Boolean(displayPrimaryActionLabel || secondaryActionLabel || isReplayActive);
+  const passiveActionStatusLabel = currentStep?.interactionKind ? "직접 해보는 단계" : "안내 완료";
 
   useEffect(() => {
     if (!currentStep?.interactionKind || !activeInteractionSelectors.length || typeof document === "undefined") return;
@@ -490,6 +511,7 @@ export function AppGuidePanel({
     clearGuideSampleData();
     finishGuideFlow(workspaceId);
     navigate("/dashboard");
+    setIsCompletionModalOpen(true);
     refreshGuideRuntime();
   }, [clearGuideSampleData, finishGuideFlow, guideRuntime.flowMode, isMainGuideComplete, isReplayActive, navigate, workspaceId]);
 
@@ -643,6 +665,15 @@ export function AppGuidePanel({
     );
   };
 
+  useEffect(() => {
+    if (isPanelCollapsed || isReplayActive || isGuidePromptVisible || !currentStep || !isCurrentStepActive) return;
+
+    const targetSide: GuideAnchorSide = LEFT_ANCHORED_GUIDE_STEP_IDS.has(currentStep.id) ? "left" : "right";
+    if (targetSide !== anchorSide) {
+      relocatePanel(targetSide);
+    }
+  }, [anchorSide, currentStep, isCurrentStepActive, isGuidePromptVisible, isPanelCollapsed, isReplayActive, panelRelocationPhase]);
+
   const beginGuideDrag = (event: ReactPointerEvent<HTMLElement>, surface: GuideDragSurface) => {
     if (surface === "panel") {
       event.preventDefault();
@@ -774,6 +805,9 @@ export function AppGuidePanel({
     }
 
     if (previousLiveStep && !isReplayActive && guideRuntime.flowMode === "active") {
+      if (GUIDE_RESTORABLE_ACTION_STEP_IDS.has(previousLiveStep.id)) {
+        restoreGuideActionState(workspaceId, previousLiveStep.id);
+      }
       revertGuideStepAction(workspaceId, previousLiveStep.id);
       refreshGuideRuntime();
     }
@@ -839,7 +873,7 @@ export function AppGuidePanel({
                 {isGuidePromptVisible ? "튜토리얼 제안" : primarySupportTip ? "편의 기능 안내" : isReplayActive ? "가이드 테스트" : "메인 가이드"}
               </span>
               <div className="floating-guide-kicker-actions">
-                <strong>{completedProgressCount}/{totalProgressCount}</strong>
+                <strong>{displayProgressCount}/{totalProgressCount}</strong>
               </div>
               <div className="floating-guide-kicker-buttons">
                 {isReplayActive ? (
@@ -882,7 +916,7 @@ export function AppGuidePanel({
                 <p className="guide-panel-copy">{renderGuideRichText(panelCopy, { emphasizeLeadSentence: true })}</p>
                 {panelMeta ? <div className="small text-secondary">{renderGuideRichText(panelMeta)}</div> : null}
               </div>
-              {displayPrimaryActionLabel ? (
+              {hasActionGroup ? (
                 <div className="floating-guide-action-group">
                   <div className="floating-guide-action-group-left">
                     {isReplayActive ? (
@@ -896,25 +930,27 @@ export function AppGuidePanel({
                         이전 단계
                       </AppButton>
                     ) : null}
-                  </div>
-                  <div className="floating-guide-action-group-right">
                     {secondaryActionLabel ? (
                       <AppButton variant="secondary" size="sm" className="floating-guide-action" onClick={handleSecondaryAction}>
                         {secondaryActionLabel}
                       </AppButton>
                     ) : null}
-                    <AppButton
-                      variant={primaryActionVariant}
-                      size="sm"
-                      className="floating-guide-action"
-                      onClick={handlePrimaryAction}
-                    >
-                      {displayPrimaryActionLabel}
-                    </AppButton>
+                  </div>
+                  <div className="floating-guide-action-group-right">
+                    {displayPrimaryActionLabel ? (
+                      <AppButton
+                        variant={primaryActionVariant}
+                        size="sm"
+                        className="floating-guide-action"
+                        onClick={handlePrimaryAction}
+                      >
+                        {displayPrimaryActionLabel}
+                      </AppButton>
+                    ) : null}
                   </div>
                 </div>
               ) : (
-                <span className="badge text-bg-success">흐름 완료</span>
+                <span className="badge text-bg-light">{passiveActionStatusLabel}</span>
               )}
             </div>
 
@@ -997,5 +1033,25 @@ export function AppGuidePanel({
 
   if (typeof document === "undefined") return null;
 
-  return createPortal(floatingGuide, document.body);
+  return createPortal(
+    <>
+      {floatingGuide}
+      <AppModal
+        open={isCompletionModalOpen}
+        title="모든 튜토리얼이 끝났습니다"
+        description="이제 실제 데이터로 첫장부터 다시 둘러보거나, 필요할 때 패널에서 튜토리얼을 다시 시작할 수 있습니다."
+        onClose={() => setIsCompletionModalOpen(false)}
+        footer={
+          <AppButton variant="primary" size="sm" onClick={() => setIsCompletionModalOpen(false)}>
+            확인했어요
+          </AppButton>
+        }
+      >
+        <p className="mb-0">
+          업로드, 검토, 미분류 정리, 흐름 확인, 통계, 설정까지 한 바퀴 모두 끝났습니다. 이제부터는 실제 가계부 작업을 이어가면 됩니다.
+        </p>
+      </AppModal>
+    </>,
+    document.body,
+  );
 }
