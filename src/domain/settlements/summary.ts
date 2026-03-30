@@ -172,7 +172,12 @@ export function getFlowStatusSummary(
   const confirmationHistory = [...settlements]
     .filter((item) => item.month === month)
     .sort((a, b) => b.completedAt.localeCompare(a.completedAt));
-  const confirmationMap = new Map(confirmationHistory.map((item) => [item.transferKey, item]));
+  const confirmationMap = new Map<string, SettlementRecord>();
+  confirmationHistory.forEach((item) => {
+    if (!confirmationMap.has(item.transferKey)) {
+      confirmationMap.set(item.transferKey, item);
+    }
+  });
 
   const rows = baseRows.map((row) => {
     const confirmationRecord = confirmationMap.get(row.transferKey) ?? null;

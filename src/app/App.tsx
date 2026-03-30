@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { MotionProvider } from "./motion/MotionProvider";
 import { AppModal } from "./components/AppModal";
 import { AppGuidePanel } from "./components/AppGuidePanel";
+import { AppSelect } from "./components/AppSelect";
 import { EmptyWorkspaceScreen, ONBOARDING_COMPLETE_KEY, WORKSPACE_SETUP_KEY } from "./pages/EmptyWorkspaceScreen";
 import { LoadingScreen } from "./pages/LoadingScreen";
 import { AppStateProvider, useAppState } from "./state/AppStateProvider";
@@ -618,25 +619,23 @@ function AppFrame() {
           </div>
           <div className="app-topbar-actions">
             <AppTopNav isDeveloperModeUnlocked={isDeveloperModeUnlocked} />
-            <select
-              className="form-select workspace-select"
+            <AppSelect
+              className="workspace-select"
               value={activeWorkspace.id}
-              onChange={(event) => {
-                if (event.target.value === CREATE_WORKSPACE_OPTION) {
+              options={[
+                ...state.workspaces.map((workspace) => ({ value: workspace.id, label: workspace.name })),
+                { value: CREATE_WORKSPACE_OPTION, label: "+ 새 가계부 추가..." },
+              ]}
+              onChange={(nextValue) => {
+                if (nextValue === CREATE_WORKSPACE_OPTION) {
                   setNewWorkspaceName("");
                   setIsCreateWorkspaceOpen(true);
                   return;
                 }
-                setActiveWorkspace(event.target.value);
+                setActiveWorkspace(nextValue);
               }}
-            >
-              {state.workspaces.map((workspace) => (
-                <option key={workspace.id} value={workspace.id}>
-                  {workspace.name}
-                </option>
-              ))}
-              <option value={CREATE_WORKSPACE_OPTION}>+ 새 가계부 추가...</option>
-            </select>
+              ariaLabel="가계부 선택"
+            />
             <div className="app-topbar-settings-cluster">
               <span className="app-topbar-settings-divider" aria-hidden="true">
                 |

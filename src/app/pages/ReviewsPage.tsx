@@ -6,6 +6,7 @@ import { getReviewSummary, getReviewTypeCounts } from "../../domain/reviews/summ
 import { getSourceTypeLabel, SOURCE_TYPE_OPTIONS } from "../../domain/transactions/sourceTypes";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
+import { AppSelect } from "../components/AppSelect";
 import { ReviewTypeFilterBar } from "../components/ReviewTypeFilterBar";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
@@ -96,18 +97,13 @@ export function ReviewsPage() {
       {openReviewCount ? (
         <div className="review-list-toolbar mt-3">
           <div className="review-list-toolbar-main">
-            <select
-              className="form-select toolbar-select"
+<AppSelect
+              className="toolbar-select"
               value={activeSourceType}
-              onChange={(event) => setActiveSourceType(event.target.value as "all" | (typeof SOURCE_TYPE_OPTIONS)[number])}
-            >
-              <option value="all">전체 수단</option>
-              {SOURCE_TYPE_OPTIONS.map((sourceType) => (
-                <option key={sourceType} value={sourceType}>
-                  {getSourceTypeLabel(sourceType)}
-                </option>
-              ))}
-            </select>
+              onChange={(nextValue) => setActiveSourceType(nextValue as "all" | (typeof SOURCE_TYPE_OPTIONS)[number])}
+              options={[{ value: "all", label: "전체 수단" }, ...SOURCE_TYPE_OPTIONS.map((sourceType) => ({ value: sourceType, label: getSourceTypeLabel(sourceType) }))]}
+              ariaLabel="검토 수단 필터"
+            />
             {hasActiveReviewFilters ? (
               <button
                 className="btn btn-outline-secondary btn-sm"
@@ -153,7 +149,7 @@ export function ReviewsPage() {
                 >
                   필터 초기화
                 </button>
-                <Link className="btn btn-outline-primary btn-sm" to="/collections/card">
+                <Link className="btn btn-outline-secondary btn-sm" to="/collections/card">
                   결제내역 보기
                 </Link>
               </>

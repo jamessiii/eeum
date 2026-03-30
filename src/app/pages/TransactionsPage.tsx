@@ -12,6 +12,7 @@ import type { ImportRecord, ReviewItem, Transaction } from "../../shared/types/m
 import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
+import { AppSelect } from "../components/AppSelect";
 import { TransactionCategoryEditor } from "../components/TransactionCategoryEditor";
 import { TransactionRowHeader } from "../components/TransactionRowHeader";
 import { ImportsPage } from "./ImportsPage";
@@ -82,7 +83,8 @@ function getInlineReviewPrompt(review: ReviewItem) {
 }
 
 export function TransactionsPage() {
-  const { applyReviewSuggestion, assignCategory, clearCategory, resolveReview, state, updateTransactionDetails } = useAppState();
+  const { applyReviewSuggestion, assignCategory, clearCategory, resolveReview, snapshotGuideActionState, state, updateTransactionDetails } =
+    useAppState();
   const { showToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const workspaceId = state.activeWorkspaceId!;
@@ -110,6 +112,7 @@ export function TransactionsPage() {
     [categoryMap, leafCategories, scope.categories],
   );
   const [categoryFilterInput, setCategoryFilterInput] = useState("");
+  const [isCategoryFilterFocused, setIsCategoryFilterFocused] = useState(false);
   const people = scope.people;
   const peopleMap = new Map(people.map((person) => [person.id, person.displayName || person.name]));
   const accountMap = new Map(scope.accounts.map((account) => [account.id, account.alias || account.name]));
@@ -361,6 +364,14 @@ export function TransactionsPage() {
     setCategoryFilterInput(partialMatch.label);
   };
 
+  const filteredCategoryOptions = useMemo(() => {
+    const normalizedValue = categoryFilterInput.trim().toLowerCase();
+    if (!normalizedValue) return categoryOptions.slice(0, 12);
+    return categoryOptions
+      .filter((option) => option.label.trim().toLowerCase().includes(normalizedValue))
+      .slice(0, 12);
+  }, [categoryFilterInput, categoryOptions]);
+
   const startAutoReviewWorkflow = () => {
     if (reviewWorkflow) return;
     if (!openTransactionReviews.length) return;
@@ -391,6 +402,7 @@ export function TransactionsPage() {
 
   const handleActiveReviewDecision = (decision: "apply" | "resolve") => {
     if (!reviewWorkflow || !activeWorkflowReview) return;
+    snapshotGuideActionState(workspaceId, "transactions-review-actions");
     completeGuideStepAction(workspaceId, "transactions-review-actions");
 
     const nextReviewId = getNextQueuedReviewId(reviewWorkflow.queuedReviewIds, activeWorkflowReview.id);
@@ -487,18 +499,22 @@ export function TransactionsPage() {
                 className="transaction-filter-toggle-input"
                 checked={filters.nature === "uncategorized"}
                 disabled={Boolean(reviewWorkflow)}
-                onChange={(event) =>
-                  {
-                    const nextChecked = event.target.checked;
-                    setFilters((current) => ({
-                      ...current,
-                      nature: nextChecked ? "uncategorized" : "all",
-                    }));
-                    if (nextChecked) {
-                      completeGuideStepAction(workspaceId, "transactions-filter-toggle");
+                  onChange={(event) =>
+                    {
+                      const nextChecked = event.target.checked;
+                      setFilters((current) => ({
+                        ...current,
+                        categoryId: nextChecked ? "all" : current.categoryId,
+                        nature: nextChecked ? "uncategorized" : "all",
+                      }));
+                      if (nextChecked) {
+                        setCategoryFilterInput("");
+                      }
+                      if (nextChecked) {
+                        completeGuideStepAction(workspaceId, "transactions-filter-toggle");
+                      }
                     }
                   }
-                }
               />
               <span className="transaction-filter-toggle-switch" aria-hidden="true" />
             </label>
@@ -515,51 +531,61 @@ export function TransactionsPage() {
                 ) : null}
               </button>
             ) : null}
-            <select
-              className="form-select"
+            <AppSelect
+              className="toolbar-select transaction-owner-select"
               value={filters.ownerPersonId}
               disabled={Boolean(reviewWorkflow)}
-              onChange={(event) => setFilters((current) => ({ ...current, ownerPersonId: event.target.value }))}
-            >
-              <option value="all">전체 사용자</option>
-              {people.map((person) => (
-                <option key={person.id} value={person.id}>
-                  {person.displayName || person.name}
-                </option>
-              ))}
-            </select>
-            <input
+              onChange={(nextValue) => setFilters((current) => ({ ...current, ownerPersonId: nextValue }))}
+              options={[{ value: "all", label: "전체 사용자" }, ...people.map((person) => ({ value: person.id, label: person.displayName || person.name }))]}
+              ariaLabel="사용자 필터"
+            />
+            <div className="transaction-category-filter-field">
+              <input
               className="form-control"
-              list="transactions-category-filter-options"
               value={categoryFilterInput}
               disabled={Boolean(reviewWorkflow)}
               placeholder="카테고리 입력"
               onChange={(event) => setCategoryFilterInput(event.target.value)}
-              onBlur={(event) => commitCategoryFilterInput(event.target.value)}
+              onFocus={() => setIsCategoryFilterFocused(true)}
+              onBlur={(event) => {
+                setIsCategoryFilterFocused(false);
+                commitCategoryFilterInput(event.target.value);
+              }}
               onKeyDown={(event) => {
                 if (event.key !== "Enter") return;
                 event.preventDefault();
                 commitCategoryFilterInput(event.currentTarget.value);
               }}
             />
-            <datalist id="transactions-category-filter-options">
-              {categoryOptions.map((option) => (
-                <option key={option.id} value={option.label} />
-              ))}
-            </datalist>
+              {isCategoryFilterFocused && filteredCategoryOptions.length ? (
+                <div className="transaction-category-suggestion-list transaction-category-suggestion-list--filter" role="listbox" aria-label="카테고리 필터 추천">
+                  {filteredCategoryOptions.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      className={`transaction-category-suggestion-item${filters.categoryId === option.id ? " is-active" : ""}`}
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        setCategoryFilterInput(option.label);
+                        setFilters((current) => ({ ...current, categoryId: option.id }));
+                        setIsCategoryFilterFocused(false);
+                      }}
+                    >
+                      <span className="transaction-category-suggestion-name">{option.label}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
             {statementOptions.length ? (
-              <select
-                className="form-select transaction-month-select"
+              <AppSelect
+                className="transaction-month-select"
                 value={effectiveSelectedStatementId === "all" ? statementOptions[0]?.id ?? "" : effectiveSelectedStatementId}
                 disabled={Boolean(reviewWorkflow)}
-                onChange={(event) => setSelectedStatementId(event.target.value)}
-              >
-                {statementOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+                onChange={(nextValue) => setSelectedStatementId(nextValue)}
+                options={statementOptions.map((option) => ({ value: option.id, label: option.label }))}
+                ariaLabel="청구분 선택"
+              />
             ) : null}
             <input
               className="form-control toolbar-search"
@@ -680,6 +706,7 @@ export function TransactionsPage() {
                             }
                             onCategoryCommit={(categoryId) => {
                               if (uncategorizedGuideTransactionId !== transaction.id || !categoryId) return;
+                              snapshotGuideActionState(workspaceId, "transactions-uncategorized");
                               completeGuideStepAction(workspaceId, "transactions-uncategorized");
                             }}
                             onCategoryChange={(categoryId) => {

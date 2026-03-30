@@ -8,6 +8,7 @@ import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { NextStepCallout } from "../components/NextStepCallout";
+import { AppSelect } from "../components/AppSelect";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
 
@@ -122,20 +123,15 @@ export function SettlementsPage() {
             <span className="section-kicker">이번달 자산 흐름</span>
             <h2 className="section-title">카드값 이체를 확인하는 마지막 단계</h2>
           </div>
-          <select
-            className="form-select"
-            data-guide-target="settlements-month-select"
+<AppSelect
+            className="settlements-month-select"
+            dataGuideTarget="settlements-month-select"
             value={selectedStatementMonth}
-            onChange={(event) => setSelectedStatementMonth(event.target.value)}
+            onChange={setSelectedStatementMonth}
             style={{ maxWidth: 180 }}
-            aria-label="청구분 기준 연월"
-          >
-            {statementMonthOptions.map((option) => (
-              <option key={option} value={option}>
-                {formatMonthLabel(option)}
-              </option>
-            ))}
-          </select>
+            options={statementMonthOptions.map((option) => ({ value: option, label: formatMonthLabel(option) }))}
+            ariaLabel="청구분 기준 연월"
+          />
         </div>
 
         <p className="text-secondary mb-0">
@@ -196,7 +192,7 @@ export function SettlementsPage() {
             title="먼저 청구분 명세서를 올려 주세요"
             description="흐름 페이지는 청구분이 지정된 명세서 업로드를 기준으로 이체 금액과 확인 상태를 계산합니다."
             actions={
-              <Link to="/collections/card" className="btn btn-outline-primary btn-sm">
+              <Link to="/collections/card" className="btn btn-outline-secondary btn-sm">
                 결제내역 보기
               </Link>
             }
@@ -216,7 +212,7 @@ export function SettlementsPage() {
                 <Link to="/connections/categories" className="btn btn-outline-secondary btn-sm">
                   분류 보기
                 </Link>
-                <Link to="/collections/card" className="btn btn-outline-primary btn-sm">
+                <Link to="/collections/card" className="btn btn-outline-secondary btn-sm">
                   결제내역 보기
                 </Link>
               </>
@@ -296,7 +292,7 @@ export function SettlementsPage() {
                           <button
                             type="button"
                             className="btn btn-outline-secondary btn-sm"
-                            onClick={() => removeSettlement(confirmationRecord.id)}
+                            onClick={() => removeSettlement(workspaceId, selectedStatementMonth, row.transferKey)}
                           >
                             확인 취소
                           </button>

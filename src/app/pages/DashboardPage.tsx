@@ -15,6 +15,7 @@ import { AppModal } from "../components/AppModal";
 import { BoardCaseSection } from "../components/BoardCase";
 import { CompletionBanner } from "../components/CompletionBanner";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
+import { AppSelect } from "../components/AppSelect";
 import { TransactionRowHeader } from "../components/TransactionRowHeader";
 import { getWorkspaceScope } from "../state/selectors";
 
@@ -947,35 +948,29 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
 
   const renderScopeSelect = (ariaLabel: string) => (
     <div className="dashboard-section-toolbar">
-      <select
-        className="form-select dashboard-section-basis-select"
+      <AppSelect
+        className="dashboard-section-basis-select"
         value={selectedDashboardBasis}
-        onChange={(event) => setSelectedDashboardBasis(event.target.value as WorkspaceInsightBasis)}
-        aria-label={`${ariaLabel} 기준 선택`}
-      >
-        <option value="month">월별</option>
-        {statementScopeOptions.length ? <option value="statement">명세서</option> : null}
-      </select>
-      <select
-        className="form-select dashboard-section-month-select"
+        onChange={(nextValue) => setSelectedDashboardBasis(nextValue as WorkspaceInsightBasis)}
+        options={[
+          { value: "month", label: "월별" },
+          ...(statementScopeOptions.length ? [{ value: "statement", label: "명세서" }] : []),
+        ]}
+        ariaLabel={`${ariaLabel} 기준 선택`}
+      />
+      <AppSelect
+        className="dashboard-section-month-select"
         value={selectedDashboardScopeValue}
-        onChange={(event) =>
-          selectedDashboardBasis === "statement"
-            ? setSelectedDashboardStatement(event.target.value)
-            : setSelectedDashboardMonth(event.target.value)
+        onChange={(nextValue) =>
+          selectedDashboardBasis === "statement" ? setSelectedDashboardStatement(nextValue) : setSelectedDashboardMonth(nextValue)
         }
-        aria-label={`${ariaLabel} 범위 선택`}
-      >
-        {selectedDashboardScopeOptions.length ? (
-          selectedDashboardScopeOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))
-        ) : (
-          <option value={selectedDashboardScopeValue}>{selectedDashboardBasis === "statement" ? "명세서 없음" : "연월 없음"}</option>
-        )}
-      </select>
+        options={
+          selectedDashboardScopeOptions.length
+            ? selectedDashboardScopeOptions.map((option) => ({ value: option.value, label: option.label }))
+            : [{ value: selectedDashboardScopeValue, label: selectedDashboardBasis === "statement" ? "명세서 없음" : "연월 없음" }]
+        }
+        ariaLabel={`${ariaLabel} 범위 선택`}
+      />
     </div>
   );
 
@@ -1329,22 +1324,17 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
               <h2 className="section-title">연간 흐름 그래프</h2>
             </div>
             <div className="dashboard-section-toolbar">
-              <select
-                className="form-select dashboard-section-month-select"
+              <AppSelect
+                className="dashboard-section-month-select"
                 value={selectedAnnualYear}
-                onChange={(event) => setSelectedAnnualYear(event.target.value)}
-                aria-label="해 기록 연도 선택"
-              >
-                {annualYearOptions.length ? (
-                  annualYearOptions.map((year) => (
-                    <option key={year} value={year}>
-                      {year}년
-                    </option>
-                  ))
-                ) : (
-                  <option value={selectedAnnualYear}>{selectedAnnualYear}년</option>
-                )}
-              </select>
+                onChange={setSelectedAnnualYear}
+                options={
+                  annualYearOptions.length
+                    ? annualYearOptions.map((year) => ({ value: year, label: `${year}년` }))
+                    : [{ value: selectedAnnualYear, label: `${selectedAnnualYear}년` }]
+                }
+                ariaLabel="해 기록 연도 선택"
+              />
             </div>
           </div>
 
@@ -2506,9 +2496,11 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
             <strong>{settlementStatusTitle}</strong>
             <p className="mb-0 text-secondary">{settlementStatusDescription}</p>
           </div>
-          <Link to="/settlements" className="btn btn-outline-secondary btn-sm">
-            흐름 보기
-          </Link>
+          <div className="dashboard-summary-action">
+            <Link to="/settlements" className="btn btn-outline-secondary btn-sm">
+              흐름 보기
+            </Link>
+          </div>
         </div>
         <div className="resource-grid mt-4">
           <article className="resource-card" style={getMotionStyle(3)}>
