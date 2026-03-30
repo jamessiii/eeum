@@ -558,6 +558,193 @@ function parseStatementDate(value: unknown, fallbackYear = new Date().getFullYea
   return null;
 }
 
+function normalizeTemplateHeader(value: unknown) {
+  return String(value ?? "")
+    .replace(/\s+/g, "")
+    .replace(/[()[\]{}<>._\-/:]/g, "")
+    .trim()
+    .toUpperCase();
+}
+
+function headerMatchesAlias(header: unknown, aliases: string[]) {
+  const normalizedHeader = normalizeTemplateHeader(header);
+  if (!normalizedHeader) return false;
+  return aliases.some((alias) => {
+    const normalizedAlias = normalizeTemplateHeader(alias);
+    return normalizedHeader === normalizedAlias || normalizedHeader.includes(normalizedAlias);
+  });
+}
+
+type StatementColumnKey =
+  | "date"
+  | "time"
+  | "card"
+  | "ownerType"
+  | "merchant"
+  | "approvedAmount"
+  | "saleType"
+  | "installmentMonths"
+  | "approvalNumber"
+  | "cancelStatus"
+  | "benefitAmount"
+  | "paymentAmount"
+  | "settledDate";
+
+type StatementTemplate = {
+  id: string;
+  required: StatementColumnKey[];
+  minimumMatchedColumnCount: number;
+  aliases: Record<StatementColumnKey, string[]>;
+  excludedSheetAliases?: string[];
+};
+
+const STATEMENT_COLUMN_ALIASES: Record<StatementColumnKey, string[]> = {
+  date: [
+    "이용일자",
+    "이용일",
+    "승인일자",
+    "거래일자",
+    "매출일자",
+    "사용일자",
+    "거래일",
+    "이용일시",
+  ],
+  time: ["승인시각", "승인시간", "이용시간", "거래시간", "사용시간", "매출시간"],
+  card: [
+    "카드번호",
+    "이용카드",
+    "카드명",
+    "사용카드",
+    "카드명카드번호4자리",
+    "카드명(카드번호4자리)",
+    "카드명(번호끝4자리)",
+    "카드명/번호",
+    "카드",
+  ],
+  ownerType: ["본인가족구분", "본인/가족", "회원구분", "소유구분", "카드구분", "사용자구분", "회원명"],
+  merchant: [
+    "가맹점명",
+    "사용처/가맹점",
+    "사용처",
+    "이용가맹점",
+    "이용가맹점(상호명)",
+    "이용가맹점상호명",
+    "가맹점",
+    "상호명",
+    "이용처",
+  ],
+  approvedAmount: [
+    "승인금액(원)",
+    "승인금액",
+    "이용금액",
+    "사용금액",
+    "매출금액",
+    "이용총액",
+    "합계금액",
+    "원금",
+  ],
+  saleType: ["일시불할부구분", "일시불/할부", "매출구분", "거래구분", "이용구분", "승인구분", "구분"],
+  installmentMonths: ["할부개월", "할부기간", "할부개월수", "할부", "회차"],
+  approvalNumber: ["승인번호", "매출번호", "거래번호", "전표번호", "사용번호"],
+  cancelStatus: ["취소여부", "취소유무", "취소구분", "매출취소여부", "상태", "취소"],
+  benefitAmount: [
+    "혜택금액",
+    "할인금액",
+    "할인금액(원)",
+    "청구할인금액",
+    "즉시할인금액",
+    "할인(원)",
+    "할인액",
+    "혜택액",
+  ],
+  paymentAmount: [
+    "결제금액",
+    "청구금액",
+    "입금금액",
+    "입금금액(취소금액)",
+    "이번달입금하실금액",
+    "이번달청구금액",
+    "결제예정금액",
+    "이번달입금하실금액_원금",
+    "결제단위금액",
+    "결제단위원금액",
+    "결제단위원금",
+    "통합청구금액",
+    "통합청구금액(원)",
+    "결제단위금액(원)",
+  ],
+  settledDate: ["결제일", "청구일", "입금기준일", "결제예정일", "납부일", "출금예정일"],
+};
+
+const COLUMN_DRIVEN_STATEMENT_TEMPLATES: StatementTemplate[] = [
+  {
+    id: "card_statement_detail",
+    required: ["date", "merchant", "approvedAmount"],
+    minimumMatchedColumnCount: 5,
+    aliases: STATEMENT_COLUMN_ALIASES,
+    excludedSheetAliases: [
+      "결제단위번호",
+      "통합청구구분",
+      "결제은행",
+      "결제계좌",
+      "대표카드",
+      "발송방법",
+      "선택",
+    ],
+  },
+];
+
+function detectIssuerNameByWorkbook(fileName: string, sheetNames: string[]) {
+  const searchPool = [fileName, ...sheetNames].join(" ").toUpperCase();
+  if (searchPool.includes("HYUNDAI") || searchPool.includes("현대")) return "현대카드";
+  if (searchPool.includes("LOTTE") || searchPool.includes("롯데")) return "롯데카드";
+  if (searchPool.includes("SHINHAN") || searchPool.includes("신한")) return "신한카드";
+  if (searchPool.includes("KB") || searchPool.includes("KOOKMIN") || searchPool.includes("국민")) return "국민카드";
+  if (searchPool.includes("WOORI") || searchPool.includes("우리")) return "우리카드";
+  return "미분류 카드";
+}
+
+function resolveStatementTemplate(
+  rows: (string | null)[][],
+  template: StatementTemplate,
+): { headerRowIndex: number; columnIndexByKey: Partial<Record<StatementColumnKey, number>>; matchedColumnCount: number } | null {
+  let bestMatch: { headerRowIndex: number; columnIndexByKey: Partial<Record<StatementColumnKey, number>>; matchedColumnCount: number } | null = null;
+
+  for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+    const row = rows[rowIndex] ?? [];
+    const columnIndexByKey: Partial<Record<StatementColumnKey, number>> = {};
+
+    row.forEach((cell, cellIndex) => {
+      (Object.keys(template.aliases) as StatementColumnKey[]).forEach((key) => {
+        if (typeof columnIndexByKey[key] === "number") return;
+        if (headerMatchesAlias(cell, template.aliases[key])) {
+          columnIndexByKey[key] = cellIndex;
+        }
+      });
+    });
+
+    const hasExcludedAlias = (template.excludedSheetAliases ?? []).some((alias) =>
+      row.some((cell) => headerMatchesAlias(cell, [alias])),
+    );
+    if (hasExcludedAlias) continue;
+
+    const isMatch = template.required.every((key) => typeof columnIndexByKey[key] === "number");
+    const matchedColumnCount = Object.keys(columnIndexByKey).length;
+    if (isMatch && matchedColumnCount >= template.minimumMatchedColumnCount) {
+      const candidate = {
+        headerRowIndex: rowIndex,
+        columnIndexByKey,
+        matchedColumnCount,
+      };
+      if (!bestMatch || candidate.matchedColumnCount > bestMatch.matchedColumnCount) {
+        bestMatch = candidate;
+      }
+    }
+  }
+
+  return bestMatch;
+}
+
 function sanitizeMerchantName(value: string) {
   return normalizeText(value).replace(/[-\s]+$/u, "").trim();
 }
@@ -1195,6 +1382,268 @@ export async function parseHouseholdWorkbook(file: File, context?: ImportClassif
     return transactions.length > 0;
   };
 
+  const parseDomesticCardUsageLookupStatement = () => {
+    const detailSheetName = workbook.SheetNames.find((name) => {
+      const sheet = workbook.Sheets[name];
+      if (!sheet) return false;
+      const rows = XLSX.utils.sheet_to_json<(string | null)[]>(sheet, { header: 1, defval: null });
+      return rows.some(
+        (row) =>
+          normalizeHeaderCell(row?.[0]) === "카드번호" &&
+          normalizeHeaderCell(row?.[1]) === "본인가족구분" &&
+          normalizeHeaderCell(row?.[2]) === "승인일자" &&
+          normalizeHeaderCell(row?.[3]) === "승인시각" &&
+          normalizeHeaderCell(row?.[4]) === "가맹점명" &&
+          normalizeHeaderCell(row?.[5]) === "승인금액(원)" &&
+          normalizeHeaderCell(row?.[6]) === "일시불할부구분" &&
+          normalizeHeaderCell(row?.[8]) === "승인번호" &&
+          normalizeHeaderCell(row?.[9]) === "취소여부" &&
+          normalizeHeaderCell(row?.[11]) === "결제일",
+      );
+    });
+    if (!detailSheetName) return false;
+
+    const detailSheet = workbook.Sheets[detailSheetName];
+    const rows = XLSX.utils.sheet_to_json<(string | null)[]>(detailSheet, { header: 1, defval: null });
+    const headerRowIndex = rows.findIndex(
+      (row) =>
+        normalizeHeaderCell(row?.[0]) === "카드번호" &&
+        normalizeHeaderCell(row?.[1]) === "본인가족구분" &&
+        normalizeHeaderCell(row?.[2]) === "승인일자" &&
+        normalizeHeaderCell(row?.[3]) === "승인시각" &&
+        normalizeHeaderCell(row?.[4]) === "가맹점명" &&
+        normalizeHeaderCell(row?.[5]) === "승인금액(원)" &&
+        normalizeHeaderCell(row?.[8]) === "승인번호" &&
+        normalizeHeaderCell(row?.[9]) === "취소여부" &&
+        normalizeHeaderCell(row?.[11]) === "결제일",
+    );
+    if (headerRowIndex < 0) return false;
+
+    const issuerName = "현대카드";
+    const approvalTransactionIndex = new Map<string, number>();
+
+    for (const row of rows.slice(headerRowIndex + 1)) {
+      const cardNumber = normalizeText(row[0]);
+      const ownerType = normalizeText(row[1]);
+      const occurredAt = parseStatementDate(row[2]);
+      const merchantName = normalizeText(row[4]);
+      const amount = parseAmount(row[5]);
+      const installmentType = normalizeText(row[6]);
+      const installmentMonths = normalizeText(row[7]);
+      const approvalNumber = normalizeText(row[8]);
+      const cancelStatus = normalizeText(row[9]);
+      const pointAmount = parseAmount(row[10]);
+      const settledAt = parseStatementDate(row[11]) ?? occurredAt;
+
+      if (!cardNumber || !occurredAt || !merchantName || amount === 0) continue;
+
+      const ownerName = ownerType.includes("본인") ? "본인" : ownerType || "사용자";
+      const last4 = extractCardNumberMasked(cardNumber);
+      const cardName = `${issuerName} ${last4 || "카드"}`;
+      const card = ensureCard(cardName, ownerName, issuerName);
+      const normalizedMerchantName = normalizeCancelledMerchantName(merchantName);
+      const isCancelled = cancelStatus.includes("취소") || amount < 0;
+      const approvalKey = approvalNumber ? `${card.id}|${approvalNumber}` : "";
+
+      if (isCancelled && approvalKey) {
+        const previousIndex = approvalTransactionIndex.get(approvalKey);
+        if (typeof previousIndex === "number") {
+          const previous = transactions[previousIndex];
+          if (previous && previous.status === "active") {
+            transactions[previousIndex] = {
+              ...previous,
+              merchantName: normalizedMerchantName,
+              status: "cancelled",
+              isExpenseImpact: false,
+              amount: Math.abs(previous.amount),
+            };
+            removePendingCategoryReviews(reviews, previous.id);
+            continue;
+          }
+        }
+      }
+
+      const descriptionParts = [
+        installmentType || null,
+        installmentMonths && installmentMonths !== "0" ? `${installmentMonths}개월` : null,
+        approvalNumber ? `승인 ${approvalNumber}` : null,
+        pointAmount > 0 ? `포인트 ${pointAmount}` : null,
+      ].filter((value): value is string => Boolean(value));
+
+      const transaction: Transaction = {
+        id: createId("tx"),
+        workspaceId: workspace.id,
+        occurredAt,
+        settledAt: settledAt ?? occurredAt,
+        transactionType: "expense",
+        sourceType: "card",
+        ownerPersonId: card.ownerPersonId,
+        cardId: card.id,
+        accountId: null,
+        fromAccountId: null,
+        toAccountId: null,
+        merchantName: normalizedMerchantName,
+        description: descriptionParts.join(" · "),
+        amount: Math.abs(amount),
+        originalAmount: Math.abs(amount),
+        discountAmount: 0,
+        categoryId: (() => {
+          const decision = inferCategoryDecision(categories, normalizedMerchantName, historicalProfiles);
+          return !isCancelled && decision?.mode === "auto" ? decision.categoryId : null;
+        })(),
+        tagIds: [],
+        isInternalTransfer: false,
+        isExpenseImpact: !isCancelled,
+        isSharedExpense: false,
+        refundOfTransactionId: null,
+        status: isCancelled ? "cancelled" : "active",
+      };
+
+      const decision = inferCategoryDecision(categories, normalizedMerchantName, historicalProfiles);
+      pushTransaction(transaction, {
+        createUncategorizedReview: !isCancelled,
+        suggestedCategoryId: !isCancelled && decision?.mode === "review" ? decision.categoryId : null,
+        suggestedCategoryLabel: !isCancelled && decision?.mode === "review" ? decision.categoryLabel : null,
+        suggestedConfidenceScore: decision?.mode === "review" ? decision.confidenceScore : undefined,
+      });
+
+      if (!isCancelled && approvalKey) {
+        approvalTransactionIndex.set(approvalKey, transactions.length - 1);
+      }
+    }
+
+    return transactions.length > 0;
+  };
+
+  const parseColumnDrivenCardStatement = () => {
+    const issuerName = detectIssuerNameByWorkbook(file.name, workbook.SheetNames);
+    const approvalTransactionIndex = new Map<string, number>();
+    let parsedCount = 0;
+
+    for (const sheetName of workbook.SheetNames) {
+      const sheet = workbook.Sheets[sheetName];
+      if (!sheet) continue;
+
+      const rows = XLSX.utils.sheet_to_json<(string | null)[]>(sheet, { header: 1, defval: null });
+      const matchedTemplate = COLUMN_DRIVEN_STATEMENT_TEMPLATES
+        .map((template) => ({ template, resolved: resolveStatementTemplate(rows, template) }))
+        .find((entry) => entry.resolved);
+
+      if (!matchedTemplate?.resolved) continue;
+
+      const { columnIndexByKey, headerRowIndex } = matchedTemplate.resolved;
+
+      for (const row of rows.slice(headerRowIndex + 1)) {
+        const getCell = (key: StatementColumnKey) => {
+          const index = columnIndexByKey[key];
+          return typeof index === "number" ? row[index] : null;
+        };
+
+        const occurredAt = parseStatementDate(getCell("date"));
+        const merchantName = normalizeText(getCell("merchant"));
+        const approvedAmount = parseAmount(getCell("approvedAmount"));
+        if (!occurredAt || !merchantName || approvedAmount === 0) continue;
+
+        const benefitAmount = Math.abs(parseAmount(getCell("benefitAmount")));
+        const paymentAmountRaw = parseAmount(getCell("paymentAmount"));
+        const paymentAmount = Math.abs(paymentAmountRaw);
+        const cancelStatus = normalizeText(getCell("cancelStatus"));
+        const approvalNumber = normalizeText(getCell("approvalNumber"));
+        const ownerType = normalizeText(getCell("ownerType"));
+        const cardValue = normalizeText(getCell("card"));
+        const installmentType = normalizeText(getCell("saleType"));
+        const installmentMonths = normalizeText(getCell("installmentMonths"));
+        const settledAt = parseStatementDate(getCell("settledDate")) ?? occurredAt;
+        const isCancelled = cancelStatus.includes("취소") || approvedAmount < 0 || paymentAmountRaw < 0;
+
+        const ownerName = ownerType.includes("본인") ? "본인" : ownerType || "사용자";
+        const last4 = extractCardNumberMasked(cardValue);
+        const cardName =
+          cardValue && cardValue.length > 4 && !/^\d+$/.test(cardValue.replace(/\D+/g, ""))
+            ? cardValue
+            : `${issuerName} ${last4 || "카드"}`;
+        const card = ensureCard(cardName, ownerName, issuerName);
+        const normalizedMerchantName = normalizeCancelledMerchantName(merchantName);
+        const approvalKey = approvalNumber ? `${card.id}|${approvalNumber}` : "";
+
+        if (isCancelled && approvalKey) {
+          const previousIndex = approvalTransactionIndex.get(approvalKey);
+          if (typeof previousIndex === "number") {
+            const previous = transactions[previousIndex];
+            if (previous && previous.status === "active") {
+              transactions[previousIndex] = {
+                ...previous,
+                merchantName: normalizedMerchantName,
+                status: "cancelled",
+                isExpenseImpact: false,
+              };
+              removePendingCategoryReviews(reviews, previous.id);
+              parsedCount += 1;
+              continue;
+            }
+          }
+        }
+
+        const originalAmount = Math.abs(approvedAmount);
+        const inferredDiscountAmount =
+          benefitAmount > 0
+            ? benefitAmount
+            : paymentAmount > 0 && paymentAmount < originalAmount
+              ? originalAmount - paymentAmount
+              : 0;
+        const netAmount = paymentAmount > 0 ? paymentAmount : Math.max(0, originalAmount - inferredDiscountAmount);
+        const descriptionParts = [
+          installmentType || null,
+          installmentMonths && installmentMonths !== "0" ? `${installmentMonths}개월` : null,
+          approvalNumber ? `승인 ${approvalNumber}` : null,
+          inferredDiscountAmount > 0 ? `할인 ${inferredDiscountAmount}` : null,
+        ].filter((value): value is string => Boolean(value));
+
+        const decision = inferCategoryDecision(categories, normalizedMerchantName, historicalProfiles);
+        pushTransaction(
+          {
+            id: createId("tx"),
+            workspaceId: workspace.id,
+            occurredAt,
+            settledAt,
+            transactionType: "expense",
+            sourceType: "card",
+            ownerPersonId: card.ownerPersonId,
+            cardId: card.id,
+            accountId: null,
+            fromAccountId: null,
+            toAccountId: null,
+            merchantName: normalizedMerchantName,
+            description: descriptionParts.join(" · "),
+            amount: netAmount,
+            originalAmount,
+            discountAmount: inferredDiscountAmount,
+            categoryId: !isCancelled && decision?.mode === "auto" ? decision.categoryId : null,
+            tagIds: [],
+            isInternalTransfer: false,
+            isExpenseImpact: !isCancelled,
+            isSharedExpense: false,
+            refundOfTransactionId: null,
+            status: isCancelled ? "cancelled" : "active",
+          },
+          {
+            createUncategorizedReview: !isCancelled,
+            suggestedCategoryId: !isCancelled && decision?.mode === "review" ? decision.categoryId : null,
+            suggestedCategoryLabel: !isCancelled && decision?.mode === "review" ? decision.categoryLabel : null,
+            suggestedConfidenceScore: decision?.mode === "review" ? decision.confidenceScore : undefined,
+          },
+        );
+
+        if (!isCancelled && approvalKey) {
+          approvalTransactionIndex.set(approvalKey, transactions.length - 1);
+        }
+        parsedCount += 1;
+      }
+    }
+
+    return parsedCount > 0;
+  };
+
   const parseHyundaiCardStatement = () => {
     const sheetName = workbook.SheetNames.find((name) => {
       const sheet = workbook.Sheets[name];
@@ -1313,6 +1762,12 @@ export async function parseHouseholdWorkbook(file: File, context?: ImportClassif
     parseLegacyWooriCardStatement();
   }
   if (transactions.length === 0) {
+    parseColumnDrivenCardStatement();
+  }
+  if (transactions.length === 0) {
+    parseDomesticCardUsageLookupStatement();
+  }
+  if (transactions.length === 0) {
     parseHyundaiCardStatement();
   }
   if (transactions.length === 0) {
@@ -1339,11 +1794,13 @@ export async function parseHouseholdWorkbook(file: File, context?: ImportClassif
 
       const originalAmount = previous.originalAmount ?? previous.amount;
       const remainingAmount = Math.max(0, previous.amount - transaction.amount);
+      const discountAmount = Math.max(previous.discountAmount ?? 0, originalAmount - remainingAmount);
       const nextStatus = remainingAmount === 0 ? "cancelled" : "active";
       transactions[previousIndex] = {
         ...previous,
         merchantName: normalizedMerchantName,
         originalAmount,
+        discountAmount,
         amount: remainingAmount,
         status: nextStatus,
         isExpenseImpact: nextStatus === "active" && previous.isExpenseImpact,
