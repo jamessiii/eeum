@@ -464,6 +464,15 @@ function RecordsPage({ view }: { view: "moon" | "sun" }) {
   );
 }
 
+function AppBrandMark({ size = "compact" }: { size?: "compact" | "expanded" }) {
+  return (
+    <span className={`app-brand-mark app-brand-mark--${size}`} aria-label="소비일기">
+      <span className="app-brand-grid" aria-hidden="true" />
+      <span className="app-brand-word">소비일기</span>
+    </span>
+  );
+}
+
 function AppFrame() {
   const { addPerson, createEmptyWorkspace, isReady, setActiveWorkspace, state } = useAppState();
   const { isDeveloperModeUnlocked, registerUnlockTap, lockDeveloperMode } = useDeveloperMode();
@@ -632,15 +641,15 @@ function AppFrame() {
       <header className="app-topbar condensed">
         <div className="app-topbar-main">
           <div className="app-brand-block">
-            <span className="sidebar-kicker">이음</span>
+            <span className="sidebar-kicker">생활 가계부</span>
             <button type="button" className="sidebar-brand-button" onClick={registerUnlockTap}>
-              <h1>이음</h1>
+              <AppBrandMark size="expanded" />
             </button>
-            <p className="sidebar-copy">이음은 빠르게 기록하고 자연스럽게 정리하는 생활 가계부 서비스입니다.</p>
+            <p className="sidebar-copy">소비일기는 빠르게 기록하고 자연스럽게 정리하는 생활 가계부 서비스입니다.</p>
           </div>
           <div className="app-topbar-compact-header">
-            <Link to="/collections/card" className="app-topbar-logo-link" aria-label="이음 결제내역으로 이동" onClick={registerUnlockTap}>
-              <img className="app-topbar-logo-image" src={`${import.meta.env.BASE_URL}logo.png`} alt="이음" />
+            <Link to="/collections/card" className="app-topbar-logo-link" aria-label="소비일기 결제내역으로 이동" onClick={registerUnlockTap}>
+              <AppBrandMark size="compact" />
             </Link>
           </div>
           <div className="app-topbar-actions">

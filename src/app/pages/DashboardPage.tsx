@@ -254,6 +254,13 @@ function formatDateLabel(value: string) {
   return `${year}.${month}.${day}`;
 }
 
+function formatFullKoreanDateLabel(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return value;
+  const weekday = CALENDAR_WEEKDAY_LABELS[new Date(year, month - 1, day).getDay()] ?? "";
+  return `${year}년 ${month}월 ${day}일 ${weekday}요일`;
+}
+
 function getLoopDueLabel(daysUntilNextPurchase: number | null) {
   if (daysUntilNextPurchase === null) return "예측 대기";
   if (daysUntilNextPurchase > 0) return `${daysUntilNextPurchase}일 지남`;
@@ -1224,7 +1231,10 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
   const [selectedCalendarMonth, setSelectedCalendarMonth] = useState(() =>
     calendarMonthOptions.some((option) => option.value === currentMonth) ? currentMonth : calendarMonthOptions[0]?.value ?? currentMonth,
   );
-  const [selectedCalendarDate, setSelectedCalendarDate] = useState(() => `${currentMonth}-01`);
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState(() => {
+    const today = new Date();
+    return `${monthKey(today)}-${String(today.getDate()).padStart(2, "0")}`;
+  });
   const [activeCategorySliceName, setActiveCategorySliceName] = useState<string | null>(null);
   const [activeAnnualMonth, setActiveAnnualMonth] = useState<string | null>(null);
   const [isAnnualMonthTooltipFading, setIsAnnualMonthTooltipFading] = useState(false);
@@ -1614,6 +1624,8 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
   }, [calendarExpenseTransactions, calendarMonthValue, categoryNameMap, latestStatementMonth, loopInsightByGroupKey, managedLoops]);
   const selectedCalendarIndex = Math.max(0, calendarCells.findIndex((item) => item.dateKey === selectedCalendarDate));
   const selectedCalendarCell = calendarCells[selectedCalendarIndex] ?? calendarCells[0] ?? null;
+  const canMoveCalendarMonthPrev = calendarMonthOptions.some((option) => option.value === getPreviousMonthKey(calendarMonthValue));
+  const canMoveCalendarMonthNext = calendarMonthOptions.some((option) => option.value === getNextMonthKey(calendarMonthValue));
   const selectedCalendarTransactions = useMemo(
     () =>
       calendarExpenseTransactions.filter(
@@ -2305,6 +2317,196 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
     return sections;
   }, [accountNameMap, selectedDashboardExpenseTransactions, visibleCards, visiblePeople]);
 
+  const moonCalendarSection = (
+    <section className="card shadow-sm" style={getMotionStyle(0.6)} data-guide-target="records-moon-calendar">
+      {mode === "dashboard" ? (
+        <div className="dashboard-calendar-hero-head">
+          <div className="dashboard-calendar-month-nav" aria-label="월 이동">
+            <button
+              type="button"
+              className="dashboard-calendar-month-button"
+              onClick={() => setSelectedCalendarMonth(getPreviousMonthKey(calendarMonthValue))}
+              disabled={!canMoveCalendarMonthPrev}
+              aria-label="이전 달"
+            >
+              <span aria-hidden="true">‹</span>
+            </button>
+            <button
+              type="button"
+              className="dashboard-calendar-month-button"
+              onClick={() => setSelectedCalendarMonth(getNextMonthKey(calendarMonthValue))}
+              disabled={!canMoveCalendarMonthNext}
+              aria-label="다음 달"
+            >
+              <span aria-hidden="true">›</span>
+            </button>
+          </div>
+          <strong className="dashboard-calendar-hero-date">
+            {formatFullKoreanDateLabel(selectedCalendarCell?.dateKey ?? selectedCalendarDate)}
+          </strong>
+          <div className="dashboard-calendar-hero-spacer" aria-hidden="true" />
+        </div>
+      ) : (
+        <div className="section-head">
+          <div>
+            <span className="section-kicker">달 기록 달력</span>
+            <h2 className="section-title">소비기록</h2>
+          </div>
+          <div className="dashboard-section-toolbar">
+            <AppSelect
+              value={calendarMonthValue}
+              onChange={setSelectedCalendarMonth}
+              options={calendarMonthOptions}
+              ariaLabel="달 기록 연월 선택"
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="dashboard-calendar-layout">
+        <div>
+          <div className="dashboard-calendar-weekdays" aria-hidden="true">
+            {CALENDAR_WEEKDAY_LABELS.map((label, index) => (
+              <span
+                key={label}
+                className={`dashboard-calendar-weekday${index === 0 ? " is-sunday" : ""}${index === 6 ? " is-saturday" : ""}`}
+              >
+                {label}
+              </span>
+            ))}
+          </div>
+          <div className="dashboard-calendar-grid">
+            {calendarCells.map((cell) => (
+              <button
+                key={cell.dateKey}
+                type="button"
+                className={`dashboard-calendar-cell${cell.isCurrentMonth ? "" : " is-outside"}${selectedCalendarCell?.dateKey === cell.dateKey ? " is-selected" : ""}`}
+                onClick={() => setSelectedCalendarDate(cell.dateKey)}
+              >
+                <div className="dashboard-calendar-cell-head">
+                  <span
+                    className={`dashboard-calendar-date${cell.dayOfWeek === 0 ? " is-sunday" : ""}${cell.dayOfWeek === 6 ? " is-saturday" : ""}`}
+                  >
+                    {Number(cell.dateKey.slice(8, 10))}
+                  </span>
+                  {cell.holidayLabel ? <span className="dashboard-calendar-holiday-label">{cell.holidayLabel}</span> : null}
+                </div>
+                <strong className="dashboard-calendar-amount">{cell.expenseAmount ? formatCurrency(cell.expenseAmount) : "-"}</strong>
+                {(cell.expenseAmount > 0 || cell.memos.length > 0) ? (
+                  <div className="dashboard-calendar-marker-row" aria-hidden="true">
+                    {cell.expenseAmount > 0 ? <span className="dashboard-calendar-marker is-expense" /> : null}
+                    {cell.memos.length > 0 ? <span className="dashboard-calendar-marker is-memo" /> : null}
+                  </div>
+                ) : null}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <article className="dashboard-diary-card">
+          <div className="dashboard-diary-head">
+            <span className="section-kicker">오늘의 일기</span>
+          </div>
+          <div className="dashboard-diary-sheet">
+            <div className="dashboard-diary-grid" aria-label={todayDiary}>
+              {todayDiaryCells.map((character, index) => (
+                <span
+                  key={`${selectedCalendarCell?.dateKey ?? calendarMonthValue}-${index}`}
+                  className={`dashboard-diary-cell${character ? "" : " is-blank"}`}
+                >
+                  {character === " " ? "" : character}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="dashboard-diary-memo">
+            {selectedCalendarCell?.memos.length ? (
+              selectedCalendarCell.memos.map((memo) => (
+                <p key={`${memo.text}-${memo.merchantNames.join("|")}`}>
+                  {memo.text}
+                  <small>({memo.merchantNames.join(", ")})</small>
+                </p>
+              ))
+            ) : null}
+          </div>
+        </article>
+      </div>
+
+      <div className="dashboard-calendar-transactions">
+        <div className="dashboard-calendar-transactions-head">
+          <span className="section-kicker">선택한 날짜 소비내역</span>
+        </div>
+        {selectedCalendarTransactions.length ? (
+          <div className="table-responsive dashboard-calendar-transactions-table-wrap">
+            <table className="table align-middle transaction-grid-table">
+              <colgroup>
+                <col className="transaction-grid-col-date" />
+                <col className="transaction-grid-col-merchant" />
+                <col className="transaction-grid-col-paid-amount" />
+                <col className="transaction-grid-col-owner" />
+                <col className="transaction-grid-col-category" />
+                <col className="transaction-grid-col-note" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>사용일</th>
+                  <th>가맹점</th>
+                  <th className="text-end">결제금액</th>
+                  <th>사용자</th>
+                  <th>카테고리</th>
+                  <th>비고</th>
+                </tr>
+              </thead>
+              <tbody>
+                {selectedCalendarTransactions.map((transaction, index) => (
+                  <tr key={transaction.id} style={getMotionStyle(index)}>
+                    <td className="transaction-date-cell">{transaction.occurredAt.slice(0, 10)}</td>
+                    <td>
+                      <TransactionRowHeader merchantName={transaction.merchantName} />
+                    </td>
+                    <td className="text-end transaction-amount-cell">
+                      <strong>{formatCurrency(transaction.amount)}</strong>
+                    </td>
+                    <td className="transaction-owner-cell">{getDashboardTransactionOwnerLabel(transaction)}</td>
+                    <td className="dashboard-calendar-grid-cell">
+                      <TransactionCategoryEditor
+                        transaction={transaction}
+                        categories={scope.categories}
+                        categoryName={transaction.categoryId ? categoryLabelMap.get(transaction.categoryId) ?? null : null}
+                        onCategoryChange={(nextCategoryId) => {
+                          if (!nextCategoryId) {
+                            clearCategory(workspaceId, transaction.id);
+                            return;
+                          }
+                          assignCategory(workspaceId, transaction.id, nextCategoryId);
+                        }}
+                      />
+                    </td>
+                    <td className="dashboard-calendar-grid-cell">
+                      <input
+                        type="text"
+                        className="form-control form-control-sm dashboard-calendar-note-input"
+                        defaultValue={transaction.description}
+                        placeholder="비고 입력"
+                        onBlur={(event) => {
+                          const nextDescription = event.currentTarget.value.trim();
+                          if (nextDescription === (transaction.description ?? "")) return;
+                          updateTransactionDetails(workspaceId, transaction.id, { description: nextDescription });
+                        }}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="mb-0 text-secondary">이 날짜에는 아직 정리된 소비내역이 없습니다.</p>
+        )}
+      </div>
+    </section>
+  );
+
   if (mode === "sun") {
     return (
       <div className="page-stack">
@@ -2611,167 +2813,9 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
 
   return (
     <div className="page-stack">
+      {mode === "dashboard" ? moonCalendarSection : null}
       {mode === "moon" ? (
         <>
-      <section className="card shadow-sm" style={getMotionStyle(0.6)} data-guide-target="records-moon-calendar">
-        <div className="section-head">
-          <div>
-            <span className="section-kicker">달 기록 달력</span>
-            <h2 className="section-title">소비기록</h2>
-          </div>
-          <div className="dashboard-section-toolbar">
-            <AppSelect
-              value={calendarMonthValue}
-              onChange={setSelectedCalendarMonth}
-              options={calendarMonthOptions}
-              ariaLabel="달 기록 연월 선택"
-            />
-          </div>
-        </div>
-
-        <div className="dashboard-calendar-layout">
-          <div>
-            <div className="dashboard-calendar-weekdays" aria-hidden="true">
-              {CALENDAR_WEEKDAY_LABELS.map((label, index) => (
-                <span
-                  key={label}
-                  className={`dashboard-calendar-weekday${index === 0 ? " is-sunday" : ""}${index === 6 ? " is-saturday" : ""}`}
-                >
-                  {label}
-                </span>
-              ))}
-            </div>
-            <div className="dashboard-calendar-grid">
-              {calendarCells.map((cell) => (
-                <button
-                  key={cell.dateKey}
-                  type="button"
-                  className={`dashboard-calendar-cell${cell.isCurrentMonth ? "" : " is-outside"}${selectedCalendarCell?.dateKey === cell.dateKey ? " is-selected" : ""}`}
-                  onClick={() => setSelectedCalendarDate(cell.dateKey)}
-                >
-                  <div className="dashboard-calendar-cell-head">
-                    <span
-                      className={`dashboard-calendar-date${cell.dayOfWeek === 0 ? " is-sunday" : ""}${cell.dayOfWeek === 6 ? " is-saturday" : ""}`}
-                    >
-                      {Number(cell.dateKey.slice(8, 10))}
-                    </span>
-                    {cell.holidayLabel ? <span className="dashboard-calendar-holiday-label">{cell.holidayLabel}</span> : null}
-                  </div>
-                  <strong className="dashboard-calendar-amount">{cell.expenseAmount ? formatCurrency(cell.expenseAmount) : "-"}</strong>
-                  {(cell.expenseAmount > 0 || cell.memos.length > 0) ? (
-                    <div className="dashboard-calendar-marker-row" aria-hidden="true">
-                      {cell.expenseAmount > 0 ? <span className="dashboard-calendar-marker is-expense" /> : null}
-                      {cell.memos.length > 0 ? <span className="dashboard-calendar-marker is-memo" /> : null}
-                    </div>
-                  ) : null}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <article className="dashboard-diary-card">
-            <div className="dashboard-diary-head">
-              <span className="section-kicker">오늘의 일기</span>
-            </div>
-            <div className="dashboard-diary-sheet">
-              <div className="dashboard-diary-grid" aria-label={todayDiary}>
-                {todayDiaryCells.map((character, index) => (
-                  <span
-                    key={`${selectedCalendarCell?.dateKey ?? calendarMonthValue}-${index}`}
-                    className={`dashboard-diary-cell${character ? "" : " is-blank"}`}
-                  >
-                    {character === " " ? "" : character}
-                  </span>
-                ))}
-              </div>
-            </div>
-            <div className="dashboard-diary-memo">
-              {selectedCalendarCell?.memos.length ? (
-                selectedCalendarCell.memos.map((memo) => (
-                  <p key={`${memo.text}-${memo.merchantNames.join("|")}`}>
-                    {memo.text}
-                    <small>({memo.merchantNames.join(", ")})</small>
-                  </p>
-                ))
-              ) : null}
-            </div>
-          </article>
-        </div>
-
-        <div className="dashboard-calendar-transactions">
-          <div className="dashboard-calendar-transactions-head">
-            <span className="section-kicker">선택한 날짜 소비내역</span>
-          </div>
-          {selectedCalendarTransactions.length ? (
-            <div className="table-responsive dashboard-calendar-transactions-table-wrap">
-              <table className="table align-middle transaction-grid-table">
-                <colgroup>
-                  <col className="transaction-grid-col-date" />
-                  <col className="transaction-grid-col-merchant" />
-                  <col className="transaction-grid-col-paid-amount" />
-                  <col className="transaction-grid-col-owner" />
-                  <col className="transaction-grid-col-category" />
-                  <col className="transaction-grid-col-note" />
-                </colgroup>
-                <thead>
-                  <tr>
-                    <th>사용일</th>
-                    <th>가맹점</th>
-                    <th className="text-end">결제금액</th>
-                    <th>사용자</th>
-                    <th>카테고리</th>
-                    <th>비고</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedCalendarTransactions.map((transaction, index) => (
-                    <tr key={transaction.id} style={getMotionStyle(index)}>
-                      <td>{transaction.occurredAt.slice(0, 10)}</td>
-                      <td>
-                        <TransactionRowHeader merchantName={transaction.merchantName} />
-                      </td>
-                      <td className="text-end transaction-amount-cell">
-                        <strong>{formatCurrency(transaction.amount)}</strong>
-                      </td>
-                      <td>{getDashboardTransactionOwnerLabel(transaction)}</td>
-                      <td className="dashboard-calendar-grid-cell">
-                        <TransactionCategoryEditor
-                          transaction={transaction}
-                          categories={scope.categories}
-                          categoryName={transaction.categoryId ? categoryLabelMap.get(transaction.categoryId) ?? null : null}
-                          onCategoryChange={(nextCategoryId) => {
-                            if (!nextCategoryId) {
-                              clearCategory(workspaceId, transaction.id);
-                              return;
-                            }
-                            assignCategory(workspaceId, transaction.id, nextCategoryId);
-                          }}
-                        />
-                      </td>
-                      <td className="dashboard-calendar-grid-cell">
-                        <input
-                          type="text"
-                          className="form-control form-control-sm dashboard-calendar-note-input"
-                          defaultValue={transaction.description}
-                          placeholder="비고 입력"
-                          onBlur={(event) => {
-                            const nextDescription = event.currentTarget.value.trim();
-                            if (nextDescription === (transaction.description ?? "")) return;
-                            updateTransactionDetails(workspaceId, transaction.id, { description: nextDescription });
-                          }}
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="mb-0 text-secondary">이 날짜에는 아직 정리된 소비내역이 없습니다.</p>
-          )}
-        </div>
-      </section>
-
       <section className="card shadow-sm" style={getMotionStyle(0)} data-guide-target="records-moon-overview">
         <div className="section-head">
           <div>
@@ -3634,6 +3678,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
           </article>
         </div>
       </section>
+      {mode !== "dashboard" ? (
       <section className="card shadow-sm" style={getMotionStyle(2)} data-guide-target="dashboard-flow-overview">
         <div className="section-head">
           <div>
@@ -3669,7 +3714,9 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
           </article>
         </div>
       </section>
+      ) : null}
 
+      {mode !== "dashboard" ? (
       <section className="card shadow-sm" style={getMotionStyle(3)} data-guide-target="dashboard-loop-station">
         <div className="section-head">
           <div>
@@ -3759,6 +3806,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
           />
         )}
       </section>
+      ) : null}
         </>
       ) : null}
 
