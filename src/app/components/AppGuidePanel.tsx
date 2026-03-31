@@ -33,6 +33,7 @@ type BeaconMorphState = "hidden" | "entering" | "idle" | "exiting";
 type PanelRelocationPhase = "out" | "in";
 
 const LEFT_ANCHORED_GUIDE_STEP_IDS = new Set([
+  "people-category-link-resize",
   "transactions-review-actions",
   "transactions-uncategorized",
   "settlements-confirm-action",

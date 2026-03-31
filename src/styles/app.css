@@ -160,6 +160,7 @@ a {
 }
 
 #root {
+  zoom: 0.8;
   min-height: 100vh;
 }
 

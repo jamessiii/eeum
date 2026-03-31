@@ -80,13 +80,13 @@ function getNextQueuedReviewId(queueIds: string[], currentId: string) {
 function getInlineReviewPrompt(review: ReviewItem) {
   switch (review.reviewType) {
     case "category_suggestion":
-      return "?대떦 嫄댁쓣 ?쒖븞 移댄뀒怨좊━濡?遺꾨쪟?좉퉴??";
+      return "해당 건을 제안 카테고리로 분류할까요?";
     case "duplicate_candidate":
-      return "?대떦 嫄댁쓣 以묐났?쇰줈 蹂닿퀬 ?쒖쇅?좉퉴??";
+      return "해당 건을 중복으로 보고 제외할까요?";
     case "refund_candidate":
-      return "?대떦 嫄댁쓣 ?섎텋濡??곌껐?좉퉴??";
+      return "해당 건을 환불로 연결할까요?";
     default:
-      return "?대떦 嫄댁쓣 寃?좏븷源뚯슂?";
+      return "해당 건을 검토할까요?";
   }
 }
 
@@ -176,7 +176,7 @@ export function TransactionsPage() {
     [statementTransactions],
   );
   const selectedStatementLabel = useMemo(
-    () => statementOptions.find((option) => option.id === effectiveSelectedStatementId)?.label ?? "?꾩껜 寃곗젣?댁뿭",
+    () => statementOptions.find((option) => option.id === effectiveSelectedStatementId)?.label ?? "전체 결제내역",
     [effectiveSelectedStatementId, statementOptions],
   );
 
@@ -489,7 +489,7 @@ export function TransactionsPage() {
       setFilters(reviewWorkflow.preservedFilters.filters);
       setSelectedStatementId(reviewWorkflow.preservedFilters.selectedStatementId);
       setReviewWorkflow(null);
-      showToast("?대쾲 ?먮룞寃?좎뿉?쒕뒗 ?섍린怨? ?ㅼ쓬 ?먮룞寃?좎뿉???ㅼ떆 蹂댁뿬?쒕┰?덈떎.", "info");
+      showToast("이번 자동검토에서는 보류하고 다음 자동검토에서 다시 보여드립니다.", "info");
       return;
     }
 
@@ -503,15 +503,15 @@ export function TransactionsPage() {
           }
         : current,
     );
-    showToast("?대쾲 ?먮룞寃?좎뿉?쒕뒗 ?섍린怨? ?ㅼ쓬 ?먮룞寃?좎뿉???ㅼ떆 蹂댁뿬?쒕┰?덈떎.", "info");
+    showToast("이번 자동검토에서는 보류하고 다음 자동검토에서 다시 보여드립니다.", "info");
   };
 
   const getTransactionReviewBadgeLabel = (transaction: Transaction) => {
     if (!activeWorkflowReview || !activeWorkflowTransactionIds.has(transaction.id)) return null;
 
-    if (activeWorkflowReview.reviewType === "category_suggestion") return "移댄뀒怨좊━ ?쒖븞";
+    if (activeWorkflowReview.reviewType === "category_suggestion") return "카테고리 제안";
     if (activeWorkflowReview.reviewType === "duplicate_candidate") {
-      return transaction.id === activeWorkflowReview.primaryTransactionId ? "以묐났 ?꾨낫" : "湲곗? 嫄곕옒";
+      return transaction.id === activeWorkflowReview.primaryTransactionId ? "중복 후보" : "비교 거래";
     }
     if (activeWorkflowReview.reviewType === "refund_candidate") {
       return transaction.id === activeWorkflowReview.primaryTransactionId ? "환불 후보" : "원거래";
@@ -523,10 +523,10 @@ export function TransactionsPage() {
     if (!activeWorkflowReview || !activeWorkflowTransactionIds.has(transaction.id)) return null;
 
     if (activeWorkflowReview.reviewType === "category_suggestion") {
-      return `?쒖븞 移댄뀒怨좊━瑜??뺤씤??二쇱꽭??쨌 ${getTransactionConnectionMeta(transaction)}`;
+      return `제안 카테고리를 확인해 주세요 · ${getTransactionConnectionMeta(transaction)}`;
     }
     if (activeWorkflowReview.reviewType === "duplicate_candidate") {
-      return `${transaction.id === activeWorkflowReview.primaryTransactionId ? "?쒖쇅???꾨낫 嫄곕옒" : "鍮꾧탳 湲곗? 嫄곕옒"} 쨌 ${getTransactionConnectionMeta(transaction)}`;
+      return `${transaction.id === activeWorkflowReview.primaryTransactionId ? "제외할 후보 거래" : "비교 기준 거래"} · ${getTransactionConnectionMeta(transaction)}`;
     }
     if (activeWorkflowReview.reviewType === "refund_candidate") {
       return `${transaction.id === activeWorkflowReview.primaryTransactionId ? "환불로 연결할 거래" : "기준이 되는 원거래"} · ${getTransactionConnectionMeta(transaction)}`;
@@ -656,32 +656,32 @@ export function TransactionsPage() {
 
         {!scope.transactions.length ? (
           <EmptyStateCallout
-            kicker="嫄곕옒 ?놁쓬"
-            title="?꾩쭅 ?낅젰??寃곗젣?댁뿭???놁뒿?덈떎"
-            description="寃곗젣?댁뿭 ?곷떒?먯꽌 移대뱶 紐낆꽭?쒕? 媛?몄삤硫?寃?좎? ?듦퀎媛 ?쒖옉?⑸땲??"
+            kicker="거래 없음"
+            title="아직 입력된 결제내역이 없습니다"
+            description="결제내역 상단에서 카드 명세서를 가져오면 검토와 통계가 시작됩니다."
             actions={
               <Link to="/connections/assets" className="btn btn-outline-secondary btn-sm">
-                ?ъ슜??愿由?蹂닿린
+                자산 관리 보기
               </Link>
             }
           />
         ) : !transactions.length ? (
           <EmptyStateCallout
-            kicker="寃곌낵 ?놁쓬"
-            title={reviewWorkflow ? "?먮룞寃?????嫄곕옒媛 吏湲덉? ?놁뒿?덈떎" : "議곌굔??留욌뒗 寃곗젣?댁뿭???놁뒿?덈떎"}
+            kicker="결과 없음"
+            title={reviewWorkflow ? "자동검토 대상 거래가 지금은 없습니다" : "조건에 맞는 결제내역이 없습니다"}
             description={
               reviewWorkflow
-                ? "?꾩옱 ?먮룞寃???먯뿉 ?⑥븘 ?덈뒗 嫄곕옒媛 ?놁뒿?덈떎. 寃??紐⑤뱶瑜?醫낅즺?섍굅???쇰컲 ?꾪꽣濡??뚯븘媛 蹂댁꽭??"
-                : "誘몃텇瑜?蹂닿린, ?ъ슜?? 紐낆꽭?? 寃??議곌굔??議곗젙?대낫?몄슂."
+                ? "현재 자동검토 목록에 남아 있는 거래가 없습니다. 검토 모드를 종료하거나 일반 필터로 돌아가 보세요."
+                : "미분류 보기, 사용자 명세서, 검색 조건을 조정해보세요."
             }
             actions={
               reviewWorkflow ? (
                 <button type="button" className="btn btn-outline-secondary btn-sm" onClick={exitReviewWorkflow}>
-                  寃??醫낅즺
+                  검토 종료
                 </button>
               ) : (
                 <button type="button" className="btn btn-outline-secondary btn-sm" onClick={resetVisibleFilters}>
-                  ?꾪꽣 珥덇린??
+                  필터 초기화
                 </button>
               )
             }
@@ -836,15 +836,15 @@ export function TransactionsPage() {
                             <div className="transaction-review-inline-panel" data-guide-target="transactions-review-card">
                               <div className="transaction-review-inline-meta">
                                 <span className="transaction-review-inline-badge">
-                                  ?좊ː??{Math.round(inlineReview.confidenceScore * 100)}%
+                                  신뢰도 {Math.round(inlineReview.confidenceScore * 100)}%
                                 </span>
                               </div>
                               <div className="transaction-review-inline-copy">
                                 {inlineReview.reviewType === "category_suggestion" && activeWorkflowSuggestedCategoryLabel ? (
                                   <strong className="transaction-review-inline-question">
-                                    <span>?대떦 嫄댁쓣 </span>
+                                    <span>해당 건을 </span>
                                     <span className="transaction-review-inline-category-badge">{activeWorkflowSuggestedCategoryLabel}</span>
-                                    <span>濡?遺꾨쪟?좉퉴??</span>
+                                    <span>로 분류할까요?</span>
                                   </strong>
                                 ) : (
                                   <strong>{getInlineReviewPrompt(inlineReview)}</strong>
@@ -857,7 +857,7 @@ export function TransactionsPage() {
                                   data-guide-target="transactions-review-defer"
                                   onClick={deferActiveReview}
                                 >
-                                  蹂대쪟
+                                  보류
                                 </button>
                                 <button
                                   type="button"
@@ -865,7 +865,7 @@ export function TransactionsPage() {
                                   data-guide-target="transactions-review-resolve"
                                   onClick={() => handleActiveReviewDecision("resolve")}
                                 >
-                                  ?꾨땲??
+                                  아니요
                                 </button>
                                 <button
                                   type="button"
@@ -873,7 +873,7 @@ export function TransactionsPage() {
                                   data-guide-target="transactions-review-apply"
                                   onClick={() => handleActiveReviewDecision("apply")}
                                 >
-                                  ??
+                                  예
                                 </button>
                               </div>
                             </div>
