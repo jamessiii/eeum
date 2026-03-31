@@ -37,6 +37,7 @@
   --app-muted: #64748b;
   --app-kicker: #4b6ea9;
   --app-handwriting-font: "NanumOkBi", "Nanum Pen Script", "Gamja Flower", "Segoe Print", "Comic Sans MS", sans-serif;
+  --app-portal-scale: 0.8;
   --app-primary: #2563eb;
   --app-primary-strong: #1d4ed8;
   --app-shadow: 0 22px 60px rgba(15, 23, 42, 0.12);
@@ -7500,6 +7501,7 @@ textarea:focus {
   position: fixed;
   right: 2.5rem;
   bottom: 2.5rem;
+  zoom: var(--app-portal-scale);
   z-index: 160;
   isolation: isolate;
   overflow: visible;
@@ -7718,6 +7720,7 @@ textarea:focus {
   position: fixed;
   right: 0.35rem;
   bottom: 0.2rem;
+  zoom: var(--app-portal-scale);
   z-index: 161;
   display: inline-grid;
   place-items: center;
@@ -7780,6 +7783,7 @@ textarea:focus {
 
 .floating-guide-drop-target {
   position: fixed;
+  zoom: var(--app-portal-scale);
   padding: 0;
   border: 2px dashed color-mix(in srgb, var(--app-line-strong) 72%, var(--app-line));
   background: transparent;
