@@ -17,11 +17,28 @@ import type { Account, AppState, Card, Category, FinancialProfile, Person, Revie
 import { createId } from "../../shared/utils/id";
 import { useToast } from "../toast/ToastProvider";
 import { getWorkspaceScope } from "./selectors";
+import { getManagedLoopGroups, type ManagedLoopGroup } from "../../domain/loops/managedLoops";
+import { getLoopRecommendations, type LoopRecommendation } from "../../domain/loops/loopRecommendations";
+import { getLoopStationInsightsFromManagedLoops, type LoopStationInsight } from "../../domain/loops/loopStation";
+import { buildLoopRules, type LoopRule } from "../../domain/loops/loopRules";
 
 type PersonDraft = Pick<Person, "name" | "displayName" | "role" | "memo" | "isActive" | "sortOrder" | "isHidden">;
 type AccountDraft = Pick<
   Account,
-  "ownerPersonId" | "name" | "alias" | "institutionName" | "accountNumberMasked" | "accountType" | "usageType" | "isShared" | "memo" | "sortOrder" | "isHidden"
+  | "ownerPersonId"
+  | "primaryPersonId"
+  | "participantPersonIds"
+  | "accountGroupType"
+  | "name"
+  | "alias"
+  | "institutionName"
+  | "accountNumberMasked"
+  | "accountType"
+  | "usageType"
+  | "isShared"
+  | "memo"
+  | "sortOrder"
+  | "isHidden"
 >;
 type CardDraft = Pick<Card, "ownerPersonId" | "name" | "issuerName" | "cardNumberMasked" | "linkedAccountId" | "cardType" | "memo" | "sortOrder" | "isHidden">;
 type CategoryDraft = Pick<
@@ -59,7 +76,7 @@ type NewTransactionInput = {
 
 type FinancialProfileInput = Pick<
   FinancialProfile,
-  "monthlyNetIncome" | "targetSavingsRate" | "warningSpendRate" | "warningFixedCostRate"
+  "monthlyNetIncome" | "targetSavingsRate" | "warningSpendRate" | "warningFixedCostRate" | "loopPriorityCategoryIds"
 >;
 
 type SettlementInput = {
@@ -142,16 +159,53 @@ type Action =
   | { type: "assignTagByMerchant"; payload: { workspaceId: string; merchantName: string; tagId: string } }
   | {
       type: "updateTransactionFlags";
+        payload: {
+          workspaceId: string;
+          transactionId: string;
+          patch: {
+            isSharedExpense?: boolean;
+            isExpenseImpact?: boolean;
+            isInternalTransfer?: boolean;
+            isLoop?: boolean;
+            isLoopIgnored?: boolean;
+            loopGroupOverrideKey?: string | null;
+            loopDisplayName?: string | null;
+          };
+        };
+      }
+  | {
+      type: "setTransactionLoopFlagBatch";
       payload: {
         workspaceId: string;
-        transactionId: string;
-        patch: {
-          isSharedExpense?: boolean;
-          isExpenseImpact?: boolean;
-          isInternalTransfer?: boolean;
-        };
+        transactionIds: string[];
+        isLoop: boolean;
       };
     }
+  | {
+      type: "setTransactionLoopIgnoredBatch";
+      payload: {
+        workspaceId: string;
+        transactionIds: string[];
+        isLoopIgnored: boolean;
+      };
+    }
+  | {
+      type: "setTransactionLoopGroupOverrideBatch";
+        payload: {
+          workspaceId: string;
+          transactionIds: string[];
+          loopGroupOverrideKey: string | null;
+          isLoop?: boolean;
+        };
+      }
+    | {
+        type: "setTransactionLoopDisplayNameBatch";
+        payload: {
+          workspaceId: string;
+          transactionIds: string[];
+          loopDisplayName: string | null;
+        };
+      }
   | { type: "deleteImportRecord"; payload: { workspaceId: string; importRecordId: string } };
 
 function createPersonDraft(input: string | Partial<PersonDraft>): PersonDraft {
@@ -186,6 +240,9 @@ function createAccountDraft(input: string | Partial<AccountDraft>, institutionNa
   if (typeof input === "string") {
     return {
       ownerPersonId: null,
+      primaryPersonId: null,
+      participantPersonIds: [],
+      accountGroupType: "personal",
       name: input.trim(),
       alias: "",
       institutionName: institutionName?.trim() || "직접입력",
@@ -200,16 +257,28 @@ function createAccountDraft(input: string | Partial<AccountDraft>, institutionNa
   }
 
   const isShared = input.isShared ?? false;
+  const accountGroupType = input.accountGroupType ?? "personal";
+  const primaryPersonId = input.primaryPersonId ?? input.ownerPersonId ?? null;
+  const participantPersonIds = Array.from(
+    new Set(
+      [...(input.participantPersonIds ?? []), ...(accountGroupType === "meeting" && primaryPersonId ? [primaryPersonId] : [])].filter(
+        (personId): personId is string => Boolean(personId),
+      ),
+    ),
+  );
 
   return {
-    ownerPersonId: isShared ? null : input.ownerPersonId ?? null,
+    ownerPersonId: input.ownerPersonId ?? null,
+    primaryPersonId,
+    participantPersonIds,
+    accountGroupType,
     name: String(input.name ?? "").trim(),
     alias: String(input.alias ?? "").trim(),
     institutionName: String(input.institutionName ?? "").trim() || "직접입력",
     accountNumberMasked: String(input.accountNumberMasked ?? "").trim(),
     accountType: input.accountType ?? "checking",
-    usageType: isShared ? "shared" : input.usageType ?? "daily",
-    isShared,
+    usageType: accountGroupType === "meeting" ? "shared" : isShared ? "shared" : input.usageType ?? "daily",
+    isShared: accountGroupType === "meeting" ? true : isShared,
     memo: String(input.memo ?? "").trim(),
     sortOrder: input.sortOrder ?? 0,
     isHidden: input.isHidden ?? false,
@@ -281,6 +350,10 @@ function normalizeAppState(rawState: AppState): AppState {
   const normalizedState = {
     ...rawState,
     schemaVersion: Math.max(rawState.schemaVersion ?? 0, 7),
+    financialProfiles: rawState.financialProfiles.map((profile) => ({
+      ...profile,
+      loopPriorityCategoryIds: profile.loopPriorityCategoryIds ?? [],
+    })),
     people: rawState.people.map((person) => ({
       ...person,
       displayName: person.displayName ?? person.name,
@@ -291,6 +364,15 @@ function normalizeAppState(rawState: AppState): AppState {
     })),
     accounts: rawState.accounts.map((account) => ({
       ...account,
+      primaryPersonId: account.primaryPersonId ?? account.ownerPersonId ?? null,
+      participantPersonIds: Array.from(
+        new Set(
+          [...(account.participantPersonIds ?? []), ...(account.accountGroupType === "meeting" && (account.primaryPersonId ?? account.ownerPersonId) ? [account.primaryPersonId ?? account.ownerPersonId!] : [])].filter(
+            (personId): personId is string => Boolean(personId),
+          ),
+        ),
+      ),
+      accountGroupType: account.accountGroupType ?? (account.isShared ? "meeting" : "personal"),
       alias: account.alias ?? "",
       usageType: account.usageType ?? (account.isShared ? "shared" : "daily"),
       memo: account.memo ?? "",
@@ -324,8 +406,12 @@ function normalizeAppState(rawState: AppState): AppState {
     })),
     transactions: rawState.transactions.map((transaction) => ({
       ...transaction,
-      importRecordId: transaction.importRecordId ?? null,
-    })),
+        importRecordId: transaction.importRecordId ?? null,
+        isLoop: transaction.isLoop ?? false,
+        isLoopIgnored: transaction.isLoopIgnored ?? false,
+        loopGroupOverrideKey: transaction.loopGroupOverrideKey ?? null,
+        loopDisplayName: transaction.loopDisplayName ?? null,
+      })),
     reviews: rawState.reviews.map((review) => ({
       ...review,
       importRecordId: review.importRecordId ?? null,
@@ -1184,6 +1270,10 @@ function applyTransactionFlagPatch(
     isSharedExpense?: boolean;
     isExpenseImpact?: boolean;
     isInternalTransfer?: boolean;
+    isLoop?: boolean;
+    isLoopIgnored?: boolean;
+    loopGroupOverrideKey?: string | null;
+    loopDisplayName?: string | null;
   },
 ) {
   const nextInternalTransfer =
@@ -1207,6 +1297,16 @@ function applyTransactionFlagPatch(
     isExpenseImpact: nextExpenseImpact,
     isSharedExpense: nextSharedExpense,
     isInternalTransfer: nextInternalTransfer,
+    isLoop: typeof patch.isLoop === "boolean" ? patch.isLoop : transaction.isLoop ?? false,
+    isLoopIgnored:
+      typeof patch.isLoopIgnored === "boolean"
+        ? patch.isLoopIgnored
+        : typeof patch.isLoop === "boolean" && patch.isLoop
+          ? false
+          : transaction.isLoopIgnored ?? false,
+    loopGroupOverrideKey:
+      patch.loopGroupOverrideKey !== undefined ? patch.loopGroupOverrideKey : transaction.loopGroupOverrideKey ?? null,
+    loopDisplayName: patch.loopDisplayName !== undefined ? patch.loopDisplayName : transaction.loopDisplayName ?? null,
   };
 }
 
@@ -1528,7 +1628,12 @@ function reducer(state: AppState, action: Action): AppState {
     case "deletePerson":
       const removedPersonAccountIds = new Set(
         state.accounts
-          .filter((account) => account.workspaceId === action.payload.workspaceId && account.ownerPersonId === action.payload.personId)
+          .filter(
+            (account) =>
+              account.workspaceId === action.payload.workspaceId &&
+              ((account.ownerPersonId === action.payload.personId && account.accountGroupType !== "meeting") ||
+                account.primaryPersonId === action.payload.personId),
+          )
           .map((account) => account.id),
       );
       return {
@@ -1536,9 +1641,23 @@ function reducer(state: AppState, action: Action): AppState {
         people: state.people.filter(
           (person) => !(person.workspaceId === action.payload.workspaceId && person.id === action.payload.personId),
         ),
-        accounts: state.accounts.filter(
-          (account) => !(account.workspaceId === action.payload.workspaceId && account.ownerPersonId === action.payload.personId),
-        ),
+        accounts: state.accounts
+          .filter(
+            (account) =>
+              !(
+                account.workspaceId === action.payload.workspaceId &&
+                ((account.ownerPersonId === action.payload.personId && account.accountGroupType !== "meeting") ||
+                  account.primaryPersonId === action.payload.personId)
+              ),
+          )
+          .map((account) =>
+            account.workspaceId === action.payload.workspaceId
+              ? {
+                  ...account,
+                  participantPersonIds: (account.participantPersonIds ?? []).filter((personId) => personId !== action.payload.personId),
+                }
+              : account,
+          ),
         cards: state.cards.filter(
           (card) => !(card.workspaceId === action.payload.workspaceId && card.ownerPersonId === action.payload.personId),
         ),
@@ -1585,10 +1704,10 @@ function reducer(state: AppState, action: Action): AppState {
       };
     case "addAccount":
       const nextAccountId = createId("account");
-      const nextAccount: Account = {
-        id: nextAccountId,
-        workspaceId: action.payload.workspaceId,
-        ...action.payload.values,
+        const nextAccount: Account = {
+          id: nextAccountId,
+          workspaceId: action.payload.workspaceId,
+          ...action.payload.values,
         sortOrder:
           action.payload.values.sortOrder ??
           state.accounts.filter(
@@ -1639,7 +1758,10 @@ function reducer(state: AppState, action: Action): AppState {
           transaction.accountId === action.payload.accountId
             ? {
                 ...transaction,
-                ownerPersonId: action.payload.values.isShared ? null : action.payload.values.ownerPersonId,
+                ownerPersonId:
+                  action.payload.values.accountGroupType === "meeting" || action.payload.values.isShared
+                    ? null
+                    : action.payload.values.ownerPersonId,
               }
             : transaction,
         ),
@@ -2096,6 +2218,58 @@ function reducer(state: AppState, action: Action): AppState {
             : transaction,
         ),
       };
+    case "setTransactionLoopFlagBatch": {
+      const transactionIdSet = new Set(action.payload.transactionIds);
+      return {
+        ...state,
+        transactions: state.transactions.map((transaction) =>
+          transaction.workspaceId === action.payload.workspaceId && transactionIdSet.has(transaction.id)
+            ? { ...transaction, isLoop: action.payload.isLoop, isLoopIgnored: action.payload.isLoop ? false : transaction.isLoopIgnored ?? false }
+            : transaction,
+        ),
+      };
+    }
+    case "setTransactionLoopIgnoredBatch": {
+      const transactionIdSet = new Set(action.payload.transactionIds);
+      return {
+        ...state,
+        transactions: state.transactions.map((transaction) =>
+          transaction.workspaceId === action.payload.workspaceId && transactionIdSet.has(transaction.id)
+            ? { ...transaction, isLoopIgnored: action.payload.isLoopIgnored, isLoop: action.payload.isLoopIgnored ? false : transaction.isLoop }
+            : transaction,
+        ),
+      };
+    }
+    case "setTransactionLoopGroupOverrideBatch": {
+      const transactionIdSet = new Set(action.payload.transactionIds);
+      return {
+        ...state,
+        transactions: state.transactions.map((transaction) =>
+          transaction.workspaceId === action.payload.workspaceId && transactionIdSet.has(transaction.id)
+            ? {
+                ...transaction,
+                loopGroupOverrideKey: action.payload.loopGroupOverrideKey,
+                isLoop: action.payload.isLoop ?? transaction.isLoop ?? false,
+                isLoopIgnored: action.payload.isLoop ?? transaction.isLoop ? false : transaction.isLoopIgnored ?? false,
+              }
+            : transaction,
+        ),
+      };
+    }
+    case "setTransactionLoopDisplayNameBatch": {
+      const transactionIdSet = new Set(action.payload.transactionIds);
+      return {
+        ...state,
+        transactions: state.transactions.map((transaction) =>
+          transaction.workspaceId === action.payload.workspaceId && transactionIdSet.has(transaction.id)
+            ? {
+                ...transaction,
+                loopDisplayName: action.payload.loopDisplayName,
+              }
+            : transaction,
+        ),
+      };
+    }
     case "deleteImportRecord":
       return deleteImportRecordFromState(state, action.payload.workspaceId, action.payload.importRecordId);
     default:
@@ -2106,6 +2280,15 @@ function reducer(state: AppState, action: Action): AppState {
 interface AppStateContextValue {
   state: AppState;
   isReady: boolean;
+  workspaceLoopDataByWorkspaceId: Map<
+    string,
+    {
+      loopRules: LoopRule[];
+      managedLoops: ManagedLoopGroup[];
+      loopInsights: LoopStationInsight[];
+      loopRecommendations: LoopRecommendation[];
+    }
+  >;
   createEmptyWorkspace: (name?: string) => void;
   createDemoWorkspace: () => Promise<void>;
   previewWorkbookImport: (file: File) => Promise<WorkspaceBundle>;
@@ -2178,8 +2361,21 @@ interface AppStateContextValue {
       isSharedExpense?: boolean;
       isExpenseImpact?: boolean;
       isInternalTransfer?: boolean;
+      isLoop?: boolean;
+      isLoopIgnored?: boolean;
+      loopGroupOverrideKey?: string | null;
+      loopDisplayName?: string | null;
     },
   ) => void;
+  setTransactionLoopFlagBatch: (workspaceId: string, transactionIds: string[], isLoop: boolean) => void;
+  setTransactionLoopIgnoredBatch: (workspaceId: string, transactionIds: string[], isLoopIgnored: boolean) => void;
+  setTransactionLoopGroupOverrideBatch: (
+    workspaceId: string,
+    transactionIds: string[],
+    loopGroupOverrideKey: string | null,
+    isLoop?: boolean,
+  ) => void;
+  setTransactionLoopDisplayNameBatch: (workspaceId: string, transactionIds: string[], loopDisplayName: string | null) => void;
 }
 
 const AppStateContext = createContext<AppStateContextValue | null>(null);
@@ -2209,10 +2405,42 @@ export function AppStateProvider({ children }: PropsWithChildren) {
     void saveAppState(state);
   }, [isReady, state]);
 
+  const workspaceLoopDataByWorkspaceId = useMemo(() => {
+    const nextMap = new Map<
+      string,
+      {
+        loopRules: LoopRule[];
+        managedLoops: ManagedLoopGroup[];
+        loopInsights: LoopStationInsight[];
+        loopRecommendations: LoopRecommendation[];
+      }
+    >();
+    const activeWorkspaceId = state.activeWorkspaceId ?? state.workspaces[0]?.id ?? null;
+    if (!activeWorkspaceId) return nextMap;
+
+    const scope = getWorkspaceScope(state, activeWorkspaceId);
+    const loopRules = buildLoopRules(scope.transactions);
+    const managedLoops = getManagedLoopGroups(scope.transactions, loopRules);
+
+    nextMap.set(activeWorkspaceId, {
+      loopRules,
+      managedLoops,
+      loopInsights: getLoopStationInsightsFromManagedLoops(managedLoops),
+      loopRecommendations: getLoopRecommendations(
+        scope.transactions,
+        scope.categories,
+        scope.financialProfile?.loopPriorityCategoryIds ?? [],
+      ),
+    });
+
+    return nextMap;
+  }, [state]);
+
   const value = useMemo<AppStateContextValue>(
     () => ({
       state,
       isReady,
+      workspaceLoopDataByWorkspaceId,
       createEmptyWorkspace(name = "새 가계부") {
         const workspace = createWorkspaceBase(name, "empty");
         dispatch({
@@ -2571,6 +2799,14 @@ export function AppStateProvider({ children }: PropsWithChildren) {
       },
       updateTransactionFlags(workspaceId, transactionId, patch) {
         dispatch({ type: "updateTransactionFlags", payload: { workspaceId, transactionId, patch } });
+        if (typeof patch.isLoop === "boolean") {
+          showToast(patch.isLoop ? "루프에 추가했습니다." : "루프에서 제외했습니다.", "success");
+          return;
+        }
+        if (typeof patch.isLoopIgnored === "boolean") {
+          showToast(patch.isLoopIgnored ? "이 추천은 숨겼습니다." : "숨긴 추천을 다시 보이게 했습니다.", "success");
+          return;
+        }
         if (typeof patch.isSharedExpense === "boolean") {
           showToast(
             patch.isSharedExpense ? "거래 흐름 표시를 바꿨습니다." : "거래 흐름 표시를 해제했습니다.",
@@ -2592,6 +2828,22 @@ export function AppStateProvider({ children }: PropsWithChildren) {
           );
         }
       },
+      setTransactionLoopFlagBatch(workspaceId, transactionIds, isLoop) {
+        dispatch({ type: "setTransactionLoopFlagBatch", payload: { workspaceId, transactionIds, isLoop } });
+        showToast(isLoop ? "선택한 거래를 루프로 묶었습니다." : "선택한 루프를 지웠습니다.", "success");
+      },
+      setTransactionLoopIgnoredBatch(workspaceId, transactionIds, isLoopIgnored) {
+        dispatch({ type: "setTransactionLoopIgnoredBatch", payload: { workspaceId, transactionIds, isLoopIgnored } });
+        showToast(isLoopIgnored ? "추천을 숨겼습니다." : "추천을 다시 보이게 했습니다.", "success");
+      },
+      setTransactionLoopGroupOverrideBatch(workspaceId, transactionIds, loopGroupOverrideKey, isLoop = true) {
+        dispatch({ type: "setTransactionLoopGroupOverrideBatch", payload: { workspaceId, transactionIds, loopGroupOverrideKey, isLoop } });
+        showToast("추천 루프를 하나로 합쳤습니다.", "success");
+      },
+      setTransactionLoopDisplayNameBatch(workspaceId, transactionIds, loopDisplayName) {
+        dispatch({ type: "setTransactionLoopDisplayNameBatch", payload: { workspaceId, transactionIds, loopDisplayName } });
+        showToast(loopDisplayName?.trim() ? "루프 이름을 바꿨습니다." : "루프 이름을 기본값으로 되돌렸습니다.", "success");
+      },
       addIncomeEntry(input) {
         dispatch({ type: "addIncomeEntry", payload: input });
         showToast(`${input.sourceName} 수입을 추가했습니다.`, "success");
@@ -2603,7 +2855,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         showToast(`${current.sourceName} 수입을 삭제했습니다.`, "success");
       },
     }),
-    [isReady, showToast, state],
+    [isReady, showToast, state, workspaceLoopDataByWorkspaceId],
   );
 
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;

@@ -15,6 +15,7 @@ export interface FinancialProfile {
   targetSavingsRate: number;
   warningSpendRate: number;
   warningFixedCostRate: number;
+  loopPriorityCategoryIds?: ID[];
 }
 
 export interface Person {
@@ -33,6 +34,9 @@ export interface Account {
   id: ID;
   workspaceId: ID;
   ownerPersonId: ID | null;
+  primaryPersonId?: ID | null;
+  participantPersonIds?: ID[];
+  accountGroupType?: "personal" | "meeting";
   name: string;
   alias: string;
   institutionName: string;
@@ -107,6 +111,10 @@ export interface Transaction {
   isInternalTransfer: boolean;
   isExpenseImpact: boolean;
   isSharedExpense: boolean;
+  isLoop?: boolean;
+  isLoopIgnored?: boolean;
+  loopGroupOverrideKey?: string | null;
+  loopDisplayName?: string | null;
   refundOfTransactionId: ID | null;
   status: "active" | "refunded" | "cancelled";
 }

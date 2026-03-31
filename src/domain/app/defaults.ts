@@ -48,6 +48,7 @@ export function createFinancialProfileBase(workspaceId: string): FinancialProfil
     targetSavingsRate: 0.2,
     warningSpendRate: 0.8,
     warningFixedCostRate: 0.55,
+    loopPriorityCategoryIds: [],
   };
 }
 

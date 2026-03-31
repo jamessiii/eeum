@@ -57,9 +57,27 @@ function isCardPaymentAccount(account: Pick<Account, "usageType" | "name" | "ali
   );
 }
 
+function isMeetingAccountVisibleToPerson(
+  account: Pick<Account, "accountGroupType" | "primaryPersonId" | "participantPersonIds">,
+  ownerPersonId: string,
+) {
+  if (account.accountGroupType !== "meeting") return false;
+  return account.primaryPersonId === ownerPersonId || (account.participantPersonIds ?? []).includes(ownerPersonId);
+}
+
 type LinkedAccountCandidate = Pick<
   Account,
-  "id" | "name" | "alias" | "institutionName" | "accountNumberMasked" | "isShared" | "usageType" | "ownerPersonId"
+  | "id"
+  | "name"
+  | "alias"
+  | "institutionName"
+  | "accountNumberMasked"
+  | "isShared"
+  | "usageType"
+  | "ownerPersonId"
+  | "primaryPersonId"
+  | "participantPersonIds"
+  | "accountGroupType"
 > & {
   source: "existing" | "preview";
 };
@@ -70,7 +88,14 @@ function buildLinkedAccountCandidates(existingAccounts: Account[], previewAccoun
 
   const upsertCandidate = (account: Account, source: LinkedAccountCandidate["source"]) => {
     if (!isCardPaymentAccount(account)) return;
-    if (source === "existing" && !account.isShared && account.ownerPersonId !== ownerPersonId) return;
+    if (
+      source === "existing" &&
+      !account.isShared &&
+      account.ownerPersonId !== ownerPersonId &&
+      !isMeetingAccountVisibleToPerson(account, ownerPersonId)
+    ) {
+      return;
+    }
 
     const dedupeKey = `${normalizeCardKey(account.alias || account.name)}:${normalizeCardKey(account.accountNumberMasked)}`;
     const candidate: LinkedAccountCandidate = {
@@ -82,6 +107,9 @@ function buildLinkedAccountCandidates(existingAccounts: Account[], previewAccoun
       isShared: account.isShared,
       usageType: account.usageType,
       ownerPersonId: account.ownerPersonId,
+      primaryPersonId: account.primaryPersonId ?? null,
+      participantPersonIds: account.participantPersonIds ?? [],
+      accountGroupType: account.accountGroupType ?? (account.isShared ? "meeting" : "personal"),
       source,
     };
     const existingCandidate = dedupedCandidates.get(dedupeKey);
@@ -97,6 +125,9 @@ function buildLinkedAccountCandidates(existingAccounts: Account[], previewAccoun
       {
         ...account,
         ownerPersonId: account.isShared ? null : ownerPersonId,
+        primaryPersonId: account.primaryPersonId ?? ownerPersonId,
+        participantPersonIds: account.accountGroupType === "meeting" ? Array.from(new Set([...(account.participantPersonIds ?? []), ownerPersonId])) : [],
+        accountGroupType: account.accountGroupType ?? (account.isShared ? "meeting" : "personal"),
       },
       "preview",
     ),

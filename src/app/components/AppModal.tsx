@@ -3,14 +3,15 @@ import { createPortal } from "react-dom";
 
 type AppModalProps = PropsWithChildren<{
   open: boolean;
-  title: string;
+  title: ReactNode;
+  ariaLabel?: string;
   description?: string;
   footer?: ReactNode;
   onClose: () => void;
   dialogClassName?: string;
 }>;
 
-export function AppModal({ open, title, description, footer, onClose, children, dialogClassName }: AppModalProps) {
+export function AppModal({ open, title, ariaLabel, description, footer, onClose, children, dialogClassName }: AppModalProps) {
   useEffect(() => {
     if (!open || typeof document === "undefined") return;
 
@@ -46,7 +47,7 @@ export function AppModal({ open, title, description, footer, onClose, children, 
         className={`app-modal-dialog${dialogClassName ? ` ${dialogClassName}` : ""}`}
         role="dialog"
         aria-modal="true"
-        aria-label={title}
+        aria-label={ariaLabel ?? (typeof title === "string" ? title : "dialog")}
         onClick={(event) => event.stopPropagation()}
       >
         <header className="app-modal-header">

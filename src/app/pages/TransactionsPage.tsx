@@ -1,7 +1,8 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+﻿import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { getCategoryGroups, getCategoryLabel, getChildCategories, getLeafCategories } from "../../domain/categories/meta";
 import { completeGuideStepAction } from "../../domain/guidance/guideRuntime";
+import { getLoopCandidateGroup } from "../../domain/loops/loopCandidates";
 import {
   getOpenTransactionWorkflowReviews,
   getTransactionWorkflowTransactionIds,
@@ -11,6 +12,7 @@ import { getSourceTypeLabel } from "../../domain/transactions/sourceTypes";
 import type { ImportRecord, ReviewItem, Transaction } from "../../shared/types/models";
 import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
+import { AppModal } from "../components/AppModal";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { AppSelect } from "../components/AppSelect";
 import { TransactionCategoryEditor } from "../components/TransactionCategoryEditor";
@@ -44,6 +46,12 @@ type ReviewWorkflowState = {
   };
 };
 
+type LoopConfirmState = {
+  transactionId: string;
+  candidateIds: string[];
+  suggestedIds: string[];
+};
+
 function formatMonthLabel(value: string) {
   const [year, month] = value.split("-");
   return `${year}년 ${Number(month)}월`;
@@ -72,19 +80,28 @@ function getNextQueuedReviewId(queueIds: string[], currentId: string) {
 function getInlineReviewPrompt(review: ReviewItem) {
   switch (review.reviewType) {
     case "category_suggestion":
-      return "해당 건을 제안 카테고리로 분류할까요?";
+      return "?대떦 嫄댁쓣 ?쒖븞 移댄뀒怨좊━濡?遺꾨쪟?좉퉴??";
     case "duplicate_candidate":
-      return "해당 건을 중복으로 보고 제외할까요?";
+      return "?대떦 嫄댁쓣 以묐났?쇰줈 蹂닿퀬 ?쒖쇅?좉퉴??";
     case "refund_candidate":
-      return "해당 건을 환불로 연결할까요?";
+      return "?대떦 嫄댁쓣 ?섎텋濡??곌껐?좉퉴??";
     default:
-      return "해당 건을 검토할까요?";
+      return "?대떦 嫄댁쓣 寃?좏븷源뚯슂?";
   }
 }
 
 export function TransactionsPage() {
-  const { applyReviewSuggestion, assignCategory, clearCategory, resolveReview, snapshotGuideActionState, state, updateTransactionDetails } =
-    useAppState();
+  const {
+    applyReviewSuggestion,
+    assignCategory,
+    clearCategory,
+    resolveReview,
+    snapshotGuideActionState,
+    state,
+    setTransactionLoopFlagBatch,
+    updateTransactionDetails,
+    updateTransactionFlags,
+  } = useAppState();
   const { showToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const workspaceId = state.activeWorkspaceId!;
@@ -144,6 +161,8 @@ export function TransactionsPage() {
   const [filters, setFilters] = useState<TransactionFilters>(DEFAULT_CARD_TRANSACTION_FILTERS);
   const [selectedStatementId, setSelectedStatementId] = useState("");
   const [reviewWorkflow, setReviewWorkflow] = useState<ReviewWorkflowState | null>(null);
+  const [loopConfirmState, setLoopConfirmState] = useState<LoopConfirmState | null>(null);
+  const [loopConfirmDragMode, setLoopConfirmDragMode] = useState<boolean | null>(null);
   const effectiveSelectedStatementId = selectedStatementId || statementOptions[0]?.id || "all";
   const statementTransactions = useMemo(() => {
     if (effectiveSelectedStatementId === "legacy") {
@@ -157,7 +176,7 @@ export function TransactionsPage() {
     [statementTransactions],
   );
   const selectedStatementLabel = useMemo(
-    () => statementOptions.find((option) => option.id === effectiveSelectedStatementId)?.label ?? "전체 결제내역",
+    () => statementOptions.find((option) => option.id === effectiveSelectedStatementId)?.label ?? "?꾩껜 寃곗젣?댁뿭",
     [effectiveSelectedStatementId, statementOptions],
   );
 
@@ -208,6 +227,44 @@ export function TransactionsPage() {
     () => (reviewWorkflow ? filteredTransactions.filter((transaction) => workflowVisibleTransactionIds.has(transaction.id)) : filteredTransactions),
     [filteredTransactions, reviewWorkflow, workflowVisibleTransactionIds],
   );
+  const loopConfirmTransactions = useMemo(() => {
+    if (!loopConfirmState) return [];
+    const selectedIdSet = new Set(loopConfirmState.candidateIds);
+    return scope.transactions.filter((transaction) => selectedIdSet.has(transaction.id));
+  }, [loopConfirmState, scope.transactions]);
+  const loopConfirmTargetTransaction = useMemo(
+    () => (loopConfirmState ? transactionMap.get(loopConfirmState.transactionId) ?? null : null),
+    [loopConfirmState, transactionMap],
+  );
+  const loopConfirmPastTransactions = useMemo(
+    () => loopConfirmTransactions.filter((transaction) => transaction.id !== loopConfirmState?.transactionId),
+    [loopConfirmState?.transactionId, loopConfirmTransactions],
+  );
+
+  useEffect(() => {
+    if (loopConfirmDragMode === null) return;
+
+    const clearDragMode = () => setLoopConfirmDragMode(null);
+    window.addEventListener("mouseup", clearDragMode);
+
+    return () => {
+      window.removeEventListener("mouseup", clearDragMode);
+    };
+  }, [loopConfirmDragMode]);
+
+  const setLoopConfirmCandidateSelection = (transactionId: string, checked: boolean) => {
+    setLoopConfirmState((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        candidateIds: checked
+          ? current.candidateIds.includes(transactionId)
+            ? current.candidateIds
+            : [...current.candidateIds, transactionId]
+          : current.candidateIds.filter((candidateId) => candidateId !== transactionId),
+      };
+    });
+  };
   const activeWorkflowSuggestedCategoryLabel = useMemo(() => {
     if (!activeWorkflowReview || activeWorkflowReview.reviewType !== "category_suggestion" || !activeWorkflowReview.suggestedCategoryId) {
       return null;
@@ -432,7 +489,7 @@ export function TransactionsPage() {
       setFilters(reviewWorkflow.preservedFilters.filters);
       setSelectedStatementId(reviewWorkflow.preservedFilters.selectedStatementId);
       setReviewWorkflow(null);
-      showToast("이번 자동검토에서는 넘기고, 다음 자동검토에서 다시 보여드립니다.", "info");
+      showToast("?대쾲 ?먮룞寃?좎뿉?쒕뒗 ?섍린怨? ?ㅼ쓬 ?먮룞寃?좎뿉???ㅼ떆 蹂댁뿬?쒕┰?덈떎.", "info");
       return;
     }
 
@@ -446,15 +503,15 @@ export function TransactionsPage() {
           }
         : current,
     );
-    showToast("이번 자동검토에서는 넘기고, 다음 자동검토에서 다시 보여드립니다.", "info");
+    showToast("?대쾲 ?먮룞寃?좎뿉?쒕뒗 ?섍린怨? ?ㅼ쓬 ?먮룞寃?좎뿉???ㅼ떆 蹂댁뿬?쒕┰?덈떎.", "info");
   };
 
   const getTransactionReviewBadgeLabel = (transaction: Transaction) => {
     if (!activeWorkflowReview || !activeWorkflowTransactionIds.has(transaction.id)) return null;
 
-    if (activeWorkflowReview.reviewType === "category_suggestion") return "카테고리 제안";
+    if (activeWorkflowReview.reviewType === "category_suggestion") return "移댄뀒怨좊━ ?쒖븞";
     if (activeWorkflowReview.reviewType === "duplicate_candidate") {
-      return transaction.id === activeWorkflowReview.primaryTransactionId ? "중복 후보" : "기준 거래";
+      return transaction.id === activeWorkflowReview.primaryTransactionId ? "以묐났 ?꾨낫" : "湲곗? 嫄곕옒";
     }
     if (activeWorkflowReview.reviewType === "refund_candidate") {
       return transaction.id === activeWorkflowReview.primaryTransactionId ? "환불 후보" : "원거래";
@@ -466,10 +523,10 @@ export function TransactionsPage() {
     if (!activeWorkflowReview || !activeWorkflowTransactionIds.has(transaction.id)) return null;
 
     if (activeWorkflowReview.reviewType === "category_suggestion") {
-      return `제안 카테고리를 확인해 주세요 · ${getTransactionConnectionMeta(transaction)}`;
+      return `?쒖븞 移댄뀒怨좊━瑜??뺤씤??二쇱꽭??쨌 ${getTransactionConnectionMeta(transaction)}`;
     }
     if (activeWorkflowReview.reviewType === "duplicate_candidate") {
-      return `${transaction.id === activeWorkflowReview.primaryTransactionId ? "제외될 후보 거래" : "비교 기준 거래"} · ${getTransactionConnectionMeta(transaction)}`;
+      return `${transaction.id === activeWorkflowReview.primaryTransactionId ? "?쒖쇅???꾨낫 嫄곕옒" : "鍮꾧탳 湲곗? 嫄곕옒"} 쨌 ${getTransactionConnectionMeta(transaction)}`;
     }
     if (activeWorkflowReview.reviewType === "refund_candidate") {
       return `${transaction.id === activeWorkflowReview.primaryTransactionId ? "환불로 연결할 거래" : "기준이 되는 원거래"} · ${getTransactionConnectionMeta(transaction)}`;
@@ -541,22 +598,22 @@ export function TransactionsPage() {
             />
             <div className="transaction-category-filter-field">
               <input
-              className="form-control"
-              value={categoryFilterInput}
-              disabled={Boolean(reviewWorkflow)}
-              placeholder="카테고리 입력"
-              onChange={(event) => setCategoryFilterInput(event.target.value)}
-              onFocus={() => setIsCategoryFilterFocused(true)}
-              onBlur={(event) => {
-                setIsCategoryFilterFocused(false);
-                commitCategoryFilterInput(event.target.value);
-              }}
-              onKeyDown={(event) => {
-                if (event.key !== "Enter") return;
-                event.preventDefault();
-                commitCategoryFilterInput(event.currentTarget.value);
-              }}
-            />
+                className="form-control"
+                value={categoryFilterInput}
+                disabled={Boolean(reviewWorkflow)}
+                placeholder="카테고리 입력"
+                onChange={(event) => setCategoryFilterInput(event.target.value)}
+                onFocus={() => setIsCategoryFilterFocused(true)}
+                onBlur={(event) => {
+                  setIsCategoryFilterFocused(false);
+                  commitCategoryFilterInput(event.target.value);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") return;
+                  event.preventDefault();
+                  commitCategoryFilterInput(event.currentTarget.value);
+                }}
+              />
               {isCategoryFilterFocused && filteredCategoryOptions.length ? (
                 <div className="transaction-category-suggestion-list transaction-category-suggestion-list--filter" role="listbox" aria-label="카테고리 필터 추천">
                   {filteredCategoryOptions.map((option) => (
@@ -599,32 +656,32 @@ export function TransactionsPage() {
 
         {!scope.transactions.length ? (
           <EmptyStateCallout
-            kicker="거래 없음"
-            title="아직 입력된 결제내역이 없습니다"
-            description="결제내역 상단에서 카드 명세서를 가져오면 검토와 통계가 시작됩니다."
+            kicker="嫄곕옒 ?놁쓬"
+            title="?꾩쭅 ?낅젰??寃곗젣?댁뿭???놁뒿?덈떎"
+            description="寃곗젣?댁뿭 ?곷떒?먯꽌 移대뱶 紐낆꽭?쒕? 媛?몄삤硫?寃?좎? ?듦퀎媛 ?쒖옉?⑸땲??"
             actions={
               <Link to="/connections/assets" className="btn btn-outline-secondary btn-sm">
-                사용자 관리 보기
+                ?ъ슜??愿由?蹂닿린
               </Link>
             }
           />
         ) : !transactions.length ? (
           <EmptyStateCallout
-            kicker="결과 없음"
-            title={reviewWorkflow ? "자동검토 대상 거래가 지금은 없습니다" : "조건에 맞는 결제내역이 없습니다"}
+            kicker="寃곌낵 ?놁쓬"
+            title={reviewWorkflow ? "?먮룞寃?????嫄곕옒媛 吏湲덉? ?놁뒿?덈떎" : "議곌굔??留욌뒗 寃곗젣?댁뿭???놁뒿?덈떎"}
             description={
               reviewWorkflow
-                ? "현재 자동검토 큐에 남아 있는 거래가 없습니다. 검토 모드를 종료하거나 일반 필터로 돌아가 보세요."
-                : "미분류 보기, 사용자, 명세서, 검색 조건을 조정해보세요."
+                ? "?꾩옱 ?먮룞寃???먯뿉 ?⑥븘 ?덈뒗 嫄곕옒媛 ?놁뒿?덈떎. 寃??紐⑤뱶瑜?醫낅즺?섍굅???쇰컲 ?꾪꽣濡??뚯븘媛 蹂댁꽭??"
+                : "誘몃텇瑜?蹂닿린, ?ъ슜?? 紐낆꽭?? 寃??議곌굔??議곗젙?대낫?몄슂."
             }
             actions={
               reviewWorkflow ? (
                 <button type="button" className="btn btn-outline-secondary btn-sm" onClick={exitReviewWorkflow}>
-                  검토 종료
+                  寃??醫낅즺
                 </button>
               ) : (
                 <button type="button" className="btn btn-outline-secondary btn-sm" onClick={resetVisibleFilters}>
-                  필터 초기화
+                  ?꾪꽣 珥덇린??
                 </button>
               )
             }
@@ -639,6 +696,7 @@ export function TransactionsPage() {
                 <col className="transaction-grid-col-discount" />
                 <col className="transaction-grid-col-paid-amount" />
                 <col className="transaction-grid-col-owner" />
+                <col className="transaction-grid-col-loop" />
                 <col className="transaction-grid-col-category" />
                 <col className="transaction-grid-col-note" />
               </colgroup>
@@ -650,6 +708,7 @@ export function TransactionsPage() {
                   <th className="text-end">할인</th>
                   <th className="text-end">결제금액</th>
                   <th>사용자</th>
+                  <th>고정비</th>
                   <th>카테고리</th>
                   <th>비고</th>
                 </tr>
@@ -667,9 +726,7 @@ export function TransactionsPage() {
                       <tr
                         style={getMotionStyle(index)}
                         data-transaction-review-row={transaction.id}
-                        className={`${
-                          isWorkflowMatch ? " transaction-review-row" : ""
-                        }${isWorkflowFocus ? " is-review-focus" : ""}${isWorkflowPrimary ? " is-review-primary" : ""}`}
+                        className={`${isWorkflowMatch ? " transaction-review-row" : ""}${isWorkflowFocus ? " is-review-focus" : ""}${isWorkflowPrimary ? " is-review-primary" : ""}`}
                       >
                         <td>{transaction.occurredAt.slice(0, 10)}</td>
                         <td>
@@ -689,6 +746,26 @@ export function TransactionsPage() {
                           <strong>{formatCurrency(transaction.amount)}</strong>
                         </td>
                         <td>{getTransactionOwnerLabel(transaction)}</td>
+                        <td className="transaction-loop-cell">
+                          <label className="transaction-loop-toggle">
+                            <input
+                              type="checkbox"
+                              checked={transaction.isLoop ?? false}
+                              onChange={(event) => {
+                                if (!event.target.checked) {
+                                  updateTransactionFlags(workspaceId, transaction.id, { isLoop: false });
+                                  return;
+                                }
+                                const candidateGroup = getLoopCandidateGroup(transaction, scope.transactions);
+                                setLoopConfirmState({
+                                  transactionId: transaction.id,
+                                  candidateIds: candidateGroup.transactionIds,
+                                  suggestedIds: candidateGroup.transactionIds,
+                                });
+                              }}
+                            />
+                          </label>
+                        </td>
                         <td className={isWorkflowFocus && activeWorkflowReview?.reviewType === "category_suggestion" ? "transaction-category-cell is-review-focus" : ""}>
                           <TransactionCategoryEditor
                             transaction={transaction}
@@ -755,19 +832,19 @@ export function TransactionsPage() {
                       </tr>
                       {inlineReview ? (
                         <tr className="transaction-review-inline-row">
-                          <td colSpan={8} className="transaction-review-inline-cell">
+                          <td colSpan={9} className="transaction-review-inline-cell">
                             <div className="transaction-review-inline-panel" data-guide-target="transactions-review-card">
                               <div className="transaction-review-inline-meta">
                                 <span className="transaction-review-inline-badge">
-                                  신뢰도 {Math.round(inlineReview.confidenceScore * 100)}%
+                                  ?좊ː??{Math.round(inlineReview.confidenceScore * 100)}%
                                 </span>
                               </div>
                               <div className="transaction-review-inline-copy">
                                 {inlineReview.reviewType === "category_suggestion" && activeWorkflowSuggestedCategoryLabel ? (
                                   <strong className="transaction-review-inline-question">
-                                    <span>해당 건을 </span>
+                                    <span>?대떦 嫄댁쓣 </span>
                                     <span className="transaction-review-inline-category-badge">{activeWorkflowSuggestedCategoryLabel}</span>
-                                    <span>로 분류할까요?</span>
+                                    <span>濡?遺꾨쪟?좉퉴??</span>
                                   </strong>
                                 ) : (
                                   <strong>{getInlineReviewPrompt(inlineReview)}</strong>
@@ -780,7 +857,7 @@ export function TransactionsPage() {
                                   data-guide-target="transactions-review-defer"
                                   onClick={deferActiveReview}
                                 >
-                                  보류
+                                  蹂대쪟
                                 </button>
                                 <button
                                   type="button"
@@ -788,7 +865,7 @@ export function TransactionsPage() {
                                   data-guide-target="transactions-review-resolve"
                                   onClick={() => handleActiveReviewDecision("resolve")}
                                 >
-                                  아니오
+                                  ?꾨땲??
                                 </button>
                                 <button
                                   type="button"
@@ -796,7 +873,7 @@ export function TransactionsPage() {
                                   data-guide-target="transactions-review-apply"
                                   onClick={() => handleActiveReviewDecision("apply")}
                                 >
-                                  예
+                                  ??
                                 </button>
                               </div>
                             </div>
@@ -811,6 +888,149 @@ export function TransactionsPage() {
           </div>
         )}
       </section>
+
+      <AppModal
+        open={Boolean(loopConfirmState)}
+        title="루프 후보 확인"
+        description="이번 거래를 기준으로 과거 소비를 함께 보여드릴게요. 같은 반복 소비가 맞는지 보고 묶어서 등록해 주세요."
+        onClose={() => {
+          setLoopConfirmState(null);
+          setLoopConfirmDragMode(null);
+        }}
+        footer={
+          <>
+            <button
+              type="button"
+              className="btn btn-outline-secondary"
+              onClick={() => {
+                setLoopConfirmState(null);
+                setLoopConfirmDragMode(null);
+              }}
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={!loopConfirmState?.candidateIds.length}
+              onClick={() => {
+                if (!loopConfirmState?.candidateIds.length) return;
+                setTransactionLoopFlagBatch(workspaceId, loopConfirmState.candidateIds, true);
+                setLoopConfirmState(null);
+              }}
+            >
+              {`선택한 ${loopConfirmState?.candidateIds.length ?? 0}건으로 루프 설정`}
+            </button>
+          </>
+        }
+      >
+        {loopConfirmState ? (
+          <div className="loop-confirm-panel">
+            <div className="loop-confirm-summary">
+              <strong>이번 거래</strong>
+              <span>이 거래는 루프 기준으로 고정됩니다. 아래 과거 거래 중 같은 소비만 함께 묶어 주세요.</span>
+            </div>
+
+            {loopConfirmTargetTransaction ? (
+              <div className="loop-confirm-item is-current is-selected">
+                <input type="checkbox" checked readOnly aria-label="현재 거래는 항상 포함됩니다." />
+                <div className="loop-confirm-copy">
+                  <strong>{loopConfirmTargetTransaction.merchantName}</strong>
+                  <span>{`${loopConfirmTargetTransaction.occurredAt.slice(0, 10)} · ${formatCurrency(loopConfirmTargetTransaction.amount)}`}</span>
+                  <span>{loopConfirmTargetTransaction.description || "비고 없음"}</span>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="loop-confirm-summary">
+              <strong>같이 볼 과거 거래</strong>
+              <span>
+                {loopConfirmPastTransactions.length
+                  ? "같은 거래처럼 보이는 과거 내역입니다. 맞는 것만 남기고 루프를 등록해 주세요."
+                  : "지금은 함께 묶을 과거 거래가 없습니다. 이번 거래만 루프로 등록됩니다."}
+              </span>
+            </div>
+
+            {loopConfirmPastTransactions.length ? (
+              <>
+                <div className="loop-confirm-actions">
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary btn-sm"
+                    onClick={() =>
+                      setLoopConfirmState((current) =>
+                        current
+                          ? {
+                              ...current,
+                              candidateIds: [...new Set([current.transactionId, ...current.suggestedIds])],
+                            }
+                          : current,
+                      )
+                    }
+                  >
+                    추천 후보 모두 선택
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary btn-sm"
+                    onClick={() =>
+                      setLoopConfirmState((current) =>
+                        current
+                          ? {
+                              ...current,
+                              candidateIds: [current.transactionId],
+                            }
+                          : current,
+                      )
+                    }
+                  >
+                    이번 거래만 남기기
+                  </button>
+                </div>
+
+                {loopConfirmPastTransactions.map((transaction) => {
+                  const checked = loopConfirmState.candidateIds.includes(transaction.id);
+                  const isSuggested = loopConfirmState.suggestedIds.includes(transaction.id);
+                  return (
+                    <label
+                      key={transaction.id}
+                      className={`loop-confirm-item${checked ? " is-selected" : ""}`}
+                      onMouseEnter={() => {
+                        if (loopConfirmDragMode === null) return;
+                        setLoopConfirmCandidateSelection(transaction.id, loopConfirmDragMode);
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          const nextChecked = !checked;
+                          setLoopConfirmDragMode(nextChecked);
+                          setLoopConfirmCandidateSelection(transaction.id, nextChecked);
+                        }}
+                        onChange={() => undefined}
+                        onKeyDown={(event) => {
+                          if (event.key !== " " && event.key !== "Enter") return;
+                          event.preventDefault();
+                          setLoopConfirmCandidateSelection(transaction.id, !checked);
+                        }}
+                      />
+                      <div className="loop-confirm-copy">
+                        <strong>{transaction.merchantName}</strong>
+                        <span>{`${transaction.occurredAt.slice(0, 10)} · ${formatCurrency(transaction.amount)}`}</span>
+                        <span>{transaction.description || "비고 없음"}</span>
+                        <small>{isSuggested ? "자동으로 묶인 추천 후보" : "직접 선택한 후보"}</small>
+                      </div>
+                    </label>
+                  );
+                })}
+              </>
+            ) : null}
+          </div>
+        ) : null}
+      </AppModal>
     </div>
   );
 }
+

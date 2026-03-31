@@ -2,7 +2,9 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useRef } from "react";
 import { monthKey } from "../../shared/utils/date";
+import { getCategoryLabel } from "../../domain/categories/meta";
 import type { Card, Category, ImportRecord, Person, Transaction } from "../../shared/types/models";
+import type { ManagedLoopGroup } from "../../domain/loops/managedLoops";
 import { getWorkspaceInsights, type WorkspaceInsightBasis } from "../../domain/insights/workspaceInsights";
 import { getMonthlySharedSettlementSummary, getSettlementBalanceSummary } from "../../domain/settlements/summary";
 import { getExpenseImpactStats } from "../../domain/transactions/expenseImpactStats";
@@ -16,6 +18,7 @@ import { BoardCaseSection } from "../components/BoardCase";
 import { CompletionBanner } from "../components/CompletionBanner";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { AppSelect } from "../components/AppSelect";
+import { TransactionCategoryEditor } from "../components/TransactionCategoryEditor";
 import { TransactionRowHeader } from "../components/TransactionRowHeader";
 import { getWorkspaceScope } from "../state/selectors";
 
@@ -94,6 +97,30 @@ type StatementScopeOption = DashboardScopeOption & {
   importRecordIds: Set<string>;
 };
 
+type CalendarChip = {
+  label: string;
+  tone: "expense" | "memo" | "holiday";
+};
+
+type CalendarMemo = {
+  text: string;
+  merchantNames: string[];
+};
+
+type CalendarCell = {
+  dateKey: string;
+  isCurrentMonth: boolean;
+  dayOfWeek: number;
+  expenseAmount: number;
+  transactionCount: number;
+  merchants: string[];
+  holidayLabel: string | null;
+  chips: CalendarChip[];
+  memos: CalendarMemo[];
+};
+
+const CALENDAR_WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
+
 const UNASSIGNED_PERSON_KEY = "__dashboard-unassigned__";
 const UNCATEGORIZED_CATEGORY_KEY = "__dashboard-uncategorized__";
 const OTHER_CATEGORY_GROUP_KEY = "__dashboard-other-categories__";
@@ -149,6 +176,40 @@ function getPreviousMonthKey(value: string) {
   return monthKey(date);
 }
 
+function getNextMonthKey(value: string) {
+  const [year, month] = value.split("-").map(Number);
+  if (!year || !month) return value;
+  const date = new Date(year, month, 1);
+  return monthKey(date);
+}
+
+function addDaysToDateKey(dateKey: string, days: number) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  if (!year || !month || !day) return dateKey;
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function getLoopProjectedDateWithinMonth(
+  latestOccurredAt: string,
+  intervalDays: number,
+  targetMonth: string,
+  latestStatementMonth: string | null,
+) {
+  if (!targetMonth || intervalDays <= 0) return null;
+  if (latestStatementMonth && targetMonth > getNextMonthKey(latestStatementMonth)) return null;
+
+  let projectedDate = latestOccurredAt.slice(0, 10);
+  let guard = 0;
+  while (projectedDate < `${targetMonth}-01` && guard < 60) {
+    projectedDate = addDaysToDateKey(projectedDate, intervalDays);
+    guard += 1;
+  }
+
+  return projectedDate.startsWith(targetMonth) ? projectedDate : null;
+}
+
 function getStatementImportIdsForMonth(
   imports: ImportRecord[],
   targetMonth: string,
@@ -164,6 +225,15 @@ function getStatementImportIdsForMonth(
   );
 }
 
+function getLatestStatementMonth(imports: ImportRecord[]) {
+  return imports.reduce<string | null>((latest, record) => {
+    const candidate = record.statementMonth?.trim() || record.importedAt.slice(0, 7);
+    if (!candidate) return latest;
+    if (!latest) return candidate;
+    return candidate > latest ? candidate : latest;
+  }, null);
+}
+
 function formatDeltaAmount(amount: number) {
   if (amount === 0) return formatCurrency(0);
   return formatCurrency(Math.abs(amount));
@@ -177,6 +247,765 @@ function clampPercent(value: number) {
 function formatYearMonthShortLabel(value: string) {
   const [, month] = value.split("-");
   return `${Number(month)}월`;
+}
+
+function formatDateLabel(value: string) {
+  const [year, month, day] = value.split("-");
+  return `${year}.${month}.${day}`;
+}
+
+function getLoopDueLabel(daysUntilNextPurchase: number | null) {
+  if (daysUntilNextPurchase === null) return "예측 대기";
+  if (daysUntilNextPurchase > 0) return `${daysUntilNextPurchase}일 지남`;
+  if (daysUntilNextPurchase < 0) return `${Math.abs(daysUntilNextPurchase)}일 뒤`;
+  return "오늘쯤";
+}
+
+function getLoopAmountTone(amountDelta: number) {
+  if (amountDelta > 0) return "is-up";
+  if (amountDelta < 0) return "is-down";
+  return "is-flat";
+}
+
+function getCalendarDays(monthValue: string) {
+  const [year, month] = monthValue.split("-").map(Number);
+  const firstDate = new Date(year, month - 1, 1);
+  const firstWeekday = firstDate.getDay();
+  const startDate = new Date(year, month - 1, 1 - firstWeekday);
+  return Array.from({ length: 42 }, (_, index) => {
+    const nextDate = new Date(startDate);
+    nextDate.setDate(startDate.getDate() + index);
+    const dateKey = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, "0")}-${String(nextDate.getDate()).padStart(2, "0")}`;
+    return {
+      dateKey,
+      isCurrentMonth: dateKey.startsWith(monthValue),
+      dayOfWeek: nextDate.getDay(),
+    };
+  });
+}
+
+function getFixedHolidayLabel(dateKey: string) {
+  const [, month, day] = dateKey.split("-");
+  const monthDay = `${month}-${day}`;
+  switch (monthDay) {
+    case "01-01":
+      return "신정";
+    case "03-01":
+      return "삼일절";
+    case "05-05":
+      return "어린이날";
+    case "06-06":
+      return "현충일";
+    case "08-15":
+      return "광복절";
+    case "10-03":
+      return "개천절";
+    case "10-09":
+      return "한글날";
+    case "12-25":
+      return "성탄절";
+    default:
+      return null;
+  }
+}
+
+function normalizeDiaryText(value: string | null | undefined) {
+  return (value ?? "").trim().toLowerCase();
+}
+
+type DiarySentencePool = string | string[];
+
+type DiaryActivity = {
+  single: DiarySentencePool;
+  multi: DiarySentencePool;
+  high: DiarySentencePool;
+};
+
+type DiaryPattern = {
+  keywords: string[];
+  activity: DiaryActivity;
+};
+
+const DIARY_PATTERNS: DiaryPattern[] = [
+  {
+    keywords: ["택시"],
+    activity: {
+      single: [
+        "오늘은 택시를 탔다. 택시비를 좀 아껴야겠다.",
+        "오늘은 택시를 타고 이동했다. 빠르긴 해서 좋았다.",
+        "오늘은 택시를 불렀다. 편하지만 돈은 좀 들었다.",
+      ],
+      multi: [
+        "택시도 타고 다른 일도 했다. 택시비를 조금 아껴야겠다.",
+        "택시도 타고 여기저기 다녔다. 하루가 바쁘게 지나갔다.",
+        "택시도 이용하고 할 일도 봤다. 생각보다 금방 지나간 하루였다.",
+      ],
+      high: [
+        "택시도 타고 여기저기 다녔다. 교통비가 커서 조금 놀랐다.",
+        "택시를 여러 번 타다 보니 돈이 꽤 들었다. 그래도 급한 날이었다.",
+        "이동이 많아서 택시비가 커졌다. 다음에는 조금 아껴야겠다.",
+      ],
+    },
+  },
+  {
+    keywords: ["주유"],
+    activity: {
+      single: [
+        "오늘은 주유를 했다. 차가 든든해져서 참 괜찮았다.",
+        "오늘은 기름을 넣었다. 차가 배부를 것 같았다.",
+        "오늘은 주유를 하고 마음이 놓였다. 이제 한동안 잘 달릴 것 같다.",
+      ],
+      multi: [
+        "주유도 하고 다른 것도 챙겼다. 하루가 제법 바빴다.",
+        "기름도 넣고 할 일도 봤다. 차가 든든해져서 좋았다.",
+        "주유도 하고 이것저것 움직였다. 꽤 바쁜 하루였다.",
+      ],
+      high: [
+        "주유도 하고 이것저것 챙기느라 돈이 꽤 들었다. 그래도 필요한 날이었다.",
+        "기름값이 올라서 그런지 돈이 더 들었다. 그래도 꼭 필요한 소비였다.",
+        "오늘은 주유비가 제법 컸다. 그래도 차가 있어야 해서 어쩔 수 없었다.",
+      ],
+    },
+  },
+  {
+    keywords: ["기부"],
+    activity: {
+      single: [
+        "오늘은 기부금을 냈다! 참 뿌듯했다.",
+        "오늘은 좋은 곳에 돈을 보탰다. 마음이 따뜻했다.",
+        "오늘은 기부를 했다. 괜히 마음이 반듯해진 것 같았다.",
+      ],
+      multi: [
+        "기부도 하고 다른 일도 했다. 마음이 참 뿌듯했다.",
+        "좋은 일에도 돈을 쓰고 다른 일도 했다. 마음이 따뜻했다.",
+        "기부도 하고 하루를 보냈다. 괜히 더 잘 살아야 할 것 같았다.",
+      ],
+      high: [
+        "기부도 하고 쓸 곳에 돈을 썼다. 마음이 참 뿌듯했다.",
+        "오늘은 큰마음 먹고 기부도 했다. 그래서 더 뿌듯했다.",
+        "좋은 일에 돈을 꽤 썼다. 그래도 마음은 아주 환했다.",
+      ],
+    },
+  },
+  {
+    keywords: ["구독", "넷플릭스", "유튜브", "spotify", "멜론", "티빙", "디즈니"],
+    activity: {
+      single: "오늘은 보고 싶은 것을 이어 보려고 구독비를 냈다. 참 편했다.",
+      multi: "구독비도 나가고 다른 소비도 있었다. 오늘도 생활이 굴러갔다.",
+      high: "구독비도 내고 이것저것 챙겼다. 쌓이면 꽤 커질 것 같았다.",
+    },
+  },
+  {
+    keywords: ["세제"],
+    activity: {
+      single: "오늘은 세제를 샀다. 빨래할 생각을 하니 든든했다.",
+      multi: "세제도 사고 다른 것도 챙겼다. 집안일 준비가 잘 된 것 같았다.",
+      high: "세제랑 필요한 것들을 챙기다 보니 돈이 꽤 들었다. 그래도 꼭 필요한 날이었다.",
+    },
+  },
+  {
+    keywords: ["샴푸"],
+    activity: {
+      single: "오늘은 샴푸를 샀다. 머리를 감을 때 기분이 좋을 것 같았다.",
+      multi: "샴푸도 사고 다른 것도 챙겼다. 욕실이 든든해진 것 같았다.",
+      high: "샴푸랑 생활용품을 한꺼번에 챙겼다. 돈은 들었지만 꼭 필요했다.",
+    },
+  },
+  {
+    keywords: ["로션"],
+    activity: {
+      single: "오늘은 로션을 샀다. 피부가 좋아질 것 같아 기분이 좋았다.",
+      multi: "로션도 사고 이것저것 챙겼다. 스스로를 잘 돌본 것 같았다.",
+      high: "로션이랑 필요한 것들을 같이 샀다. 돈은 들었지만 뿌듯했다.",
+    },
+  },
+  {
+    keywords: ["생필품"],
+    activity: {
+      single: "오늘은 생활에 필요한 것을 샀다. 미리 챙겨서 참 든든했다.",
+      multi: "생필품도 사고 다른 것도 챙겼다. 집이 조금 더 든든해졌다.",
+      high: "생필품을 이것저것 챙기다 보니 돈이 꽤 들었다. 그래도 꼭 필요한 날이었다.",
+    },
+  },
+  {
+    keywords: ["이마트", "홈플러스", "롯데마트", "코스트코", "마트", "장보기"],
+    activity: {
+      single: "오늘은 마트에 갔다. 마트는 즐거워서 기분이 좋았다.",
+      multi: "오늘은 마트에도 가고 다른 일도 했다. 냉장고가 든든해질 것 같았다.",
+      high: "오늘은 마트에서 장을 크게 봤다. 돈은 들었지만 마음이 놓였다.",
+    },
+  },
+  {
+    keywords: ["의류", "옷", "쇼핑몰", "무신사", "지그재그", "에이블리", "자라", "h&m", "유니클로", "스파오"],
+    activity: {
+      single: "오늘은 옷쇼핑을 했다. 행복했다.",
+      multi: "오늘은 옷도 사고 다른 것도 챙겼다. 기분이 한결 좋아졌다.",
+      high: "오늘은 옷쇼핑을 크게 했다. 돈은 좀 들었지만 마음은 즐거웠다.",
+    },
+  },
+  {
+    keywords: ["신발", "운동화", "구두"],
+    activity: {
+      single: "오늘은 신발을 샀다. 새로 신고 나갈 생각에 설렜다.",
+      multi: "오늘은 신발도 사고 다른 것도 챙겼다. 기분이 산뜻했다.",
+      high: "오늘은 신발까지 큰맘 먹고 샀다. 돈은 들었지만 마음에 들었다.",
+    },
+  },
+  {
+    keywords: ["가방", "백팩", "크로스백"],
+    activity: {
+      single: "오늘은 가방을 샀다. 예뻐서 기분이 좋았다.",
+      multi: "오늘은 가방도 보고 다른 것도 챙겼다. 괜히 즐거운 하루였다.",
+      high: "오늘은 가방까지 큰맘 먹고 샀다. 돈은 들었지만 마음은 좋았다.",
+    },
+  },
+  {
+    keywords: ["병원", "치과", "한의원", "의원"],
+    activity: {
+      single: "오늘은 병원에 갔다. 아픈 곳을 돌봐서 다행이었다.",
+      multi: "오늘은 병원도 다녀오고 다른 일도 했다. 몸을 챙겨서 다행이었다.",
+      high: "오늘은 병원비가 제법 들었다. 그래도 몸이 먼저라서 잘한 일 같다.",
+    },
+  },
+  {
+    keywords: ["약국", "약"],
+    activity: {
+      single: "오늘은 약을 샀다. 얼른 나으면 좋겠다.",
+      multi: "오늘은 약도 사고 다른 일도 했다. 몸을 챙겨서 다행이었다.",
+      high: "오늘은 약값도 들고 이것저것 챙겼다. 그래도 건강이 제일이다.",
+    },
+  },
+  {
+    keywords: ["편의점", "cu", "gs25", "세븐일레븐", "emart24"],
+    activity: {
+      single: "오늘은 편의점에 들렀다. 작은 것을 샀지만 꽤 반가웠다.",
+      multi: "오늘은 편의점도 들르고 다른 일도 했다. 소소하지만 바빴다.",
+      high: "오늘은 편의점에서 이것저것 사다 보니 생각보다 돈이 들었다.",
+    },
+  },
+  {
+    keywords: ["배달", "배민", "요기요", "쿠팡이츠"],
+    activity: {
+      single: "오늘은 배달음식을 시켜 먹었다. 참 편했다.",
+      multi: "오늘은 배달도 시키고 다른 일도 했다. 게으른데 즐거운 날이었다.",
+      high: "오늘은 배달비까지 붙어서 돈이 꽤 들었다. 그래도 맛있었다.",
+    },
+  },
+  {
+    keywords: ["외식", "식비", "식당", "점심", "저녁", "치킨", "피자", "햄버거"],
+    activity: {
+      single: "오늘은 맛있는 것을 사 먹었다. 참 맛이 있었다.",
+      multi: "오늘은 먹을 것도 사고 다른 일도 했다. 제법 재미있는 날이었다.",
+      high: "오늘은 먹는 데 돈을 꽤 썼다. 그래도 맛있어서 기분이 좋았다.",
+    },
+  },
+  {
+    keywords: ["카페", "커피", "스타벅스", "메가커피", "빽다방", "컴포즈"],
+    activity: {
+      single: "오늘은 커피를 마셨다. 향이 좋아서 기분이 괜찮았다.",
+      multi: "오늘은 커피도 마시고 다른 일도 했다. 잠이 조금 깼다.",
+      high: "오늘은 커피값도 쌓이고 다른 소비도 있었다. 그래도 달달해서 좋았다.",
+    },
+  },
+  {
+    keywords: ["빵", "베이커리", "도넛", "케이크"],
+    activity: {
+      single: "오늘은 빵을 샀다. 달콤해서 기분이 좋아질 것 같았다.",
+      multi: "오늘은 빵도 사고 다른 것도 챙겼다. 입이 즐거운 날이었다.",
+      high: "오늘은 맛있는 것을 이것저것 골랐다. 돈은 좀 들었지만 즐거웠다.",
+    },
+  },
+  {
+    keywords: ["버스", "지하철", "교통"],
+    activity: {
+      single: "오늘은 대중교통을 타고 이동했다. 길을 잘 다녀와서 다행이었다.",
+      multi: "오늘은 이동도 하고 다른 일도 봤다. 하루가 꽤 바빴다.",
+      high: "오늘은 여기저기 다니느라 교통비가 좀 들었다. 그래도 필요한 날이었다.",
+    },
+  },
+  {
+    keywords: ["주차"],
+    activity: {
+      single: "오늘은 주차비를 냈다. 차를 세워 둘 수 있어서 다행이었다.",
+      multi: "오늘은 주차도 하고 다른 일도 했다. 바쁜 하루였다.",
+      high: "오늘은 주차비까지 겹쳐서 돈이 더 들었다. 그래도 어쩔 수 없었다.",
+    },
+  },
+  {
+    keywords: ["고양이", "강아지", "사료", "반려", "동물병원", "펫"],
+    activity: {
+      single: "오늘은 반려동물을 위해 필요한 것을 샀다. 참 뿌듯했다.",
+      multi: "오늘은 반려동물 것도 챙기고 다른 일도 했다. 마음이 따뜻했다.",
+      high: "오늘은 반려동물에게 필요한 것을 크게 챙겼다. 돈은 들었지만 뿌듯했다.",
+    },
+  },
+  {
+    keywords: ["영화", "cgv", "롯데시네마", "메가박스"],
+    activity: {
+      single: "오늘은 영화를 봤다. 참 재미있었다.",
+      multi: "오늘은 영화도 보고 다른 일도 했다. 꽤 신나는 하루였다.",
+      high: "오늘은 놀거리에도 돈을 썼다. 그래도 재미있어서 만족했다.",
+    },
+  },
+  {
+    keywords: ["책", "서점", "교보문고", "yes24", "알라딘"],
+    activity: {
+      single: "오늘은 책을 샀다. 읽을 생각을 하니 기대되었다.",
+      multi: "오늘은 책도 사고 다른 것도 챙겼다. 마음이 조금 똑똑해진 것 같았다.",
+      high: "오늘은 읽고 싶은 것을 많이 골랐다. 돈은 들었지만 뿌듯했다.",
+    },
+  },
+  {
+    keywords: ["문구", "다이소", "팬", "노트", "필기"],
+    activity: {
+      single: "오늘은 문구를 샀다. 쓰고 싶은 마음이 생겼다.",
+      multi: "오늘은 문구도 사고 다른 것도 챙겼다. 괜히 부지런해지고 싶었다.",
+      high: "오늘은 자잘한 것을 이것저것 샀다. 작은 것들이지만 꽤 많았다.",
+    },
+  },
+  {
+    keywords: ["가구", "이케아", "수납", "책상", "의자"],
+    activity: {
+      single: "오늘은 집에 둘 것을 샀다. 방이 더 좋아질 것 같았다.",
+      multi: "오늘은 집안 것도 사고 다른 일도 했다. 생활이 조금 더 편해질 것 같았다.",
+      high: "오늘은 집에 필요한 것을 크게 샀다. 돈은 들었지만 오래 쓸 것 같았다.",
+    },
+  },
+  {
+    keywords: ["화장품", "올리브영", "립", "쿠션", "틴트"],
+    activity: {
+      single: "오늘은 화장품을 샀다. 예뻐질 것 같아 기분이 좋았다.",
+      multi: "오늘은 화장품도 사고 다른 것도 챙겼다. 괜히 신이 났다.",
+      high: "오늘은 예뻐지는 데 돈을 꽤 썼다. 그래도 마음은 즐거웠다.",
+    },
+  },
+  {
+    keywords: ["미용실", "헤어", "커트", "염색", "펌"],
+    activity: {
+      single: "오늘은 머리를 하러 갔다. 거울을 보니 기분이 좋았다.",
+      multi: "오늘은 머리도 하고 다른 일도 했다. 한결 산뜻했다.",
+      high: "오늘은 꾸미는 데 돈을 꽤 썼다. 그래도 예뻐져서 좋았다.",
+    },
+  },
+  {
+    keywords: ["네일", "왁싱", "피부", "에스테틱"],
+    activity: {
+      single: "오늘은 나를 꾸미는 데 돈을 썼다. 기분이 좋아졌다.",
+      multi: "오늘은 관리도 받고 다른 일도 했다. 스스로를 챙긴 날 같았다.",
+      high: "오늘은 나를 위해 제법 돈을 썼다. 그래도 뿌듯했다.",
+    },
+  },
+  {
+    keywords: ["운동", "헬스", "pt", "필라테스", "요가"],
+    activity: {
+      single: "오늘은 운동을 했다. 몸이 건강해질 것 같았다.",
+      multi: "오늘은 운동도 하고 다른 일도 했다. 꽤 부지런한 날이었다.",
+      high: "오늘은 건강을 위해 돈을 썼다. 잘한 일 같아서 뿌듯했다.",
+    },
+  },
+  {
+    keywords: ["학원", "강의", "수강", "교육", "인강", "클래스"],
+    activity: {
+      single: "오늘은 배우는 데 돈을 썼다. 똑똑해질 것 같았다.",
+      multi: "오늘은 공부도 하고 다른 일도 했다. 제법 알찬 하루였다.",
+      high: "오늘은 배움을 위해 제법 돈을 썼다. 그래도 잘한 일 같았다.",
+    },
+  },
+  {
+    keywords: ["게임", "steam", "닌텐도", "플레이스테이션"],
+    activity: {
+      single: "오늘은 게임을 샀다. 집에 가서 빨리 하고 싶었다.",
+      multi: "오늘은 게임도 사고 다른 것도 챙겼다. 괜히 신나는 날이었다.",
+      high: "오늘은 재미있는 것에 돈을 꽤 썼다. 그래도 행복했다.",
+    },
+  },
+  {
+    keywords: ["여행", "숙소", "호텔", "비행기", "항공", "기차"],
+    activity: {
+      single: "오늘은 여행 준비를 했다. 떠날 생각을 하니 설렜다.",
+      multi: "오늘은 여행 것도 챙기고 다른 일도 했다. 괜히 들떴다.",
+      high: "오늘은 여행 준비에 돈을 꽤 썼다. 그래도 기대가 더 컸다.",
+    },
+  },
+  {
+    keywords: ["통신", "휴대폰", "요금제", "인터넷"],
+    activity: {
+      single: "오늘은 통신비가 나갔다. 생활에 꼭 필요한 돈이었다.",
+      multi: "오늘은 통신비도 나가고 다른 소비도 있었다. 돈이 조용히 빠져나갔다.",
+      high: "오늘은 고정으로 나가는 돈도 있고 다른 소비도 겹쳤다. 조금 아쉬웠다.",
+    },
+  },
+  {
+    keywords: ["전기", "가스", "수도", "관리비"],
+    activity: {
+      single: "오늘은 집에 필요한 요금을 냈다. 생활은 참 꾸준하다.",
+      multi: "오늘은 집에 필요한 돈도 내고 다른 일도 했다. 어른이 된 기분이었다.",
+      high: "오늘은 생활요금이랑 다른 소비가 겹쳤다. 그래도 꼭 내야 하는 돈이었다.",
+    },
+  },
+  {
+    keywords: ["보험"],
+    activity: {
+      single: "오늘은 보험료를 냈다. 미래를 챙긴 것 같아 조금 든든했다.",
+      multi: "오늘은 보험료도 나가고 다른 소비도 있었다. 생활은 참 바쁘다.",
+      high: "오늘은 꼭 필요한 돈이 여러 군데로 나갔다. 그래도 챙겨 둬서 다행이다.",
+    },
+  },
+  {
+    keywords: ["세금", "주민세", "재산세", "소득세"],
+    activity: {
+      single: "오늘은 세금을 냈다. 아깝지만 꼭 필요한 일 같았다.",
+      multi: "오늘은 세금도 내고 다른 일도 했다. 어른의 하루 같았다.",
+      high: "오늘은 세금까지 겹쳐서 돈이 크게 나갔다. 그래도 해야 할 일은 했다.",
+    },
+  },
+  {
+    keywords: ["쿠팡", "컬리", "쓱배송", "새벽배송"],
+    activity: {
+      single: [
+        "오늘은 필요한 것을 배송으로 샀다. 집으로 오니 참 편할 것 같다.",
+        "오늘은 온라인으로 장을 봤다. 기다리는 재미도 있을 것 같다.",
+        "오늘은 집에서 편하게 주문했다. 세상이 참 편해졌다.",
+      ],
+      multi: [
+        "오늘은 온라인으로 필요한 것도 사고 다른 일도 했다. 집에 오면 반가울 것 같다.",
+        "배송 주문도 하고 하루를 보냈다. 기다리는 마음이 조금 들떴다.",
+        "인터넷으로도 사고 다른 일도 했다. 편한데 돈은 잘 나가는 것 같다.",
+      ],
+      high: [
+        "오늘은 온라인 주문을 이것저것 했다. 편하지만 돈이 꽤 나갔다.",
+        "배송으로 많이 시켰더니 금액이 제법 컸다. 그래도 필요한 것들이었다.",
+        "오늘은 집에서 편하게 샀는데 돈은 크게 들었다. 조금 신기했다.",
+      ],
+    },
+  },
+  {
+    keywords: ["네이버", "11번가", "g마켓", "옥션", "오늘의집"],
+    activity: {
+      single: [
+        "오늘은 인터넷으로 물건을 샀다. 곧 오면 좋겠다.",
+        "오늘은 온라인 쇼핑을 했다. 택배가 기다려진다.",
+        "오늘은 집에서 편하게 주문했다. 참 신기한 세상이다.",
+      ],
+      multi: [
+        "오늘은 온라인 쇼핑도 하고 다른 일도 했다. 기다릴 것이 생겼다.",
+        "인터넷으로도 사고 이것저것 했다. 내일이 조금 기다려진다.",
+        "주문도 하고 할 일도 봤다. 괜히 손이 바빴다.",
+      ],
+      high: [
+        "오늘은 온라인 쇼핑을 제법 했다. 택배는 좋지만 돈도 많이 나갔다.",
+        "오늘은 인터넷 장바구니가 커졌다. 조금 신나고 조금 무서웠다.",
+        "필요한 것을 많이 주문했다. 편했지만 금액은 꽤 컸다.",
+      ],
+    },
+  },
+  {
+    keywords: ["과일", "채소", "정육", "생선"],
+    activity: {
+      single: [
+        "오늘은 먹을 재료를 샀다. 집밥이 든든해질 것 같았다.",
+        "오늘은 신선한 것을 샀다. 냉장고가 기뻐할 것 같았다.",
+        "오늘은 재료를 챙겼다. 집에서 맛있는 것을 해 먹고 싶었다.",
+      ],
+      multi: [
+        "오늘은 재료도 사고 다른 것도 챙겼다. 냉장고가 든든해질 것 같았다.",
+        "먹을 것도 마련하고 다른 일도 했다. 알찬 하루였다.",
+        "재료도 사고 바쁘게 움직였다. 그래도 마음은 든든했다.",
+      ],
+      high: [
+        "오늘은 먹을 재료를 크게 샀다. 돈은 들었지만 마음이 놓였다.",
+        "오늘은 장바구니가 무거울 만큼 샀다. 그래도 든든해서 좋았다.",
+        "집에서 먹을 것을 많이 챙겼다. 금액은 컸지만 필요한 소비였다.",
+      ],
+    },
+  },
+  {
+    keywords: ["안경", "렌즈", "콘택트"],
+    activity: {
+      single: [
+        "오늘은 눈에 필요한 것을 샀다. 잘 보이면 좋겠다.",
+        "오늘은 렌즈를 챙겼다. 앞이 잘 보이면 마음도 편하다.",
+        "오늘은 눈을 위해 돈을 썼다. 그래도 꼭 필요한 일이었다.",
+      ],
+      multi: [
+        "오늘은 렌즈도 사고 다른 일도 했다. 생활이 조금 편해질 것 같았다.",
+        "눈에 필요한 것도 챙기고 하루를 보냈다. 바쁘지만 괜찮았다.",
+        "오늘은 안경 관련해서도 쓰고 다른 일도 했다. 참 필요한 날이었다.",
+      ],
+      high: [
+        "오늘은 눈에 필요한 데 돈이 꽤 들었다. 그래도 잘 보여야 하니까 괜찮다.",
+        "안경이나 렌즈에 돈을 썼다. 조금 아프지만 꼭 필요했다.",
+        "오늘은 시야를 위해 큰돈을 썼다. 그래도 잘 보이면 좋겠다.",
+      ],
+    },
+  },
+  {
+    keywords: ["꽃", "화분", "식물"],
+    activity: {
+      single: [
+        "오늘은 꽃이나 식물을 샀다. 보기만 해도 기분이 좋아졌다.",
+        "오늘은 초록색 친구를 데려왔다. 방이 예뻐질 것 같았다.",
+        "오늘은 꽃을 샀다. 마음이 말랑해지는 것 같았다.",
+      ],
+      multi: [
+        "오늘은 식물도 사고 다른 일도 했다. 괜히 집에 빨리 가고 싶었다.",
+        "꽃도 사고 하루를 보냈다. 마음이 조금 환해졌다.",
+        "예쁜 것도 사고 다른 일도 했다. 기분이 부드러워졌다.",
+      ],
+      high: [
+        "오늘은 집을 예쁘게 하려고 제법 썼다. 그래도 보기 좋아서 만족했다.",
+        "꽃과 식물에 돈을 썼다. 금액은 들었지만 마음은 참 좋았다.",
+        "오늘은 예쁜 것을 들였다. 돈보다 기분이 더 크게 남았다.",
+      ],
+    },
+  },
+  {
+    keywords: ["술", "와인", "맥주", "소주"],
+    activity: {
+      single: [
+        "오늘은 마실 것을 샀다. 하루 끝에 마시면 좋을 것 같았다.",
+        "오늘은 술을 샀다. 어른 같은 기분이 조금 났다.",
+        "오늘은 한잔할 것을 챙겼다. 마음이 조금 느긋해졌다.",
+      ],
+      multi: [
+        "오늘은 마실 것도 사고 다른 일도 했다. 오늘 밤이 조금 기대되었다.",
+        "술도 사고 다른 것도 챙겼다. 괜히 하루가 길게 느껴졌다.",
+        "오늘은 한잔할 준비도 하고 이것저것 했다. 소소하게 즐거웠다.",
+      ],
+      high: [
+        "오늘은 마실 것에도 돈을 꽤 썼다. 그래도 기분 전환은 될 것 같다.",
+        "술값도 생각보다 커졌다. 그래도 오늘은 그럴 만한 날이었다.",
+        "오늘은 즐기려고 돈을 좀 썼다. 그래도 후회는 덜했다.",
+      ],
+    },
+  },
+  {
+    keywords: ["선물", "기프티콘", "축하", "생일"],
+    activity: {
+      single: [
+        "오늘은 누군가를 위해 선물을 샀다. 마음이 좋았다.",
+        "오늘은 축하할 일이 있어 돈을 썼다. 참 반가운 마음이었다.",
+        "오늘은 선물을 준비했다. 받는 사람이 좋아하면 좋겠다.",
+      ],
+      multi: [
+        "오늘은 선물도 사고 다른 일도 했다. 괜히 마음이 따뜻했다.",
+        "누군가를 위한 것도 챙기고 하루를 보냈다. 기분이 좋았다.",
+        "축하할 준비도 하고 이것저것 했다. 바쁘지만 뿌듯했다.",
+      ],
+      high: [
+        "오늘은 선물에 제법 돈을 썼다. 그래도 기쁜 일이라 괜찮았다.",
+        "누군가를 위해 큰맘 먹고 샀다. 돈은 들었지만 즐거웠다.",
+        "오늘은 선물값이 꽤 컸다. 그래도 마음은 아주 좋았다.",
+      ],
+    },
+  },
+  {
+    keywords: ["유아", "아기", "육아", "기저귀", "분유"],
+    activity: {
+      single: [
+        "오늘은 아기에게 필요한 것을 샀다. 참 소중한 소비였다.",
+        "오늘은 작은 사람을 위해 돈을 썼다. 마음이 따뜻했다.",
+        "오늘은 육아에 필요한 것을 챙겼다. 든든하면 좋겠다.",
+      ],
+      multi: [
+        "오늘은 아기 것도 챙기고 다른 일도 했다. 손이 많이 가는 하루였다.",
+        "육아용품도 사고 이것저것 했다. 바쁘지만 뿌듯했다.",
+        "오늘은 작은 사람을 위한 것도 사고 하루를 보냈다. 마음이 따뜻했다.",
+      ],
+      high: [
+        "오늘은 아기에게 필요한 것을 크게 챙겼다. 돈은 들었지만 꼭 필요했다.",
+        "육아에 들어가는 돈이 꽤 컸다. 그래도 소중한 데 쓰는 거라 괜찮았다.",
+        "오늘은 기저귀나 분유 같은 것을 많이 샀다. 든든하면 좋겠다.",
+      ],
+    },
+  },
+  {
+    keywords: ["사무", "프린트", "복사", "오피스"],
+    activity: {
+      single: [
+        "오늘은 일하는 데 필요한 것을 샀다. 조금 더 부지런해질 것 같았다.",
+        "오늘은 사무용품에 돈을 썼다. 쓸모 있는 소비 같았다.",
+        "오늘은 일할 때 필요한 것을 챙겼다. 참 든든했다.",
+      ],
+      multi: [
+        "오늘은 일에 필요한 것도 사고 다른 일도 했다. 제법 바빴다.",
+        "사무용품도 챙기고 하루를 보냈다. 책상이 조금 든든해질 것 같았다.",
+        "오늘은 일 관련해서도 쓰고 다른 일도 했다. 꽤 알찬 날이었다.",
+      ],
+      high: [
+        "오늘은 일하는 데 필요한 것들을 많이 샀다. 돈은 들었지만 잘 쓸 것 같다.",
+        "업무용으로 이것저것 챙기다 보니 금액이 컸다. 그래도 필요한 소비였다.",
+        "오늘은 사무용품에 꽤 썼다. 그래도 오래 쓰면 괜찮을 것 같다.",
+      ],
+    },
+  },
+  {
+    keywords: ["수리", "정비", "교체", "as", "a/s"],
+    activity: {
+      single: [
+        "오늘은 고장 난 것을 고쳤다. 다시 쓸 수 있어서 다행이었다.",
+        "오늘은 수리비를 냈다. 아프지만 꼭 필요한 돈이었다.",
+        "오늘은 망가진 것을 손봤다. 다시 멀쩡해지면 좋겠다.",
+      ],
+      multi: [
+        "오늘은 수리도 하고 다른 일도 했다. 은근 바쁜 하루였다.",
+        "고장 난 것도 챙기고 하루를 보냈다. 그래도 해결되어 다행이었다.",
+        "오늘은 정비도 하고 다른 일도 했다. 손이 많이 간 날이었다.",
+      ],
+      high: [
+        "오늘은 수리비가 꽤 컸다. 그래도 고쳐서 쓰는 게 더 나을 것 같았다.",
+        "오늘은 고장 난 것 때문에 돈이 많이 나갔다. 조금 속상했다.",
+        "오늘은 정비와 교체에 큰돈이 들었다. 그래도 해결되어 다행이었다.",
+      ],
+    },
+  },
+  {
+    keywords: ["은행", "이체수수료", "수수료"],
+    activity: {
+      single: [
+        "오늘은 수수료가 나갔다. 작지만 조금 아까웠다.",
+        "오늘은 은행 관련 돈이 빠져나갔다. 괜히 아쉬웠다.",
+        "오늘은 수수료를 냈다. 눈에 띄진 않지만 신경이 쓰였다.",
+      ],
+      multi: [
+        "오늘은 수수료도 나가고 다른 돈도 썼다. 조금 아쉬운 하루였다.",
+        "은행 관련 돈도 빠져나가고 다른 일도 있었다. 조용히 돈이 나갔다.",
+        "오늘은 자잘한 비용도 생겼다. 모이면 꽤 클 것 같았다.",
+      ],
+      high: [
+        "오늘은 이런저런 비용이 겹쳐서 아쉬웠다. 꼭 필요한 돈이긴 했다.",
+        "오늘은 수수료까지 더해져서 금액이 커졌다. 조금 속상했다.",
+        "오늘은 눈에 잘 안 띄는 돈도 꽤 나갔다. 괜히 아깝게 느껴졌다.",
+      ],
+    },
+  },
+];
+
+function pickDiarySentence(pool: DiarySentencePool, seed: number) {
+  if (typeof pool === "string") return pool;
+  if (pool.length === 0) return "";
+  return pool[Math.abs(seed) % pool.length] ?? pool[0];
+}
+
+type LoopMemoPattern = {
+  keywords: string[];
+  lines: string[];
+};
+
+const LOOP_MEMO_PATTERNS: LoopMemoPattern[] = [
+  { keywords: ["관리비"], lines: ["관리비가 나갈 때가 된 것 같다.", "아파트 관리비를 챙길 날이 다가오는 것 같다.", "생활비 중 관리비가 다시 빠져나갈 것 같다."] },
+  { keywords: ["보험"], lines: ["보험료가 빠져나갈 때가 된 것 같다.", "보험료를 다시 챙길 시기가 오는 것 같다.", "보험 쪽 돈이 또 나갈 것 같다."] },
+  { keywords: ["세금"], lines: ["세금을 챙겨 낼 때가 된 것 같다.", "세금 낼 날이 다시 다가오는 것 같다.", "세금 관련 돈이 또 나갈 것 같다."] },
+  { keywords: ["구독", "넷플릭스", "유튜브", "spotify", "티빙", "디즈니"], lines: ["구독 결제일이 다가오는 것 같다.", "구독비가 다시 빠져나갈 것 같다.", "보고 듣는 데 쓰는 돈이 또 나갈 것 같다."] },
+  { keywords: ["주유"], lines: ["기름을 다시 넣을 때가 된 것 같다.", "주유할 날이 가까워지는 것 같다.", "차에 기름값이 또 들어갈 것 같다."] },
+  { keywords: ["택시"], lines: ["택시비가 또 들 수 있을 것 같다.", "이동하다 보면 택시를 다시 탈 것 같다.", "택시 쓸 일이 또 생길 것 같다."] },
+  { keywords: ["버스", "지하철", "교통"], lines: ["교통비가 또 나갈 것 같다.", "이동에 드는 돈이 다시 생길 것 같다.", "버스나 지하철 탈 일이 또 있을 것 같다."] },
+  { keywords: ["마트", "장보기", "이마트", "홈플러스", "코스트코", "롯데마트"], lines: ["마트에 다시 갈 때가 된 것 같다.", "장을 다시 볼 날이 가까워지는 것 같다.", "먹을 것 사러 또 갈 것 같다."] },
+  { keywords: ["쿠팡", "컬리", "쓱배송", "새벽배송"], lines: ["배송 주문을 다시 할 때가 된 것 같다.", "인터넷으로 또 시킬 일이 생길 것 같다.", "집으로 받을 것을 다시 주문할 것 같다."] },
+  { keywords: ["세제"], lines: ["세제를 다시 챙길 때가 된 것 같다.", "세제 살 날이 다시 올 것 같다.", "집안일용품을 또 사야 할 것 같다."] },
+  { keywords: ["샴푸"], lines: ["샴푸를 다시 살 때가 된 것 같다.", "샴푸가 슬슬 떨어질 것 같다.", "욕실용품을 다시 챙길 날이 올 것 같다."] },
+  { keywords: ["로션"], lines: ["로션을 다시 살 때가 된 것 같다.", "로션을 또 챙길 시기가 오는 것 같다.", "바르는 것을 다시 살 날이 올 것 같다."] },
+  { keywords: ["생필품"], lines: ["생활용품을 다시 챙길 때가 된 것 같다.", "집에 필요한 것을 또 사게 될 것 같다.", "생필품 살 날이 다시 올 것 같다."] },
+  { keywords: ["병원", "치과", "한의원", "의원"], lines: ["병원 갈 일이 다시 생길 수도 있을 것 같다.", "몸 챙기러 다시 갈 수도 있을 것 같다.", "의료비가 또 들 수 있을 것 같다."] },
+  { keywords: ["약국", "약"], lines: ["약을 다시 챙길 일이 생길 것 같다.", "약국에 또 들를 수도 있을 것 같다.", "몸 상태에 따라 약값이 다시 나갈 것 같다."] },
+  { keywords: ["카페", "커피", "스타벅스", "메가커피", "빽다방"], lines: ["커피값이 또 나갈 것 같다.", "다시 카페에 들를 것 같다.", "커피 한잔 생각나는 날이 또 올 것 같다."] },
+  { keywords: ["외식", "식비", "배달", "치킨", "피자", "햄버거"], lines: ["먹을 것에 또 돈을 쓸 것 같다.", "다시 사 먹는 날이 올 것 같다.", "식비가 또 나갈 것 같다."] },
+  { keywords: ["의류", "옷", "쇼핑", "무신사", "지그재그", "에이블리"], lines: ["옷이나 쇼핑 비용이 또 들 것 같다.", "다시 사고 싶은 것이 생길 것 같다.", "쇼핑 욕심이 또 올라올 것 같다."] },
+  { keywords: ["화장품", "올리브영"], lines: ["화장품을 다시 살 때가 된 것 같다.", "예뻐지는 데 돈이 또 들 것 같다.", "다시 올리브영에 갈 것 같다."] },
+  { keywords: ["미용실", "헤어", "커트", "염색"], lines: ["머리를 하러 갈 때가 다시 올 것 같다.", "미용실 비용이 또 들 것 같다.", "머리 손질할 날이 가까워지는 것 같다."] },
+  { keywords: ["반려", "사료", "고양이", "강아지", "펫"], lines: ["반려동물에게 필요한 것을 또 챙길 것 같다.", "사료나 간식을 다시 사야 할 것 같다.", "작은 가족을 위한 돈이 또 나갈 것 같다."] },
+  { keywords: ["통신", "휴대폰", "인터넷"], lines: ["통신비가 다시 빠져나갈 것 같다.", "휴대폰이나 인터넷 요금이 또 나갈 것 같다.", "고정으로 나가는 통신비가 다시 올 것 같다."] },
+  { keywords: ["전기", "가스", "수도"], lines: ["생활요금이 다시 나갈 것 같다.", "전기나 가스 같은 돈이 또 빠질 것 같다.", "집에 필요한 요금이 다시 찾아올 것 같다."] },
+  { keywords: ["보험"], lines: ["보험료를 챙길 날이 다시 올 것 같다.", "미래를 위한 돈이 또 빠져나갈 것 같다.", "보험 관련 자동이체가 다시 있을 것 같다."] },
+  { keywords: ["과일", "채소", "정육", "생선"], lines: ["먹을 재료를 다시 살 때가 된 것 같다.", "집밥 재료를 또 챙길 것 같다.", "냉장고 채울 날이 다시 올 것 같다."] },
+  { keywords: ["안경", "렌즈", "콘택트"], lines: ["렌즈나 안경 관련 돈이 또 들 것 같다.", "눈에 필요한 것을 다시 챙길 것 같다.", "시야를 위한 소비가 또 생길 것 같다."] },
+  { keywords: ["꽃", "화분", "식물"], lines: ["예쁜 것을 또 들이고 싶어질 것 같다.", "꽃이나 식물을 다시 살 수도 있을 것 같다.", "집에 초록색을 더 둘 날이 올 것 같다."] },
+  { keywords: ["술", "와인", "맥주", "소주"], lines: ["마실 것에 돈을 또 쓸 것 같다.", "한잔 생각나는 날이 다시 올 것 같다.", "술값이 또 나갈 수도 있을 것 같다."] },
+  { keywords: ["선물", "기프티콘", "축하", "생일"], lines: ["누군가를 위한 돈이 또 나갈 것 같다.", "선물 살 일이 다시 생길 것 같다.", "축하할 일이 또 찾아올 것 같다."] },
+  { keywords: ["유아", "아기", "육아", "기저귀", "분유"], lines: ["아기에게 필요한 것을 또 챙길 것 같다.", "육아용품을 다시 사야 할 것 같다.", "작은 사람을 위한 돈이 또 나갈 것 같다."] },
+  { keywords: ["사무", "프린트", "복사", "오피스"], lines: ["일하는 데 필요한 것을 또 살 것 같다.", "사무용품을 다시 챙길 때가 된 것 같다.", "업무용 돈이 또 나갈 것 같다."] },
+  { keywords: ["수리", "정비", "교체", "as", "a/s"], lines: ["고친 뒤에도 다시 손볼 일이 생길 것 같다.", "수리비가 또 들 수 있을 것 같다.", "정비할 일이 다시 찾아올 것 같다."] },
+  { keywords: ["은행", "이체수수료", "수수료"], lines: ["자잘한 수수료가 또 나갈 것 같다.", "은행 관련 비용이 다시 생길 것 같다.", "눈에 덜 띄는 돈이 또 빠져나갈 것 같다."] },
+];
+
+function createLoopMemo(loop: ManagedLoopGroup, categoryNameMap: Map<string, string>) {
+  const categoryLabel = normalizeDiaryText(loop.categoryId ? categoryNameMap.get(loop.categoryId) ?? "" : "");
+  const merchantName = normalizeDiaryText(loop.merchantName);
+  const description = normalizeDiaryText(loop.descriptionSamples.join(" "));
+  const joinedText = `${categoryLabel} ${merchantName} ${description}`;
+  const seed = loop.latestAmount + loop.averageAmount + loop.transactionCount + loop.merchantName.length;
+
+  for (const pattern of LOOP_MEMO_PATTERNS) {
+    if (pattern.keywords.some((keyword) => joinedText.includes(keyword))) {
+      return pickDiarySentence(pattern.lines, seed);
+    }
+  }
+
+  return pickDiarySentence(
+    [
+      `${loop.merchantName} 관련 돈이 또 나갈 것 같다.`,
+      `${loop.merchantName} 쪽으로 다시 돈이 들 것 같다.`,
+      `${loop.merchantName}와 비슷한 소비가 또 생길 것 같다.`,
+    ],
+    seed,
+  );
+}
+
+function getDiaryActivity(transaction: Transaction, getCategoryLabel: (transaction: Transaction) => string) {
+  const categoryLabel = normalizeDiaryText(getCategoryLabel(transaction));
+  const merchantName = normalizeDiaryText(transaction.merchantName);
+  const description = normalizeDiaryText(transaction.description);
+  const joinedText = `${categoryLabel} ${merchantName} ${description}`;
+  for (const pattern of DIARY_PATTERNS) {
+    if (pattern.keywords.some((keyword) => joinedText.includes(keyword))) {
+      return pattern.activity;
+    }
+  }
+
+  return {
+    single: "오늘은 필요한 것을 샀다. 참 괜찮았다.",
+    multi: "오늘은 필요한 것도 사고 다른 것도 챙겼다. 제법 알찬 하루였다.",
+    high: "오늘은 필요한 곳에 돈을 꽤 썼다. 그래도 꼭 필요한 하루였다.",
+  };
+}
+
+function createElementaryDiary(transactions: Transaction[], getCategoryLabel: (transaction: Transaction) => string) {
+  const expenseTransactions = transactions
+    .filter((transaction) => transaction.status === "active" && transaction.transactionType === "expense" && transaction.isExpenseImpact)
+    .sort((left, right) => right.amount - left.amount);
+  const totalAmount = expenseTransactions.reduce((sum, transaction) => sum + transaction.amount, 0);
+  const count = expenseTransactions.length;
+  const seed = expenseTransactions.reduce((sum, transaction) => sum + transaction.amount + transaction.merchantName.length, 0);
+
+  if (count === 0) return `돈을 거의 안 썼다. 조용해서 참 다행이었다.`;
+
+  const leadTransaction = expenseTransactions[0];
+  const activity = getDiaryActivity(leadTransaction, getCategoryLabel);
+
+  if (count === 1) {
+    return pickDiarySentence(activity.single, seed);
+  }
+
+  if (totalAmount >= 50000) {
+    return pickDiarySentence(activity.high, seed);
+  }
+
+  if (count >= 3) {
+    return pickDiarySentence(activity.multi, seed);
+  }
+
+  return pickDiarySentence(activity.multi, seed + count);
+}
+
+function createDiaryCells(text: string, minimumLength = 70, columns = 10, leadingBlankRows = 1, prefixText = "") {
+  const characters = Array.from(`${prefixText}${text}`);
+  const leadingBlanks = columns * leadingBlankRows;
+  const totalLength = Math.max(minimumLength, leadingBlanks + characters.length);
+  const safeLength = Math.ceil(totalLength / columns) * columns;
+  return Array.from({ length: safeLength }, (_, index) => {
+    const characterIndex = index - leadingBlanks;
+    return characterIndex >= 0 ? characters[characterIndex] ?? "" : "";
+  });
 }
 
 function formatTenThousandUnit(value: number) {
@@ -303,7 +1132,7 @@ function getStatementScopeOptions(imports: ImportRecord[], linkedImportRecordIds
 }
 
 export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" | "sun" }) {
-  const { state } = useAppState();
+  const { state, workspaceLoopDataByWorkspaceId, updateTransactionDetails, assignCategory, clearCategory } = useAppState();
   const navigate = useNavigate();
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
@@ -353,9 +1182,21 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
       ),
     [scope.transactions],
   );
+  const latestStatementMonth = useMemo(() => getLatestStatementMonth(scope.imports), [scope.imports]);
+  const forecastCalendarMonth = useMemo(
+    () => (latestStatementMonth ? getNextMonthKey(latestStatementMonth) : null),
+    [latestStatementMonth],
+  );
   const monthScopeOptions = useMemo<DashboardScopeOption[]>(
     () => monthOptions.map((month) => ({ value: month, label: formatMonthLabel(month) })),
     [monthOptions],
+  );
+  const calendarMonthOptions = useMemo(
+    () =>
+      Array.from(new Set([...monthOptions, ...(forecastCalendarMonth ? [forecastCalendarMonth] : [])]))
+        .sort((a, b) => b.localeCompare(a))
+        .map((month) => ({ value: month, label: formatMonthLabel(month) })),
+    [forecastCalendarMonth, monthOptions],
   );
   const linkedImportRecordIds = useMemo(
     () =>
@@ -380,6 +1221,10 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
   const [categoryUsageModal, setCategoryUsageModal] = useState<CategoryUsageModalState | null>(null);
   const [pendingCategoryUsageNavigation, setPendingCategoryUsageNavigation] = useState<string | null>(null);
   const [categoryChartMode, setCategoryChartMode] = useState<"bar" | "circle">("bar");
+  const [selectedCalendarMonth, setSelectedCalendarMonth] = useState(() =>
+    calendarMonthOptions.some((option) => option.value === currentMonth) ? currentMonth : calendarMonthOptions[0]?.value ?? currentMonth,
+  );
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState(() => `${currentMonth}-01`);
   const [activeCategorySliceName, setActiveCategorySliceName] = useState<string | null>(null);
   const [activeAnnualMonth, setActiveAnnualMonth] = useState<string | null>(null);
   const [isAnnualMonthTooltipFading, setIsAnnualMonthTooltipFading] = useState(false);
@@ -408,6 +1253,18 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
       setSelectedDashboardMonth(nextSelectedMonth);
     }
   }, [currentMonth, monthOptions, selectedDashboardMonth]);
+
+  useEffect(() => {
+    const nextSelectedCalendarMonth = calendarMonthOptions.some((option) => option.value === selectedCalendarMonth)
+      ? selectedCalendarMonth
+      : calendarMonthOptions.some((option) => option.value === currentMonth)
+        ? currentMonth
+        : calendarMonthOptions[0]?.value ?? currentMonth;
+
+    if (nextSelectedCalendarMonth !== selectedCalendarMonth) {
+      setSelectedCalendarMonth(nextSelectedCalendarMonth);
+    }
+  }, [calendarMonthOptions, currentMonth, selectedCalendarMonth]);
 
   useEffect(() => {
     const nextSelectedStatement = statementScopeOptions.some((option) => option.value === selectedDashboardStatement)
@@ -639,6 +1496,145 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
   );
   const currentMonthSettlementRows = currentMonthSettlementBalance.rows;
   const currentMonthSettlementHistory = currentMonthSettlementBalance.settlementHistory;
+  const managedLoops = workspaceLoopDataByWorkspaceId.get(workspaceId)?.managedLoops ?? [];
+  const loopStationInsights = workspaceLoopDataByWorkspaceId.get(workspaceId)?.loopInsights ?? [];
+  const featuredLoopStationInsights = loopStationInsights.slice(0, 6);
+  const categoryNameMap = useMemo(
+    () => new Map(scope.categories.map((category) => [category.id, category.name])),
+    [scope.categories],
+  );
+  const categoryLabelMap = useMemo(() => {
+    const categoryMap = new Map(scope.categories.map((category) => [category.id, category]));
+    return new Map(
+      scope.categories
+        .filter((category) => category.categoryType === "category")
+        .map((category) => [category.id, getCategoryLabel(category, categoryMap)]),
+    );
+  }, [scope.categories]);
+  const loopInsightByGroupKey = useMemo(
+    () => new Map(loopStationInsights.map((item) => [item.groupKey, item])),
+    [loopStationInsights],
+  );
+  const calendarMonthValue = selectedCalendarMonth || currentMonth;
+  const calendarExpenseTransactions = useMemo(
+    () =>
+      scope.transactions.filter(
+        (transaction) =>
+          transaction.status === "active" &&
+          transaction.transactionType === "expense" &&
+          transaction.isExpenseImpact &&
+          monthKey(transaction.occurredAt) === calendarMonthValue,
+      ),
+    [calendarMonthValue, scope.transactions],
+  );
+  const calendarCells = useMemo<CalendarCell[]>(() => {
+    const transactionMap = new Map<string, { expenseAmount: number; transactionCount: number; merchants: string[] }>();
+    calendarExpenseTransactions.forEach((transaction) => {
+        const dateKey = transaction.occurredAt.slice(0, 10);
+        const merchantName = transaction.merchantName.trim() || "이름 없는 결제";
+        const current = transactionMap.get(dateKey) ?? { expenseAmount: 0, transactionCount: 0, merchants: [] };
+        current.expenseAmount += transaction.amount;
+        current.transactionCount += 1;
+        if (!current.merchants.includes(merchantName) && current.merchants.length < 2) {
+          current.merchants.push(merchantName);
+        }
+        transactionMap.set(dateKey, current);
+      });
+
+    const loopMemoMap = new Map<string, Map<string, CalendarMemo>>();
+    const addLoopMemo = (dateKey: string, merchantName: string, text: string) => {
+      const current = loopMemoMap.get(dateKey) ?? new Map<string, CalendarMemo>();
+      const existing = current.get(text);
+      if (existing) {
+        if (!existing.merchantNames.includes(merchantName)) {
+          existing.merchantNames.push(merchantName);
+        }
+      } else {
+        current.set(text, { text, merchantNames: [merchantName] });
+      }
+      loopMemoMap.set(dateKey, current);
+    };
+
+    managedLoops.forEach((loop) => {
+      const insight = loopInsightByGroupKey.get(loop.key);
+      const text = createLoopMemo(loop, categoryNameMap);
+
+      let hasActualLoopTransactionInMonth = false;
+      loop.transactions.forEach((transaction) => {
+        const occurredDateKey = transaction.occurredAt.slice(0, 10);
+        if (!occurredDateKey.startsWith(calendarMonthValue)) return;
+        hasActualLoopTransactionInMonth = true;
+        addLoopMemo(occurredDateKey, loop.merchantName, text);
+      });
+
+      if (!hasActualLoopTransactionInMonth && insight) {
+        const projectedLoopDate = getLoopProjectedDateWithinMonth(
+          insight.latestOccurredAt,
+          insight.averageIntervalDays,
+          calendarMonthValue,
+          latestStatementMonth,
+        );
+        if (projectedLoopDate) {
+          addLoopMemo(projectedLoopDate, loop.merchantName, text);
+        }
+      }
+    });
+
+    return getCalendarDays(calendarMonthValue).map((day) => {
+      const expenseAmount = transactionMap.get(day.dateKey)?.expenseAmount ?? 0;
+      const transactionCount = transactionMap.get(day.dateKey)?.transactionCount ?? 0;
+      const merchants = transactionMap.get(day.dateKey)?.merchants ?? [];
+      const memos = [...(loopMemoMap.get(day.dateKey)?.values() ?? [])];
+      const holidayLabel = getFixedHolidayLabel(day.dateKey);
+      const chips: CalendarChip[] = [];
+
+      if (holidayLabel) {
+        chips.push({ label: holidayLabel, tone: "holiday" });
+      }
+      if (merchants[0] && transactionCount) {
+        chips.push({
+          label: `${merchants[0]}${transactionCount > 1 ? ` 외 ${transactionCount - 1}건` : ""}`,
+          tone: "expense",
+        });
+      }
+      memos.slice(0, 1).forEach((memo) => {
+        chips.push({ label: memo.text, tone: "memo" });
+      });
+
+      return {
+        ...day,
+        expenseAmount,
+        transactionCount,
+        merchants,
+        holidayLabel,
+        chips,
+        memos,
+      };
+    });
+  }, [calendarExpenseTransactions, calendarMonthValue, categoryNameMap, latestStatementMonth, loopInsightByGroupKey, managedLoops]);
+  const selectedCalendarIndex = Math.max(0, calendarCells.findIndex((item) => item.dateKey === selectedCalendarDate));
+  const selectedCalendarCell = calendarCells[selectedCalendarIndex] ?? calendarCells[0] ?? null;
+  const selectedCalendarTransactions = useMemo(
+    () =>
+      calendarExpenseTransactions.filter(
+        (transaction) =>
+          transaction.occurredAt.slice(0, 10) === selectedCalendarCell?.dateKey,
+      ),
+    [calendarExpenseTransactions, selectedCalendarCell?.dateKey],
+  );
+  const todayDiary = selectedCalendarCell
+    ? selectedCalendarTransactions.length === 0
+      ? ""
+      : createElementaryDiary(
+          selectedCalendarTransactions,
+          (transaction) => (transaction.categoryId ? categoryNameMap.get(transaction.categoryId) ?? "미분류" : "미분류"),
+        )
+    : "오늘은 기록이 아직 없다. 참 조용했다.";
+  const todayDiaryCells = useMemo(() => createDiaryCells(todayDiary, 70, 10, 1), [todayDiary]);
+  useEffect(() => {
+    if (selectedCalendarDate.startsWith(calendarMonthValue)) return;
+    setSelectedCalendarDate(`${calendarMonthValue}-01`);
+  }, [calendarMonthValue, selectedCalendarDate]);
   const settlementReceiver = currentMonthSettlementRows.find((row) => row.remainingDelta > 0);
   const settlementSender = currentMonthSettlementRows.find((row) => row.remainingDelta < 0);
   const suggestedSettlementAmount =
@@ -670,10 +1666,6 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
   const accountNameMap = useMemo(
     () => new Map(scope.accounts.map((account) => [account.id, account.alias || account.name])),
     [scope.accounts],
-  );
-  const categoryNameMap = useMemo(
-    () => new Map(scope.categories.map((category) => [category.id, category.name])),
-    [scope.categories],
   );
   const selectedDashboardCategoryColumns = useMemo(() => {
     const totals = new Map<string, number>();
@@ -973,7 +1965,6 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
       />
     </div>
   );
-
   const toggleCategoryGroup = (groupKey: string) => {
     setExpandedCategoryGroupKeys((current) => {
       const next = new Set(current);
@@ -1622,11 +2613,170 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
     <div className="page-stack">
       {mode === "moon" ? (
         <>
+      <section className="card shadow-sm" style={getMotionStyle(0.6)} data-guide-target="records-moon-calendar">
+        <div className="section-head">
+          <div>
+            <span className="section-kicker">달 기록 달력</span>
+            <h2 className="section-title">소비기록</h2>
+          </div>
+          <div className="dashboard-section-toolbar">
+            <AppSelect
+              value={calendarMonthValue}
+              onChange={setSelectedCalendarMonth}
+              options={calendarMonthOptions}
+              ariaLabel="달 기록 연월 선택"
+            />
+          </div>
+        </div>
+
+        <div className="dashboard-calendar-layout">
+          <div>
+            <div className="dashboard-calendar-weekdays" aria-hidden="true">
+              {CALENDAR_WEEKDAY_LABELS.map((label, index) => (
+                <span
+                  key={label}
+                  className={`dashboard-calendar-weekday${index === 0 ? " is-sunday" : ""}${index === 6 ? " is-saturday" : ""}`}
+                >
+                  {label}
+                </span>
+              ))}
+            </div>
+            <div className="dashboard-calendar-grid">
+              {calendarCells.map((cell) => (
+                <button
+                  key={cell.dateKey}
+                  type="button"
+                  className={`dashboard-calendar-cell${cell.isCurrentMonth ? "" : " is-outside"}${selectedCalendarCell?.dateKey === cell.dateKey ? " is-selected" : ""}`}
+                  onClick={() => setSelectedCalendarDate(cell.dateKey)}
+                >
+                  <div className="dashboard-calendar-cell-head">
+                    <span
+                      className={`dashboard-calendar-date${cell.dayOfWeek === 0 ? " is-sunday" : ""}${cell.dayOfWeek === 6 ? " is-saturday" : ""}`}
+                    >
+                      {Number(cell.dateKey.slice(8, 10))}
+                    </span>
+                    {cell.holidayLabel ? <span className="dashboard-calendar-holiday-label">{cell.holidayLabel}</span> : null}
+                  </div>
+                  <strong className="dashboard-calendar-amount">{cell.expenseAmount ? formatCurrency(cell.expenseAmount) : "-"}</strong>
+                  {(cell.expenseAmount > 0 || cell.memos.length > 0) ? (
+                    <div className="dashboard-calendar-marker-row" aria-hidden="true">
+                      {cell.expenseAmount > 0 ? <span className="dashboard-calendar-marker is-expense" /> : null}
+                      {cell.memos.length > 0 ? <span className="dashboard-calendar-marker is-memo" /> : null}
+                    </div>
+                  ) : null}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <article className="dashboard-diary-card">
+            <div className="dashboard-diary-head">
+              <span className="section-kicker">오늘의 일기</span>
+            </div>
+            <div className="dashboard-diary-sheet">
+              <div className="dashboard-diary-grid" aria-label={todayDiary}>
+                {todayDiaryCells.map((character, index) => (
+                  <span
+                    key={`${selectedCalendarCell?.dateKey ?? calendarMonthValue}-${index}`}
+                    className={`dashboard-diary-cell${character ? "" : " is-blank"}`}
+                  >
+                    {character === " " ? "" : character}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="dashboard-diary-memo">
+              {selectedCalendarCell?.memos.length ? (
+                selectedCalendarCell.memos.map((memo) => (
+                  <p key={`${memo.text}-${memo.merchantNames.join("|")}`}>
+                    {memo.text}
+                    <small>({memo.merchantNames.join(", ")})</small>
+                  </p>
+                ))
+              ) : null}
+            </div>
+          </article>
+        </div>
+
+        <div className="dashboard-calendar-transactions">
+          <div className="dashboard-calendar-transactions-head">
+            <span className="section-kicker">선택한 날짜 소비내역</span>
+          </div>
+          {selectedCalendarTransactions.length ? (
+            <div className="table-responsive dashboard-calendar-transactions-table-wrap">
+              <table className="table align-middle transaction-grid-table">
+                <colgroup>
+                  <col className="transaction-grid-col-date" />
+                  <col className="transaction-grid-col-merchant" />
+                  <col className="transaction-grid-col-paid-amount" />
+                  <col className="transaction-grid-col-owner" />
+                  <col className="transaction-grid-col-category" />
+                  <col className="transaction-grid-col-note" />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th>사용일</th>
+                    <th>가맹점</th>
+                    <th className="text-end">결제금액</th>
+                    <th>사용자</th>
+                    <th>카테고리</th>
+                    <th>비고</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedCalendarTransactions.map((transaction, index) => (
+                    <tr key={transaction.id} style={getMotionStyle(index)}>
+                      <td>{transaction.occurredAt.slice(0, 10)}</td>
+                      <td>
+                        <TransactionRowHeader merchantName={transaction.merchantName} />
+                      </td>
+                      <td className="text-end transaction-amount-cell">
+                        <strong>{formatCurrency(transaction.amount)}</strong>
+                      </td>
+                      <td>{getDashboardTransactionOwnerLabel(transaction)}</td>
+                      <td className="dashboard-calendar-grid-cell">
+                        <TransactionCategoryEditor
+                          transaction={transaction}
+                          categories={scope.categories}
+                          categoryName={transaction.categoryId ? categoryLabelMap.get(transaction.categoryId) ?? null : null}
+                          onCategoryChange={(nextCategoryId) => {
+                            if (!nextCategoryId) {
+                              clearCategory(workspaceId, transaction.id);
+                              return;
+                            }
+                            assignCategory(workspaceId, transaction.id, nextCategoryId);
+                          }}
+                        />
+                      </td>
+                      <td className="dashboard-calendar-grid-cell">
+                        <input
+                          type="text"
+                          className="form-control form-control-sm dashboard-calendar-note-input"
+                          defaultValue={transaction.description}
+                          placeholder="비고 입력"
+                          onBlur={(event) => {
+                            const nextDescription = event.currentTarget.value.trim();
+                            if (nextDescription === (transaction.description ?? "")) return;
+                            updateTransactionDetails(workspaceId, transaction.id, { description: nextDescription });
+                          }}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="mb-0 text-secondary">이 날짜에는 아직 정리된 소비내역이 없습니다.</p>
+          )}
+        </div>
+      </section>
+
       <section className="card shadow-sm" style={getMotionStyle(0)} data-guide-target="records-moon-overview">
         <div className="section-head">
           <div>
             <span className="section-kicker">달 기록 통계</span>
-            <h2 className="section-title">한눈에 보는 흐름 그래프</h2>
+            <h2 className="section-title">소비그래프</h2>
           </div>
           {renderScopeSelect("달 기록 통계")}
         </div>
@@ -2518,6 +3668,96 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
             </p>
           </article>
         </div>
+      </section>
+
+      <section className="card shadow-sm" style={getMotionStyle(3)} data-guide-target="dashboard-loop-station">
+        <div className="section-head">
+          <div>
+            <span className="section-kicker">루프스테이션</span>
+            <h2 className="section-title">반복 소비를 미리 읽기</h2>
+          </div>
+          <div className="dashboard-section-toolbar">
+            <span className="dashboard-loop-station-count">추적 {loopStationInsights.length}개</span>
+          </div>
+        </div>
+        <div className="review-summary-panel compact-summary-panel dashboard-summary-action-panel mb-4">
+          <div className="review-summary-copy">
+            <strong>
+              {featuredLoopStationInsights.length
+                ? `반복 소비 ${featuredLoopStationInsights.length}개를 루프로 읽었습니다`
+                : "아직 읽을 수 있는 반복 소비 루프가 부족합니다"}
+            </strong>
+            <p className="mb-0 text-secondary">
+              {featuredLoopStationInsights.length
+                ? "구매 간격, 최근 금액 변화, 다음 구매 예정 시점을 같이 보여줍니다."
+                : "같은 가맹점 소비가 2번 이상 쌓이면 루프스테이션이 다음 구매 시점을 계산해 드립니다."}
+            </p>
+          </div>
+          <div className="dashboard-summary-action">
+            <Link to="/collections/card" className="btn btn-outline-secondary btn-sm">
+              결제내역 보기
+            </Link>
+          </div>
+        </div>
+        {featuredLoopStationInsights.length ? (
+          <div className="dashboard-loop-station-grid">
+            {featuredLoopStationInsights.map((loop, index) => (
+              <article key={loop.merchantName} className="dashboard-loop-card" style={getMotionStyle(4 + index)}>
+                <div className="dashboard-loop-card-head">
+                  <div>
+                    <span className="dashboard-loop-card-kicker">{loop.cadenceLabel}</span>
+                    <h3>{loop.merchantName}</h3>
+                  </div>
+                  <span className={`dashboard-loop-due-chip${(loop.daysUntilNextPurchase ?? 0) >= 0 ? " is-due" : ""}`}>
+                    {getLoopDueLabel(loop.daysUntilNextPurchase)}
+                  </span>
+                </div>
+                <div className="dashboard-loop-stat-row">
+                  <div>
+                    <span className="stat-label">최근 결제</span>
+                    <strong>{formatCurrency(loop.latestAmount)}</strong>
+                  </div>
+                  <div className={`dashboard-loop-amount-delta ${getLoopAmountTone(loop.amountDelta)}`}>
+                    {loop.amountDelta === 0 ? "변화 없음" : `${loop.amountDelta > 0 ? "+" : "-"}${formatCurrency(Math.abs(loop.amountDelta))}`}
+                  </div>
+                </div>
+                <div className="dashboard-loop-meta-grid">
+                  <div>
+                    <span>평균 주기</span>
+                    <strong>{loop.averageIntervalDays}일</strong>
+                  </div>
+                  <div>
+                    <span>직전 간격</span>
+                    <strong>{loop.latestIntervalDays ? `${loop.latestIntervalDays}일` : "-"}</strong>
+                  </div>
+                  <div>
+                    <span>다음 예정</span>
+                    <strong>{loop.nextExpectedAt ? formatDateLabel(loop.nextExpectedAt) : "-"}</strong>
+                  </div>
+                  <div>
+                    <span>평균 금액</span>
+                    <strong>{formatCurrency(loop.averageAmount)}</strong>
+                  </div>
+                </div>
+                <div className="dashboard-loop-footer">
+                  <span>최근 구매 {formatDateLabel(loop.latestOccurredAt)}</span>
+                  <span>반복 {loop.transactionCount}회</span>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <EmptyStateCallout
+            kicker="루프스테이션"
+            title="반복 소비 루프가 아직 충분하지 않습니다"
+            description="같은 가맹점 소비가 조금 더 쌓이면 구매 주기와 다음 예상일을 루프스테이션에서 보여드립니다."
+            actions={
+              <Link to="/collections/card" className="btn btn-outline-primary btn-sm">
+                결제내역 보러 가기
+              </Link>
+            }
+          />
+        )}
       </section>
         </>
       ) : null}

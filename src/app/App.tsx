@@ -27,6 +27,12 @@ const CategoriesPage = lazy(() => import("./pages/CategoriesPage").then((module)
 const SettlementsPage = lazy(() =>
   import("./pages/SettlementsPage").then((module) => ({ default: module.SettlementsPage })),
 );
+const LoopStationPage = lazy(() =>
+  import("./pages/LoopStationPage").then((module) => ({ default: module.LoopStationPage })),
+);
+const LoopAnnualPage = lazy(() =>
+  import("./pages/LoopAnnualPage").then((module) => ({ default: module.LoopAnnualPage })),
+);
 const SettingsPage = lazy(() => import("./pages/SettingsPage").then((module) => ({ default: module.SettingsPage })));
 const DeveloperPage = lazy(() => import("./pages/DeveloperPage").then((module) => ({ default: module.DeveloperPage })));
 
@@ -65,7 +71,14 @@ const baseNavItems: NavItem[] = [
       { key: "categories", label: "분류", to: "/connections/categories" },
     ],
   },
-  { to: "/settlements", label: "흐름" },
+  {
+    to: "/flows",
+    label: "흐름",
+    subItems: [
+      { key: "transfers", label: "이체", to: "/settlements" },
+      { key: "loops", label: "루프스테이션", to: "/loops" },
+    ],
+  },
   {
     to: "/records",
     label: "기록",
@@ -82,7 +95,7 @@ const navGuideTargetMap: Record<string, string> = {
   "/dashboard": "nav-dashboard",
   "/collections": "nav-collections",
   "/connections": "nav-connections",
-  "/settlements": "nav-settlements",
+  "/flows": "nav-flows",
   "/records": "nav-records",
 };
 
@@ -93,6 +106,9 @@ function getForcedSubnavKeyFromGuideSelector(selector?: string | null) {
   }
   if (selector.includes('data-guide-target="nav-sub-assets"') || selector.includes('data-guide-target="nav-sub-categories"')) {
     return "/connections";
+  }
+  if (selector.includes('data-guide-target="nav-sub-transfers"') || selector.includes('data-guide-target="nav-sub-loops"')) {
+    return "/flows";
   }
   if (selector.includes('data-guide-target="nav-sub-moon"') || selector.includes('data-guide-target="nav-sub-sun"')) {
     return "/records";
@@ -172,6 +188,9 @@ function AppTopNav({ isDeveloperModeUnlocked }: { isDeveloperModeUnlocked: boole
     ) {
       return "/connections";
     }
+    if (pathname === "/settlements" || pathname.startsWith("/loops")) {
+      return "/flows";
+    }
     if (pathname.startsWith("/records")) {
       return "/records";
     }
@@ -196,6 +215,9 @@ function AppTopNav({ isDeveloperModeUnlocked }: { isDeveloperModeUnlocked: boole
     }
     if (activeKey === "/connections") {
       return location.pathname === "/categories" || location.pathname.startsWith("/connections/categories") ? "categories" : "assets";
+    }
+    if (activeKey === "/flows") {
+      return location.pathname.startsWith("/loops") ? "loops" : "transfers";
     }
     if (activeKey === "/records") {
       return location.pathname.startsWith("/records/sun") ? "sun" : "moon";
@@ -382,6 +404,7 @@ function AppRoutes({
         <Route path="/imports" element={<PathRedirect to="/collections/card" />} />
         <Route path="/reviews" element={<PathRedirect to="/collections/card" />} />
         <Route path="/settlements" element={<SettlementsPage />} />
+        <Route path="/loops" element={<LoopStationPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route
           path="/dev"
@@ -432,7 +455,10 @@ function RecordsPage({ view }: { view: "moon" | "sun" }) {
       {view === "moon" ? (
         <DashboardPage mode="moon" />
       ) : (
-        <DashboardPage mode="sun" />
+        <>
+          <DashboardPage mode="sun" />
+          <LoopAnnualPage />
+        </>
       )}
     </>
   );

@@ -7,7 +7,7 @@ import { GUIDE_SAMPLE_MEMO } from "../../domain/guidance/guideSampleBundle";
 import { getWorkspaceGuide } from "../../domain/guidance/workspaceGuide";
 import { completeGuideStepAction, revertGuideStepAction } from "../../domain/guidance/guideRuntime";
 import { getActiveTransactions } from "../../domain/transactions/meta";
-import type { Category } from "../../shared/types/models";
+import type { Account, Category } from "../../shared/types/models";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { AppModal } from "../components/AppModal";
 import { AppSelect } from "../components/AppSelect";
@@ -36,6 +36,7 @@ const ACCOUNT_USAGE_OPTIONS = [
 ] as const;
 
 const ACCOUNT_USAGE_FORM_OPTIONS = ACCOUNT_USAGE_OPTIONS.filter((option) => option.value !== "shared");
+const MEETING_ACCOUNT_USAGE_OPTIONS = [{ value: "shared", label: "공동 자금" }] as const;
 
 const FINANCIAL_INSTITUTION_OPTIONS = [
   "KB국민은행",
@@ -76,6 +77,9 @@ type PersonAccountDraftState = {
   institutionName: string;
   accountNumberMasked: string;
   ownerPersonId: string;
+  primaryPersonId: string;
+  participantPersonIds: string[];
+  accountGroupType: "personal" | "meeting";
   accountType: (typeof ACCOUNT_TYPE_OPTIONS)[number]["value"];
   usageType: AccountUsageType;
   isShared: boolean;
@@ -91,6 +95,22 @@ type PersonCardDraftState = {
   cardType: (typeof CARD_TYPE_OPTIONS)[number]["value"];
   memo: string;
 };
+
+type PersonAccountValues = Pick<
+  Account,
+  | "ownerPersonId"
+  | "primaryPersonId"
+  | "participantPersonIds"
+  | "accountGroupType"
+  | "name"
+  | "alias"
+  | "institutionName"
+  | "accountNumberMasked"
+  | "accountType"
+  | "usageType"
+  | "isShared"
+  | "memo"
+>;
 
 type DragItem =
   | { id: string; itemType: "person"; ownerPersonId: null; isHidden: boolean }
@@ -157,6 +177,9 @@ const EMPTY_PERSON_ACCOUNT_DRAFT: PersonAccountDraftState = {
   institutionName: "",
   accountNumberMasked: "",
   ownerPersonId: "",
+  primaryPersonId: "",
+  participantPersonIds: [],
+  accountGroupType: "personal",
   accountType: "checking",
   usageType: "daily",
   isShared: false,
@@ -274,6 +297,10 @@ function getVisibleAccountUsageType(usageType: AccountUsageType, isShared?: bool
   return usageType;
 }
 
+function isMeetingAccount(account?: Pick<Account, "accountGroupType"> | null) {
+  return account?.accountGroupType === "meeting";
+}
+
 function getFinancialInstitutionOptions(currentValue?: string) {
   const normalizedCurrentValue = currentValue?.trim() ?? "";
   if (!normalizedCurrentValue) return FINANCIAL_INSTITUTION_OPTIONS;
@@ -287,32 +314,38 @@ function createAccountDraftForPerson(personId: string): PersonAccountDraftState 
   return {
     ...EMPTY_PERSON_ACCOUNT_DRAFT,
     ownerPersonId: personId,
+    primaryPersonId: personId,
+    participantPersonIds: [personId],
   };
 }
 
-function createDraftFromAccount(account?: {
-  name: string;
-  alias: string;
-  institutionName: string;
-  accountNumberMasked: string;
-  ownerPersonId: string | null;
-  accountType: PersonAccountDraftState["accountType"];
-  usageType: AccountUsageType;
-  isShared: boolean;
-  memo: string;
-}): PersonAccountDraftState {
+function createDraftFromAccount(account?: PersonAccountValues): PersonAccountDraftState {
   if (!account) return EMPTY_PERSON_ACCOUNT_DRAFT;
+  const isMeeting = account.accountGroupType === "meeting";
+  const primaryPersonId = account.primaryPersonId ?? account.ownerPersonId ?? "";
+  const participantPersonIds = Array.from(
+    new Set(
+      [...(account.participantPersonIds ?? []), ...(account.accountGroupType === "meeting" && primaryPersonId ? [primaryPersonId] : [])].filter(Boolean),
+    ),
+  );
   return {
     name: account.name,
     alias: account.alias || account.name,
     institutionName: account.institutionName,
     accountNumberMasked: account.accountNumberMasked,
     ownerPersonId: account.ownerPersonId ?? "",
+    primaryPersonId,
+    participantPersonIds,
+    accountGroupType: account.accountGroupType ?? "personal",
     accountType: account.accountType,
-    usageType: getVisibleAccountUsageType(account.usageType, account.isShared),
-    isShared: false,
+    usageType: isMeeting ? "shared" : getVisibleAccountUsageType(account.usageType, account.isShared),
+    isShared: isMeeting || account.isShared,
     memo: account.memo,
   };
+}
+
+function getAccountUsageOptions(accountGroupType: PersonAccountDraftState["accountGroupType"]) {
+  return accountGroupType === "meeting" ? MEETING_ACCOUNT_USAGE_OPTIONS : ACCOUNT_USAGE_FORM_OPTIONS;
 }
 
 function createDraftFromCard(card?: {
@@ -336,17 +369,29 @@ function createDraftFromCard(card?: {
   };
 }
 
-function normalizeAccountDraftValues(draft: PersonAccountDraftState) {
+function normalizeAccountDraftValues(draft: PersonAccountDraftState): PersonAccountValues {
   const accountLabel = draft.alias.trim() || draft.name.trim();
+  const primaryPersonId = draft.primaryPersonId || draft.ownerPersonId || null;
+  const isMeeting = draft.accountGroupType === "meeting";
+  const participantPersonIds = Array.from(
+    new Set(
+      [...draft.participantPersonIds, ...(isMeeting && primaryPersonId ? [primaryPersonId] : [])].filter(
+        (personId): personId is string => Boolean(personId),
+      ),
+    ),
+  );
   return {
-    ownerPersonId: draft.ownerPersonId || null,
+    ownerPersonId: primaryPersonId,
+    primaryPersonId,
+    participantPersonIds,
+    accountGroupType: draft.accountGroupType,
     name: accountLabel,
     alias: accountLabel,
     institutionName: draft.institutionName.trim(),
     accountNumberMasked: draft.accountNumberMasked.trim(),
     accountType: draft.accountType,
-    usageType: getVisibleAccountUsageType(draft.usageType),
-    isShared: false,
+    usageType: isMeeting ? "shared" : getVisibleAccountUsageType(draft.usageType),
+    isShared: isMeeting,
     memo: draft.memo.trim(),
   };
 }
@@ -619,11 +664,24 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   }, [shouldRenderCategoryLinkPanel, maxCategoryLinkGroupSize, categoryLinkPanelSize]);
 
   const accountsByPersonId = new Map(
-    scope.people.map((person) => [person.id, scope.accounts.filter((account) => account.ownerPersonId === person.id && !account.isHidden)]),
+    scope.people.map((person) => [
+      person.id,
+      scope.accounts.filter((account) => {
+        if (account.isHidden) return false;
+        if (account.accountGroupType === "meeting") {
+          return (account.participantPersonIds ?? []).includes(person.id) || account.primaryPersonId === person.id;
+        }
+        return account.ownerPersonId === person.id;
+      }),
+    ]),
   );
   const cardsByPersonId = new Map(
     scope.people.map((person) => [person.id, scope.cards.filter((card) => card.ownerPersonId === person.id && !card.isHidden)]),
   );
+  const activePeopleOptions = people.map((person) => ({
+    value: person.id,
+    label: person.displayName || person.name,
+  }));
 
   const createPersonSection = () => {
     const displayName = createSequentialLabel(
@@ -1266,9 +1324,20 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   ) => {
     setter((current) => {
       const next = { ...current, ...patch };
-      next.isShared = false;
       if (!next.ownerPersonId && fallbackOwnerPersonId) next.ownerPersonId = fallbackOwnerPersonId;
-      if (next.usageType === "shared") next.usageType = "other";
+      if (!next.primaryPersonId) next.primaryPersonId = next.ownerPersonId || fallbackOwnerPersonId || "";
+      const isMeeting = next.accountGroupType === "meeting";
+      if (isMeeting) {
+        next.isShared = true;
+        next.usageType = "shared";
+        next.ownerPersonId = next.primaryPersonId;
+        next.participantPersonIds = Array.from(new Set([...next.participantPersonIds, ...(next.primaryPersonId ? [next.primaryPersonId] : [])]));
+      } else {
+        next.isShared = false;
+        next.ownerPersonId = next.primaryPersonId || next.ownerPersonId;
+        next.participantPersonIds = next.primaryPersonId ? [next.primaryPersonId] : [];
+        if (next.usageType === "shared") next.usageType = "other";
+      }
       return next;
     });
   };
@@ -1440,10 +1509,18 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                         "기타";
                       const linkedCategories = linkedCategoriesByAccountId.get(account.id) ?? [];
                       const isActiveCategoryLinkTarget = activeCategoryLinkTargetId === account.id && isCategoryConnectionDragItem(dragItem);
+                      const isMeeting = isMeetingAccount(account);
+                      const isPrimaryMeetingOwner = isMeeting && (account.primaryPersonId ?? account.ownerPersonId) === section.person.id;
+                      const participantNames = (account.participantPersonIds ?? [])
+                        .map((personId) => personNameMap.get(personId) ?? null)
+                        .filter((value): value is string => Boolean(value));
+                      const accountRoleLabel = isMeeting ? (isPrimaryMeetingOwner ? "메인 사용자" : "서브 사용자") : null;
                        return (
                         <article
                           key={account.id}
                           className={`category-case-card people-board-card${
+                            isMeeting ? " is-meeting-account" : ""
+                          }${
                             isCategoryConnectionDragItem(dragItem) ? " is-category-link-target" : ""
                           }${isActiveCategoryLinkTarget ? " is-category-link-active" : ""}${getDragStateClassName(account.id)}`}
                           data-guide-target={
@@ -1452,7 +1529,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                               : "people-visible-asset-card"
                           }
                           data-guide-category-link-account-drop="true"
-                          draggable
+                          draggable={!isMeeting || isPrimaryMeetingOwner}
                           onDragStart={(event) => {
                             startGuideDragTransaction("people-hidden-hide-pick");
                             startDrag({ id: account.id, itemType: "account", ownerPersonId: account.ownerPersonId ?? null, isHidden: false }, event);
@@ -1501,14 +1578,24 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                           <div className="category-case-card-copy people-board-card-copy">
                             <strong>{account.alias || account.name}</strong>
                             <span>{account.institutionName || "직접 입력"}</span>
+                            {isMeeting ? (
+                              <span className="people-meeting-account-meta">
+                                참여 {participantNames.length}명{accountRoleLabel ? ` · ${accountRoleLabel}` : ""}
+                              </span>
+                            ) : null}
                             <span>{account.accountNumberMasked || "계좌번호 미입력"}</span>
+                            {isMeeting && participantNames.length ? (
+                              <span className="people-meeting-account-participants">{participantNames.join(" · ")}</span>
+                            ) : null}
                             <div className="people-linked-category-block">
                               <span className={`people-linked-category-count${linkedCategories.length ? "" : " is-empty"}`}>
                                 {linkedCategories.length ? `카테고리 ${linkedCategories.length}개` : "카테고리 없음"}
                               </span>
                             </div>
                            </div>
-                          <div className="category-case-pill">{usageLabel}</div>
+                          <div className={`category-case-pill${isMeeting ? " people-meeting-account-pill" : ""}`}>
+                            {isMeeting ? "모임통장" : usageLabel}
+                          </div>
                         </article>
                       );
                     })}
@@ -1980,6 +2067,29 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
               <input className="form-control" value={accountDraft.alias} onChange={(event) => patchAccountDraft({ alias: event.target.value }, setAccountDraft, accountOwnerPersonId)} />
             </label>
             <label>
+              계좌 구분
+              <AppSelect
+                value={accountDraft.accountGroupType}
+                onChange={(nextValue) =>
+                  patchAccountDraft({ accountGroupType: nextValue as PersonAccountDraftState["accountGroupType"] }, setAccountDraft, accountOwnerPersonId)
+                }
+                options={[
+                  { value: "personal", label: "개인 통장" },
+                  { value: "meeting", label: "모임통장" },
+                ]}
+                ariaLabel="계좌 구분 선택"
+              />
+            </label>
+            <label>
+              메인 사용자
+              <AppSelect
+                value={accountDraft.primaryPersonId}
+                onChange={(nextValue) => patchAccountDraft({ primaryPersonId: nextValue, ownerPersonId: nextValue }, setAccountDraft, accountOwnerPersonId)}
+                options={activePeopleOptions}
+                ariaLabel="메인 사용자 선택"
+              />
+            </label>
+            <label>
               금융기관
               <AppSelect
                 value={accountDraft.institutionName}
@@ -2015,14 +2125,48 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
               <AppSelect
                 value={accountDraft.usageType}
                 onChange={(nextValue) => patchAccountDraft({ usageType: nextValue as AccountUsageType }, setAccountDraft, accountOwnerPersonId)}
-                options={ACCOUNT_USAGE_FORM_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
+                options={getAccountUsageOptions(accountDraft.accountGroupType).map((option) => ({ value: option.value, label: option.label }))}
                 ariaLabel="계좌 용도 선택"
+                disabled={accountDraft.accountGroupType === "meeting"}
               />
             </label>
             <label style={{ gridColumn: "1 / -1" }}>
               메모
               <textarea className="form-control" rows={3} value={accountDraft.memo} onChange={(event) => patchAccountDraft({ memo: event.target.value }, setAccountDraft, accountOwnerPersonId)} />
             </label>
+            {accountDraft.accountGroupType === "meeting" ? (
+              <label style={{ gridColumn: "1 / -1" }}>
+                참여 사용자
+                <div className="people-account-member-grid">
+                  {activePeopleOptions.map((person) => {
+                    const checked = accountDraft.participantPersonIds.includes(person.value) || accountDraft.primaryPersonId === person.value;
+                    const locked = accountDraft.primaryPersonId === person.value;
+                    return (
+                      <label key={person.value} className={`people-account-member-option${checked ? " is-selected" : ""}`}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={locked}
+                          onChange={(event) =>
+                            patchAccountDraft(
+                              {
+                                participantPersonIds: event.target.checked
+                                  ? [...accountDraft.participantPersonIds, person.value]
+                                  : accountDraft.participantPersonIds.filter((participantId) => participantId !== person.value),
+                              },
+                              setAccountDraft,
+                              accountOwnerPersonId,
+                            )
+                          }
+                        />
+                        <span>{person.label}</span>
+                        {locked ? <small>메인</small> : null}
+                      </label>
+                    );
+                  })}
+                </div>
+              </label>
+            ) : null}
             <div className="d-flex justify-content-end" style={{ gridColumn: "1 / -1" }}>
               <button className="btn btn-primary" type="submit">
                 저장
@@ -2056,6 +2200,29 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
             <label>
               계좌 이름
               <input className="form-control" value={editAccountDraft.alias} onChange={(event) => patchAccountDraft({ alias: event.target.value }, setEditAccountDraft, editingAccount.ownerPersonId)} />
+            </label>
+            <label>
+              계좌 구분
+              <AppSelect
+                value={editAccountDraft.accountGroupType}
+                onChange={(nextValue) =>
+                  patchAccountDraft({ accountGroupType: nextValue as PersonAccountDraftState["accountGroupType"] }, setEditAccountDraft, editingAccount.ownerPersonId)
+                }
+                options={[
+                  { value: "personal", label: "개인 통장" },
+                  { value: "meeting", label: "모임통장" },
+                ]}
+                ariaLabel="계좌 구분 선택"
+              />
+            </label>
+            <label>
+              메인 사용자
+              <AppSelect
+                value={editAccountDraft.primaryPersonId}
+                onChange={(nextValue) => patchAccountDraft({ primaryPersonId: nextValue, ownerPersonId: nextValue }, setEditAccountDraft, editingAccount.ownerPersonId)}
+                options={activePeopleOptions}
+                ariaLabel="메인 사용자 선택"
+              />
             </label>
             <label>
               금융기관
@@ -2093,14 +2260,48 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
               <AppSelect
                 value={editAccountDraft.usageType}
                 onChange={(nextValue) => patchAccountDraft({ usageType: nextValue as AccountUsageType }, setEditAccountDraft, editingAccount.ownerPersonId)}
-                options={ACCOUNT_USAGE_FORM_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
+                options={getAccountUsageOptions(editAccountDraft.accountGroupType).map((option) => ({ value: option.value, label: option.label }))}
                 ariaLabel="계좌 용도 선택"
+                disabled={editAccountDraft.accountGroupType === "meeting"}
               />
             </label>
             <label style={{ gridColumn: "1 / -1" }}>
               메모
               <textarea className="form-control" rows={3} value={editAccountDraft.memo} onChange={(event) => patchAccountDraft({ memo: event.target.value }, setEditAccountDraft, editingAccount.ownerPersonId)} />
             </label>
+            {editAccountDraft.accountGroupType === "meeting" ? (
+              <label style={{ gridColumn: "1 / -1" }}>
+                참여 사용자
+                <div className="people-account-member-grid">
+                  {activePeopleOptions.map((person) => {
+                    const checked = editAccountDraft.participantPersonIds.includes(person.value) || editAccountDraft.primaryPersonId === person.value;
+                    const locked = editAccountDraft.primaryPersonId === person.value;
+                    return (
+                      <label key={person.value} className={`people-account-member-option${checked ? " is-selected" : ""}`}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={locked}
+                          onChange={(event) =>
+                            patchAccountDraft(
+                              {
+                                participantPersonIds: event.target.checked
+                                  ? [...editAccountDraft.participantPersonIds, person.value]
+                                  : editAccountDraft.participantPersonIds.filter((participantId) => participantId !== person.value),
+                              },
+                              setEditAccountDraft,
+                              editingAccount.ownerPersonId,
+                            )
+                          }
+                        />
+                        <span>{person.label}</span>
+                        {locked ? <small>메인</small> : null}
+                      </label>
+                    );
+                  })}
+                </div>
+              </label>
+            ) : null}
             <div className="people-linked-category-detail" style={{ gridColumn: "1 / -1" }}>
               <div className="people-linked-category-detail-head">
                 <strong>연결된 정산 카테고리</strong>
@@ -2179,11 +2380,20 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                 options={[
                   { value: "", label: "연결 안 함" },
                   ...scope.accounts
-                    .filter((account) => !account.isShared)
-                    .map((account) => ({
-                      value: account.id,
-                      label: `${account.alias || account.name}${account.ownerPersonId ? ` · ${personNameMap.get(account.ownerPersonId) ?? "사용자 없음"}` : ""}`,
-                    })),
+                    .filter((account) => !account.isShared || account.accountGroupType === "meeting")
+                    .map((account) => {
+                      const primaryOwnerName =
+                        account.primaryPersonId || account.ownerPersonId
+                          ? personNameMap.get(account.primaryPersonId ?? account.ownerPersonId ?? "") ?? "사용자 없음"
+                          : "사용자 없음";
+                      return {
+                        value: account.id,
+                        label:
+                          account.accountGroupType === "meeting"
+                            ? `${account.alias || account.name} · 모임통장 · ${primaryOwnerName}`
+                            : `${account.alias || account.name}${account.ownerPersonId ? ` · ${primaryOwnerName}` : ""}`,
+                      };
+                    }),
                 ]}
                 ariaLabel="연결 계좌 선택"
               />

@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { completeGuideStepAction } from "../../domain/guidance/guideRuntime";
+import { getCategoryLabel } from "../../domain/categories/meta";
 import { formatPercent } from "../../shared/utils/format";
 import { AppModal } from "../components/AppModal";
 import { useAppState } from "../state/AppStateProvider";
@@ -40,6 +41,20 @@ export function SettingsPage() {
   const [profileDraft, setProfileDraft] = useState<ProfileDraftState>(() => createProfileDraft(profile));
   const [activeProfileField, setActiveProfileField] = useState<EditableProfileField | null>(null);
   const [isExportConfirmOpen, setIsExportConfirmOpen] = useState(false);
+  const categoryMap = useMemo(() => new Map(scope.categories.map((category) => [category.id, category])), [scope.categories]);
+  const loopPriorityOptions = useMemo(
+    () =>
+      scope.categories
+        .filter((category) => category.categoryType === "category" && !category.isHidden && category.direction !== "income")
+        .map((category) => ({
+          id: category.id,
+          label: getCategoryLabel(category, categoryMap),
+          name: category.name,
+        }))
+        .sort((left, right) => left.label.localeCompare(right.label, "ko")),
+    [categoryMap, scope.categories],
+  );
+  const selectedLoopPriorityCategoryIds = profile?.loopPriorityCategoryIds ?? [];
 
   useEffect(() => {
     setProfileDraft(createProfileDraft(profile));
@@ -52,6 +67,17 @@ export function SettingsPage() {
       targetSavingsRate: Number(nextDraft.targetSavingsRate || 0) / 100,
       warningSpendRate: Number(nextDraft.warningSpendRate || 0) / 100,
       warningFixedCostRate: Number(nextDraft.warningFixedCostRate || 0) / 100,
+      loopPriorityCategoryIds: profile?.loopPriorityCategoryIds ?? [],
+    });
+  };
+
+  const updateLoopPriorityCategories = (nextCategoryIds: string[]) => {
+    setFinancialProfile(workspaceId, {
+      monthlyNetIncome: profile?.monthlyNetIncome ?? 0,
+      targetSavingsRate: profile?.targetSavingsRate ?? 0,
+      warningSpendRate: profile?.warningSpendRate ?? 0,
+      warningFixedCostRate: profile?.warningFixedCostRate ?? 0,
+      loopPriorityCategoryIds: nextCategoryIds,
     });
   };
 
@@ -212,6 +238,35 @@ export function SettingsPage() {
                   <span className="theme-toggle-button-label">테마</span>
                   <strong>{themeMode === "dark" ? "Light" : "Dark"}</strong>
                 </button>
+              </div>
+            </article>
+
+            <article className="resource-card settings-panel-card" data-guide-target="settings-loop-priority">
+              <div className="settings-panel-copy">
+                <span className="section-kicker">루프 추천</span>
+                <h3 className="mb-1">루프 추천 카테고리</h3>
+                <p className="mb-0 text-secondary">여기서 고른 카테고리 안에서만 루프스테이션 추천을 보여줍니다.</p>
+              </div>
+              <div className="settings-loop-priority-list">
+                {loopPriorityOptions.map((option) => {
+                  const isSelected = selectedLoopPriorityCategoryIds.includes(option.id);
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      className={`settings-loop-priority-chip${isSelected ? " is-selected" : ""}`}
+                      onClick={() =>
+                        updateLoopPriorityCategories(
+                          isSelected
+                            ? selectedLoopPriorityCategoryIds.filter((categoryId) => categoryId !== option.id)
+                            : [...selectedLoopPriorityCategoryIds, option.id],
+                        )
+                      }
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
               </div>
             </article>
           </section>

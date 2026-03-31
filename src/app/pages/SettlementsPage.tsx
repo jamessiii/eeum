@@ -112,7 +112,6 @@ export function SettlementsPage() {
       }, 0),
     [selectedStatementTransactions],
   );
-
   const selectedStatementLabel = `${formatMonthLabel(selectedStatementMonth)} 청구분`;
 
   return (
@@ -186,7 +185,7 @@ export function SettlementsPage() {
       </section>
 
       {!statementMonthOptions.length ? (
-        <section className="card shadow-sm" style={getMotionStyle(1)}>
+        <section className="card shadow-sm" style={getMotionStyle(2)}>
           <EmptyStateCallout
             kicker="흐름 준비 중"
             title="먼저 청구분 명세서를 올려 주세요"
