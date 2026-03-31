@@ -4961,11 +4961,17 @@ label,
   vertical-align: middle !important;
 }
 
+.transaction-date-cell,
+.transaction-owner-cell {
+  text-align: center;
+}
+
 .transaction-impact-cell .form-check-input {
   cursor: pointer;
 }
 
 .transaction-loop-cell {
+  text-align: center;
   vertical-align: middle !important;
 }
 

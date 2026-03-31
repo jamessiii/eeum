@@ -708,7 +708,7 @@ export function TransactionsPage() {
                   <th className="text-end">할인</th>
                   <th className="text-end">결제금액</th>
                   <th>사용자</th>
-                  <th>고정비</th>
+                  <th>루프</th>
                   <th>카테고리</th>
                   <th>비고</th>
                 </tr>
@@ -728,7 +728,7 @@ export function TransactionsPage() {
                         data-transaction-review-row={transaction.id}
                         className={`${isWorkflowMatch ? " transaction-review-row" : ""}${isWorkflowFocus ? " is-review-focus" : ""}${isWorkflowPrimary ? " is-review-primary" : ""}`}
                       >
-                        <td>{transaction.occurredAt.slice(0, 10)}</td>
+                        <td className="transaction-date-cell">{transaction.occurredAt.slice(0, 10)}</td>
                         <td>
                           <TransactionRowHeader
                             merchantName={transaction.merchantName}
@@ -745,7 +745,7 @@ export function TransactionsPage() {
                         <td className="text-end transaction-amount-cell">
                           <strong>{formatCurrency(transaction.amount)}</strong>
                         </td>
-                        <td>{getTransactionOwnerLabel(transaction)}</td>
+                        <td className="transaction-owner-cell">{getTransactionOwnerLabel(transaction)}</td>
                         <td className="transaction-loop-cell">
                           <label className="transaction-loop-toggle">
                             <input

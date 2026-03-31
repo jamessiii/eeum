@@ -30,6 +30,14 @@ type DropdownStyle = {
   openUpward: boolean;
 };
 
+function getWindowScrollX() {
+  return window.scrollX || window.pageXOffset || 0;
+}
+
+function getWindowScrollY() {
+  return window.scrollY || window.pageYOffset || 0;
+}
+
 export function AppSelect({
   options,
   value,
@@ -60,6 +68,8 @@ export function AppSelect({
       if (!trigger) return;
 
       const rect = trigger.getBoundingClientRect();
+      const scrollX = getWindowScrollX();
+      const scrollY = getWindowScrollY();
       const viewportPadding = 12;
       const gap = 6;
       const preferredHeight = 260;
@@ -74,10 +84,12 @@ export function AppSelect({
       const openUpward = belowSpace < 180 && aboveSpace > belowSpace;
       const availableHeight = Math.max(140, openUpward ? aboveSpace - gap : belowSpace - gap);
       const maxHeight = Math.min(preferredHeight, availableHeight);
-      const top = openUpward ? Math.max(viewportPadding, rect.top - maxHeight - gap) : rect.bottom + gap;
+      const top = openUpward
+        ? Math.max(scrollY + viewportPadding, scrollY + rect.top - maxHeight - gap)
+        : scrollY + rect.bottom + gap;
       const left = Math.min(
-        Math.max(viewportPadding, rect.left),
-        Math.max(viewportPadding, window.innerWidth - viewportPadding - width),
+        Math.max(scrollX + viewportPadding, scrollX + rect.left),
+        Math.max(scrollX + viewportPadding, scrollX + window.innerWidth - viewportPadding - width),
       );
 
       setDropdownStyle({
@@ -237,7 +249,7 @@ export function AppSelect({
                 dropdownStyle.openUpward && "is-open-upward",
               )}
               style={{
-                position: "fixed",
+                position: "absolute",
                 top: `${dropdownStyle.top}px`,
                 left: `${dropdownStyle.left}px`,
                 width: `${dropdownStyle.width}px`,
