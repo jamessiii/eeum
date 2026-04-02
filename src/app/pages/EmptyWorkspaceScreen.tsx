@@ -3,8 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { GuideBeaconScene } from "../components/GuideBeaconScene";
 import { useAppState } from "../state/AppStateProvider";
 
-export const WORKSPACE_SETUP_KEY = "household-webapp.workspace-setup";
-export const ONBOARDING_COMPLETE_KEY = "household-webapp.onboarding-complete";
+export const WORKSPACE_SETUP_KEY = "spending-diary.workspace-setup";
+export const ONBOARDING_COMPLETE_KEY = "spending-diary.onboarding-complete";
 
 type SetupPhase = "intro" | "person" | "creating";
 type CreatingStage = "idle" | "text-fading" | "beacon-exiting";

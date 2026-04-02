@@ -5,7 +5,7 @@ type GuideSampleBackupState = {
 };
 
 function getGuideSampleBackupKey(workspaceId: string) {
-  return `household-webapp.guide-sample-backup.${workspaceId}`;
+  return `spending-diary.guide-sample-backup.${workspaceId}`;
 }
 
 function canUseStorage() {

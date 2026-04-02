@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const THEME_STORAGE_KEY = "household-webapp.theme";
+const THEME_STORAGE_KEY = "spending-diary.theme";
 
 export type ThemeMode = "light" | "dark";
 

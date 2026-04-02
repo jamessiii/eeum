@@ -19,7 +19,7 @@ const DEFAULT_GUIDE_SAMPLE_STATE: GuideSampleState = {
 };
 
 function getGuideSampleStateKey(workspaceId: string) {
-  return `household-webapp.guide-sample.${workspaceId}`;
+  return `spending-diary.guide-sample.${workspaceId}`;
 }
 
 function canUseStorage() {

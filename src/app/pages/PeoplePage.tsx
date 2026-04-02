@@ -141,7 +141,7 @@ type PendingGuideDragTransaction = {
 let transparentDragImage: HTMLCanvasElement | null = null;
 
 const CATEGORY_LINK_PANEL_RESIZE_DIRECTIONS: CategoryLinkPanelResizeDirection[] = ["n", "s", "e", "w", "ne", "nw", "se", "sw"];
-const GUIDE_HIGHLIGHT_CHANGE_EVENT = "household-webapp:guide-highlight-change";
+const GUIDE_HIGHLIGHT_CHANGE_EVENT = "spending-diary:guide-highlight-change";
 const HIDDEN_GUIDE_SELECTORS = new Set([
   '[data-guide-target="people-hidden-toggle"]',
   '[data-guide-target="people-hide-guide-card"]',

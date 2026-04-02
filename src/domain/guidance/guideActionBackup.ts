@@ -6,7 +6,7 @@ type GuideActionBackupState = {
 };
 
 function getGuideActionBackupKey(workspaceId: string, stepId: string) {
-  return `household-webapp.guide-action-backup.${workspaceId}.${stepId}`;
+  return `spending-diary.guide-action-backup.${workspaceId}.${stepId}`;
 }
 
 function canUseStorage() {

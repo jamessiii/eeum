@@ -36,9 +36,9 @@ const LoopAnnualPage = lazy(() =>
 const SettingsPage = lazy(() => import("./pages/SettingsPage").then((module) => ({ default: module.SettingsPage })));
 const DeveloperPage = lazy(() => import("./pages/DeveloperPage").then((module) => ({ default: module.DeveloperPage })));
 
-const DEVELOPER_MODE_KEY = "household-webapp.developer-mode";
+const DEVELOPER_MODE_KEY = "spending-diary.developer-mode";
 const CREATE_WORKSPACE_OPTION = "__create_workspace__";
-const GUIDE_HIGHLIGHT_CHANGE_EVENT = "household-webapp:guide-highlight-change";
+const GUIDE_HIGHLIGHT_CHANGE_EVENT = "spending-diary:guide-highlight-change";
 
 type NavSubItem = {
   key: string;

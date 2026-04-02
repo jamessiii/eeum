@@ -39,14 +39,14 @@ const LEFT_ANCHORED_GUIDE_STEP_IDS = new Set([
   "settlements-confirm-action",
 ]);
 
-const GUIDE_ANCHOR_SIDE_KEY = "household-webapp.guide-anchor-side";
+const GUIDE_ANCHOR_SIDE_KEY = "spending-diary.guide-anchor-side";
 const GUIDE_BEACON_EXIT_MS = 220;
 const GUIDE_BEACON_ENTER_MS = 700;
 const GUIDE_PANEL_MORPH_MS = 520;
 const GUIDE_BEACON_RETURN_MS = GUIDE_BEACON_ENTER_MS;
 const GUIDE_PANEL_RELOCATE_OUT_MS = 180;
 const GUIDE_PANEL_RELOCATE_IN_MS = 260;
-const GUIDE_HIGHLIGHT_CHANGE_EVENT = "household-webapp:guide-highlight-change";
+const GUIDE_HIGHLIGHT_CHANGE_EVENT = "spending-diary:guide-highlight-change";
 
 function isGuideDragBlocked(target: EventTarget | null) {
   if (!(target instanceof Element)) return false;

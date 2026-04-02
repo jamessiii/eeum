@@ -1,4 +1,4 @@
-export const GUIDE_V1_RESET_EVENT = "household-webapp:guide-v1-reset";
+export const GUIDE_V1_RESET_EVENT = "spending-diary:guide-v1-reset";
 
 export type GuideFlowMode = "prompt" | "active" | "tips" | "completed";
 
@@ -25,7 +25,7 @@ const DEFAULT_GUIDE_RUNTIME_STATE: GuideRuntimeState = {
 };
 
 function getGuideRuntimeKey(workspaceId: string) {
-  return `household-webapp.guide-v1.${workspaceId}`;
+  return `spending-diary.guide-v1.${workspaceId}`;
 }
 
 function canUseStorage() {
