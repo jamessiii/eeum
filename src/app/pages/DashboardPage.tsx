@@ -1,12 +1,17 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import type { DragEvent } from "react";
 import { useRef } from "react";
+import { Fragment } from "react";
 import { monthKey } from "../../shared/utils/date";
 import { getCategoryLabel } from "../../domain/categories/meta";
-import type { Card, Category, ImportRecord, Person, Transaction } from "../../shared/types/models";
+import { getLoopCandidateGroup } from "../../domain/loops/loopCandidates";
+import type { ReviewItem } from "../../shared/types/models";
+import type { Account, Card, Category, ImportRecord, Person, Transaction, WorkspaceBundle } from "../../shared/types/models";
 import type { ManagedLoopGroup } from "../../domain/loops/managedLoops";
 import { getWorkspaceInsights, type WorkspaceInsightBasis } from "../../domain/insights/workspaceInsights";
 import { getMonthlySharedSettlementSummary, getSettlementBalanceSummary } from "../../domain/settlements/summary";
+import { getOpenTransactionWorkflowReviews, getTransactionWorkflowTransactionIds } from "../../domain/reviews/transactionWorkflow";
 import { getExpenseImpactStats } from "../../domain/transactions/expenseImpactStats";
 import { getSourceTypeLabel } from "../../domain/transactions/sourceTypes";
 import { formatCurrency, formatPercent } from "../../shared/utils/format";
@@ -18,6 +23,7 @@ import { BoardCaseSection } from "../components/BoardCase";
 import { CompletionBanner } from "../components/CompletionBanner";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { AppSelect } from "../components/AppSelect";
+import { IncomeManagementContent } from "../components/IncomeManagementContent";
 import { TransactionCategoryEditor } from "../components/TransactionCategoryEditor";
 import { TransactionRowHeader } from "../components/TransactionRowHeader";
 import { getWorkspaceScope } from "../state/selectors";
@@ -119,6 +125,19 @@ type CalendarCell = {
   memos: CalendarMemo[];
 };
 
+type DashboardCalendarProcessingMode = "review" | "uncategorized" | null;
+
+type LoopConfirmState = {
+  transactionId: string;
+  candidateIds: string[];
+  suggestedIds: string[];
+};
+
+type DashboardReviewWorkflowState = {
+  activeReviewId: string | null;
+  queuedReviewIds: string[];
+};
+
 const CALENDAR_WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 
 const UNASSIGNED_PERSON_KEY = "__dashboard-unassigned__";
@@ -167,6 +186,177 @@ function formatMonthLabel(value: string) {
 
 function formatStatementMonthLabel(value: string) {
   return `${formatMonthLabel(value)} 청구`;
+}
+
+function normalizeCardKey(value: string) {
+  return value.replace(/\s+/g, "").trim().toLowerCase();
+}
+
+function getVisibleCardIdentifier(cardNumberMasked: string) {
+  const trimmed = cardNumberMasked.trim();
+  if (!trimmed) return "";
+  return /\d/.test(trimmed) ? trimmed : "";
+}
+
+function isWorkbookFile(file: File) {
+  return /\.xlsx?$/.test(file.name.toLowerCase());
+}
+
+function findMatchedCardInCandidates(existingCards: Card[], previewCard: Card) {
+  const previewCardIdentifier = getVisibleCardIdentifier(previewCard.cardNumberMasked);
+  return (
+    existingCards.find(
+      (existing) =>
+        existing.issuerName === previewCard.issuerName &&
+        getVisibleCardIdentifier(existing.cardNumberMasked) &&
+        previewCardIdentifier &&
+        normalizeCardKey(getVisibleCardIdentifier(existing.cardNumberMasked)) === normalizeCardKey(previewCardIdentifier),
+    ) ??
+    existingCards.find((existing) => normalizeCardKey(existing.name) === normalizeCardKey(previewCard.name)) ??
+    null
+  );
+}
+
+function findMatchedCard(existingCards: Card[], previewCard: Card, ownerPersonId: string | null) {
+  if (!ownerPersonId) return null;
+
+  const ownedCards = existingCards.filter((existing) => (existing.ownerPersonId ?? null) === ownerPersonId);
+  const unownedCards = existingCards.filter((existing) => (existing.ownerPersonId ?? null) === null);
+
+  return findMatchedCardInCandidates(ownedCards, previewCard) ?? findMatchedCardInCandidates(unownedCards, previewCard) ?? null;
+}
+
+function isCardPaymentAccount(account: Pick<Account, "usageType" | "name" | "alias">) {
+  if (account.usageType === "card_payment") return true;
+  const normalizedLabel = normalizeCardKey(`${account.name} ${account.alias}`);
+  return (
+    normalizedLabel.includes("카드값") ||
+    normalizedLabel.includes("카드결제") ||
+    normalizedLabel.includes("결제계좌") ||
+    normalizedLabel.includes("결제통장") ||
+    normalizedLabel.includes("납부")
+  );
+}
+
+function isMeetingAccountVisibleToPerson(
+  account: Pick<Account, "accountGroupType" | "primaryPersonId" | "participantPersonIds">,
+  ownerPersonId: string,
+) {
+  if (account.accountGroupType !== "meeting") return false;
+  return account.primaryPersonId === ownerPersonId || (account.participantPersonIds ?? []).includes(ownerPersonId);
+}
+
+type LinkedAccountCandidate = Pick<
+  Account,
+  | "id"
+  | "name"
+  | "alias"
+  | "institutionName"
+  | "accountNumberMasked"
+  | "isShared"
+  | "usageType"
+  | "ownerPersonId"
+  | "primaryPersonId"
+  | "participantPersonIds"
+  | "accountGroupType"
+> & {
+  source: "existing" | "preview";
+};
+
+const EMPTY_LINKED_ACCOUNT_CANDIDATES: LinkedAccountCandidate[] = [];
+
+function buildLinkedAccountCandidates(existingAccounts: Account[], previewAccounts: Account[], ownerPersonId: string) {
+  const dedupedCandidates = new Map<string, LinkedAccountCandidate>();
+
+  const upsertCandidate = (account: Account, source: LinkedAccountCandidate["source"]) => {
+    if (!isCardPaymentAccount(account)) return;
+    if (
+      source === "existing" &&
+      !account.isShared &&
+      account.ownerPersonId !== ownerPersonId &&
+      !isMeetingAccountVisibleToPerson(account, ownerPersonId)
+    ) {
+      return;
+    }
+
+    const dedupeKey = `${normalizeCardKey(account.alias || account.name)}:${normalizeCardKey(account.accountNumberMasked)}`;
+    const candidate: LinkedAccountCandidate = {
+      id: account.id,
+      name: account.name,
+      alias: account.alias,
+      institutionName: account.institutionName,
+      accountNumberMasked: account.accountNumberMasked,
+      isShared: account.isShared,
+      usageType: account.usageType,
+      ownerPersonId: account.ownerPersonId,
+      primaryPersonId: account.primaryPersonId ?? null,
+      participantPersonIds: account.participantPersonIds ?? [],
+      accountGroupType: account.accountGroupType ?? (account.isShared ? "meeting" : "personal"),
+      source,
+    };
+    const existingCandidate = dedupedCandidates.get(dedupeKey);
+
+    if (!existingCandidate || (existingCandidate.source === "preview" && source === "existing")) {
+      dedupedCandidates.set(dedupeKey, candidate);
+    }
+  };
+
+  existingAccounts.forEach((account) => upsertCandidate(account, "existing"));
+  previewAccounts.forEach((account) =>
+    upsertCandidate(
+      {
+        ...account,
+        ownerPersonId: account.isShared ? null : ownerPersonId,
+        primaryPersonId: account.primaryPersonId ?? ownerPersonId,
+        participantPersonIds: account.accountGroupType === "meeting" ? Array.from(new Set([...(account.participantPersonIds ?? []), ownerPersonId])) : [],
+        accountGroupType: account.accountGroupType ?? (account.isShared ? "meeting" : "personal"),
+      },
+      "preview",
+    ),
+  );
+
+  return Array.from(dedupedCandidates.values()).sort((left, right) => {
+    if (left.source !== right.source) return left.source === "existing" ? -1 : 1;
+    if (left.isShared !== right.isShared) return left.isShared ? 1 : -1;
+    return (left.alias || left.name).localeCompare(right.alias || right.name, "ko");
+  });
+}
+
+function getPostImportLabel(bundle: WorkspaceBundle) {
+  if (bundle.reviews.length > 0) return `검토 ${bundle.reviews.length}건 확인`;
+  if (bundle.transactions.some((transaction) => transaction.isExpenseImpact && !transaction.categoryId)) {
+    return "결제내역 보기";
+  }
+  return "결제내역 보기";
+}
+
+function addMonthKey(value: string, monthsToAdd: number) {
+  const [year, month] = value.split("-").map(Number);
+  const nextDate = new Date(Date.UTC(year, month - 1 + monthsToAdd, 1));
+  return `${nextDate.getUTCFullYear()}-${String(nextDate.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function getUsageMonths(bundle: WorkspaceBundle | null) {
+  if (!bundle) return [];
+  const uniqueMonths = new Set(
+    bundle.transactions.map((transaction) => transaction.occurredAt.slice(0, 7)).filter((monthValue) => Boolean(monthValue)),
+  );
+  return [...uniqueMonths].sort((left, right) => left.localeCompare(right));
+}
+
+function getPreviewStatementMonthOptions(bundle: WorkspaceBundle | null) {
+  const usageMonths = getUsageMonths(bundle);
+  const latestUsageMonth = usageMonths.at(-1) ?? null;
+  if (!latestUsageMonth) return [];
+  if (usageMonths.length >= 3) {
+    return [addMonthKey(latestUsageMonth, -1), latestUsageMonth, addMonthKey(latestUsageMonth, 1)];
+  }
+  return [latestUsageMonth, addMonthKey(latestUsageMonth, 1)];
+}
+
+function getStatementRecordLabel(record: Pick<ImportRecord, "statementMonth" | "fileName">) {
+  if (record.statementMonth) return formatStatementMonthLabel(record.statementMonth);
+  return `${record.fileName} 기록`;
 }
 
 function getPreviousMonthKey(value: string) {
@@ -242,6 +432,34 @@ function formatDeltaAmount(amount: number) {
 function clampPercent(value: number) {
   if (!Number.isFinite(value)) return 0;
   return Math.max(0, Math.min(100, value));
+}
+
+function getNextQueuedReviewId(queueIds: string[], currentId: string) {
+  const currentIndex = queueIds.indexOf(currentId);
+  if (currentIndex < 0) return queueIds[0] ?? null;
+
+  for (let index = currentIndex + 1; index < queueIds.length; index += 1) {
+    if (queueIds[index] !== currentId) return queueIds[index];
+  }
+
+  for (let index = 0; index < currentIndex; index += 1) {
+    if (queueIds[index] !== currentId) return queueIds[index];
+  }
+
+  return null;
+}
+
+function getInlineReviewPrompt(review: ReviewItem) {
+  switch (review.reviewType) {
+    case "category_suggestion":
+      return "해당 건을 제안 카테고리로 분류할까요?";
+    case "duplicate_candidate":
+      return "해당 건을 중복으로 보고 제외할까요?";
+    case "refund_candidate":
+      return "해당 건을 환불로 연결할까요?";
+    default:
+      return "해당 건을 검토할까요?";
+  }
 }
 
 function formatYearMonthShortLabel(value: string) {
@@ -1139,49 +1357,24 @@ function getStatementScopeOptions(imports: ImportRecord[], linkedImportRecordIds
 }
 
 export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" | "sun" }) {
-  const { state, workspaceLoopDataByWorkspaceId, updateTransactionDetails, assignCategory, clearCategory } = useAppState();
+  const {
+    applyReviewSuggestion,
+    commitImportedBundle,
+    deleteImportRecord,
+    previewWorkbookImport,
+    resolveReview,
+    setTransactionLoopFlagBatch,
+    state,
+    workspaceLoopDataByWorkspaceId,
+    updateTransactionDetails,
+    updateTransactionFlags,
+    assignCategory,
+    clearCategory,
+  } = useAppState();
   const navigate = useNavigate();
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const currentMonth = monthKey(new Date());
-  const previousMonth = useMemo(() => getPreviousMonthKey(currentMonth), [currentMonth]);
-  const currentMonthStatementImportIds = useMemo(
-    () => getStatementImportIdsForMonth(scope.imports, currentMonth),
-    [currentMonth, scope.imports],
-  );
-  const previousMonthStatementImportIds = useMemo(
-    () => getStatementImportIdsForMonth(scope.imports, previousMonth),
-    [previousMonth, scope.imports],
-  );
-  const currentMonthStatementImportCount = useMemo(
-    () => currentMonthStatementImportIds.size,
-    [currentMonthStatementImportIds],
-  );
-  const currentMonthStatementExpenseTotal = useMemo(
-    () =>
-      scope.transactions.reduce((sum, transaction) => {
-        if (!transaction.importRecordId || !currentMonthStatementImportIds.has(transaction.importRecordId)) return sum;
-        if (transaction.status !== "active" || transaction.transactionType !== "expense") return sum;
-        return sum + transaction.amount;
-      }, 0),
-    [currentMonthStatementImportIds, scope.transactions],
-  );
-  const previousMonthStatementExpenseTotal = useMemo(
-    () =>
-      scope.transactions.reduce((sum, transaction) => {
-        if (!transaction.importRecordId || !previousMonthStatementImportIds.has(transaction.importRecordId)) return sum;
-        if (transaction.status !== "active" || transaction.transactionType !== "expense") return sum;
-        return sum + transaction.amount;
-      }, 0),
-    [previousMonthStatementImportIds, scope.transactions],
-  );
-  const currentMonthStatementTransactions = useMemo(
-    () =>
-      scope.transactions.filter(
-        (transaction) => Boolean(transaction.importRecordId && currentMonthStatementImportIds.has(transaction.importRecordId)),
-      ),
-    [currentMonthStatementImportIds, scope.transactions],
-  );
   const monthOptions = useMemo(
     () =>
       Array.from(new Set(scope.transactions.map((transaction) => transaction.occurredAt.slice(0, 7)).filter(Boolean))).sort((a, b) =>
@@ -1214,9 +1407,26 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
       ),
     [scope.transactions],
   );
+  const recentImports = useMemo(() => [...scope.imports].sort((a, b) => b.importedAt.localeCompare(a.importedAt)), [scope.imports]);
   const statementScopeOptions = useMemo(
     () => getStatementScopeOptions(scope.imports, linkedImportRecordIds),
     [linkedImportRecordIds, scope.imports],
+  );
+  const calendarOwnerOptions = useMemo(
+    () => [
+      { value: "all", label: "우리의 소비" },
+      ...scope.people
+        .filter((person) => !person.isHidden)
+        .sort(compareBySortOrder)
+        .map((person) => {
+          const personLabel = getPersonLabel(person);
+          return {
+            value: person.id,
+            label: `${personLabel}의 소비`,
+          };
+        }),
+    ],
+    [scope.people],
   );
   const [selectedDashboardBasis, setSelectedDashboardBasis] = useState<WorkspaceInsightBasis>("month");
   const [selectedDashboardMonth, setSelectedDashboardMonth] = useState(() =>
@@ -1235,6 +1445,30 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
     const today = new Date();
     return `${monthKey(today)}-${String(today.getDate()).padStart(2, "0")}`;
   });
+  const [selectedCalendarOwnerId, setSelectedCalendarOwnerId] = useState("all");
+  const [isDashboardCalendarUncategorizedOnly, setIsDashboardCalendarUncategorizedOnly] = useState(false);
+  const [isDashboardCalendarAutoReviewOnly, setIsDashboardCalendarAutoReviewOnly] = useState(false);
+  const [dashboardCalendarProcessingMode, setDashboardCalendarProcessingMode] =
+    useState<DashboardCalendarProcessingMode>(null);
+  const [pendingDashboardCalendarProcessingMode, setPendingDashboardCalendarProcessingMode] =
+    useState<DashboardCalendarProcessingMode>(null);
+  const [dashboardReviewWorkflow, setDashboardReviewWorkflow] = useState<DashboardReviewWorkflowState | null>(null);
+  const [dashboardUncategorizedFocusTransactionId, setDashboardUncategorizedFocusTransactionId] = useState<string | null>(null);
+  const [loopConfirmState, setLoopConfirmState] = useState<LoopConfirmState | null>(null);
+  const [loopConfirmDragMode, setLoopConfirmDragMode] = useState<boolean | null>(null);
+  const [selectedStatementHistoryYear, setSelectedStatementHistoryYear] = useState(String(new Date().getFullYear()));
+  const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false);
+  const [isStatementUploadModalOpen, setIsStatementUploadModalOpen] = useState(false);
+  const [previewBundle, setPreviewBundle] = useState<WorkspaceBundle | null>(null);
+  const [previewFileName, setPreviewFileName] = useState("");
+  const [isPreparingPreview, setIsPreparingPreview] = useState(false);
+  const [selectedImportOwnerId, setSelectedImportOwnerId] = useState("");
+  const [selectedStatementMonth, setSelectedStatementMonth] = useState("");
+  const [importCardNameDrafts, setImportCardNameDrafts] = useState<Record<string, string>>({});
+  const [importCardLinkedAccountDrafts, setImportCardLinkedAccountDrafts] = useState<Record<string, string>>({});
+  const [isLinkedAccountModalOpen, setIsLinkedAccountModalOpen] = useState(false);
+  const [isDropzoneActive, setIsDropzoneActive] = useState(false);
+  const [isDropzoneInvalid, setIsDropzoneInvalid] = useState(false);
   const [activeCategorySliceName, setActiveCategorySliceName] = useState<string | null>(null);
   const [activeAnnualMonth, setActiveAnnualMonth] = useState<string | null>(null);
   const [isAnnualMonthTooltipFading, setIsAnnualMonthTooltipFading] = useState(false);
@@ -1251,6 +1485,67 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
   const annualMonthHideTimerRef = useRef<number | null>(null);
   const annualTrendFadeTimerRef = useRef<number | null>(null);
   const annualTrendHideTimerRef = useRef<number | null>(null);
+  const statementImportDragDepthRef = useRef(0);
+  const statementImportFileInputRef = useRef<HTMLInputElement | null>(null);
+  const dashboardCalendarTransactionsRef = useRef<HTMLDivElement | null>(null);
+  const previewStatementMonthOptions = useMemo(() => getPreviewStatementMonthOptions(previewBundle), [previewBundle]);
+  const defaultPreviewStatementMonth = previewStatementMonthOptions.at(-1) ?? "";
+  const previewCardMatches = useMemo(
+    () =>
+      (previewBundle?.cards ?? []).map((card) => {
+        const matchedCard = findMatchedCard(scope.cards, card, selectedImportOwnerId || null);
+        return {
+          card,
+          matchedCard,
+          draftName: importCardNameDrafts[card.id] ?? card.name,
+        };
+      }),
+    [importCardNameDrafts, previewBundle, scope.cards, selectedImportOwnerId],
+  );
+  const previewCardMatchMap = useMemo(() => new Map(previewCardMatches.map((entry) => [entry.card.id, entry])), [previewCardMatches]);
+  const newCreditPreviewCards = useMemo(
+    () => previewCardMatches.filter(({ card, matchedCard }) => !matchedCard && card.cardType === "credit"),
+    [previewCardMatches],
+  );
+  const linkedAccountCandidates = useMemo(
+    () =>
+      previewBundle && selectedImportOwnerId
+        ? buildLinkedAccountCandidates(scope.accounts, previewBundle.accounts, selectedImportOwnerId)
+        : EMPTY_LINKED_ACCOUNT_CANDIDATES,
+    [previewBundle, scope.accounts, selectedImportOwnerId],
+  );
+  const shouldPromptLinkedAccounts = newCreditPreviewCards.length > 0 && linkedAccountCandidates.length > 0;
+  const importHistoryByYear = useMemo(() => {
+    const yearMap = new Map<string, ImportRecord[]>();
+    recentImports.forEach((record) => {
+      const yearKey = (record.statementMonth || record.importedAt.slice(0, 4) || "기타").slice(0, 4);
+      const current = yearMap.get(yearKey) ?? [];
+      current.push(record);
+      yearMap.set(yearKey, current);
+    });
+    return [...yearMap.entries()].sort((a, b) => b[0].localeCompare(a[0], "ko"));
+  }, [recentImports]);
+  const importHistoryYears = useMemo(() => {
+    const years = importHistoryByYear.map(([year]) => year);
+    const currentYear = String(new Date().getFullYear());
+    return years.includes(currentYear) ? years : [currentYear, ...years];
+  }, [importHistoryByYear]);
+  const visibleStatementHistoryRecords = useMemo(
+    () => importHistoryByYear.find(([year]) => year === selectedStatementHistoryYear)?.[1] ?? [],
+    [importHistoryByYear, selectedStatementHistoryYear],
+  );
+  const visibleStatementHistoryMonthGroups = useMemo(() => {
+    const monthMap = new Map<string, ImportRecord[]>();
+    visibleStatementHistoryRecords.forEach((record) => {
+      const monthKeyValue = record.statementMonth?.slice(0, 7) || record.importedAt.slice(0, 7);
+      const current = monthMap.get(monthKeyValue) ?? [];
+      current.push(record);
+      monthMap.set(monthKeyValue, current);
+    });
+    return [...monthMap.entries()]
+      .sort((left, right) => right[0].localeCompare(left[0], "ko"))
+      .map(([month, records]) => ({ month, records }));
+  }, [visibleStatementHistoryRecords]);
 
   useEffect(() => {
     const nextSelectedMonth = monthOptions.includes(selectedDashboardMonth)
@@ -1263,6 +1558,14 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
       setSelectedDashboardMonth(nextSelectedMonth);
     }
   }, [currentMonth, monthOptions, selectedDashboardMonth]);
+  useEffect(() => {
+    const nextYear = importHistoryYears.includes(selectedStatementHistoryYear)
+      ? selectedStatementHistoryYear
+      : importHistoryYears[0] ?? String(new Date().getFullYear());
+    if (nextYear !== selectedStatementHistoryYear) {
+      setSelectedStatementHistoryYear(nextYear);
+    }
+  }, [importHistoryYears, selectedStatementHistoryYear]);
 
   useEffect(() => {
     const nextSelectedCalendarMonth = calendarMonthOptions.some((option) => option.value === selectedCalendarMonth)
@@ -1275,6 +1578,237 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
       setSelectedCalendarMonth(nextSelectedCalendarMonth);
     }
   }, [calendarMonthOptions, currentMonth, selectedCalendarMonth]);
+
+  useEffect(() => {
+    if (selectedCalendarOwnerId === "all") return;
+    if (calendarOwnerOptions.some((option) => option.value === selectedCalendarOwnerId)) return;
+    setSelectedCalendarOwnerId("all");
+  }, [calendarOwnerOptions, selectedCalendarOwnerId]);
+
+  useEffect(() => {
+    if (!previewBundle) {
+      setSelectedImportOwnerId((current) => (current === "" ? current : ""));
+      return;
+    }
+
+    if (scope.people.length === 1) {
+      const onlyPersonId = scope.people[0]?.id ?? "";
+      if (selectedImportOwnerId !== onlyPersonId) {
+        setSelectedImportOwnerId(onlyPersonId);
+      }
+      return;
+    }
+
+    if (selectedImportOwnerId && scope.people.some((person) => person.id === selectedImportOwnerId)) return;
+    setSelectedImportOwnerId((current) => (current === "" ? current : ""));
+  }, [previewBundle, scope.people, selectedImportOwnerId]);
+
+  useEffect(() => {
+    if (!previewBundle) {
+      setSelectedStatementMonth((current) => (current === "" ? current : ""));
+      return;
+    }
+
+    if (selectedStatementMonth && previewStatementMonthOptions.includes(selectedStatementMonth)) return;
+    setSelectedStatementMonth((current) => (current === defaultPreviewStatementMonth ? current : defaultPreviewStatementMonth));
+  }, [defaultPreviewStatementMonth, previewBundle, previewStatementMonthOptions, selectedStatementMonth]);
+
+  useEffect(() => {
+    if (!previewBundle || !shouldPromptLinkedAccounts) {
+      setImportCardLinkedAccountDrafts((current) => (Object.keys(current).length === 0 ? current : {}));
+      setIsLinkedAccountModalOpen(false);
+      return;
+    }
+
+    const validCardIds = new Set(newCreditPreviewCards.map(({ card }) => card.id));
+    const validAccountIds = new Set(linkedAccountCandidates.map((account) => account.id));
+    const defaultAccountId = linkedAccountCandidates.length === 1 ? linkedAccountCandidates[0]?.id ?? "" : "";
+
+    setImportCardLinkedAccountDrafts((current) => {
+      const nextDrafts: Record<string, string> = {};
+      let changed = false;
+
+      newCreditPreviewCards.forEach(({ card }) => {
+        const hasCurrentSelection = Object.prototype.hasOwnProperty.call(current, card.id);
+        const currentValue = current[card.id] ?? "";
+        const nextValue =
+          hasCurrentSelection && (!currentValue || validAccountIds.has(currentValue)) ? currentValue : defaultAccountId;
+        nextDrafts[card.id] = nextValue;
+        if (nextValue !== currentValue) changed = true;
+      });
+
+      Object.keys(current).forEach((cardId) => {
+        if (!validCardIds.has(cardId)) changed = true;
+      });
+
+      if (!changed && Object.keys(current).length === Object.keys(nextDrafts).length) {
+      return current;
+      }
+      return nextDrafts;
+    });
+  }, [linkedAccountCandidates, newCreditPreviewCards, previewBundle, shouldPromptLinkedAccounts]);
+
+  const resetDropzoneState = () => {
+    statementImportDragDepthRef.current = 0;
+    setIsDropzoneActive(false);
+    setIsDropzoneInvalid(false);
+  };
+
+  const resetFileInput = () => {
+    if (statementImportFileInputRef.current) {
+      statementImportFileInputRef.current.value = "";
+    }
+  };
+
+  const clearPreview = () => {
+    setPreviewBundle(null);
+    setPreviewFileName("");
+    setSelectedImportOwnerId("");
+    setSelectedStatementMonth("");
+    setImportCardNameDrafts({});
+    setImportCardLinkedAccountDrafts({});
+    setIsLinkedAccountModalOpen(false);
+    resetFileInput();
+  };
+
+  const preparePreview = async (file: File) => {
+    setIsPreparingPreview(true);
+    resetDropzoneState();
+    try {
+      const bundle = await previewWorkbookImport(file);
+      setPreviewBundle(bundle);
+      setPreviewFileName(file.name);
+      setSelectedImportOwnerId("");
+      setSelectedStatementMonth("");
+      setImportCardNameDrafts(Object.fromEntries(bundle.cards.map((card) => [card.id, card.name])));
+      setImportCardLinkedAccountDrafts({});
+      setIsLinkedAccountModalOpen(false);
+    } finally {
+      setIsPreparingPreview(false);
+    }
+  };
+
+  const handlePickedFile = async (file: File | null | undefined) => {
+    if (!file) return;
+    if (!isWorkbookFile(file)) {
+      setIsDropzoneInvalid(true);
+      setIsDropzoneActive(false);
+      return;
+    }
+    await preparePreview(file);
+  };
+
+  const handleDropzoneDragEnter = (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    statementImportDragDepthRef.current += 1;
+    setIsDropzoneActive(true);
+  };
+
+  const handleDropzoneDragOver = (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    const file = event.dataTransfer.files?.[0];
+    const isValid = !file || isWorkbookFile(file);
+    event.dataTransfer.dropEffect = isValid ? "copy" : "none";
+    setIsDropzoneActive(true);
+    setIsDropzoneInvalid(!isValid);
+  };
+
+  const handleDropzoneDragLeave = (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    statementImportDragDepthRef.current = Math.max(0, statementImportDragDepthRef.current - 1);
+    if (statementImportDragDepthRef.current === 0) {
+      setIsDropzoneActive(false);
+      setIsDropzoneInvalid(false);
+    }
+  };
+
+  const handleDropzoneDrop = async (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    const file = event.dataTransfer.files?.[0];
+    resetDropzoneState();
+    await handlePickedFile(file);
+  };
+
+  const commitPreview = () => {
+    if (!previewBundle || !selectedImportOwnerId || !selectedStatementMonth) return;
+
+    const renamedCards = previewBundle.cards.map((card) => {
+      const matchedCard = previewCardMatchMap.get(card.id)?.matchedCard ?? null;
+      const selectedLinkedAccountId = importCardLinkedAccountDrafts[card.id] || null;
+
+      return {
+        ...card,
+        name: matchedCard?.name ?? ((importCardNameDrafts[card.id] ?? card.name).trim() || card.name),
+        linkedAccountId: matchedCard?.linkedAccountId ?? selectedLinkedAccountId ?? card.linkedAccountId ?? null,
+      };
+    });
+    const linkedAccountIdByPreviewCardId = new Map(renamedCards.map((card) => [card.id, card.linkedAccountId ?? null]));
+
+    const normalizedBundle: WorkspaceBundle = {
+      ...previewBundle,
+      people: [],
+      imports: previewBundle.imports.map((record, index) =>
+        index === 0
+          ? {
+              ...record,
+              statementMonth: selectedStatementMonth,
+            }
+          : record,
+      ),
+      accounts: previewBundle.accounts.map((account) => ({
+        ...account,
+        ownerPersonId: account.isShared ? null : selectedImportOwnerId,
+      })),
+      cards: renamedCards.map((card) => ({
+        ...card,
+        ownerPersonId: selectedImportOwnerId,
+      })),
+      transactions: previewBundle.transactions.map((transaction) => ({
+        ...transaction,
+        ownerPersonId: selectedImportOwnerId,
+        accountId: transaction.cardId ? linkedAccountIdByPreviewCardId.get(transaction.cardId) ?? transaction.accountId : transaction.accountId,
+      })),
+    };
+
+    commitImportedBundle(normalizedBundle, previewFileName);
+    clearPreview();
+  };
+
+  const handleCommitPreview = () => {
+    if (!previewBundle || !selectedImportOwnerId || !selectedStatementMonth) return;
+    if (shouldPromptLinkedAccounts) {
+      setIsLinkedAccountModalOpen(true);
+      return;
+    }
+    commitPreview();
+  };
+
+  const handleDeleteImportRecord = (record: ImportRecord) => {
+    if (!linkedImportRecordIds.has(record.id)) return;
+    const confirmed = window.confirm(`${getStatementRecordLabel(record)} 명세서를 삭제할까요?\n관련 결제내역과 검토 기록도 함께 삭제됩니다.`);
+    if (!confirmed) return;
+    deleteImportRecord(workspaceId, record.id);
+  };
+
+  const handleOpenStatementUploadModal = () => {
+    setIsStatementUploadModalOpen(true);
+  };
+
+  const handleCloseStatementUploadModal = () => {
+    setIsStatementUploadModalOpen(false);
+    setIsLinkedAccountModalOpen(false);
+    resetDropzoneState();
+  };
+
+  const dropzoneTitle = isDropzoneInvalid
+    ? "엑셀 파일만 업로드할 수 있어요"
+    : isDropzoneActive
+      ? "여기에 파일을 놓으면 미리보기를 준비합니다"
+      : "클릭하거나 파일을 끌어놓으세요";
+
+  const dropzoneDescription = isDropzoneInvalid
+    ? "지원 형식: .xlsx, .xls"
+    : "미리보기에서 거래 수, 검토 수, 자산 정보를 먼저 확인합니다.";
 
   useEffect(() => {
     const nextSelectedStatement = statementScopeOptions.some((option) => option.value === selectedDashboardStatement)
@@ -1354,37 +1888,88 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
     () => scope.transactions.filter((transaction) => monthKey(transaction.occurredAt) === currentMonth),
     [currentMonth, scope.transactions],
   );
-  const previousMonthTransactions = useMemo(
-    () => scope.transactions.filter((transaction) => monthKey(transaction.occurredAt) === previousMonth),
-    [previousMonth, scope.transactions],
+  const selectedCalendarSummaryTransactions = useMemo(
+    () =>
+      scope.transactions.filter(
+        (transaction) =>
+          monthKey(transaction.occurredAt) === selectedCalendarMonth &&
+          (selectedCalendarOwnerId === "all" ? true : transaction.ownerPersonId === selectedCalendarOwnerId),
+      ),
+    [scope.transactions, selectedCalendarMonth, selectedCalendarOwnerId],
   );
-  const currentMonthIncomeEntries = useMemo(
-    () => scope.incomeEntries.filter((entry) => monthKey(entry.occurredAt) === currentMonth),
-    [currentMonth, scope.incomeEntries],
+  const selectedCalendarSummaryIncomeEntries = useMemo(
+    () =>
+      scope.incomeEntries.filter(
+        (entry) =>
+          monthKey(entry.occurredAt) === selectedCalendarMonth &&
+          (selectedCalendarOwnerId === "all" ? true : entry.ownerPersonId === selectedCalendarOwnerId),
+      ),
+    [scope.incomeEntries, selectedCalendarMonth, selectedCalendarOwnerId],
   );
-  const currentMonthIncomeMissing = currentMonthIncomeEntries.length === 0;
-  const previousMonthIncomeEntries = useMemo(
-    () => scope.incomeEntries.filter((entry) => monthKey(entry.occurredAt) === previousMonth),
-    [previousMonth, scope.incomeEntries],
+  const selectedCalendarPreviousMonth = useMemo(
+    () => getPreviousMonthKey(selectedCalendarMonth),
+    [selectedCalendarMonth],
   );
-  const currentMonthInsights = getWorkspaceInsights(state, workspaceId, {
+  const selectedCalendarPreviousTransactions = useMemo(
+    () =>
+      scope.transactions.filter(
+        (transaction) =>
+          monthKey(transaction.occurredAt) === selectedCalendarPreviousMonth &&
+          (selectedCalendarOwnerId === "all" ? true : transaction.ownerPersonId === selectedCalendarOwnerId),
+      ),
+    [scope.transactions, selectedCalendarOwnerId, selectedCalendarPreviousMonth],
+  );
+  const selectedCalendarPreviousIncomeEntries = useMemo(
+    () =>
+      scope.incomeEntries.filter(
+        (entry) =>
+          monthKey(entry.occurredAt) === selectedCalendarPreviousMonth &&
+          (selectedCalendarOwnerId === "all" ? true : entry.ownerPersonId === selectedCalendarOwnerId),
+      ),
+    [scope.incomeEntries, selectedCalendarOwnerId, selectedCalendarPreviousMonth],
+  );
+  const selectedCalendarInsights = getWorkspaceInsights(state, workspaceId, {
     basis: "month",
-    label: formatMonthLabel(currentMonth),
-    transactions: currentMonthTransactions,
-    incomeEntries: currentMonthIncomeEntries,
+    label: formatMonthLabel(selectedCalendarMonth),
+    transactions: selectedCalendarSummaryTransactions,
+    incomeEntries: selectedCalendarSummaryIncomeEntries,
   });
-  const currentMonthStatementInsights = getWorkspaceInsights(state, workspaceId, {
-    basis: "statement",
-    label: formatStatementMonthLabel(currentMonth),
-    transactions: currentMonthStatementTransactions,
-    incomeEntries: currentMonthIncomeEntries,
-  });
-  const previousMonthInsights = getWorkspaceInsights(state, workspaceId, {
+  const selectedCalendarPreviousInsights = getWorkspaceInsights(state, workspaceId, {
     basis: "month",
-    label: formatMonthLabel(previousMonth),
-    transactions: previousMonthTransactions,
-    incomeEntries: previousMonthIncomeEntries,
+    label: formatMonthLabel(selectedCalendarPreviousMonth),
+    transactions: selectedCalendarPreviousTransactions,
+    incomeEntries: selectedCalendarPreviousIncomeEntries,
   });
+  const selectedCalendarExpenseTotal = useMemo(
+    () => getExpenseImpactStats(selectedCalendarSummaryTransactions).activeExpenseTransactions.reduce((sum, transaction) => sum + transaction.amount, 0),
+    [selectedCalendarSummaryTransactions],
+  );
+  const selectedCalendarPreviousExpenseTotal = useMemo(
+    () => getExpenseImpactStats(selectedCalendarPreviousTransactions).activeExpenseTransactions.reduce((sum, transaction) => sum + transaction.amount, 0),
+    [selectedCalendarPreviousTransactions],
+  );
+  const selectedCalendarImportRecordIds = useMemo(
+    () =>
+      new Set(
+        selectedCalendarSummaryTransactions
+          .map((transaction) => transaction.importRecordId)
+          .filter((importRecordId): importRecordId is string => Boolean(importRecordId)),
+      ),
+    [selectedCalendarSummaryTransactions],
+  );
+  const selectedCalendarImportCount = selectedCalendarImportRecordIds.size;
+  const selectedCalendarIncomeDelta = selectedCalendarInsights.income - selectedCalendarPreviousInsights.income;
+  const selectedCalendarExpenseDelta = selectedCalendarExpenseTotal - selectedCalendarPreviousExpenseTotal;
+  const selectedCalendarBalance = selectedCalendarInsights.income - selectedCalendarExpenseTotal;
+  const selectedCalendarPreviousBalance = selectedCalendarPreviousInsights.income - selectedCalendarPreviousExpenseTotal;
+  const selectedCalendarSavingsDelta = selectedCalendarBalance - selectedCalendarPreviousBalance;
+  const selectedCalendarIncomeBadge = getDeltaBadge(selectedCalendarIncomeDelta, true);
+  const selectedCalendarExpenseBadge = getDeltaBadge(selectedCalendarExpenseDelta, false);
+  const selectedCalendarSavingsBadge = getDeltaBadge(selectedCalendarSavingsDelta, true);
+  const selectedCalendarReviewBadge = getCompletionBadge(selectedCalendarInsights.reviewCount);
+  const selectedCalendarUncategorizedBadge = getCompletionBadge(selectedCalendarInsights.uncategorizedCount);
+  const selectedCalendarReviewPending = selectedCalendarInsights.reviewCount > 0;
+  const selectedCalendarUncategorizedPending = selectedCalendarInsights.uncategorizedCount > 0;
   const previousDashboardScopeMonth = useMemo(() => {
     if (selectedDashboardBasis === "statement") {
       if (!selectedDashboardStatement || selectedDashboardStatement === UNSPECIFIED_STATEMENT_KEY) return "";
@@ -1436,19 +2021,6 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
   const selectedDashboardSavingsBadge = getDeltaBadge(selectedDashboardSavingsDelta, true);
   const selectedDashboardReviewBadge = getCompletionBadge(insights.reviewCount);
   const selectedDashboardUncategorizedBadge = getCompletionBadge(insights.uncategorizedCount);
-  const currentMonthIncomeDelta = currentMonthInsights.income - previousMonthInsights.income;
-  const currentMonthExpenseDelta = currentMonthStatementExpenseTotal - previousMonthStatementExpenseTotal;
-  const currentMonthStatementBalance = currentMonthInsights.income - currentMonthStatementExpenseTotal;
-  const previousMonthStatementBalance = previousMonthInsights.income - previousMonthStatementExpenseTotal;
-  const currentMonthSavingsDelta = currentMonthStatementBalance - previousMonthStatementBalance;
-  const incomeDeltaBadge = getDeltaBadge(currentMonthIncomeDelta, true);
-  const expenseDeltaBadge = getDeltaBadge(currentMonthExpenseDelta, false);
-  const savingsDeltaBadge = getDeltaBadge(currentMonthSavingsDelta, true);
-  const reviewBadge = getCompletionBadge(currentMonthStatementInsights.reviewCount);
-  const uncategorizedBadge = getCompletionBadge(currentMonthStatementInsights.uncategorizedCount);
-  const currentMonthStatementMissing = currentMonthStatementImportCount === 0;
-  const currentMonthReviewPending = currentMonthStatementInsights.reviewCount > 0;
-  const currentMonthUncategorizedPending = currentMonthStatementInsights.uncategorizedCount > 0;
   const dominantCategory = insights.topCategories[0] ?? null;
   const dominantCategoryShare =
     dominantCategory && insights.expense > 0 ? Math.round((dominantCategory.amount / insights.expense) * 100) : null;
@@ -1533,9 +2105,10 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
           transaction.status === "active" &&
           transaction.transactionType === "expense" &&
           transaction.isExpenseImpact &&
-          monthKey(transaction.occurredAt) === calendarMonthValue,
+          monthKey(transaction.occurredAt) === calendarMonthValue &&
+          (selectedCalendarOwnerId === "all" ? true : transaction.ownerPersonId === selectedCalendarOwnerId),
       ),
-    [calendarMonthValue, scope.transactions],
+    [calendarMonthValue, scope.transactions, selectedCalendarOwnerId],
   );
   const calendarCells = useMemo<CalendarCell[]>(() => {
     const transactionMap = new Map<string, { expenseAmount: number; transactionCount: number; merchants: string[] }>();
@@ -1634,6 +2207,141 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
       ),
     [calendarExpenseTransactions, selectedCalendarCell?.dateKey],
   );
+  const dashboardTransactionMap = useMemo(
+    () => new Map(scope.transactions.map((transaction) => [transaction.id, transaction])),
+    [scope.transactions],
+  );
+  const calendarExpenseTransactionIdSet = useMemo(
+    () => new Set(calendarExpenseTransactions.map((transaction) => transaction.id)),
+    [calendarExpenseTransactions],
+  );
+  const dashboardCalendarOpenReviews = useMemo(
+    () =>
+      getOpenTransactionWorkflowReviews(
+        scope.reviews.filter(
+          (review) =>
+            calendarExpenseTransactionIdSet.has(review.primaryTransactionId) ||
+            review.relatedTransactionIds.some((transactionId) => calendarExpenseTransactionIdSet.has(transactionId)),
+        ),
+        new Map(scope.transactions.map((transaction) => [transaction.id, transaction])),
+      ),
+    [calendarExpenseTransactionIdSet, scope.reviews, scope.transactions],
+  );
+  const sortedDashboardCalendarOpenReviews = useMemo(
+    () =>
+      [...dashboardCalendarOpenReviews].sort((left, right) => {
+        const leftTransaction = dashboardTransactionMap.get(left.primaryTransactionId);
+        const rightTransaction = dashboardTransactionMap.get(right.primaryTransactionId);
+        const leftDate = leftTransaction?.occurredAt ?? "";
+        const rightDate = rightTransaction?.occurredAt ?? "";
+        if (leftDate !== rightDate) return leftDate.localeCompare(rightDate);
+        return left.id.localeCompare(right.id, "ko");
+      }),
+    [dashboardCalendarOpenReviews, dashboardTransactionMap],
+  );
+  const dashboardTransactionWorkflowReviews = useMemo(() => {
+    if (!dashboardReviewWorkflow) return [];
+    const reviewsById = new Map(sortedDashboardCalendarOpenReviews.map((review) => [review.id, review]));
+    return dashboardReviewWorkflow.queuedReviewIds
+      .map((reviewId) => reviewsById.get(reviewId) ?? null)
+      .filter((review): review is ReviewItem => Boolean(review));
+  }, [dashboardReviewWorkflow, sortedDashboardCalendarOpenReviews]);
+  const activeDashboardWorkflowReview = useMemo(() => {
+    if (!dashboardReviewWorkflow || !dashboardTransactionWorkflowReviews.length) return null;
+    return (
+      dashboardTransactionWorkflowReviews.find((review) => review.id === dashboardReviewWorkflow.activeReviewId) ??
+      dashboardTransactionWorkflowReviews[0] ??
+      null
+    );
+  }, [dashboardReviewWorkflow, dashboardTransactionWorkflowReviews]);
+  const activeDashboardWorkflowTransactionIds = useMemo(
+    () => new Set(activeDashboardWorkflowReview ? getTransactionWorkflowTransactionIds(activeDashboardWorkflowReview) : []),
+    [activeDashboardWorkflowReview],
+  );
+  const activeDashboardWorkflowSuggestedCategoryLabel = useMemo(() => {
+    if (
+      !activeDashboardWorkflowReview ||
+      activeDashboardWorkflowReview.reviewType !== "category_suggestion" ||
+      !activeDashboardWorkflowReview.suggestedCategoryId
+    ) {
+      return null;
+    }
+    return categoryLabelMap.get(activeDashboardWorkflowReview.suggestedCategoryId) ?? null;
+  }, [activeDashboardWorkflowReview, categoryLabelMap]);
+  const dashboardCategorySuggestionLabelsByTransactionId = useMemo(() => {
+    const nextMap = new Map<string, string>();
+    dashboardTransactionWorkflowReviews.forEach((review) => {
+      if (review.reviewType !== "category_suggestion" || !review.suggestedCategoryId) return;
+      const label = categoryLabelMap.get(review.suggestedCategoryId);
+      if (!label) return;
+      nextMap.set(review.primaryTransactionId, label);
+    });
+    return nextMap;
+  }, [categoryLabelMap, dashboardTransactionWorkflowReviews]);
+  const dashboardCalendarReviewTransactionIdSet = useMemo(() => {
+    const nextSet = new Set<string>();
+    dashboardCalendarOpenReviews.forEach((review) => {
+      getTransactionWorkflowTransactionIds(review).forEach((transactionId) => nextSet.add(transactionId));
+    });
+    return nextSet;
+  }, [dashboardCalendarOpenReviews]);
+  const calendarReviewDateKeys = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          calendarExpenseTransactions
+            .filter((transaction) => dashboardCalendarReviewTransactionIdSet.has(transaction.id))
+            .map((transaction) => transaction.occurredAt.slice(0, 10)),
+        ),
+      ).sort((left, right) => left.localeCompare(right)),
+    [calendarExpenseTransactions, dashboardCalendarReviewTransactionIdSet],
+  );
+  const calendarUncategorizedDateKeys = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          calendarExpenseTransactions
+            .filter((transaction) => !transaction.categoryId)
+            .map((transaction) => transaction.occurredAt.slice(0, 10)),
+        ),
+      ).sort((left, right) => left.localeCompare(right)),
+    [calendarExpenseTransactions],
+  );
+  const selectedCalendarHasUncategorizedTransactions = useMemo(
+    () => selectedCalendarTransactions.some((transaction) => !transaction.categoryId),
+    [selectedCalendarTransactions],
+  );
+  const dashboardCalendarBaseTransactions = useMemo(
+    () =>
+      dashboardCalendarProcessingMode === "review" && activeDashboardWorkflowReview
+        ? calendarExpenseTransactions.filter((transaction) => activeDashboardWorkflowTransactionIds.has(transaction.id))
+        : selectedCalendarTransactions,
+    [
+      activeDashboardWorkflowReview,
+      activeDashboardWorkflowTransactionIds,
+      calendarExpenseTransactions,
+      dashboardCalendarProcessingMode,
+      selectedCalendarTransactions,
+    ],
+  );
+  const displayedCalendarTransactions = useMemo(
+    () =>
+      dashboardCalendarBaseTransactions.filter((transaction) => {
+        if (isDashboardCalendarUncategorizedOnly && transaction.categoryId) return false;
+        if (isDashboardCalendarAutoReviewOnly && !dashboardCalendarReviewTransactionIdSet.has(transaction.id)) return false;
+        return true;
+      }),
+    [
+      dashboardCalendarBaseTransactions,
+      dashboardCalendarReviewTransactionIdSet,
+      isDashboardCalendarAutoReviewOnly,
+      isDashboardCalendarUncategorizedOnly,
+    ],
+  );
+  const firstDisplayedUncategorizedTransactionId = useMemo(
+    () => displayedCalendarTransactions.find((transaction) => !transaction.categoryId)?.id ?? null,
+    [displayedCalendarTransactions],
+  );
   const todayDiary = selectedCalendarCell
     ? selectedCalendarTransactions.length === 0
       ? ""
@@ -1643,10 +2351,244 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
         )
     : "오늘은 기록이 아직 없다. 참 조용했다.";
   const todayDiaryCells = useMemo(() => createDiaryCells(todayDiary, 70, 10, 1), [todayDiary]);
+  const loopConfirmTransactions = useMemo(() => {
+    if (!loopConfirmState) return [];
+    const selectedIdSet = new Set(loopConfirmState.candidateIds);
+    return scope.transactions.filter((transaction) => selectedIdSet.has(transaction.id));
+  }, [loopConfirmState, scope.transactions]);
+  const loopConfirmTargetTransaction = useMemo(
+    () => (loopConfirmState ? dashboardTransactionMap.get(loopConfirmState.transactionId) ?? null : null),
+    [dashboardTransactionMap, loopConfirmState],
+  );
+  const loopConfirmPastTransactions = useMemo(
+    () => loopConfirmTransactions.filter((transaction) => transaction.id !== loopConfirmState?.transactionId),
+    [loopConfirmState?.transactionId, loopConfirmTransactions],
+  );
   useEffect(() => {
     if (selectedCalendarDate.startsWith(calendarMonthValue)) return;
     setSelectedCalendarDate(`${calendarMonthValue}-01`);
   }, [calendarMonthValue, selectedCalendarDate]);
+  useEffect(() => {
+    if (loopConfirmDragMode === null) return;
+
+    const clearDragMode = () => setLoopConfirmDragMode(null);
+    window.addEventListener("mouseup", clearDragMode);
+
+    return () => {
+      window.removeEventListener("mouseup", clearDragMode);
+    };
+  }, [loopConfirmDragMode]);
+  useEffect(() => {
+    if (dashboardCalendarProcessingMode === "review" && !isDashboardCalendarAutoReviewOnly) {
+      setDashboardCalendarProcessingMode(null);
+      setDashboardReviewWorkflow(null);
+      return;
+    }
+    if (dashboardCalendarProcessingMode === "uncategorized" && !isDashboardCalendarUncategorizedOnly) {
+      setDashboardCalendarProcessingMode(null);
+    }
+  }, [
+    dashboardCalendarProcessingMode,
+    isDashboardCalendarAutoReviewOnly,
+    isDashboardCalendarUncategorizedOnly,
+  ]);
+  useEffect(() => {
+    if (!dashboardCalendarProcessingMode) return;
+    if (dashboardCalendarProcessingMode === "review") {
+      if (!calendarReviewDateKeys.length) return;
+      if (calendarReviewDateKeys.includes(selectedCalendarDate)) return;
+
+      const nextDateKey =
+        calendarReviewDateKeys.find((dateKey) => dateKey >= selectedCalendarDate) ??
+        calendarReviewDateKeys[calendarReviewDateKeys.length - 1];
+
+      if (nextDateKey && nextDateKey !== selectedCalendarDate) {
+        setSelectedCalendarDate(nextDateKey);
+      }
+      return;
+    }
+
+    if (dashboardCalendarProcessingMode === "uncategorized") {
+      if (selectedCalendarHasUncategorizedTransactions) return;
+      if (!calendarUncategorizedDateKeys.length) return;
+
+      const nextDateKey =
+        calendarUncategorizedDateKeys.find((dateKey) => dateKey > selectedCalendarDate) ??
+        calendarUncategorizedDateKeys[calendarUncategorizedDateKeys.length - 1];
+
+      if (nextDateKey && nextDateKey !== selectedCalendarDate) {
+        setSelectedCalendarDate(nextDateKey);
+      }
+    }
+  }, [
+    calendarReviewDateKeys,
+    calendarUncategorizedDateKeys,
+    dashboardCalendarProcessingMode,
+    selectedCalendarHasUncategorizedTransactions,
+    selectedCalendarDate,
+  ]);
+  useEffect(() => {
+    if (dashboardCalendarProcessingMode !== "review" || !dashboardReviewWorkflow) return;
+
+    const availableReviewIds = dashboardTransactionWorkflowReviews.map((review) => review.id);
+    if (!availableReviewIds.length) {
+      handleStopDashboardCalendarProcessing();
+      return;
+    }
+
+    const isQueueChanged =
+      availableReviewIds.length !== dashboardReviewWorkflow.queuedReviewIds.length ||
+      availableReviewIds.some((reviewId, index) => reviewId !== dashboardReviewWorkflow.queuedReviewIds[index]);
+    const nextActiveReviewId =
+      dashboardReviewWorkflow.activeReviewId && availableReviewIds.includes(dashboardReviewWorkflow.activeReviewId)
+        ? dashboardReviewWorkflow.activeReviewId
+        : availableReviewIds[0];
+
+    if (isQueueChanged || nextActiveReviewId !== dashboardReviewWorkflow.activeReviewId) {
+      setDashboardReviewWorkflow((current) =>
+        current
+          ? {
+              ...current,
+              queuedReviewIds: availableReviewIds,
+              activeReviewId: nextActiveReviewId,
+            }
+          : current,
+      );
+    }
+  }, [dashboardCalendarProcessingMode, dashboardReviewWorkflow, dashboardTransactionWorkflowReviews]);
+  useEffect(() => {
+    if (dashboardCalendarProcessingMode !== "uncategorized") {
+      setDashboardUncategorizedFocusTransactionId((current) => (current === null ? current : null));
+      return;
+    }
+
+    setDashboardUncategorizedFocusTransactionId((current) => {
+      if (
+        current &&
+        displayedCalendarTransactions.some((transaction) => transaction.id === current)
+      ) {
+        return current;
+      }
+      return firstDisplayedUncategorizedTransactionId;
+    });
+  }, [dashboardCalendarProcessingMode, displayedCalendarTransactions, firstDisplayedUncategorizedTransactionId]);
+  useEffect(() => {
+    if (!activeDashboardWorkflowReview) return;
+    const primaryTransaction = dashboardTransactionMap.get(activeDashboardWorkflowReview.primaryTransactionId);
+    const nextDateKey = primaryTransaction?.occurredAt.slice(0, 10);
+    if (!nextDateKey || nextDateKey === selectedCalendarDate) return;
+    setSelectedCalendarDate(nextDateKey);
+  }, [activeDashboardWorkflowReview, dashboardTransactionMap, selectedCalendarDate]);
+  useEffect(() => {
+    if (!activeDashboardWorkflowReview) return;
+    const row = document.querySelector<HTMLElement>(`[data-transaction-review-row="${activeDashboardWorkflowReview.primaryTransactionId}"]`);
+    row?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [activeDashboardWorkflowReview, selectedCalendarDate]);
+  useEffect(() => {
+    if (!dashboardCalendarProcessingMode) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      const container = dashboardCalendarTransactionsRef.current;
+      if (!container) return;
+
+      const primaryRow =
+        container.querySelector<HTMLElement>(".transaction-review-row.is-review-primary") ??
+        container.querySelector<HTMLElement>("[data-dashboard-calendar-row]");
+      const fallbackTarget =
+        primaryRow ??
+        container.querySelector<HTMLElement>(".dashboard-calendar-transactions-head");
+      if (!fallbackTarget) return;
+
+      const rect = fallbackTarget.getBoundingClientRect();
+      const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+      const needsScroll = rect.top < 120 || rect.bottom > viewportHeight - 40;
+
+      if (needsScroll) {
+        fallbackTarget.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      }
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [dashboardCalendarProcessingMode, selectedCalendarDate, displayedCalendarTransactions.length]);
+  const handleStartDashboardCalendarProcessing = (mode: Exclude<DashboardCalendarProcessingMode, null>) => {
+    const monthStartDateKey = `${calendarMonthValue}-01`;
+    const relevantDateKeys = mode === "review" ? calendarReviewDateKeys : calendarUncategorizedDateKeys;
+    const nextDateKey = relevantDateKeys.find((dateKey) => dateKey >= monthStartDateKey) ?? monthStartDateKey;
+
+    setDashboardCalendarProcessingMode(mode);
+    setIsDashboardCalendarAutoReviewOnly(mode === "review");
+    setIsDashboardCalendarUncategorizedOnly(mode === "uncategorized");
+    setSelectedCalendarDate(nextDateKey);
+    setDashboardUncategorizedFocusTransactionId(null);
+    if (mode === "review") {
+      setDashboardReviewWorkflow({
+        activeReviewId: sortedDashboardCalendarOpenReviews[0]?.id ?? null,
+        queuedReviewIds: sortedDashboardCalendarOpenReviews.map((review) => review.id),
+      });
+      return;
+    }
+    setDashboardReviewWorkflow(null);
+  };
+  const handleStopDashboardCalendarProcessing = () => {
+    setDashboardCalendarProcessingMode(null);
+    setIsDashboardCalendarAutoReviewOnly(false);
+    setIsDashboardCalendarUncategorizedOnly(false);
+    setDashboardReviewWorkflow(null);
+    setDashboardUncategorizedFocusTransactionId(null);
+  };
+  const handleDashboardActiveReviewDecision = (decision: "apply" | "resolve") => {
+    if (!dashboardReviewWorkflow || !activeDashboardWorkflowReview) return;
+
+    const nextReviewId = getNextQueuedReviewId(dashboardReviewWorkflow.queuedReviewIds, activeDashboardWorkflowReview.id);
+    setDashboardReviewWorkflow((current) =>
+      current
+        ? {
+            ...current,
+            activeReviewId: nextReviewId,
+          }
+        : current,
+    );
+
+    if (decision === "apply") {
+      applyReviewSuggestion(activeDashboardWorkflowReview.id);
+      return;
+    }
+
+    resolveReview(activeDashboardWorkflowReview.id);
+  };
+  const deferDashboardActiveReview = () => {
+    if (!dashboardReviewWorkflow || !activeDashboardWorkflowReview) return;
+
+    const remainingReviewIds = dashboardReviewWorkflow.queuedReviewIds.filter((reviewId) => reviewId !== activeDashboardWorkflowReview.id);
+    if (!remainingReviewIds.length) {
+      handleStopDashboardCalendarProcessing();
+      return;
+    }
+
+    const nextReviewId = getNextQueuedReviewId(dashboardReviewWorkflow.queuedReviewIds, activeDashboardWorkflowReview.id);
+    setDashboardReviewWorkflow((current) =>
+      current
+        ? {
+            ...current,
+            activeReviewId: nextReviewId && remainingReviewIds.includes(nextReviewId) ? nextReviewId : remainingReviewIds[0] ?? null,
+            queuedReviewIds: remainingReviewIds,
+          }
+        : current,
+    );
+  };
+  const setLoopConfirmCandidateSelection = (transactionId: string, checked: boolean) => {
+    setLoopConfirmState((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        candidateIds: checked
+          ? current.candidateIds.includes(transactionId)
+            ? current.candidateIds
+            : [...current.candidateIds, transactionId]
+          : current.candidateIds.filter((candidateId) => candidateId !== transactionId),
+      };
+    });
+  };
   const settlementReceiver = currentMonthSettlementRows.find((row) => row.remainingDelta > 0);
   const settlementSender = currentMonthSettlementRows.find((row) => row.remainingDelta < 0);
   const suggestedSettlementAmount =
@@ -1679,6 +2621,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
     () => new Map(scope.accounts.map((account) => [account.id, account.alias || account.name])),
     [scope.accounts],
   );
+  const cardNameMap = useMemo(() => new Map(scope.cards.map((card) => [card.id, card.name])), [scope.cards]);
   const selectedDashboardCategoryColumns = useMemo(() => {
     const totals = new Map<string, number>();
 
@@ -2075,6 +3018,43 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
     if (!transaction.categoryId) return "미분류";
     return categoryNameMap.get(transaction.categoryId) ?? "알 수 없는 카테고리";
   };
+  const getDashboardTransactionConnectionMeta = (transaction: Transaction) => {
+    const parts = [
+      getSourceTypeLabel(transaction.sourceType),
+      transaction.ownerPersonId ? `사용자 ${getDashboardTransactionOwnerLabel(transaction)}` : null,
+      transaction.accountId ? `계좌 ${accountNameMap.get(transaction.accountId) ?? "-"}` : null,
+      transaction.cardId ? `카드 ${cardNameMap.get(transaction.cardId) ?? "-"}` : null,
+    ].filter(Boolean);
+
+    return parts.join(" · ");
+  };
+  const getDashboardTransactionReviewBadgeLabel = (transaction: Transaction) => {
+    if (!activeDashboardWorkflowReview || !activeDashboardWorkflowTransactionIds.has(transaction.id)) return null;
+
+    if (activeDashboardWorkflowReview.reviewType === "category_suggestion") return "카테고리 제안";
+    if (activeDashboardWorkflowReview.reviewType === "duplicate_candidate") {
+      return transaction.id === activeDashboardWorkflowReview.primaryTransactionId ? "중복 후보" : "비교 거래";
+    }
+    if (activeDashboardWorkflowReview.reviewType === "refund_candidate") {
+      return transaction.id === activeDashboardWorkflowReview.primaryTransactionId ? "환불 후보" : "원거래";
+    }
+    return null;
+  };
+  const getDashboardTransactionReviewHelperText = (transaction: Transaction) => {
+    if (!activeDashboardWorkflowReview || !activeDashboardWorkflowTransactionIds.has(transaction.id)) return null;
+
+    if (activeDashboardWorkflowReview.reviewType === "category_suggestion") {
+      return `제안 카테고리를 확인해 주세요 · ${getDashboardTransactionConnectionMeta(transaction)}`;
+    }
+    if (activeDashboardWorkflowReview.reviewType === "duplicate_candidate") {
+      return `${transaction.id === activeDashboardWorkflowReview.primaryTransactionId ? "제외할 후보 거래" : "비교 기준 거래"} · ${getDashboardTransactionConnectionMeta(transaction)}`;
+    }
+    if (activeDashboardWorkflowReview.reviewType === "refund_candidate") {
+      return `${transaction.id === activeDashboardWorkflowReview.primaryTransactionId ? "환불로 연결할 거래" : "기준이 되는 원거래"} · ${getDashboardTransactionConnectionMeta(transaction)}`;
+    }
+
+    return getDashboardTransactionConnectionMeta(transaction);
+  };
 
   const personCategoryUsage = useMemo<DashboardPersonCategoryUsage[]>(() => {
     const personMap = new Map(visiblePeople.map((person) => [person.id, person]));
@@ -2342,9 +3322,19 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
             </button>
           </div>
           <strong className="dashboard-calendar-hero-date">
-            {formatFullKoreanDateLabel(selectedCalendarCell?.dateKey ?? selectedCalendarDate)}
+            {formatMonthLabel((selectedCalendarCell?.dateKey ?? selectedCalendarDate).slice(0, 7))}
           </strong>
-          <div className="dashboard-calendar-hero-spacer" aria-hidden="true" />
+          <div className="dashboard-section-toolbar">
+            <AppSelect
+              className="dashboard-calendar-owner-select"
+              buttonClassName="dashboard-calendar-owner-select-trigger"
+              dropdownClassName="dashboard-calendar-owner-select-dropdown"
+              value={selectedCalendarOwnerId}
+              onChange={setSelectedCalendarOwnerId}
+              options={calendarOwnerOptions}
+              ariaLabel="소비기록 사용자 선택"
+            />
+          </div>
         </div>
       ) : (
         <div className="section-head">
@@ -2362,6 +3352,137 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
           </div>
         </div>
       )}
+
+      {mode === "dashboard" ? (
+        <div className="stats-grid">
+          <article
+            className="stat-card stat-card--actionable"
+            style={getMotionStyle(1)}
+            onClick={() => setIsIncomeModalOpen(true)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                setIsIncomeModalOpen(true);
+              }
+            }}
+            role="button"
+            tabIndex={0}
+            aria-label="수입 모달 열기"
+          >
+            <div className="stat-card-head">
+              <span className="stat-label">이번 달 수입</span>
+              <span className={`badge dashboard-stat-badge ${selectedCalendarIncomeBadge.className}`}>
+                {selectedCalendarIncomeBadge.label}
+              </span>
+            </div>
+            <strong>{formatCurrency(selectedCalendarInsights.income)}</strong>
+            <span
+              className={`stat-delta${selectedCalendarIncomeDelta > 0 ? " is-up is-positive" : selectedCalendarIncomeDelta < 0 ? " is-down is-negative" : ""}`}
+            >
+              {formatDeltaAmount(selectedCalendarIncomeDelta)}
+            </span>
+          </article>
+          <article className="stat-card" style={getMotionStyle(2)}>
+            <div className="stat-card-head">
+              <span className="stat-label">이번 달 결제금액</span>
+              <span className={`badge dashboard-stat-badge ${selectedCalendarExpenseBadge.className}`}>
+                {selectedCalendarExpenseBadge.label}
+              </span>
+            </div>
+            <strong>{formatCurrency(selectedCalendarExpenseTotal)}</strong>
+            <span
+              className={`stat-delta${selectedCalendarExpenseDelta > 0 ? " is-up is-negative" : selectedCalendarExpenseDelta < 0 ? " is-down is-positive" : ""}`}
+            >
+              {formatDeltaAmount(selectedCalendarExpenseDelta)}
+            </span>
+          </article>
+          <article className="stat-card" style={getMotionStyle(3)}>
+            <div className="stat-card-head">
+              <span className="stat-label">잔액</span>
+              <span className={`badge dashboard-stat-badge ${selectedCalendarSavingsBadge.className}`}>
+                {selectedCalendarSavingsBadge.label}
+              </span>
+            </div>
+            <strong>{formatCurrency(selectedCalendarBalance)}</strong>
+            <span
+              className={`stat-delta${selectedCalendarSavingsDelta > 0 ? " is-up is-positive" : selectedCalendarSavingsDelta < 0 ? " is-down is-negative" : ""}`}
+            >
+              {formatDeltaAmount(selectedCalendarSavingsDelta)}
+            </span>
+          </article>
+          <article
+            className="stat-card stat-card--actionable"
+            style={getMotionStyle(4)}
+            onClick={handleOpenStatementUploadModal}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                handleOpenStatementUploadModal();
+              }
+            }}
+            role="button"
+            tabIndex={0}
+            aria-label="명세서 업로드 모달 열기"
+          >
+            <div className="stat-card-head">
+              <span className="stat-label">명세서 업로드</span>
+            </div>
+            <strong>{selectedCalendarImportCount}건</strong>
+          </article>
+          <article
+            className={`stat-card${selectedCalendarReviewPending ? " stat-card--actionable" : ""}`}
+            style={getMotionStyle(5)}
+            onClick={selectedCalendarReviewPending ? () => setPendingDashboardCalendarProcessingMode("review") : undefined}
+            onKeyDown={
+              selectedCalendarReviewPending
+                ? (event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setPendingDashboardCalendarProcessingMode("review");
+                    }
+                  }
+                : undefined
+            }
+            role={selectedCalendarReviewPending ? "button" : undefined}
+            tabIndex={selectedCalendarReviewPending ? 0 : undefined}
+            aria-label={selectedCalendarReviewPending ? "검토 모드 시작" : undefined}
+          >
+            <div className="stat-card-head">
+              <span className="stat-label">검토 필요</span>
+              <span className={`badge dashboard-stat-badge ${selectedCalendarReviewBadge.className}`}>
+                {selectedCalendarReviewBadge.label}
+              </span>
+            </div>
+            <strong>{selectedCalendarInsights.reviewCount}건</strong>
+          </article>
+          <article
+            className={`stat-card${selectedCalendarUncategorizedPending ? " stat-card--actionable" : ""}`}
+            style={getMotionStyle(6)}
+            onClick={selectedCalendarUncategorizedPending ? () => setPendingDashboardCalendarProcessingMode("uncategorized") : undefined}
+            onKeyDown={
+              selectedCalendarUncategorizedPending
+                ? (event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setPendingDashboardCalendarProcessingMode("uncategorized");
+                    }
+                  }
+                : undefined
+            }
+            role={selectedCalendarUncategorizedPending ? "button" : undefined}
+            tabIndex={selectedCalendarUncategorizedPending ? 0 : undefined}
+            aria-label={selectedCalendarUncategorizedPending ? "미분류 모드 시작" : undefined}
+          >
+            <div className="stat-card-head">
+              <span className="stat-label">미분류</span>
+              <span className={`badge dashboard-stat-badge ${selectedCalendarUncategorizedBadge.className}`}>
+                {selectedCalendarUncategorizedBadge.label}
+              </span>
+            </div>
+            <strong>{selectedCalendarInsights.uncategorizedCount}건</strong>
+          </article>
+        </div>
+      ) : null}
 
       <div className="dashboard-calendar-layout">
         <div>
@@ -2432,20 +3553,43 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
         </article>
       </div>
 
-      <div className="dashboard-calendar-transactions">
+      <div className="dashboard-calendar-transactions" ref={dashboardCalendarTransactionsRef}>
         <div className="dashboard-calendar-transactions-head">
-          <span className="section-kicker">선택한 날짜 소비내역</span>
+          <div className="dashboard-calendar-transactions-title-block">
+            <h3 className="dashboard-calendar-transactions-title">
+              {`${formatFullKoreanDateLabel(selectedCalendarCell?.dateKey ?? selectedCalendarDate)}의 결제내역`}
+            </h3>
+            {dashboardCalendarProcessingMode === "review" ? (
+              <span className="dashboard-calendar-transactions-status-badge">자동검토중</span>
+            ) : null}
+            {dashboardCalendarProcessingMode === "uncategorized" ? (
+              <span className="dashboard-calendar-transactions-status-badge">분류작업중</span>
+            ) : null}
+          </div>
+          <div className="dashboard-calendar-transactions-toolbar">
+            {dashboardCalendarProcessingMode === "review" ? (
+              <button type="button" className="btn btn-outline-secondary btn-sm" onClick={handleStopDashboardCalendarProcessing}>
+                자동검토 종료
+              </button>
+            ) : null}
+            {dashboardCalendarProcessingMode === "uncategorized" ? (
+              <button type="button" className="btn btn-outline-secondary btn-sm" onClick={handleStopDashboardCalendarProcessing}>
+                분류작업 종료
+              </button>
+            ) : null}
+          </div>
         </div>
-        {selectedCalendarTransactions.length ? (
+        {displayedCalendarTransactions.length ? (
           <div className="table-responsive dashboard-calendar-transactions-table-wrap">
             <table className="table align-middle transaction-grid-table">
               <colgroup>
                 <col className="transaction-grid-col-date" />
-                <col className="transaction-grid-col-merchant" />
+                <col className="transaction-grid-col-merchant dashboard-calendar-col-merchant" />
                 <col className="transaction-grid-col-paid-amount" />
                 <col className="transaction-grid-col-owner" />
+                <col className="transaction-grid-col-loop" />
                 <col className="transaction-grid-col-category" />
-                <col className="transaction-grid-col-note" />
+                <col className="transaction-grid-col-note dashboard-calendar-col-note" />
               </colgroup>
               <thead>
                 <tr>
@@ -2453,55 +3597,167 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
                   <th>가맹점</th>
                   <th className="text-end">결제금액</th>
                   <th>사용자</th>
+                  <th>루프</th>
                   <th>카테고리</th>
                   <th>비고</th>
                 </tr>
               </thead>
               <tbody>
-                {selectedCalendarTransactions.map((transaction, index) => (
-                  <tr key={transaction.id} style={getMotionStyle(index)}>
-                    <td className="transaction-date-cell">{transaction.occurredAt.slice(0, 10)}</td>
-                    <td>
-                      <TransactionRowHeader merchantName={transaction.merchantName} />
-                    </td>
-                    <td className="text-end transaction-amount-cell">
-                      <strong>{formatCurrency(transaction.amount)}</strong>
-                    </td>
-                    <td className="transaction-owner-cell">{getDashboardTransactionOwnerLabel(transaction)}</td>
-                    <td className="dashboard-calendar-grid-cell">
-                      <TransactionCategoryEditor
-                        transaction={transaction}
-                        categories={scope.categories}
-                        categoryName={transaction.categoryId ? categoryLabelMap.get(transaction.categoryId) ?? null : null}
-                        onCategoryChange={(nextCategoryId) => {
-                          if (!nextCategoryId) {
-                            clearCategory(workspaceId, transaction.id);
-                            return;
-                          }
-                          assignCategory(workspaceId, transaction.id, nextCategoryId);
-                        }}
-                      />
-                    </td>
-                    <td className="dashboard-calendar-grid-cell">
-                      <input
-                        type="text"
-                        className="form-control form-control-sm dashboard-calendar-note-input"
-                        defaultValue={transaction.description}
-                        placeholder="비고 입력"
-                        onBlur={(event) => {
-                          const nextDescription = event.currentTarget.value.trim();
-                          if (nextDescription === (transaction.description ?? "")) return;
-                          updateTransactionDetails(workspaceId, transaction.id, { description: nextDescription });
-                        }}
-                      />
-                    </td>
-                  </tr>
-                ))}
+                {displayedCalendarTransactions.map((transaction, index) => {
+                  const isWorkflowMatch =
+                    dashboardCalendarProcessingMode === "review" ? activeDashboardWorkflowTransactionIds.has(transaction.id) : false;
+                  const isWorkflowPrimary = activeDashboardWorkflowReview?.primaryTransactionId === transaction.id;
+                  const isUncategorizedFocus =
+                    dashboardCalendarProcessingMode === "uncategorized" &&
+                    dashboardUncategorizedFocusTransactionId === transaction.id;
+                  const categoryReviewHint = dashboardCategorySuggestionLabelsByTransactionId.get(transaction.id) ?? null;
+                  const inlineReview = isWorkflowPrimary ? activeDashboardWorkflowReview : null;
+
+                  return (
+                    <Fragment key={transaction.id}>
+                      <tr
+                        style={getMotionStyle(index)}
+                        data-transaction-review-row={transaction.id}
+                        data-dashboard-calendar-row="true"
+                        className={`${isWorkflowMatch || isUncategorizedFocus ? " transaction-review-row" : ""}${isWorkflowPrimary || isUncategorizedFocus ? " is-review-focus" : ""}${isWorkflowPrimary ? " is-review-primary" : ""}`}
+                      >
+                        <td className="transaction-date-cell">{transaction.occurredAt.slice(0, 10)}</td>
+                        <td>
+                          <TransactionRowHeader
+                            merchantName={transaction.merchantName}
+                            badgeLabel={getDashboardTransactionReviewBadgeLabel(transaction)}
+                            helperText={getDashboardTransactionReviewHelperText(transaction)}
+                          />
+                        </td>
+                        <td className="text-end transaction-amount-cell">
+                          <strong>{formatCurrency(transaction.amount)}</strong>
+                        </td>
+                        <td className="transaction-owner-cell">{getDashboardTransactionOwnerLabel(transaction)}</td>
+                        <td className="transaction-loop-cell">
+                          <label className="transaction-loop-toggle">
+                            <input
+                              type="checkbox"
+                              checked={transaction.isLoop ?? false}
+                              onChange={(event) => {
+                                if (!event.target.checked) {
+                                  updateTransactionFlags(workspaceId, transaction.id, { isLoop: false });
+                                  return;
+                                }
+                                const candidateGroup = getLoopCandidateGroup(transaction, scope.transactions);
+                                setLoopConfirmState({
+                                  transactionId: transaction.id,
+                                  candidateIds: candidateGroup.transactionIds,
+                                  suggestedIds: candidateGroup.transactionIds,
+                                });
+                              }}
+                            />
+                          </label>
+                        </td>
+                        <td className={`dashboard-calendar-grid-cell${inlineReview?.reviewType === "category_suggestion" ? " is-review-focus" : ""}`}>
+                          <TransactionCategoryEditor
+                            transaction={transaction}
+                            categories={scope.categories}
+                            categoryName={transaction.categoryId ? categoryLabelMap.get(transaction.categoryId) ?? null : null}
+                            reviewSuggestionLabel={categoryReviewHint}
+                            onFocus={() => {
+                              if (dashboardCalendarProcessingMode === "uncategorized") {
+                                setDashboardUncategorizedFocusTransactionId(transaction.id);
+                              }
+                            }}
+                            isReviewFocused={Boolean(
+                              activeDashboardWorkflowReview?.reviewType === "category_suggestion" &&
+                                activeDashboardWorkflowReview.primaryTransactionId === transaction.id,
+                            )}
+                            suggestionListClassName="dashboard-calendar-category-suggestion-list"
+                            onCategoryChange={(nextCategoryId) => {
+                              if (!nextCategoryId) {
+                                clearCategory(workspaceId, transaction.id);
+                                return;
+                              }
+                              assignCategory(workspaceId, transaction.id, nextCategoryId);
+                            }}
+                          />
+                        </td>
+                        <td className="dashboard-calendar-grid-cell">
+                          <input
+                            type="text"
+                            className="form-control form-control-sm dashboard-calendar-note-input"
+                            defaultValue={transaction.description}
+                            placeholder="비고 입력"
+                            onFocus={() => {
+                              if (dashboardCalendarProcessingMode === "uncategorized") {
+                                setDashboardUncategorizedFocusTransactionId(transaction.id);
+                              }
+                            }}
+                            onBlur={(event) => {
+                              const nextDescription = event.currentTarget.value.trim();
+                              if (nextDescription === (transaction.description ?? "")) return;
+                              updateTransactionDetails(workspaceId, transaction.id, { description: nextDescription });
+                            }}
+                          />
+                        </td>
+                      </tr>
+                      {inlineReview ? (
+                        <tr className="transaction-review-inline-row">
+                          <td colSpan={7} className="transaction-review-inline-cell">
+                            <div className="transaction-review-inline-panel">
+                              <div className="transaction-review-inline-meta">
+                                <span className="transaction-review-inline-badge">
+                                  신뢰도 {Math.round(inlineReview.confidenceScore * 100)}%
+                                </span>
+                              </div>
+                              <div className="transaction-review-inline-copy">
+                                {inlineReview.reviewType === "category_suggestion" && activeDashboardWorkflowSuggestedCategoryLabel ? (
+                                  <strong className="transaction-review-inline-question">
+                                    <span>해당 건을 </span>
+                                    <span className="transaction-review-inline-category-badge">
+                                      {activeDashboardWorkflowSuggestedCategoryLabel}
+                                    </span>
+                                    <span>로 분류할까요?</span>
+                                  </strong>
+                                ) : (
+                                  <strong>{getInlineReviewPrompt(inlineReview)}</strong>
+                                )}
+                              </div>
+                              <div className="transaction-review-inline-actions">
+                                <button type="button" className="btn btn-outline-secondary btn-sm" onClick={deferDashboardActiveReview}>
+                                  보류
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-outline-danger btn-sm"
+                                  onClick={() => handleDashboardActiveReviewDecision("resolve")}
+                                >
+                                  아니요
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-primary btn-sm"
+                                  onClick={() => handleDashboardActiveReviewDecision("apply")}
+                                >
+                                  예
+                                </button>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : null}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         ) : (
-          <p className="mb-0 text-secondary">이 날짜에는 아직 정리된 소비내역이 없습니다.</p>
+          <p className="mb-0 text-secondary">
+            {selectedCalendarTransactions.length
+              ? "현재 토글 조건에 맞는 결제내역이 없습니다."
+              : dashboardCalendarProcessingMode === "review"
+                ? "이번 달에 남은 검토 필요 결제내역이 없습니다."
+                : dashboardCalendarProcessingMode === "uncategorized"
+                  ? "이번 달에 남은 미분류 결제내역이 없습니다."
+                  : "이 날짜에는 아직 정리된 소비내역이 없습니다."}
+          </p>
         )}
       </div>
     </section>
@@ -3398,228 +4654,6 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
 
       {mode === "dashboard" ? (
         <>
-      <section className="card shadow-sm" style={getMotionStyle(0)} data-guide-target="dashboard-month-summary">
-        <div className="section-head">
-          <div>
-            <span className="section-kicker">이번 달 조각</span>
-            <h2 className="section-title">이번 달 조각모음</h2>
-          </div>
-        </div>
-
-        <div className="stats-grid">
-          <article
-            className={`stat-card${currentMonthIncomeMissing ? " stat-card--actionable" : ""}`}
-            style={getMotionStyle(1)}
-            onClick={currentMonthIncomeMissing ? () => navigate("/collections/income") : undefined}
-            onKeyDown={
-              currentMonthIncomeMissing
-                ? (event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      navigate("/collections/income");
-                    }
-                  }
-                : undefined
-            }
-            role={currentMonthIncomeMissing ? "button" : undefined}
-            tabIndex={currentMonthIncomeMissing ? 0 : undefined}
-            aria-label={currentMonthIncomeMissing ? "수입 페이지로 이동" : undefined}
-          >
-            <div className="stat-card-head">
-              <span className="stat-label">이번 달 수입</span>
-              <span className={`badge dashboard-stat-badge ${incomeDeltaBadge.className}`}>
-                {incomeDeltaBadge.label}
-              </span>
-            </div>
-            <strong>{formatCurrency(currentMonthInsights.income)}</strong>
-            <span
-              className={`stat-delta${currentMonthIncomeDelta > 0 ? " is-up is-positive" : currentMonthIncomeDelta < 0 ? " is-down is-negative" : ""}`}
-            >
-              {formatDeltaAmount(currentMonthIncomeDelta)}
-            </span>
-          </article>
-          <article className="stat-card" style={getMotionStyle(2)}>
-            <div className="stat-card-head">
-              <span className="stat-label">이번 달 결제금액</span>
-              <span className={`badge dashboard-stat-badge ${expenseDeltaBadge.className}`}>
-                {expenseDeltaBadge.label}
-              </span>
-            </div>
-            <strong>{formatCurrency(currentMonthStatementExpenseTotal)}</strong>
-            <span
-              className={`stat-delta${currentMonthExpenseDelta > 0 ? " is-up is-negative" : currentMonthExpenseDelta < 0 ? " is-down is-positive" : ""}`}
-            >
-              {formatDeltaAmount(currentMonthExpenseDelta)}
-            </span>
-          </article>
-          <article className="stat-card" style={getMotionStyle(3)}>
-            <div className="stat-card-head">
-              <span className="stat-label">잔액</span>
-              <span className={`badge dashboard-stat-badge ${savingsDeltaBadge.className}`}>
-                {savingsDeltaBadge.label}
-              </span>
-            </div>
-            <strong>{formatCurrency(currentMonthStatementBalance)}</strong>
-            <span
-              className={`stat-delta${currentMonthSavingsDelta > 0 ? " is-up is-positive" : currentMonthSavingsDelta < 0 ? " is-down is-negative" : ""}`}
-            >
-              {formatDeltaAmount(currentMonthSavingsDelta)}
-            </span>
-          </article>
-          <article
-            className={`stat-card${currentMonthStatementMissing ? " stat-card--actionable" : ""}`}
-            style={getMotionStyle(4)}
-            onClick={currentMonthStatementMissing ? () => navigate("/collections/card") : undefined}
-            onKeyDown={
-              currentMonthStatementMissing
-                ? (event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      navigate("/collections/card");
-                    }
-                  }
-                : undefined
-            }
-            role={currentMonthStatementMissing ? "button" : undefined}
-            tabIndex={currentMonthStatementMissing ? 0 : undefined}
-            aria-label={currentMonthStatementMissing ? "결제내역 페이지로 이동" : undefined}
-          >
-            <div className="stat-card-head">
-              <span className="stat-label">명세서 업로드</span>
-            </div>
-            <strong>{currentMonthStatementImportCount}건</strong>
-          </article>
-          <article
-            className={`stat-card${currentMonthReviewPending ? " stat-card--actionable" : ""}`}
-            style={getMotionStyle(5)}
-            onClick={currentMonthReviewPending ? () => navigate("/collections/card") : undefined}
-            onKeyDown={
-              currentMonthReviewPending
-                ? (event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      navigate("/collections/card");
-                    }
-                  }
-                : undefined
-            }
-            role={currentMonthReviewPending ? "button" : undefined}
-            tabIndex={currentMonthReviewPending ? 0 : undefined}
-            aria-label={currentMonthReviewPending ? "결제내역 페이지로 이동" : undefined}
-          >
-            <div className="stat-card-head">
-              <span className="stat-label">검토 필요</span>
-              <span className={`badge dashboard-stat-badge ${reviewBadge.className}`}>
-                {reviewBadge.label}
-              </span>
-            </div>
-            <strong>{currentMonthStatementInsights.reviewCount}건</strong>
-          </article>
-          <article
-            className={`stat-card${currentMonthUncategorizedPending ? " stat-card--actionable" : ""}`}
-            style={getMotionStyle(6)}
-            onClick={currentMonthUncategorizedPending ? () => navigate("/collections/card?cleanup=uncategorized") : undefined}
-            onKeyDown={
-              currentMonthUncategorizedPending
-                ? (event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      navigate("/collections/card?cleanup=uncategorized");
-                    }
-                  }
-                : undefined
-            }
-            role={currentMonthUncategorizedPending ? "button" : undefined}
-            tabIndex={currentMonthUncategorizedPending ? 0 : undefined}
-            aria-label={currentMonthUncategorizedPending ? "미분류 결제내역 페이지로 이동" : undefined}
-          >
-            <div className="stat-card-head">
-              <span className="stat-label">미분류</span>
-              <span className={`badge dashboard-stat-badge ${uncategorizedBadge.className}`}>
-                {uncategorizedBadge.label}
-              </span>
-            </div>
-            <strong>{currentMonthStatementInsights.uncategorizedCount}건</strong>
-          </article>
-        </div>
-
-        <div className="review-summary-panel compact-summary-panel dashboard-summary-action-panel mt-4">
-          <div className="review-summary-copy">
-            <strong>
-              {currentMonthStatementInsights.isDiagnosisReady
-                ? "이번 달 조각이 안정적으로 정리되어 있습니다"
-                : "이번 달 조각을 더 정리해야 합니다"}
-            </strong>
-            <p className="mb-0 text-secondary">
-              {currentMonthStatementInsights.nextSteps.length
-                ? currentMonthStatementInsights.nextSteps[0]
-                : "결제내역에서 이번 달 거래를 계속 정리할 수 있습니다."}
-            </p>
-          </div>
-          <div className="dashboard-summary-action">
-            <Link to="/collections/card" className="btn btn-outline-secondary btn-sm">
-              결제내역 보기
-            </Link>
-          </div>
-        </div>
-
-        {currentMonthIncomeMissing ? (
-          <div className="review-summary-panel compact-summary-panel dashboard-summary-action-panel mt-4">
-            <div className="review-summary-copy">
-              <strong>이번 달 수입이 없습니다</strong>
-              <p className="mb-0 text-secondary">수입 페이지에서 이번 달 수입을 먼저 입력해 주세요.</p>
-            </div>
-            <div className="dashboard-summary-action">
-              <Link to="/collections/income" className="btn btn-outline-primary btn-sm">
-                수입 입력하기
-              </Link>
-            </div>
-          </div>
-        ) : null}
-
-        {currentMonthStatementMissing ? (
-          <div className="review-summary-panel compact-summary-panel dashboard-summary-action-panel mt-4">
-            <div className="review-summary-copy">
-              <strong>이번 달 명세서 업로드가 없습니다</strong>
-              <p className="mb-0 text-secondary">결제내역에서 이번 달 청구분 명세서를 먼저 올려 주세요.</p>
-            </div>
-            <div className="dashboard-summary-action">
-              <Link to="/collections/card" className="btn btn-outline-primary btn-sm">
-                명세서 업로드하기
-              </Link>
-            </div>
-          </div>
-        ) : null}
-
-        {currentMonthReviewPending ? (
-          <div className="review-summary-panel compact-summary-panel dashboard-summary-action-panel mt-4">
-            <div className="review-summary-copy">
-              <strong>검토가 필요한 항목이 남아 있습니다</strong>
-              <p className="mb-0 text-secondary">결제내역에서 이번 달 검토 필요 항목을 이어서 정리해 주세요.</p>
-            </div>
-            <div className="dashboard-summary-action">
-              <Link to="/collections/card" className="btn btn-outline-primary btn-sm">
-                검토하러 가기
-              </Link>
-            </div>
-          </div>
-        ) : null}
-
-        {currentMonthUncategorizedPending ? (
-          <div className="review-summary-panel compact-summary-panel dashboard-summary-action-panel mt-4">
-            <div className="review-summary-copy">
-              <strong>미분류 거래가 남아 있습니다</strong>
-              <p className="mb-0 text-secondary">미분류 필터가 켜진 결제내역에서 이번 달 거래를 바로 정리할 수 있습니다.</p>
-            </div>
-            <div className="dashboard-summary-action">
-              <Link to="/collections/card?cleanup=uncategorized" className="btn btn-outline-primary btn-sm">
-                미분류 정리하기
-              </Link>
-            </div>
-          </div>
-        ) : null}
-      </section>
-
       <section className="card shadow-sm" style={getMotionStyle(1)} data-guide-target="dashboard-foundation-overview">
         <div className="section-head">
           <div>
@@ -3809,6 +4843,559 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
       ) : null}
         </>
       ) : null}
+
+      <AppModal
+        open={pendingDashboardCalendarProcessingMode !== null}
+        title={pendingDashboardCalendarProcessingMode === "review" ? "자동검토 시작" : "분류작업 시작"}
+        dialogClassName="dashboard-processing-confirm-modal"
+        description={
+          pendingDashboardCalendarProcessingMode === "review"
+            ? "이번 달 1일부터 말일까지 날짜를 넘겨가며 검토가 필요한 결제내역을 순서대로 확인할까요?"
+            : pendingDashboardCalendarProcessingMode === "uncategorized"
+              ? "분류작업을 시작하시겠습니까? 이번 달 1일부터 말일까지 날짜를 넘겨가며 미분류 결제내역을 순서대로 정리합니다."
+              : ""
+        }
+        onClose={() => setPendingDashboardCalendarProcessingMode(null)}
+      >
+        <div className="d-flex justify-content-end gap-2">
+          <button
+            type="button"
+            className="btn btn-outline-secondary"
+            onClick={() => setPendingDashboardCalendarProcessingMode(null)}
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => {
+              if (!pendingDashboardCalendarProcessingMode) return;
+              handleStartDashboardCalendarProcessing(pendingDashboardCalendarProcessingMode);
+              setPendingDashboardCalendarProcessingMode(null);
+            }}
+          >
+            시작
+          </button>
+        </div>
+      </AppModal>
+
+      <AppModal
+        open={Boolean(loopConfirmState)}
+        title="루프 후보 확인"
+        description="이번 거래를 기준으로 과거 소비를 함께 보여드릴게요. 같은 반복 소비가 맞는지 보고 묶어서 등록해 주세요."
+        onClose={() => {
+          setLoopConfirmState(null);
+          setLoopConfirmDragMode(null);
+        }}
+        footer={
+          <>
+            <button
+              type="button"
+              className="btn btn-outline-secondary"
+              onClick={() => {
+                setLoopConfirmState(null);
+                setLoopConfirmDragMode(null);
+              }}
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={!loopConfirmState?.candidateIds.length}
+              onClick={() => {
+                if (!loopConfirmState?.candidateIds.length) return;
+                setTransactionLoopFlagBatch(workspaceId, loopConfirmState.candidateIds, true);
+                setLoopConfirmState(null);
+              }}
+            >
+              {`선택한 ${loopConfirmState?.candidateIds.length ?? 0}건으로 루프 설정`}
+            </button>
+          </>
+        }
+      >
+        {loopConfirmState ? (
+          <div className="loop-confirm-panel">
+            <div className="loop-confirm-summary">
+              <strong>이번 거래</strong>
+              <span>이 거래는 루프 기준으로 고정됩니다. 아래 과거 거래 중 같은 소비만 함께 묶어 주세요.</span>
+            </div>
+
+            {loopConfirmTargetTransaction ? (
+              <div className="loop-confirm-item is-current is-selected">
+                <input type="checkbox" checked readOnly aria-label="현재 거래는 항상 포함됩니다." />
+                <div className="loop-confirm-copy">
+                  <strong>{loopConfirmTargetTransaction.merchantName}</strong>
+                  <span>{`${loopConfirmTargetTransaction.occurredAt.slice(0, 10)} · ${formatCurrency(loopConfirmTargetTransaction.amount)}`}</span>
+                  <span>{loopConfirmTargetTransaction.description || "비고 없음"}</span>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="loop-confirm-summary">
+              <strong>같이 볼 과거 거래</strong>
+              <span>
+                {loopConfirmPastTransactions.length
+                  ? "같은 거래처럼 보이는 과거 내역입니다. 맞는 것만 남기고 루프를 등록해 주세요."
+                  : "지금은 함께 묶을 과거 거래가 없습니다. 이번 거래만 루프로 등록됩니다."}
+              </span>
+            </div>
+
+            {loopConfirmPastTransactions.length ? (
+              <>
+                <div className="loop-confirm-actions">
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary btn-sm"
+                    onClick={() =>
+                      setLoopConfirmState((current) =>
+                        current
+                          ? {
+                              ...current,
+                              candidateIds: [...new Set([current.transactionId, ...current.suggestedIds])],
+                            }
+                          : current,
+                      )
+                    }
+                  >
+                    추천 후보 모두 선택
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary btn-sm"
+                    onClick={() =>
+                      setLoopConfirmState((current) =>
+                        current
+                          ? {
+                              ...current,
+                              candidateIds: [current.transactionId],
+                            }
+                          : current,
+                      )
+                    }
+                  >
+                    이번 거래만 남기기
+                  </button>
+                </div>
+
+                {loopConfirmPastTransactions.map((transaction) => {
+                  const checked = loopConfirmState.candidateIds.includes(transaction.id);
+                  const isSuggested = loopConfirmState.suggestedIds.includes(transaction.id);
+                  return (
+                    <label
+                      key={transaction.id}
+                      className={`loop-confirm-item${checked ? " is-selected" : ""}`}
+                      onMouseEnter={() => {
+                        if (loopConfirmDragMode === null) return;
+                        setLoopConfirmCandidateSelection(transaction.id, loopConfirmDragMode);
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          const nextChecked = !checked;
+                          setLoopConfirmDragMode(nextChecked);
+                          setLoopConfirmCandidateSelection(transaction.id, nextChecked);
+                        }}
+                        onChange={() => undefined}
+                        onKeyDown={(event) => {
+                          if (event.key !== " " && event.key !== "Enter") return;
+                          event.preventDefault();
+                          setLoopConfirmCandidateSelection(transaction.id, !checked);
+                        }}
+                      />
+                      <div className="loop-confirm-copy">
+                        <strong>{transaction.merchantName}</strong>
+                        <span>{`${transaction.occurredAt.slice(0, 10)} · ${formatCurrency(transaction.amount)}`}</span>
+                        <span>{transaction.description || "비고 없음"}</span>
+                        <small>{isSuggested ? "자동으로 묶인 추천 후보" : "직접 선택한 후보"}</small>
+                      </div>
+                    </label>
+                  );
+                })}
+              </>
+            ) : null}
+          </div>
+        ) : null}
+      </AppModal>
+
+      <AppModal
+        open={isIncomeModalOpen}
+        title="수입"
+        onClose={() => setIsIncomeModalOpen(false)}
+        dialogClassName="dashboard-income-modal"
+      >
+        <IncomeManagementContent />
+      </AppModal>
+
+      <AppModal
+        open={isStatementUploadModalOpen}
+        title="명세서 업로드"
+        description="카드 명세서를 먼저 미리보기로 확인하고, 연도별 업로드 기록까지 한 자리에서 볼 수 있습니다."
+        onClose={handleCloseStatementUploadModal}
+        dialogClassName="dashboard-statement-upload-modal"
+      >
+        <div className="dashboard-statement-upload-modal-body">
+          <section className="dashboard-statement-modal-section-card">
+            <div className="dashboard-statement-modal-section-head">
+              <div>
+                <span className="section-kicker">업로드 센터</span>
+                <h2 className="section-title">카드 명세서 가져오기</h2>
+                <p className="dashboard-statement-modal-section-copy">
+                  엑셀 파일을 올리면 바로 반영하지 않고 먼저 미리보기로 검토합니다. 확인 후 한 번에 가져오면 됩니다.
+                </p>
+              </div>
+            </div>
+
+            <section className="dashboard-statement-upload-section" data-guide-target="transactions-upload">
+
+            <label
+              className={`upload-dropzone${isDropzoneActive ? " is-active" : ""}${isDropzoneInvalid ? " is-invalid" : ""}`}
+              data-guide-target="transactions-upload-action"
+              onDragEnter={handleDropzoneDragEnter}
+              onDragOver={handleDropzoneDragOver}
+              onDragLeave={handleDropzoneDragLeave}
+              onDrop={handleDropzoneDrop}
+            >
+              <div className="upload-dropzone-copy">
+                <div className="upload-dropzone-kicker-row">
+                  <span className="upload-dropzone-kicker">카드 이용 내역 명세서 업로드</span>
+                  <span className="upload-dropzone-format-badge" aria-hidden="true">
+                    .xlsx / .xls
+                  </span>
+                </div>
+                <strong>{dropzoneTitle}</strong>
+                <p className="mb-0 text-secondary">{dropzoneDescription}</p>
+              </div>
+              <input
+                ref={statementImportFileInputRef}
+                hidden
+                type="file"
+                accept=".xlsx,.xls"
+                onClick={(event) => {
+                  event.currentTarget.value = "";
+                }}
+                onChange={async (event) => {
+                  const file = event.target.files?.[0];
+                  try {
+                    await handlePickedFile(file);
+                  } finally {
+                    event.currentTarget.value = "";
+                  }
+                }}
+              />
+            </label>
+
+            {isPreparingPreview ? <p className="text-secondary mt-3 mb-0">업로드 미리보기를 준비하고 있습니다.</p> : null}
+
+            {previewBundle ? (
+              <div className="card shadow-sm mt-4 import-preview-panel" data-guide-target="transactions-upload-preview">
+                <div className="section-head">
+                  <div>
+                    <span className="section-kicker">미리보기</span>
+                    <h3 className="section-title">{previewFileName}</h3>
+                  </div>
+                </div>
+                <div className="stats-grid import-preview-stats">
+                  <article className="stat-card">
+                    <span className="stat-label">거래</span>
+                    <strong>{previewBundle.transactions.length}건</strong>
+                  </article>
+                  <article className="stat-card">
+                    <span className="stat-label">검토</span>
+                    <strong>{previewBundle.reviews.length}건</strong>
+                  </article>
+                  <article className="stat-card">
+                    <span className="stat-label">카드</span>
+                    <strong>{previewBundle.cards.length}장</strong>
+                  </article>
+                </div>
+
+                <div className="import-preview-control-grid mt-4">
+                  <div className="import-preview-control-card">
+                    <label className="form-label">누구의 카드인가요?</label>
+                    <AppSelect
+                      value={selectedImportOwnerId}
+                      onChange={setSelectedImportOwnerId}
+                      disabled={!scope.people.length}
+                      options={[
+                        { value: "", label: "누구의 명세서인지 선택" },
+                        ...scope.people.map((person) => ({ value: person.id, label: person.displayName || person.name })),
+                      ]}
+                      ariaLabel="가져올 카드 소유자 선택"
+                    />
+                  </div>
+
+                  <div className="import-preview-control-card">
+                    <label className="form-label">언제 청구된 명세서 인가요?</label>
+                    <AppSelect
+                      value={selectedStatementMonth}
+                      onChange={setSelectedStatementMonth}
+                      disabled={!previewStatementMonthOptions.length}
+                      options={
+                        !previewStatementMonthOptions.length
+                          ? [{ value: "", label: "청구월 후보를 만들 수 없습니다" }]
+                          : previewStatementMonthOptions.map((month) => ({ value: month, label: formatStatementMonthLabel(month) }))
+                      }
+                      ariaLabel="예상 청구월 명세서 선택"
+                    />
+                  </div>
+                </div>
+
+                {previewCardMatches.length ? (
+                  <div className="people-subboard import-preview-card-section mt-4">
+                    <div className="people-subboard-head">
+                      <div>
+                        <span className="section-kicker">업로드 자산 확인</span>
+                        <h4>카드 확인</h4>
+                      </div>
+                    </div>
+                    <div className="board-case-section-body">
+                      <div className="category-case-grid import-preview-card-grid">
+                        {previewCardMatches.map(({ card, matchedCard, draftName }) => (
+                          <article key={card.id} className="category-case-card people-board-card import-preview-card">
+                            <div className="category-case-card-copy people-board-card-copy import-preview-card-copy">
+                              {!selectedImportOwnerId || matchedCard ? <strong>{card.name}</strong> : null}
+                              {selectedImportOwnerId && !matchedCard ? (
+                                <>
+                                  <div className="import-preview-card-input-block">
+                                    <input
+                                      id={`import-card-name-${card.id}`}
+                                      className="form-control"
+                                      value={draftName}
+                                      onChange={(event) =>
+                                        setImportCardNameDrafts((current) => ({
+                                          ...current,
+                                          [card.id]: event.target.value,
+                                        }))
+                                      }
+                                    />
+                                  </div>
+                                  <span>
+                                    {card.issuerName}
+                                    {card.cardNumberMasked ? ` (${card.cardNumberMasked})` : ""}
+                                  </span>
+                                </>
+                              ) : (
+                                <span>
+                                  {card.issuerName}
+                                  {card.cardNumberMasked ? ` (${card.cardNumberMasked})` : ""}
+                                </span>
+                              )}
+                              {!selectedImportOwnerId ? <span>사용자를 선택하면 해당 사용자의 카드인지 확인합니다.</span> : null}
+                            </div>
+                            <div className="import-preview-card-footer">
+                              <div
+                                className={`category-case-pill import-preview-card-pill${
+                                  !selectedImportOwnerId ? "" : matchedCard ? " is-success" : " is-warning"
+                                }`}
+                              >
+                                {!selectedImportOwnerId ? "사용자 선택 후 확인" : matchedCard ? "기존 카드" : "새 카드"}
+                              </div>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="action-row mt-4">
+                  <button
+                    className="btn btn-primary"
+                    type="button"
+                    data-guide-target="transactions-upload-commit"
+                    onClick={handleCommitPreview}
+                    disabled={!selectedImportOwnerId || !selectedStatementMonth || !scope.people.length}
+                  >
+                    {getPostImportLabel(previewBundle)}
+                  </button>
+                  <button className="btn btn-outline-secondary" type="button" onClick={clearPreview}>
+                    미리보기 닫기
+                  </button>
+                </div>
+              </div>
+            ) : null}
+            </section>
+          </section>
+
+          <section className="dashboard-statement-modal-section-card">
+            <div className="dashboard-statement-modal-section-head">
+              <div>
+                <span className="section-kicker">관리</span>
+                <h2 className="section-title">{selectedStatementHistoryYear}년 명세서 업로드 내역</h2>
+                <p className="dashboard-statement-modal-section-copy">
+                  업로드한 명세서를 연도별로 모아 보고, 필요한 경우 바로 결제내역으로 이어서 확인할 수 있습니다.
+                </p>
+              </div>
+              <AppSelect
+                className="toolbar-select"
+                ariaLabel="명세서 업로드 내역 연도 선택"
+                value={selectedStatementHistoryYear}
+                onChange={setSelectedStatementHistoryYear}
+                options={importHistoryYears.map((year) => ({ value: year, label: `${year}년` }))}
+              />
+            </div>
+
+            <section className="dashboard-statement-history-section">
+              {!visibleStatementHistoryRecords.length ? (
+                <p className="text-secondary mb-0">아직 해당 연도의 업로드된 명세서가 없습니다.</p>
+              ) : (
+                <div className="dashboard-statement-history-year-list">
+                  {visibleStatementHistoryMonthGroups.map(({ month, records }) => (
+                    <section key={month} className="dashboard-statement-history-year-group">
+                      <div className="dashboard-statement-history-year-head">
+                        <strong>{formatMonthLabel(month)}</strong>
+                        <span>{records.length}건</span>
+                      </div>
+                      <div className="dashboard-statement-history-card-grid">
+                        {records.map((record) => (
+                          <article key={record.id} className="dashboard-statement-history-card">
+                            <div className="dashboard-statement-history-card-copy">
+                              <div className="dashboard-statement-history-card-title">
+                                <strong>{getStatementRecordLabel(record)}</strong>
+                                {!linkedImportRecordIds.has(record.id) ? <span className="badge text-bg-light">기존 기록</span> : null}
+                              </div>
+                              <p>{record.fileName}</p>
+                              <div className="dashboard-statement-history-card-meta">
+                                <span>{record.importedAt.slice(0, 16).replace("T", " ")}</span>
+                                <span>거래 {record.rowCount}건</span>
+                                <span>검토 {record.reviewCount}건</span>
+                              </div>
+                            </div>
+                            <div className="dashboard-statement-history-card-actions">
+                              {linkedImportRecordIds.has(record.id) ? (
+                                <button
+                                  type="button"
+                                  className="btn btn-outline-secondary btn-sm"
+                                  onClick={() => {
+                                    setIsStatementUploadModalOpen(false);
+                                    navigate(`/collections/card?statementId=${record.id}`);
+                                  }}
+                                >
+                                  결제내역 보기
+                                </button>
+                              ) : null}
+                              <button
+                                type="button"
+                                className="btn btn-outline-danger btn-sm"
+                                disabled={!linkedImportRecordIds.has(record.id)}
+                                onClick={() => handleDeleteImportRecord(record)}
+                              >
+                                삭제
+                              </button>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              )}
+            </section>
+          </section>
+        </div>
+      </AppModal>
+
+      <AppModal
+        open={Boolean(previewBundle) && shouldPromptLinkedAccounts && isLinkedAccountModalOpen}
+        title="납부계좌 빠른 연결"
+        description="카드값 계좌가 있습니다. 연결할 계좌가 있으면 선택하세요."
+        onClose={() => setIsLinkedAccountModalOpen(false)}
+        footer={
+          <div className="import-linked-account-footer-actions">
+            <button type="button" className="btn btn-primary" onClick={commitPreview}>
+              선택 반영 후 가져오기
+            </button>
+          </div>
+        }
+      >
+        <div className="import-linked-account-modal">
+          <div className="import-linked-account-summary">
+            <strong>새로 등록될 신용카드 {newCreditPreviewCards.length}장</strong>
+            <span>납부계좌 후보 {linkedAccountCandidates.length}개를 찾았습니다.</span>
+          </div>
+
+          <div className="import-linked-account-list">
+            {newCreditPreviewCards.map(({ card }, index) => {
+              const selectedLinkedAccountId = importCardLinkedAccountDrafts[card.id] ?? "";
+
+              return (
+                <article key={card.id} className="review-card import-linked-card" style={getMotionStyle(index + 1)}>
+                  <div className="import-linked-card-head">
+                    <div>
+                      <span className="import-linked-card-kicker">새 카드</span>
+                      <h3 className="mb-1">{importCardNameDrafts[card.id] ?? card.name}</h3>
+                      <p className="mb-0 text-secondary">
+                        {card.issuerName}
+                        {card.cardNumberMasked ? ` · ${card.cardNumberMasked}` : ""}
+                      </p>
+                    </div>
+                    <span className="badge text-bg-light">납부계좌 선택</span>
+                  </div>
+
+                  <div className="category-case-grid import-linked-account-option-grid">
+                    <label
+                      className={`category-case-card people-board-card import-linked-account-option import-linked-account-option-skip${
+                        selectedLinkedAccountId === "" ? " is-selected" : ""
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name={`import-linked-account-${card.id}`}
+                        checked={selectedLinkedAccountId === ""}
+                        onChange={() =>
+                          setImportCardLinkedAccountDrafts((current) => ({
+                            ...current,
+                            [card.id]: "",
+                          }))
+                        }
+                      />
+                      <div className="category-case-card-copy people-board-card-copy import-linked-account-option-skip-copy">
+                        <span className="import-linked-account-option-skip-badge">지금은 연결하지 않기</span>
+                      </div>
+                    </label>
+
+                    {linkedAccountCandidates.map((account) => (
+                      <label
+                        key={`${card.id}-${account.id}`}
+                        className={`category-case-card people-board-card import-linked-account-option${
+                          selectedLinkedAccountId === account.id ? " is-selected" : ""
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name={`import-linked-account-${card.id}`}
+                          checked={selectedLinkedAccountId === account.id}
+                          onChange={() =>
+                            setImportCardLinkedAccountDrafts((current) => ({
+                              ...current,
+                              [card.id]: account.id,
+                            }))
+                          }
+                        />
+                        <div className="category-case-card-copy people-board-card-copy">
+                          <strong>{account.alias || account.name}</strong>
+                          <span>{account.institutionName || "직접 입력"}</span>
+                          <span>{account.accountNumberMasked || "계좌번호 미입력"}</span>
+                          <div className="people-linked-category-block">
+                            <span className={`people-linked-category-count${account.isShared ? "" : " is-empty"}`}>
+                              {account.isShared ? "공동 계좌" : "개인 계좌"}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="category-case-pill">{account.source === "existing" ? "기존 계좌" : "이번 업로드"}</div>
+                      </label>
+                    ))}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      </AppModal>
 
       <AppModal
         open={Boolean(categoryUsageModal)}

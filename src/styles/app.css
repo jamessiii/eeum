@@ -37,6 +37,10 @@
   --app-muted: #64748b;
   --app-kicker: #4b6ea9;
   --app-handwriting-font: "NanumOkBi", "Nanum Pen Script", "Gamja Flower", "Segoe Print", "Comic Sans MS", sans-serif;
+  --app-grid-body-font-size: 1.08rem;
+  --app-grid-body-letter-spacing: 0.07em;
+  --app-grid-body-line-height: 1.62;
+  --app-grid-body-color: #3f3f46;
   --app-portal-scale: 0.8;
   --app-primary: #2563eb;
   --app-primary-strong: #1d4ed8;
@@ -161,7 +165,6 @@ a {
 }
 
 #root {
-  zoom: 0.8;
   min-height: 100vh;
 }
 
@@ -2943,6 +2946,9 @@ label,
   display: block;
   margin-top: 0.4rem;
   font-size: 1.4rem;
+  font-family: var(--app-handwriting-font);
+  color: #5d584f;
+  letter-spacing: 0.1em;
   transition: transform 220ms ease, color 220ms ease;
 }
 
@@ -2967,16 +2973,18 @@ label,
   justify-content: flex-start;
   gap: 0.28rem;
   margin-top: 0.3rem;
-  color: #64748b;
-  font-size: 0.78rem;
+  color: #9a9186;
+  font-size: 0.9rem;
   font-weight: 700;
+  font-family: var(--app-handwriting-font);
+  letter-spacing: 0.1em;
   line-height: 1.35;
   width: fit-content;
   text-align: left;
 }
 
 .stat-delta::after {
-  font-size: 0.76rem;
+  font-size: 0.84rem;
   line-height: 1;
 }
 
@@ -2989,11 +2997,11 @@ label,
 }
 
 .stat-delta.is-positive {
-  color: var(--app-primary);
+  color: #6d86b5;
 }
 
 .stat-delta.is-negative {
-  color: #dc2626;
+  color: #c07b74;
 }
 
 .stat-card:hover strong,
@@ -3003,7 +3011,7 @@ label,
 }
 
 .stat-label {
-  color: #64748b;
+  color: #49566b;
   font-size: 12px;
   font-weight: 800;
 }
@@ -4868,7 +4876,6 @@ label,
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.28)),
     rgba(248, 250, 252, 0.74);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
   overflow-x: auto;
   overflow-y: visible;
 }
@@ -4899,7 +4906,7 @@ label,
 }
 
 .transaction-grid-table .transaction-grid-col-loop {
-  width: 6.2rem;
+  width: 3.15rem;
 }
 
 .transaction-grid-table .transaction-grid-col-category,
@@ -4995,12 +5002,13 @@ label,
 
 .table-responsive .table tbody td {
   font-family: var(--app-handwriting-font);
-  letter-spacing: 0.07em;
-  line-height: 1.62;
+  color: var(--app-grid-body-color);
+  letter-spacing: var(--app-grid-body-letter-spacing);
+  line-height: var(--app-grid-body-line-height);
 }
 
 .table-responsive .table tbody td {
-  font-size: 1.08rem;
+  font-size: var(--app-grid-body-font-size);
 }
 
 .table-responsive .table tbody td :is(
@@ -5132,6 +5140,11 @@ label,
     0 18px 36px rgba(15, 23, 42, 0.14);
 }
 
+.transaction-category-suggestion-list.is-upward {
+  top: auto;
+  bottom: calc(100% + 0.35rem);
+}
+
 .transaction-category-suggestion-list--filter {
   top: calc(100% + 0.45rem);
 }
@@ -5170,6 +5183,19 @@ label,
   line-height: 1.3;
   white-space: nowrap;
   word-break: keep-all;
+}
+
+.dashboard-calendar-category-suggestion-list .transaction-category-suggestion-item,
+.dashboard-calendar-category-suggestion-list .transaction-category-suggestion-name {
+  font-family: var(--app-handwriting-font);
+  font-size: 0.94rem;
+  letter-spacing: var(--app-grid-body-letter-spacing);
+  line-height: 1.35;
+}
+
+.dashboard-calendar-category-suggestion-list .transaction-category-suggestion-item {
+  color: var(--app-grid-body-color);
+  padding: 0.36rem 0.62rem;
 }
 
 [data-guide-target="transactions-page-overview"] {
@@ -6445,6 +6471,14 @@ label,
   margin-bottom: 1rem;
 }
 
+.card[data-guide-target="records-moon-calendar"] > .stats-grid {
+  margin-bottom: 1.2rem;
+}
+
+.card[data-guide-target="records-moon-calendar"] {
+  overflow: visible;
+}
+
 .dashboard-calendar-month-nav {
   display: inline-flex;
   align-items: center;
@@ -6497,6 +6531,45 @@ label,
 
 .dashboard-calendar-hero-spacer {
   width: 5.15rem;
+}
+
+.dashboard-calendar-owner-select {
+  min-width: 12.5rem;
+}
+
+.dashboard-calendar-owner-select-trigger {
+  min-height: 2.15rem;
+  height: 2.15rem;
+  padding: 0.36rem 0.72rem;
+  border-radius: 0.85rem;
+  font: 700 var(--app-grid-body-font-size) / var(--app-grid-body-line-height) var(--app-handwriting-font) !important;
+  color: var(--app-grid-body-color);
+  letter-spacing: var(--app-grid-body-letter-spacing);
+  box-shadow: none !important;
+}
+
+.dashboard-calendar-owner-select-trigger .app-select-value {
+  font: inherit;
+  letter-spacing: inherit;
+}
+
+.dashboard-calendar-owner-select-dropdown {
+  padding: 0.3rem;
+  border-radius: 0.9rem;
+  box-shadow: none !important;
+}
+
+.dashboard-calendar-owner-select-dropdown .app-select-option {
+  padding: 0.36rem 0.62rem;
+  color: var(--app-grid-body-color);
+  font: 700 0.94rem / 1.35 var(--app-handwriting-font);
+  letter-spacing: var(--app-grid-body-letter-spacing);
+}
+
+.dashboard-calendar-owner-select-dropdown .app-select-option-label {
+  font: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
 }
 
 .dashboard-calendar-grid {
@@ -6657,18 +6730,222 @@ label,
   gap: 1rem;
 }
 
+.dashboard-calendar-transactions-title-block {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.dashboard-calendar-transactions-title {
+  margin: 0;
+  font-size: 1.18rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--app-grid-body-color);
+  font-family: var(--app-handwriting-font);
+}
+
+.dashboard-calendar-transactions-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.8rem;
+  padding: 0.22rem 0.7rem;
+  border: 1px solid rgba(249, 115, 22, 0.22);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 237, 213, 0.9), rgba(255, 247, 237, 0.98));
+  color: #c2410c;
+  font-size: 0.83rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.dashboard-calendar-transactions-toolbar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+
 .dashboard-calendar-transactions-head .section-title {
   margin-bottom: 0;
 }
 
 .dashboard-calendar-transactions-table-wrap {
-  overflow: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  overflow-x: auto;
+  overflow-y: visible;
   scrollbar-gutter: stable;
+  background: transparent;
+  box-shadow: none !important;
+  position: relative;
+  z-index: 20;
+}
+
+.dashboard-calendar-transactions .table-responsive,
+.dashboard-calendar-transactions .table-responsive.table,
+.dashboard-calendar-transactions .table-responsive .table,
+.dashboard-calendar-transactions .transaction-grid-table {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.dashboard-calendar-transactions .transaction-grid-table tbody tr,
+.dashboard-calendar-transactions .transaction-grid-table tbody td,
+.dashboard-calendar-transactions .transaction-grid-table .transaction-category-editor {
+  position: relative;
+}
+
+.dashboard-calendar-transactions .transaction-grid-table tbody tr:focus-within,
+.dashboard-calendar-transactions .transaction-grid-table tbody tr:has(.transaction-category-suggestion-list),
+.dashboard-calendar-transactions .transaction-grid-table tbody td:focus-within,
+.dashboard-calendar-transactions .transaction-grid-table tbody td:has(.transaction-category-suggestion-list),
+.dashboard-calendar-transactions .transaction-grid-table .transaction-category-editor:focus-within,
+.dashboard-calendar-transactions .transaction-grid-table .transaction-category-editor:has(.transaction-category-suggestion-list) {
+  z-index: 80;
+}
+
+.dashboard-statement-upload-modal-body {
+  display: grid;
+  gap: 1.4rem;
+}
+
+.dashboard-statement-modal-section-card {
+  display: grid;
+  gap: 1rem;
+  padding: 1.15rem 1.2rem;
+  border: 1px solid color-mix(in srgb, var(--app-line) 86%, white 14%);
+  border-radius: 1.2rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(249, 251, 255, 0.96)),
+    rgba(255, 255, 255, 0.96);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 10px 24px rgba(15, 23, 42, 0.05);
+}
+
+.dashboard-statement-modal-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.dashboard-statement-modal-section-copy {
+  margin: 0.45rem 0 0;
+  color: var(--app-muted);
+  font-size: 0.93rem;
+  line-height: 1.6;
+}
+
+.dashboard-statement-upload-section,
+.dashboard-statement-history-section {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.dashboard-statement-history-year-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.dashboard-statement-history-year-group {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.dashboard-statement-history-year-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.dashboard-statement-history-year-head strong {
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.dashboard-statement-history-year-head span {
+  color: var(--app-muted);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.dashboard-statement-history-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 0.85rem;
+}
+
+.dashboard-statement-history-card {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1rem 1.05rem;
+  border: 1px solid rgba(23, 32, 51, 0.08);
+  border-radius: 1rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(251, 253, 255, 0.96)),
+    rgba(255, 255, 255, 0.96);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86);
+}
+
+.dashboard-statement-history-card-copy {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.dashboard-statement-history-card-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.dashboard-statement-history-card-title strong {
+  font-size: 0.98rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.dashboard-statement-history-card-copy p {
+  margin: 0;
+  color: var(--app-text);
+  font-size: 0.92rem;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.dashboard-statement-history-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.8rem;
+  color: var(--app-muted);
+  font-size: 0.84rem;
+}
+
+.dashboard-statement-history-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
 }
 
 .dashboard-calendar-transactions .transaction-grid-table thead th {
   text-align: center;
   vertical-align: middle;
+}
+
+.dashboard-calendar-transactions .form-control,
+.dashboard-calendar-transactions .form-select,
+.dashboard-calendar-transactions .transaction-category-editor .form-control.form-control-sm,
+.dashboard-calendar-transactions input.dashboard-calendar-note-input.form-control.form-control-sm {
+  box-shadow: none !important;
 }
 
 .dashboard-calendar-transactions .transaction-grid-table tbody td {
@@ -6679,23 +6956,77 @@ label,
   vertical-align: middle !important;
 }
 
+.transaction-grid-table .dashboard-calendar-col-merchant {
+  width: 14rem;
+}
+
+.transaction-grid-table .dashboard-calendar-col-note {
+  width: 14.5rem;
+}
+
 .dashboard-calendar-note-input {
   width: 100%;
 }
 
+.dashboard-calendar-transactions .transaction-loop-toggle input {
+  width: 1.12rem;
+  height: 1.12rem;
+  border-width: 1.8px;
+  border-radius: 0.22rem;
+  border-color: rgba(94, 82, 67, 0.6);
+  background: rgba(255, 252, 247, 0.98);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0.04rem 0.05rem 0 rgba(120, 100, 79, 0.16);
+  transform: rotate(-2deg);
+}
+
+.dashboard-calendar-transactions .transaction-loop-toggle input::after {
+  width: 0.34rem;
+  height: 0.62rem;
+  border-right: 2px solid rgba(117, 88, 59, 0.9);
+  border-bottom: 2px solid rgba(117, 88, 59, 0.9);
+}
+
+.dashboard-calendar-transactions .transaction-loop-toggle input:checked {
+  border-color: rgba(173, 122, 71, 0.92);
+  background:
+    linear-gradient(135deg, rgba(255, 245, 230, 0.98), rgba(255, 236, 205, 0.98));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 0 0 0.12rem rgba(240, 180, 95, 0.16);
+}
+
+.dashboard-calendar-transactions .transaction-loop-toggle input:checked::after {
+  transform: rotate(45deg) scale(1.02);
+  opacity: 1;
+}
+
 .dashboard-calendar-transactions .transaction-category-editor .form-control.form-control-sm,
-.dashboard-calendar-transactions .dashboard-calendar-note-input {
+.dashboard-calendar-transactions input.dashboard-calendar-note-input.form-control.form-control-sm {
   min-height: 2.15rem;
   height: 2.15rem;
   border-radius: 0.85rem;
+  font: 700 var(--app-grid-body-font-size) / var(--app-grid-body-line-height) var(--app-handwriting-font) !important;
+  color: var(--app-grid-body-color) !important;
+  letter-spacing: var(--app-grid-body-letter-spacing) !important;
 }
 
 .dashboard-calendar-transactions .transaction-category-editor .form-control.form-control-sm {
-  line-height: 1.4;
+  font: 700 var(--app-grid-body-font-size) / var(--app-grid-body-line-height) var(--app-handwriting-font) !important;
+  letter-spacing: var(--app-grid-body-letter-spacing) !important;
 }
 
-.dashboard-calendar-transactions .dashboard-calendar-note-input {
+.dashboard-calendar-transactions input.dashboard-calendar-note-input.form-control.form-control-sm {
   padding-inline: 0.9rem;
+  font: 700 var(--app-grid-body-font-size) / var(--app-grid-body-line-height) var(--app-handwriting-font) !important;
+  letter-spacing: var(--app-grid-body-letter-spacing) !important;
+}
+
+.dashboard-calendar-transactions input.dashboard-calendar-note-input.form-control.form-control-sm::placeholder {
+  font: 700 var(--app-grid-body-font-size) / var(--app-grid-body-line-height) var(--app-handwriting-font);
+  letter-spacing: var(--app-grid-body-letter-spacing);
+  color: color-mix(in srgb, var(--app-grid-body-color) 38%, white);
 }
 
 .dashboard-diary-head {
@@ -7049,9 +7380,9 @@ label,
 
 .loop-confirm-item {
   display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-  padding: 0.85rem 0.95rem;
+  align-items: center;
+  gap: 0.68rem;
+  padding: 0.72rem 0.82rem;
   border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 0.95rem;
   background: rgba(255, 255, 255, 0.92);
@@ -7068,28 +7399,48 @@ label,
 }
 
 .loop-confirm-item input {
-  margin-top: 0.15rem;
+  margin-top: 0;
+  flex: 0 0 auto;
 }
 
 .loop-confirm-copy {
   display: grid;
-  gap: 0.18rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 0.75rem;
+  row-gap: 0.12rem;
+  align-items: start;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .loop-confirm-copy strong {
-  font-size: 0.92rem;
+  grid-column: 1 / -1;
+  font-size: 0.9rem;
+  line-height: 1.3;
 }
 
 .loop-confirm-copy span {
   color: color-mix(in srgb, var(--app-text) 72%, var(--app-muted) 28%);
-  font-size: 0.8rem;
-  line-height: 1.45;
+  font-size: 0.77rem;
+  line-height: 1.35;
+}
+
+.loop-confirm-copy span:first-of-type {
+  grid-column: 1;
+}
+
+.loop-confirm-copy span + span {
+  grid-column: 1 / -1;
 }
 
 .loop-confirm-copy small {
+  grid-column: 2;
+  justify-self: end;
+  text-align: right;
   color: color-mix(in srgb, var(--app-text) 62%, var(--app-muted) 38%);
-  font-size: 0.74rem;
-  line-height: 1.4;
+  font-size: 0.7rem;
+  line-height: 1.25;
+  white-space: nowrap;
 }
 
 .compact-action-row {
@@ -8404,7 +8755,9 @@ textarea:focus {
 .app-modal-dialog {
   width: min(46rem, calc(100vw - 2rem));
   max-height: calc(100vh - 2rem);
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: 1.15rem;
   border: 1px solid rgba(226, 232, 240, 0.95);
   border-radius: 1.5rem;
@@ -8445,12 +8798,38 @@ textarea:focus {
   overflow: hidden;
 }
 
+.app-modal-dialog.dashboard-statement-upload-modal {
+  width: min(84rem, calc(100vw - 2rem));
+  max-height: min(48rem, calc(100vh - 2rem));
+  overflow: hidden;
+}
+
+.app-modal-dialog.dashboard-income-modal {
+  width: min(84rem, calc(100vw - 2rem));
+  max-height: min(48rem, calc(100vh - 2rem));
+  overflow: hidden;
+}
+
+.app-modal-dialog.dashboard-processing-confirm-modal {
+  width: min(28rem, calc(100vw - 2rem));
+}
+
 @media (max-width: 960px) {
 }
 
 .app-modal-dialog.dashboard-category-usage-modal .app-modal-body {
   max-height: min(34rem, calc(100vh - 11rem));
   overflow: hidden;
+}
+
+.app-modal-dialog.dashboard-statement-upload-modal .app-modal-body {
+  max-height: min(39rem, calc(100vh - 10rem));
+  overflow: auto;
+}
+
+.app-modal-dialog.dashboard-income-modal .app-modal-body {
+  max-height: min(39rem, calc(100vh - 10rem));
+  overflow: auto;
 }
 
 .app-modal-dialog.dashboard-category-usage-modal .app-modal-footer {
@@ -8467,6 +8846,7 @@ textarea:focus {
 .app-modal-header,
 .app-modal-footer {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
@@ -8498,7 +8878,11 @@ textarea:focus {
 
 .app-modal-body {
   display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
   gap: 1rem;
+  overflow: auto;
+  max-height: calc(100vh - 10rem);
 }
 
 :root[data-theme="dark"] .text-secondary,

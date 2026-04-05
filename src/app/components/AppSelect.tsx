@@ -15,6 +15,7 @@ type AppSelectProps = {
   ariaLabel?: string;
   className?: string;
   buttonClassName?: string;
+  dropdownClassName?: string;
   style?: CSSProperties;
   disabled?: boolean;
   placeholder?: string;
@@ -45,6 +46,7 @@ export function AppSelect({
   ariaLabel,
   className,
   buttonClassName,
+  dropdownClassName,
   style,
   disabled = false,
   placeholder,
@@ -247,6 +249,7 @@ export function AppSelect({
               className={clsx(
                 "app-select-dropdown",
                 dropdownStyle.openUpward && "is-open-upward",
+                dropdownClassName,
               )}
               style={{
                 position: "absolute",

@@ -31,6 +31,7 @@ type GuideDragSurface = "beacon" | "panel";
 type PanelMorphState = "closed" | "opening" | "open" | "closing";
 type BeaconMorphState = "hidden" | "entering" | "idle" | "exiting";
 type PanelRelocationPhase = "out" | "in";
+type GuideRuntimeSnapshot = ReturnType<typeof readGuideRuntime>;
 
 const LEFT_ANCHORED_GUIDE_STEP_IDS = new Set([
   "people-category-link-resize",
@@ -47,6 +48,18 @@ const GUIDE_BEACON_RETURN_MS = GUIDE_BEACON_ENTER_MS;
 const GUIDE_PANEL_RELOCATE_OUT_MS = 180;
 const GUIDE_PANEL_RELOCATE_IN_MS = 260;
 const GUIDE_HIGHLIGHT_CHANGE_EVENT = "spending-diary:guide-highlight-change";
+
+function isSameGuideRuntime(left: GuideRuntimeSnapshot, right: GuideRuntimeSnapshot) {
+  return (
+    left.flowMode === right.flowMode &&
+    left.replayStepIndex === right.replayStepIndex &&
+    left.replaySnapshot === right.replaySnapshot &&
+    left.visitedStepIds.length === right.visitedStepIds.length &&
+    left.visitedStepIds.every((value, index) => value === right.visitedStepIds[index]) &&
+    left.dismissedTipIds.length === right.dismissedTipIds.length &&
+    left.dismissedTipIds.every((value, index) => value === right.dismissedTipIds[index])
+  );
+}
 
 function isGuideDragBlocked(target: EventTarget | null) {
   if (!(target instanceof Element)) return false;
@@ -200,6 +213,7 @@ export function AppGuidePanel({
   const dragStartXRef = useRef<number | null>(null);
   const isDraggingRef = useRef(false);
   const suppressClickRef = useRef(false);
+  const completionHandledRef = useRef(false);
   const [panelMorphState, setPanelMorphState] = useState<PanelMorphState>(() => (forceCollapsed ? "closed" : "open"));
   const [isCompletionModalOpen, setIsCompletionModalOpen] = useState(false);
 
@@ -214,7 +228,8 @@ export function AppGuidePanel({
 
   useEffect(() => {
     if (!workspaceId) return;
-    setGuideRuntime(readGuideRuntime(workspaceId));
+    const nextRuntime = readGuideRuntime(workspaceId);
+    setGuideRuntime((current) => (isSameGuideRuntime(current, nextRuntime) ? current : nextRuntime));
   }, [workspaceId]);
 
   useEffect(() => {
@@ -223,7 +238,8 @@ export function AppGuidePanel({
     const handleGuideReset = (event: Event) => {
       const detail = (event as CustomEvent<{ workspaceId?: string }>).detail;
       if (detail?.workspaceId && detail.workspaceId !== workspaceId) return;
-      setGuideRuntime(readGuideRuntime(workspaceId));
+      const nextRuntime = readGuideRuntime(workspaceId);
+      setGuideRuntime((current) => (isSameGuideRuntime(current, nextRuntime) ? current : nextRuntime));
     };
 
     window.addEventListener(GUIDE_V1_RESET_EVENT, handleGuideReset as EventListener);
@@ -245,12 +261,12 @@ export function AppGuidePanel({
 
   useEffect(() => {
     if (!expandSignal) return;
-    setIsCollapsed(false);
+    setIsCollapsed((current) => (current ? false : current));
   }, [expandSignal]);
 
   useEffect(() => {
     if (!forceCollapsed) return;
-    setIsCollapsed(true);
+    setIsCollapsed((current) => (current ? current : true));
   }, [forceCollapsed]);
 
   useEffect(() => {
@@ -506,14 +522,19 @@ export function AppGuidePanel({
   }, [clearGuideSampleData, guideRuntime.flowMode, isMainGuideComplete, isReplayActive, loadGuideSampleData, workspaceId]);
 
   useEffect(() => {
-    if (!workspaceId || isReplayActive) return;
-    if (guideRuntime.flowMode !== "active" || !isMainGuideComplete) return;
+    if (!workspaceId || isReplayActive || guideRuntime.flowMode !== "active" || !isMainGuideComplete) {
+      completionHandledRef.current = false;
+      return;
+    }
+    if (completionHandledRef.current) return;
+    completionHandledRef.current = true;
 
     clearGuideSampleData();
     finishGuideFlow(workspaceId);
     navigate("/dashboard");
     setIsCompletionModalOpen(true);
-    refreshGuideRuntime();
+    const nextRuntime = readGuideRuntime(workspaceId);
+    setGuideRuntime((current) => (isSameGuideRuntime(current, nextRuntime) ? current : nextRuntime));
   }, [clearGuideSampleData, finishGuideFlow, guideRuntime.flowMode, isMainGuideComplete, isReplayActive, navigate, workspaceId]);
 
   useEffect(() => {

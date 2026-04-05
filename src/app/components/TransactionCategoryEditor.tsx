@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { getCategoryLabel, getLeafCategories } from "../../domain/categories/meta";
 import type { Category, Transaction } from "../../shared/types/models";
 
@@ -9,9 +8,11 @@ interface TransactionCategoryEditorProps {
   categoryName: string | null;
   onCategoryChange: (categoryId: string) => void;
   onCategoryCommit?: (categoryId: string) => void;
+  onFocus?: () => void;
   guideTarget?: string;
   reviewSuggestionLabel?: string | null;
   isReviewFocused?: boolean;
+  suggestionListClassName?: string;
 }
 
 type CategorySuggestionRow = {
@@ -21,23 +22,17 @@ type CategorySuggestionRow = {
   normalizedName: string;
 };
 
-type SuggestionLayerStyle = {
-  top: number;
-  left: number;
-  width: number;
-  maxHeight: number;
-  openUpward: boolean;
-};
-
 export function TransactionCategoryEditor({
   transaction,
   categories,
   categoryName,
   onCategoryChange,
   onCategoryCommit,
+  onFocus,
   guideTarget,
   reviewSuggestionLabel,
   isReviewFocused = false,
+  suggestionListClassName,
 }: TransactionCategoryEditorProps) {
   const canEdit = transaction.transactionType === "expense" && !transaction.isInternalTransfer;
   const currentCategoryId = transaction.categoryId ?? "";
@@ -46,7 +41,7 @@ export function TransactionCategoryEditor({
   const [draftValue, setDraftValue] = useState(categoryName ?? "");
   const [isFocused, setIsFocused] = useState(false);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
-  const [suggestionLayerStyle, setSuggestionLayerStyle] = useState<SuggestionLayerStyle | null>(null);
+  const [suggestionDirection, setSuggestionDirection] = useState<"down" | "up">("down");
   const inputRef = useRef<HTMLInputElement | null>(null);
   const suggestionListRef = useRef<HTMLDivElement | null>(null);
   const skipNextBlurCommitRef = useRef(false);
@@ -54,7 +49,8 @@ export function TransactionCategoryEditor({
   const pendingCompositionCommitRef = useRef(false);
 
   useEffect(() => {
-    setDraftValue(categoryName ?? "");
+    const nextDraftValue = categoryName ?? "";
+    setDraftValue((current) => (current === nextDraftValue ? current : nextDraftValue));
   }, [categoryName, transaction.id]);
 
   const suggestionRows = useMemo<CategorySuggestionRow[]>(
@@ -76,19 +72,19 @@ export function TransactionCategoryEditor({
       const normalizedValue = rawValue.trim().toLowerCase();
       if (!normalizedValue) return "";
 
-      const exactMatch = suggestionRows.find((category) => {
-        return category.normalizedName === normalizedValue || category.normalizedLabel === normalizedValue;
-      });
+      const exactMatch = suggestionRows.find(
+        (category) => category.normalizedName === normalizedValue || category.normalizedLabel === normalizedValue,
+      );
       if (exactMatch) return exactMatch.id;
 
-      const prefixMatch = suggestionRows.find((category) => {
-        return category.normalizedName.startsWith(normalizedValue) || category.normalizedLabel.startsWith(normalizedValue);
-      });
+      const prefixMatch = suggestionRows.find(
+        (category) => category.normalizedName.startsWith(normalizedValue) || category.normalizedLabel.startsWith(normalizedValue),
+      );
       if (prefixMatch) return prefixMatch.id;
 
-      const partialMatch = suggestionRows.find((category) => {
-        return category.normalizedName.includes(normalizedValue) || category.normalizedLabel.includes(normalizedValue);
-      });
+      const partialMatch = suggestionRows.find(
+        (category) => category.normalizedName.includes(normalizedValue) || category.normalizedLabel.includes(normalizedValue),
+      );
       return partialMatch?.id ?? null;
     },
     [suggestionRows],
@@ -99,10 +95,9 @@ export function TransactionCategoryEditor({
       const normalizedValue = rawValue.trim().toLowerCase();
       if (!normalizedValue) return "";
 
-      const exactMatch = suggestionRows.find((category) => {
-        return category.normalizedName === normalizedValue || category.normalizedLabel === normalizedValue;
-      });
-
+      const exactMatch = suggestionRows.find(
+        (category) => category.normalizedName === normalizedValue || category.normalizedLabel === normalizedValue,
+      );
       return exactMatch?.id ?? null;
     },
     [suggestionRows],
@@ -119,7 +114,7 @@ export function TransactionCategoryEditor({
       const nextLabel = resolvedCategoryId
         ? suggestionRows.find((category) => category.id === resolvedCategoryId)?.label ?? (categoryName ?? draftValue.trim())
         : "";
-      setDraftValue(nextLabel);
+      setDraftValue((current) => (current === nextLabel ? current : nextLabel));
       return;
     }
 
@@ -128,7 +123,7 @@ export function TransactionCategoryEditor({
     const nextLabel = resolvedCategoryId
       ? suggestionRows.find((category) => category.id === resolvedCategoryId)?.label ?? draftValue.trim()
       : "";
-    setDraftValue(nextLabel);
+    setDraftValue((current) => (current === nextLabel ? current : nextLabel));
   };
 
   const moveFocus = (direction: "next" | "prev") => {
@@ -147,17 +142,36 @@ export function TransactionCategoryEditor({
   const resolvedDraftCategoryId = resolveCategoryId(draftValue);
   const isCategoryFilled = resolvedDraftCategoryId !== null && resolvedDraftCategoryId !== "";
   const normalizedDraftValue = draftValue.trim().toLowerCase();
-  const filteredCategories = suggestionRows
-    .filter((category) => {
-      if (!normalizedDraftValue) return true;
-      return category.normalizedName.includes(normalizedDraftValue) || category.normalizedLabel.includes(normalizedDraftValue);
-    })
-    .slice(0, 12);
+  const filteredCategories = useMemo(
+    () =>
+      suggestionRows
+        .filter((category) => {
+          if (!normalizedDraftValue) return true;
+          return category.normalizedName.includes(normalizedDraftValue) || category.normalizedLabel.includes(normalizedDraftValue);
+        })
+        .slice(0, 12),
+    [normalizedDraftValue, suggestionRows],
+  );
   const shouldShowSuggestions = isFocused && filteredCategories.length > 0;
   const highlightedSuggestion =
     shouldShowSuggestions && activeSuggestionIndex >= 0
       ? filteredCategories[Math.min(activeSuggestionIndex, filteredCategories.length - 1)] ?? null
       : null;
+
+  useEffect(() => {
+    if (!shouldShowSuggestions) return;
+
+    const input = inputRef.current;
+    if (!input || typeof window === "undefined") return;
+
+    const rect = input.getBoundingClientRect();
+    const estimatedListHeight = Math.min(filteredCategories.length, 8) * 42 + 20;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+
+    setSuggestionDirection(spaceBelow < estimatedListHeight && spaceAbove > spaceBelow ? "up" : "down");
+  }, [filteredCategories.length, shouldShowSuggestions]);
+
   const tone = isCategoryFilled
     ? {
         borderColor: "rgba(96, 165, 250, 0.98)",
@@ -172,60 +186,7 @@ export function TransactionCategoryEditor({
 
   useEffect(() => {
     if (!shouldShowSuggestions) {
-      setSuggestionLayerStyle(null);
-      return;
-    }
-
-    const updateSuggestionLayerPosition = () => {
-      const input = inputRef.current;
-      if (!input) {
-        setSuggestionLayerStyle(null);
-        return;
-      }
-
-      const rect = input.getBoundingClientRect();
-      const viewportPadding = 12;
-      const gap = 6;
-      const preferredHeight = 216;
-      const maxWidth = Math.min(420, window.innerWidth - viewportPadding * 2);
-      const estimatedContentWidth = Math.max(
-        rect.width,
-        ...filteredCategories.map((category) => category.label.length * 11 + 34),
-      );
-      const width = Math.min(maxWidth, estimatedContentWidth);
-      const belowSpace = window.innerHeight - rect.bottom - viewportPadding;
-      const aboveSpace = rect.top - viewportPadding;
-      const openUpward = belowSpace < 180 && aboveSpace > belowSpace;
-      const availableHeight = Math.max(120, openUpward ? aboveSpace - gap : belowSpace - gap);
-      const maxHeight = Math.min(preferredHeight, availableHeight);
-      const top = openUpward ? Math.max(viewportPadding, rect.top - maxHeight - gap) : rect.bottom + gap;
-      const left = Math.min(
-        Math.max(viewportPadding, rect.left),
-        Math.max(viewportPadding, window.innerWidth - viewportPadding - width),
-      );
-
-      setSuggestionLayerStyle({
-        top,
-        left,
-        width,
-        maxHeight,
-        openUpward,
-      });
-    };
-
-    updateSuggestionLayerPosition();
-    window.addEventListener("resize", updateSuggestionLayerPosition);
-    window.addEventListener("scroll", updateSuggestionLayerPosition, true);
-
-    return () => {
-      window.removeEventListener("resize", updateSuggestionLayerPosition);
-      window.removeEventListener("scroll", updateSuggestionLayerPosition, true);
-    };
-  }, [filteredCategories, shouldShowSuggestions]);
-
-  useEffect(() => {
-    if (!shouldShowSuggestions) {
-      setActiveSuggestionIndex(0);
+      setActiveSuggestionIndex((current) => (current === 0 ? current : 0));
       return;
     }
 
@@ -259,7 +220,7 @@ export function TransactionCategoryEditor({
 
   const applySuggestion = (categoryId: string, label: string) => {
     skipNextBlurCommitRef.current = true;
-    setDraftValue(label);
+    setDraftValue((current) => (current === label ? current : label));
     if (categoryId !== currentCategoryId) {
       onCategoryChange(categoryId);
       onCategoryCommit?.(categoryId);
@@ -273,10 +234,7 @@ export function TransactionCategoryEditor({
   }
 
   return (
-    <div
-      className={`transaction-category-editor${isReviewFocused ? " is-review-focused" : ""}`}
-      data-guide-target={guideTarget}
-    >
+    <div className={`transaction-category-editor${isReviewFocused ? " is-review-focused" : ""}`} data-guide-target={guideTarget}>
       <input
         ref={inputRef}
         className="form-control form-control-sm"
@@ -319,6 +277,7 @@ export function TransactionCategoryEditor({
         onFocus={(event) => {
           setIsFocused(true);
           setActiveSuggestionIndex(-1);
+          onFocus?.();
           event.currentTarget.select();
         }}
         onCompositionStart={() => {
@@ -333,9 +292,7 @@ export function TransactionCategoryEditor({
           }
         }}
         onKeyDown={(event) => {
-          if (event.nativeEvent.isComposing || isComposingRef.current) {
-            return;
-          }
+          if (event.nativeEvent.isComposing || isComposingRef.current) return;
 
           if (event.key === "Enter") {
             event.preventDefault();
@@ -383,43 +340,31 @@ export function TransactionCategoryEditor({
           }
         }}
       />
-      {shouldShowSuggestions && suggestionLayerStyle && typeof document !== "undefined"
-        ? createPortal(
-            <div
-              ref={suggestionListRef}
-              className={`transaction-category-suggestion-list transaction-category-suggestion-list--floating${
-                suggestionLayerStyle.openUpward ? " is-open-upward" : ""
-              }`}
-              data-guide-target="transactions-uncategorized-category-suggestions"
-              style={{
-                position: "fixed",
-                top: `${suggestionLayerStyle.top}px`,
-                left: `${suggestionLayerStyle.left}px`,
-                width: `${suggestionLayerStyle.width}px`,
-                maxHeight: `${suggestionLayerStyle.maxHeight}px`,
+      {shouldShowSuggestions ? (
+        <div
+          ref={suggestionListRef}
+          className={`transaction-category-suggestion-list${suggestionDirection === "up" ? " is-upward" : ""}${suggestionListClassName ? ` ${suggestionListClassName}` : ""}`}
+          data-guide-target="transactions-uncategorized-category-suggestions"
+          role="listbox"
+          aria-label="카테고리 추천"
+        >
+          {filteredCategories.map((category) => (
+            <button
+              key={category.id}
+              type="button"
+              className={`transaction-category-suggestion-item${category.id === highlightedSuggestion?.id ? " is-active" : ""}`}
+              data-suggestion-active={category.id === highlightedSuggestion?.id ? "true" : "false"}
+              data-guide-target="transactions-uncategorized-category-option"
+              onMouseDown={(event) => {
+                event.preventDefault();
+                applySuggestion(category.id, category.label);
               }}
-              role="listbox"
-              aria-label="카테고리 추천"
             >
-              {filteredCategories.map((category) => (
-                <button
-                  key={category.id}
-                  type="button"
-                  className={`transaction-category-suggestion-item${category.id === highlightedSuggestion?.id ? " is-active" : ""}`}
-                  data-suggestion-active={category.id === highlightedSuggestion?.id ? "true" : "false"}
-                  data-guide-target="transactions-uncategorized-category-option"
-                  onMouseDown={(event) => {
-                    event.preventDefault();
-                    applySuggestion(category.id, category.label);
-                  }}
-                >
-                  <span className="transaction-category-suggestion-name">{category.label}</span>
-                </button>
-              ))}
-            </div>,
-            document.body,
-          )
-        : null}
+              <span className="transaction-category-suggestion-name">{category.label}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
       {reviewSuggestionLabel ? (
         <div className={`transaction-category-review-hint${isReviewFocused ? " is-review-focused" : ""}`}>
           <strong>제안</strong>

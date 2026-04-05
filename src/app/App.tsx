@@ -56,14 +56,6 @@ type NavItem = {
 const baseNavItems: NavItem[] = [
   { to: "/dashboard", label: "첫장" },
   {
-    to: "/collections",
-    label: "조각",
-    subItems: [
-      { key: "income", label: "수입", to: "/collections/income" },
-      { key: "card", label: "결제내역", to: "/collections/card" },
-    ],
-  },
-  {
     to: "/connections",
     label: "연결",
     subItems: [

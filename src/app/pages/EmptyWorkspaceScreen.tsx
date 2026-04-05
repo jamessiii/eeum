@@ -132,7 +132,7 @@ export function EmptyWorkspaceScreen() {
               moveToPhase("creating");
             }}
           >
-            <span className="hero-kicker">이음 시작</span>
+            <span className="hero-kicker">소비일기 시작</span>
             <h1 id="empty-workspace-title">당신의 이름은?</h1>
             <input
               ref={personInputRef}
@@ -169,9 +169,9 @@ export function EmptyWorkspaceScreen() {
             finalizeOnboarding();
           }}
         >
-          <div className="empty-workspace-intro-lines" aria-label="올바른 소비습관으로 이어지는 여정, 이음에서 시작합니다">
+          <div className="empty-workspace-intro-lines" aria-label="올바른 소비습관으로 이어지는 여정, 소비일기에서 시작합니다">
             <span className="empty-workspace-intro-line is-active">올바른 소비습관으로 이어지는 여정,</span>
-            <span className="empty-workspace-intro-line is-active">이음에서 시작합니다</span>
+            <span className="empty-workspace-intro-line is-active">소비일기에서 시작합니다</span>
           </div>
         </button>
       ) : null}
