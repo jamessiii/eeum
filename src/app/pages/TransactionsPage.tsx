@@ -539,7 +539,7 @@ export function TransactionsPage() {
     <div className="page-stack">
       <ImportsPage />
 
-      <section className="card shadow-sm" style={getMotionStyle(0)} data-guide-target="transactions-page-overview">
+      <section className="page-section" style={getMotionStyle(0)} data-guide-target="transactions-page-overview">
         <div className="section-head transaction-grid-head">
           <div>
             <h2 className="section-title">결제내역</h2>

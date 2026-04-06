@@ -6,7 +6,6 @@ import { Link } from "react-router-dom";
 import { MotionProvider } from "./motion/MotionProvider";
 import { AppModal } from "./components/AppModal";
 import { AppGuidePanel } from "./components/AppGuidePanel";
-import { AppSelect } from "./components/AppSelect";
 import { EmptyWorkspaceScreen, ONBOARDING_COMPLETE_KEY, WORKSPACE_SETUP_KEY } from "./pages/EmptyWorkspaceScreen";
 import { LoadingScreen } from "./pages/LoadingScreen";
 import { AppStateProvider, useAppState } from "./state/AppStateProvider";
@@ -37,75 +36,59 @@ const SettingsPage = lazy(() => import("./pages/SettingsPage").then((module) => 
 const DeveloperPage = lazy(() => import("./pages/DeveloperPage").then((module) => ({ default: module.DeveloperPage })));
 
 const DEVELOPER_MODE_KEY = "spending-diary.developer-mode";
-const CREATE_WORKSPACE_OPTION = "__create_workspace__";
-const GUIDE_HIGHLIGHT_CHANGE_EVENT = "spending-diary:guide-highlight-change";
-
-type NavSubItem = {
-  key: string;
-  label: string;
-  to: string;
-};
 
 type NavItem = {
   to: string;
   label: string;
   end?: boolean;
-  subItems?: NavSubItem[];
 };
 
 const baseNavItems: NavItem[] = [
   { to: "/dashboard", label: "첫장" },
-  {
-    to: "/connections",
-    label: "연결",
-    subItems: [
-      { key: "assets", label: "자산", to: "/connections/assets" },
-      { key: "categories", label: "분류", to: "/connections/categories" },
-    ],
-  },
-  {
-    to: "/flows",
-    label: "흐름",
-    subItems: [
-      { key: "transfers", label: "이체", to: "/settlements" },
-      { key: "loops", label: "루프스테이션", to: "/loops" },
-    ],
-  },
-  {
-    to: "/records",
-    label: "기록",
-    end: true,
-    subItems: [
-      { key: "moon", label: "달 기록", to: "/records/moon" },
-      { key: "sun", label: "해 기록", to: "/records/sun" },
-    ],
-  },
+  { to: "/connections/assets", label: "자산" },
+  { to: "/connections/categories", label: "분류" },
+  { to: "/settlements", label: "이체" },
+  { to: "/loops", label: "루프스테이션" },
+  { to: "/records/moon", label: "달기록" },
+  { to: "/records/sun", label: "해기록" },
 ];
 const developerNavItem: NavItem = { to: "/dev", label: "DEV" };
 
 const navGuideTargetMap: Record<string, string> = {
   "/dashboard": "nav-dashboard",
-  "/collections": "nav-collections",
-  "/connections": "nav-connections",
-  "/flows": "nav-flows",
-  "/records": "nav-records",
+  "/connections/assets": "nav-sub-assets",
+  "/connections/categories": "nav-sub-categories",
+  "/settlements": "nav-sub-transfers",
+  "/loops": "nav-sub-loops",
+  "/records/moon": "nav-sub-moon",
+  "/records/sun": "nav-sub-sun",
+  "/dev": "nav-dev",
+  "/settings": "nav-settings",
 };
 
-function getForcedSubnavKeyFromGuideSelector(selector?: string | null) {
-  if (!selector) return null;
-  if (selector.includes('data-guide-target="nav-sub-card"') || selector.includes('data-guide-target="nav-sub-income"')) {
-    return "/collections";
+const navIconKeyMap: Record<string, string> = {
+  "/dashboard": "home",
+  "/connections/assets": "link",
+  "/connections/categories": "link",
+  "/settlements": "flow",
+  "/loops": "flow",
+  "/records/moon": "note",
+  "/records/sun": "note",
+  "/dev": "lab",
+  "/settings": "settings",
+};
+
+function getDesktopHeaderTitle(pathname: string) {
+  if (pathname === "/dashboard" || pathname.startsWith("/records/moon")) {
+    const today = new Date();
+    return `${today.getFullYear()}년 ${today.getMonth() + 1}월`;
   }
-  if (selector.includes('data-guide-target="nav-sub-assets"') || selector.includes('data-guide-target="nav-sub-categories"')) {
-    return "/connections";
-  }
-  if (selector.includes('data-guide-target="nav-sub-transfers"') || selector.includes('data-guide-target="nav-sub-loops"')) {
-    return "/flows";
-  }
-  if (selector.includes('data-guide-target="nav-sub-moon"') || selector.includes('data-guide-target="nav-sub-sun"')) {
-    return "/records";
-  }
-  return null;
+  if (pathname.startsWith("/records/sun")) return "해 기록";
+  if (pathname.startsWith("/connections")) return "연결";
+  if (pathname.startsWith("/flows") || pathname === "/settlements" || pathname.startsWith("/loops")) return "흐름";
+  if (pathname.startsWith("/collections")) return "기록";
+  if (pathname === "/settings") return "설정";
+  return "소비일기";
 }
 
 function useDeveloperMode() {
@@ -145,106 +128,76 @@ function useDeveloperMode() {
   return { isDeveloperModeUnlocked, registerUnlockTap, lockDeveloperMode };
 }
 
-function AppTopNav({ isDeveloperModeUnlocked }: { isDeveloperModeUnlocked: boolean }) {
+function getActiveMainKey(pathname: string, navItems: NavItem[]) {
+  if (pathname === "/dashboard") {
+    return "/dashboard";
+  }
+  if (pathname === "/settings") {
+    return "/settings";
+  }
+  if (pathname.startsWith("/connections/categories") || pathname === "/categories") return "/connections/categories";
+  if (pathname.startsWith("/connections/assets") || pathname === "/people" || pathname === "/accounts" || pathname === "/cards")
+    return "/connections/assets";
+  if (pathname === "/settlements") return "/settlements";
+  if (pathname.startsWith("/loops")) return "/loops";
+  if (pathname.startsWith("/records/moon") || pathname === "/dashboard") return pathname === "/dashboard" ? "/dashboard" : "/records/moon";
+  if (pathname.startsWith("/records/sun")) return "/records/sun";
+  if (pathname === "/dev") return "/dev";
+  const exact = navItems.find((item) => item.to === pathname);
+  if (exact) return exact.to;
+  const partial = navItems.find((item) => item.to !== "/" && pathname.startsWith(item.to));
+  return partial?.to ?? null;
+}
+
+function AppSidebarNav({ isDeveloperModeUnlocked }: { isDeveloperModeUnlocked: boolean }) {
   const location = useLocation();
   const navItems = useMemo(
     () => (isDeveloperModeUnlocked ? [...baseNavItems, developerNavItem] : baseNavItems),
     [isDeveloperModeUnlocked],
   );
-  const [openSubnavKey, setOpenSubnavKey] = useState<string | null>(null);
-  const [guideHighlightSelector, setGuideHighlightSelector] = useState<string | null>(null);
-
-  const activeKey = useMemo<string | null>(() => {
-    const pathname = location.pathname || "/";
-    if (
-      pathname === "/dashboard"
-    ) {
-      return "/dashboard";
-    }
-    if (
-      pathname === "/" ||
-      pathname.startsWith("/collections") ||
-      pathname === "/transactions" ||
-      pathname === "/account-transfers" ||
-      pathname === "/imports" ||
-      pathname === "/reviews"
-    ) {
-      return "/collections";
-    }
-    if (
-      pathname.startsWith("/connections") ||
-      pathname === "/people" ||
-      pathname === "/accounts" ||
-      pathname === "/cards" ||
-      pathname === "/categories"
-    ) {
-      return "/connections";
-    }
-    if (pathname === "/settlements" || pathname.startsWith("/loops")) {
-      return "/flows";
-    }
-    if (pathname.startsWith("/records")) {
-      return "/records";
-    }
-    if (pathname === "/settings") {
-      return null;
-    }
-    const exact = navItems.find((item) => item.to === pathname);
-    if (exact) return exact.to;
-    const partial = navItems.find((item) => item.to !== "/" && pathname.startsWith(item.to));
-    return partial?.to ?? null;
-  }, [location.pathname, navItems]);
-
-  const activeSubKey = useMemo(() => {
-    if (activeKey === "/collections") {
-      if (location.pathname === "/account-transfers" || location.pathname.startsWith("/collections/transfer")) {
-        return "transfer";
-      }
-      if (location.pathname.startsWith("/collections/income")) {
-        return "income";
-      }
-      return "card";
-    }
-    if (activeKey === "/connections") {
-      return location.pathname === "/categories" || location.pathname.startsWith("/connections/categories") ? "categories" : "assets";
-    }
-    if (activeKey === "/flows") {
-      return location.pathname.startsWith("/loops") ? "loops" : "transfers";
-    }
-    if (activeKey === "/records") {
-      return location.pathname.startsWith("/records/sun") ? "sun" : "moon";
-    }
-    return null;
-  }, [activeKey, location.pathname]);
-
-  const forcedOpenSubnavKey = useMemo(
-    () => getForcedSubnavKeyFromGuideSelector(guideHighlightSelector),
-    [guideHighlightSelector],
-  );
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const handleGuideHighlightChange = (event: Event) => {
-      const detail = (event as CustomEvent<{ selector?: string | null }>).detail;
-      setGuideHighlightSelector(detail?.selector ?? null);
-    };
-
-    window.addEventListener(GUIDE_HIGHLIGHT_CHANGE_EVENT, handleGuideHighlightChange as EventListener);
-    return () => window.removeEventListener(GUIDE_HIGHLIGHT_CHANGE_EVENT, handleGuideHighlightChange as EventListener);
-  }, []);
-
-  useEffect(() => {
-    setOpenSubnavKey(null);
-  }, [location.pathname, location.search]);
+  const activeKey = useMemo(() => getActiveMainKey(location.pathname || "/", navItems), [location.pathname, navItems]);
 
   return (
-    <nav className="app-top-nav" data-guide-target="nav-menu">
-      {navItems.map((item, index) => {
-        const subItems = item.subItems ?? [];
-        const hasSubnav = subItems.length > 0;
-        const isSubnavOpen = openSubnavKey === item.to || forcedOpenSubnavKey === item.to;
+    <nav className="sidebar-nav" aria-label="주요 메뉴" data-guide-target="nav-menu">
+      {[...navItems, { to: "/settings", label: "설정" }].map((item) => (
+        <div key={item.to} className={`sidebar-nav-section${activeKey === item.to ? " is-active" : ""}`}>
+          <NavLink
+            to={item.to}
+            end={item.end}
+            className={({ isActive: isLinkActive }) => `sidebar-nav-parent sidebar-nav-link${isLinkActive || activeKey === item.to ? " is-active" : ""}`}
+            data-guide-target={navGuideTargetMap[item.to] ?? undefined}
+          >
+            <span className={`nav-sidebar-icon nav-sidebar-icon--${navIconKeyMap[item.to] ?? "dot"}`} aria-hidden="true" />
+            <span className="sidebar-nav-parent-label">{item.label}</span>
+          </NavLink>
+        </div>
+      ))}
+    </nav>
+  );
+}
 
+function AppTopNav({
+  isDeveloperModeUnlocked,
+  variant = "desktop",
+  onNavigate,
+}: {
+  isDeveloperModeUnlocked: boolean;
+  variant?: "desktop" | "drawer" | "sidebar";
+  onNavigate?: () => void;
+}) {
+  const location = useLocation();
+  const navItems = useMemo(
+    () => (isDeveloperModeUnlocked ? [...baseNavItems, developerNavItem] : baseNavItems),
+    [isDeveloperModeUnlocked],
+  );
+  const isDrawer = variant === "drawer";
+  const isSidebar = variant === "sidebar";
+
+  const activeKey = useMemo<string | null>(() => getActiveMainKey(location.pathname || "/", navItems), [location.pathname, navItems]);
+
+  return (
+    <nav className={`app-top-nav${isDrawer ? " is-drawer-nav" : ""}${isSidebar ? " is-sidebar-nav" : ""}`} data-guide-target="nav-menu">
+      {navItems.map((item, index) => {
         return (
           <Fragment key={item.to}>
             {index > 0 ? (
@@ -252,72 +205,19 @@ function AppTopNav({ isDeveloperModeUnlocked }: { isDeveloperModeUnlocked: boole
                 |
               </span>
             ) : null}
-            <div
-              className={`app-top-nav-group${hasSubnav ? " has-subnav" : ""}${item.to === activeKey ? " is-active" : ""}${isSubnavOpen ? " is-subnav-open" : ""}`}
-              onMouseEnter={hasSubnav ? () => setOpenSubnavKey(item.to) : undefined}
-              onMouseLeave={
-                hasSubnav
-                  ? (event) => {
-                      const nextTarget = event.relatedTarget;
-                      if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) {
-                        setOpenSubnavKey((current) => (current === item.to ? null : current));
-                      }
-                    }
-                  : undefined
-              }
-              onFocusCapture={hasSubnav ? () => setOpenSubnavKey(item.to) : undefined}
-              onBlurCapture={
-                hasSubnav
-                  ? (event) => {
-                      const nextTarget = event.relatedTarget;
-                      if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) {
-                        setOpenSubnavKey((current) => (current === item.to ? null : current));
-                      }
-                    }
-                  : undefined
-              }
-            >
-              {hasSubnav ? (
-                <button
-                  type="button"
-                  className={`nav-link nav-parent-link nav-parent-button${item.to === activeKey ? " active" : ""}`}
-                  data-guide-target={navGuideTargetMap[item.to] ?? undefined}
-                  aria-haspopup="true"
-                  aria-expanded={isSubnavOpen}
-                >
-                  {item.label}
-                </button>
-              ) : (
-                <NavLink
-                  to={item.to}
-                  end={item.end}
-                  className={`nav-link nav-parent-link${item.to === activeKey ? " active" : ""}`}
-                  data-guide-target={navGuideTargetMap[item.to] ?? undefined}
-                >
-                  {item.label}
-                </NavLink>
-              )}
-              {hasSubnav ? (
-                <div
-                  className="app-top-subnav"
-                  aria-label={`${item.label} 하위 메뉴`}
-                  data-guide-target={`nav-subnav-${item.to.replaceAll("/", "-").replace(/^-/, "")}`}
-                >
-                  {subItems.map((subItem) => (
-                    <Fragment key={subItem.key}>
-                      <Link
-                        to={subItem.to}
-                        className={`nav-link nav-sub-link${activeSubKey === subItem.key ? " active" : ""}`}
-                        data-guide-target={`nav-sub-${subItem.key}`}
-                        aria-current={activeSubKey === subItem.key ? "page" : undefined}
-                        onClick={() => setOpenSubnavKey(null)}
-                      >
-                        {subItem.label}
-                      </Link>
-                    </Fragment>
-                  ))}
-                </div>
-              ) : null}
+            <div className={`app-top-nav-group${item.to === activeKey ? " is-active" : ""}${isDrawer ? " is-drawer-group" : ""}`}>
+              <NavLink
+                to={item.to}
+                end={item.end}
+                className={`nav-link nav-parent-link${item.to === activeKey ? " active" : ""}${isDrawer ? " is-drawer-parent" : ""}${isSidebar ? " is-sidebar-parent" : ""}`}
+                data-guide-target={navGuideTargetMap[item.to] ?? undefined}
+                onClick={onNavigate}
+              >
+                {isSidebar ? (
+                  <span className={`nav-sidebar-icon nav-sidebar-icon--${navIconKeyMap[item.to] ?? "dot"}`} aria-hidden="true" />
+                ) : null}
+                <span className="nav-item-label">{item.label}</span>
+              </NavLink>
             </div>
           </Fragment>
         );
@@ -459,17 +359,22 @@ function RecordsPage({ view }: { view: "moon" | "sun" }) {
 function AppBrandMark({ size = "compact" }: { size?: "compact" | "expanded" }) {
   return (
     <span className={`app-brand-mark app-brand-mark--${size}`} aria-label="소비일기">
-      <span className="app-brand-grid" aria-hidden="true" />
-      <span className="app-brand-word">소비일기</span>
+      <img className="app-brand-image" src="/logo2.png" alt="" aria-hidden="true" />
+      <span className="app-brand-word-stack">
+        <span className="app-brand-word">소비일기</span>
+        {size === "expanded" ? null : null}
+      </span>
     </span>
   );
 }
 
 function AppFrame() {
-  const { addPerson, createEmptyWorkspace, isReady, setActiveWorkspace, state } = useAppState();
+  const location = useLocation();
+  const { addPerson, createEmptyWorkspace, isReady, state } = useAppState();
   const { isDeveloperModeUnlocked, registerUnlockTap, lockDeveloperMode } = useDeveloperMode();
   useThemeMode();
   const [isCreateWorkspaceOpen, setIsCreateWorkspaceOpen] = useState(false);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [guideBeaconState, setGuideBeaconState] = useState<"hidden" | "entering" | "idle">("hidden");
   const [isGuideBeaconMounted, setIsGuideBeaconMounted] = useState(false);
@@ -611,11 +516,29 @@ function AppFrame() {
     return () => window.removeEventListener(GUIDE_V1_RESET_EVENT, handleGuideReset as EventListener);
   }, [state.activeWorkspaceId]);
 
+  useEffect(() => {
+    setIsMobileNavOpen(false);
+  }, [location.pathname, location.search]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+
+    document.body.classList.toggle("app-mobile-nav-open", isMobileNavOpen);
+    document.documentElement.classList.toggle("app-mobile-nav-open", isMobileNavOpen);
+
+    return () => {
+      document.body.classList.remove("app-mobile-nav-open");
+      document.documentElement.classList.remove("app-mobile-nav-open");
+    };
+  }, [isMobileNavOpen]);
+
   if (!isReady) return <LoadingScreen />;
   if (!state.workspaces.length) return <EmptyWorkspaceScreen />;
 
   const activeWorkspace = getActiveWorkspace(state);
   if (!activeWorkspace) return <EmptyWorkspaceScreen />;
+
+  const desktopHeaderTitle = getDesktopHeaderTitle(location.pathname);
 
   const closeCreateWorkspaceModal = () => {
     setIsCreateWorkspaceOpen(false);
@@ -630,43 +553,68 @@ function AppFrame() {
 
   return (
     <div className={`app-shell${isOnboardingEntering ? " is-onboarding-entering" : ""}`}>
-      <header className="app-topbar condensed">
-        <div className="app-topbar-main">
-          <div className="app-brand-block">
-            <span className="sidebar-kicker">생활 가계부</span>
-            <button type="button" className="sidebar-brand-button" onClick={registerUnlockTap}>
+      <aside className="app-sidebar" aria-label="주요 메뉴">
+        <div className="app-sidebar-panel">
+          <div className="app-sidebar-header">
+            <button type="button" className="sidebar-brand-button app-sidebar-brand" onClick={registerUnlockTap}>
               <AppBrandMark size="expanded" />
             </button>
-            <p className="sidebar-copy">소비일기는 빠르게 기록하고 자연스럽게 정리하는 생활 가계부 서비스입니다.</p>
+            <p className="app-sidebar-copy">작은 소비도, 소중한 기억이 되도록.</p>
           </div>
+
+          <div className="app-sidebar-nav">
+            <AppSidebarNav isDeveloperModeUnlocked={isDeveloperModeUnlocked} />
+          </div>
+
+          <div className="app-sidebar-footer">
+            <div className="app-sidebar-note">
+              <img className="app-sidebar-note-image" src="/slogan.png" alt="기록이 쌓이면, 마음의 흐름이 보여요" />
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <header className="app-topbar condensed">
+        <div className="app-topbar-main">
+          <div className="app-brand-block app-topbar-desktop-copy">
+            <div className="app-topbar-title-cluster">
+              <div className="app-topbar-title-nav" aria-hidden="true">
+                <button type="button" className="app-topbar-title-arrow">‹</button>
+                <button type="button" className="app-topbar-title-arrow">›</button>
+              </div>
+              <strong>{desktopHeaderTitle}</strong>
+            </div>
+          </div>
+          <button
+            type="button"
+            className={`mobile-nav-toggle${isMobileNavOpen ? " is-open" : ""}`}
+            aria-label={isMobileNavOpen ? "메뉴 닫기" : "메뉴 열기"}
+            aria-expanded={isMobileNavOpen}
+            onClick={() => setIsMobileNavOpen((current) => !current)}
+          >
+            <span />
+            <span />
+            <span />
+          </button>
           <div className="app-topbar-compact-header">
-            <Link to="/collections/card" className="app-topbar-logo-link" aria-label="소비일기 결제내역으로 이동" onClick={registerUnlockTap}>
+            <Link
+              to="/collections/card"
+              className="app-topbar-logo-link app-topbar-mobile-brand"
+              aria-label="소비일기 결제내역으로 이동"
+              onClick={registerUnlockTap}
+            >
               <AppBrandMark size="compact" />
             </Link>
           </div>
           <div className="app-topbar-actions">
-            <AppTopNav isDeveloperModeUnlocked={isDeveloperModeUnlocked} />
-            <AppSelect
-              className="workspace-select"
-              value={activeWorkspace.id}
-              options={[
-                ...state.workspaces.map((workspace) => ({ value: workspace.id, label: workspace.name })),
-                { value: CREATE_WORKSPACE_OPTION, label: "+ 새 가계부 추가..." },
-              ]}
-              onChange={(nextValue) => {
-                if (nextValue === CREATE_WORKSPACE_OPTION) {
-                  setNewWorkspaceName("");
-                  setIsCreateWorkspaceOpen(true);
-                  return;
-                }
-                setActiveWorkspace(nextValue);
-              }}
-              ariaLabel="가계부 선택"
-            />
             <div className="app-topbar-settings-cluster">
-              <span className="app-topbar-settings-divider" aria-hidden="true">
-                |
-              </span>
+              <div className="app-topbar-date-chip">{activeWorkspace.name}</div>
+              <Link to="/dashboard" className="app-topbar-ghost-button">
+                오늘
+              </Link>
+              <Link to="/collections/card" className="app-topbar-primary-button">
+                + 기록하기
+              </Link>
               <NavLink
                 to="/settings"
                 className={({ isActive }) => `app-topbar-settings-link${isActive ? " active" : ""}`}
@@ -679,6 +627,25 @@ function AppFrame() {
           </div>
         </div>
       </header>
+
+      <div
+        className={`app-mobile-nav-backdrop${isMobileNavOpen ? " is-open" : ""}`}
+        aria-hidden={!isMobileNavOpen}
+        onClick={() => setIsMobileNavOpen(false)}
+      />
+      <aside className={`app-mobile-drawer${isMobileNavOpen ? " is-open" : ""}`} aria-hidden={!isMobileNavOpen}>
+        <div className="app-mobile-drawer-head">
+          <button type="button" className="sidebar-brand-button" onClick={registerUnlockTap}>
+            <AppBrandMark size="compact" />
+          </button>
+        </div>
+        <p className="app-mobile-drawer-copy">핵심 메뉴와 중요한 이동 경로를 모바일 화면에서 한 번에 다루기 쉽게 다시 정리했습니다.</p>
+
+        <div className="app-mobile-drawer-section">
+          <span className="sidebar-kicker">전체 메뉴</span>
+          <AppTopNav isDeveloperModeUnlocked={isDeveloperModeUnlocked} variant="drawer" onNavigate={() => setIsMobileNavOpen(false)} />
+        </div>
+      </aside>
 
       <div className="app-main">
         <main className="app-content">

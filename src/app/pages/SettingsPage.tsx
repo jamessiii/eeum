@@ -124,7 +124,7 @@ export function SettingsPage() {
 
   return (
     <div className="page-stack">
-      <section className="settings-shell-card card shadow-sm" data-guide-target="settings-page-overview">
+      <section className="settings-shell-card page-section" data-guide-target="settings-page-overview">
         <div className="settings-shell-header">
           <div>
             <span className="section-kicker">설정</span>

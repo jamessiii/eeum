@@ -463,7 +463,7 @@ export function ImportsPage() {
   return (
     <>
       <div className="page-stack">
-        <section className="card shadow-sm" style={getMotionStyle(0)} data-guide-target="transactions-upload">
+        <section className="page-section" style={getMotionStyle(0)} data-guide-target="transactions-upload">
             <div className="section-head">
               <div>
                 <span className="section-kicker">업로드 센터</span>
@@ -522,7 +522,7 @@ export function ImportsPage() {
           {isPreparingPreview ? <p className="text-secondary mt-3 mb-0">업로드 미리보기를 준비하고 있습니다.</p> : null}
 
           {previewBundle ? (
-            <div className="card shadow-sm mt-4 import-preview-panel" data-guide-target="transactions-upload-preview">
+            <div className="page-section mt-4 import-preview-panel" data-guide-target="transactions-upload-preview">
               <div className="section-head">
                 <div>
                   <span className="section-kicker">미리보기</span>

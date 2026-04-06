@@ -3,7 +3,7 @@ import { getMotionStyle } from "../../shared/utils/motion";
 export function AccountTransfersPage() {
   return (
     <div className="page-stack">
-      <section className="card shadow-sm" style={getMotionStyle(0)} data-guide-target="account-transfers-entry">
+      <section className="page-section" style={getMotionStyle(0)} data-guide-target="account-transfers-entry">
         <div className="section-head">
           <div>
             <span className="section-kicker">이체내역</span>

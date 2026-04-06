@@ -73,7 +73,7 @@ export function ReviewsPage() {
   };
 
   return (
-    <section className="card shadow-sm" data-guide-target="transactions-reviews">
+    <section className="page-section" data-guide-target="transactions-reviews">
       <div className="section-head">
         <div>
           <span className="section-kicker">검토함</span>

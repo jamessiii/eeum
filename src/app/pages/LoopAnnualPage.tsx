@@ -43,7 +43,7 @@ export function LoopAnnualPage() {
   const chartMax = Math.max(...loopTrendRows.map((item) => item.maxAmount), 1);
 
   return (
-    <section className="card shadow-sm" style={getMotionStyle(0)}>
+    <section className="page-section" style={getMotionStyle(0)}>
       <div className="section-head">
         <div>
           <span className="section-kicker">루프 가격변동</span>

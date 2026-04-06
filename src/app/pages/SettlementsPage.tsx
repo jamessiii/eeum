@@ -116,7 +116,7 @@ export function SettlementsPage() {
 
   return (
     <div className="page-stack">
-      <section className="card shadow-sm" style={getMotionStyle(0)} data-guide-target="settlements-page-overview">
+      <section className="page-section" style={getMotionStyle(0)} data-guide-target="settlements-page-overview">
         <div className="section-head">
           <div>
             <span className="section-kicker">이번달 자산 흐름</span>
@@ -185,7 +185,7 @@ export function SettlementsPage() {
       </section>
 
       {!statementMonthOptions.length ? (
-        <section className="card shadow-sm" style={getMotionStyle(2)}>
+        <section className="page-section" style={getMotionStyle(2)}>
           <EmptyStateCallout
             kicker="흐름 준비 중"
             title="먼저 청구분 명세서를 올려 주세요"
@@ -198,7 +198,7 @@ export function SettlementsPage() {
           />
         </section>
       ) : !flowStatus.rows.length ? (
-        <section className="card shadow-sm" style={getMotionStyle(1)}>
+        <section className="page-section" style={getMotionStyle(1)}>
           <EmptyStateCallout
             kicker="흐름 준비 중"
             title={`${selectedStatementLabel}에 확인할 이체가 아직 없습니다`}
@@ -219,7 +219,7 @@ export function SettlementsPage() {
           />
         </section>
       ) : (
-        <section className="card shadow-sm" style={getMotionStyle(1)}>
+        <section className="page-section" style={getMotionStyle(1)}>
           <div className="section-head">
             <div>
               <span className="section-kicker">이체 확인</span>

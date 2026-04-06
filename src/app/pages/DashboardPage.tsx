@@ -2351,6 +2351,10 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
         )
     : "오늘은 기록이 아직 없다. 참 조용했다.";
   const todayDiaryCells = useMemo(() => createDiaryCells(todayDiary, 70, 10, 1), [todayDiary]);
+  const selectedCalendarDayLabel = useMemo(
+    () => formatFullKoreanDateLabel(selectedCalendarCell?.dateKey ?? selectedCalendarDate),
+    [selectedCalendarCell?.dateKey, selectedCalendarDate],
+  );
   const loopConfirmTransactions = useMemo(() => {
     if (!loopConfirmState) return [];
     const selectedIdSet = new Set(loopConfirmState.candidateIds);
@@ -3298,7 +3302,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
   }, [accountNameMap, selectedDashboardExpenseTransactions, visibleCards, visiblePeople]);
 
   const moonCalendarSection = (
-    <section className="card shadow-sm" style={getMotionStyle(0.6)} data-guide-target="records-moon-calendar">
+    <section className="page-section" style={getMotionStyle(0.6)} data-guide-target="records-moon-calendar">
       {mode === "dashboard" ? (
         <div className="dashboard-calendar-hero-head">
           <div className="dashboard-calendar-month-nav" aria-label="월 이동">
@@ -3526,7 +3530,12 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
 
         <article className="dashboard-diary-card">
           <div className="dashboard-diary-head">
-            <span className="section-kicker">오늘의 일기</span>
+            <div className="dashboard-diary-title-block">
+              <strong>{selectedCalendarDayLabel.replace("요일", "")}</strong>
+              <span className="dashboard-diary-head-action" aria-hidden="true">
+                •••
+              </span>
+            </div>
           </div>
           <div className="dashboard-diary-sheet">
             <div className="dashboard-diary-grid" aria-label={todayDiary}>
@@ -3766,7 +3775,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
   if (mode === "sun") {
     return (
       <div className="page-stack">
-        <section className="card shadow-sm" style={getMotionStyle(0)} data-guide-target="records-sun-overview">
+        <section className="page-section" style={getMotionStyle(0)} data-guide-target="records-sun-overview">
           <div className="section-head">
             <div>
               <span className="section-kicker">해 기록 통계</span>
@@ -4072,7 +4081,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
       {mode === "dashboard" ? moonCalendarSection : null}
       {mode === "moon" ? (
         <>
-      <section className="card shadow-sm" style={getMotionStyle(0)} data-guide-target="records-moon-overview">
+      <section className="page-section" style={getMotionStyle(0)} data-guide-target="records-moon-overview">
         <div className="section-head">
           <div>
             <span className="section-kicker">달 기록 통계</span>
@@ -4259,7 +4268,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
         </div>
       </section>
 
-      <section className="card shadow-sm" style={getMotionStyle(1)} data-guide-target="dashboard-summary">
+      <section className="page-section" style={getMotionStyle(1)} data-guide-target="dashboard-summary">
         <div className="section-head">
           <div>
             <span className="section-kicker">{selectedDashboardBasis === "statement" ? "명세서 기준 요약" : "월별 요약"}</span>
@@ -4408,7 +4417,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
         ) : null}
       </section>
 
-      <section className="card shadow-sm" style={getMotionStyle(1)}>
+      <section className="page-section" style={getMotionStyle(1)}>
         <div className="section-head">
           <div>
             <span className="section-kicker">카테고리 흐름</span>
@@ -4578,7 +4587,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
         </div>
       </section>
 
-      <section className="card shadow-sm" style={getMotionStyle(2)}>
+      <section className="page-section" style={getMotionStyle(2)}>
         <div className="section-head">
           <div>
             <span className="section-kicker">카드 흐름</span>
@@ -4654,7 +4663,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
 
       {mode === "dashboard" ? (
         <>
-      <section className="card shadow-sm" style={getMotionStyle(1)} data-guide-target="dashboard-foundation-overview">
+      <section className="page-section" style={getMotionStyle(1)} data-guide-target="dashboard-foundation-overview">
         <div className="section-head">
           <div>
             <span className="section-kicker">연결 된 것들</span>
@@ -4713,7 +4722,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
         </div>
       </section>
       {mode !== "dashboard" ? (
-      <section className="card shadow-sm" style={getMotionStyle(2)} data-guide-target="dashboard-flow-overview">
+      <section className="page-section" style={getMotionStyle(2)} data-guide-target="dashboard-flow-overview">
         <div className="section-head">
           <div>
             <span className="section-kicker">이번 달 흐름</span>
@@ -4751,7 +4760,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
       ) : null}
 
       {mode !== "dashboard" ? (
-      <section className="card shadow-sm" style={getMotionStyle(3)} data-guide-target="dashboard-loop-station">
+      <section className="page-section" style={getMotionStyle(3)} data-guide-target="dashboard-loop-station">
         <div className="section-head">
           <div>
             <span className="section-kicker">루프스테이션</span>
@@ -5091,7 +5100,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
             {isPreparingPreview ? <p className="text-secondary mt-3 mb-0">업로드 미리보기를 준비하고 있습니다.</p> : null}
 
             {previewBundle ? (
-              <div className="card shadow-sm mt-4 import-preview-panel" data-guide-target="transactions-upload-preview">
+              <div className="page-section mt-4 import-preview-panel" data-guide-target="transactions-upload-preview">
                 <div className="section-head">
                   <div>
                     <span className="section-kicker">미리보기</span>

@@ -35,7 +35,7 @@ export function DeveloperPage({ onLockDeveloperMode }: DeveloperPageProps) {
 
   return (
     <div className="page-grid">
-      <section className="card shadow-sm">
+      <section className="page-section">
         <div className="section-head">
           <div>
             <span className="section-kicker">개발자 모드</span>
@@ -75,7 +75,7 @@ export function DeveloperPage({ onLockDeveloperMode }: DeveloperPageProps) {
         </div>
       </section>
 
-      <section className="card shadow-sm">
+      <section className="page-section">
         <div className="section-head">
           <div>
             <span className="section-kicker">가이드 테스트</span>
@@ -97,7 +97,7 @@ export function DeveloperPage({ onLockDeveloperMode }: DeveloperPageProps) {
         </button>
       </section>
 
-      <section className="card shadow-sm">
+      <section className="page-section">
         <div className="section-head">
           <div>
             <span className="section-kicker">위험 작업</span>
@@ -110,7 +110,7 @@ export function DeveloperPage({ onLockDeveloperMode }: DeveloperPageProps) {
         </button>
       </section>
 
-      <section className="card shadow-sm">
+      <section className="page-section">
         <div className="section-head">
           <div>
             <span className="section-kicker">디버그</span>

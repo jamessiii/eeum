@@ -259,7 +259,7 @@ export function LoopStationPage() {
 
   return (
     <div className="page-stack">
-      <section className="card shadow-sm" style={getMotionStyle(0)}>
+      <section className="page-section" style={getMotionStyle(0)}>
         <div className="section-head">
           <div>
             <h2 className="section-title">루프 제안</h2>
@@ -343,7 +343,7 @@ export function LoopStationPage() {
         )}
       </section>
 
-      <section className="card shadow-sm" style={getMotionStyle(1.2)}>
+      <section className="page-section" style={getMotionStyle(1.2)}>
         <div className="section-head">
           <div>
             <h2 className="section-title">루프스테이션</h2>
