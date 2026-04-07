@@ -9766,6 +9766,29 @@ textarea:focus {
   background: linear-gradient(180deg, rgba(255, 253, 249, 0.98) 0%, rgba(248, 240, 229, 0.96) 100%);
 }
 
+@media (max-width: 720px) {
+  .settings-dotori-modal.settings-dotori-modal--auth {
+    width: min(30rem, calc(100vw - 1rem));
+  }
+
+  .settings-dotori-modal.settings-dotori-modal--auth .app-modal-body {
+    max-height: min(88vh, 52rem);
+  }
+
+  .dotori-login-window {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: auto;
+  }
+
+  .dotori-login-art {
+    display: none;
+  }
+
+  .dotori-login-panel {
+    padding: 1.6rem 1.15rem;
+  }
+}
+
 .dotori-login-header {
   display: grid;
   grid-template-columns: auto 1fr;
