@@ -12283,6 +12283,11 @@ textarea:focus {
     animation: modal-sheet-up 260ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
+  .app-modal-dialog.app-modal-dialog--mobile-sheet.is-dragging {
+    animation: none;
+    transition: none;
+  }
+
   .app-modal-dialog.app-modal-dialog--mobile-sheet::before {
     border-radius: 1.35rem 1.35rem 0 0 !important;
   }
@@ -12301,6 +12306,12 @@ textarea:focus {
     margin: 0 auto 0.55rem;
     border-radius: 999px;
     background: rgba(148, 163, 184, 0.48);
+    touch-action: none;
+    cursor: grab;
+  }
+
+  .app-modal-dialog.app-modal-dialog--mobile-sheet.is-dragging .app-modal-sheet-handle {
+    cursor: grabbing;
   }
 
   .app-modal-backdrop.is-closing {

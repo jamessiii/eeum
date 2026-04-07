@@ -208,10 +208,18 @@ export function SettingsPage() {
                   <input
                     hidden
                     type="file"
-                    accept=".json,application/json,text/json"
+                    accept=".json,application/json,text/json,application/octet-stream"
                     onChange={(event) => {
                       const file = event.target.files?.[0];
-                      if (file) void importState(file);
+                      if (file) {
+                        const isJsonFile = file.name.toLowerCase().endsWith(".json");
+                        if (!isJsonFile) {
+                          window.alert("JSON 백업 파일만 가져올 수 있어요.");
+                          event.currentTarget.value = "";
+                          return;
+                        }
+                        void importState(file);
+                      }
                       event.currentTarget.value = "";
                     }}
                   />
