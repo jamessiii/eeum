@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { completeGuideStepAction } from "../../domain/guidance/guideRuntime";
 import { getCategoryLabel } from "../../domain/categories/meta";
 import { formatPercent } from "../../shared/utils/format";
@@ -28,7 +28,7 @@ function hasNumericValue(value: string) {
 }
 
 function formatDraftPercent(value: string) {
-  if (!hasNumericValue(value)) return "입력 필요";
+  if (!hasNumericValue(value)) return "?낅젰 ?꾩슂";
   return formatPercent(Number(value) / 100);
 }
 
@@ -41,6 +41,7 @@ export function SettingsPage() {
   const [profileDraft, setProfileDraft] = useState<ProfileDraftState>(() => createProfileDraft(profile));
   const [activeProfileField, setActiveProfileField] = useState<EditableProfileField | null>(null);
   const [isExportConfirmOpen, setIsExportConfirmOpen] = useState(false);
+  const backupImportInputRef = useRef<HTMLInputElement | null>(null);
   const categoryMap = useMemo(() => new Map(scope.categories.map((category) => [category.id, category])), [scope.categories]);
   const loopPriorityOptions = useMemo(
     () =>
@@ -104,19 +105,19 @@ export function SettingsPage() {
   }> = [
     {
       key: "targetSavingsRate",
-      title: "목표 저축률",
+      title: "紐⑺몴 ?異뺣쪧",
       preview: formatDraftPercent(profileDraft.targetSavingsRate),
       placeholder: "20",
     },
     {
       key: "warningSpendRate",
-      title: "지출 경고 기준",
+      title: "吏異?寃쎄퀬 湲곗?",
       preview: formatDraftPercent(profileDraft.warningSpendRate),
       placeholder: "80",
     },
     {
       key: "warningFixedCostRate",
-      title: "고정지출 경고 기준",
+      title: "怨좎젙吏異?寃쎄퀬 湲곗?",
       preview: formatDraftPercent(profileDraft.warningFixedCostRate),
       placeholder: "55",
     },
@@ -127,8 +128,8 @@ export function SettingsPage() {
       <section className="settings-shell-card page-section" data-guide-target="settings-page-overview">
         <div className="settings-shell-header">
           <div>
-            <span className="section-kicker">설정</span>
-            <h2 className="section-title settings-shell-title">설정</h2>
+            <span className="section-kicker">?ㅼ젙</span>
+            <h2 className="section-title settings-shell-title">?ㅼ젙</h2>
           </div>
         </div>
         <div className="settings-shell-body">
@@ -173,7 +174,7 @@ export function SettingsPage() {
                         onClick={commitProfileDraft}
                         aria-label={`${card.title} 저장`}
                       >
-                        ✓
+                        ??
                       </button>
                     </div>
                   ) : (
@@ -183,9 +184,9 @@ export function SettingsPage() {
                         type="button"
                         className="board-case-edit-button settings-profile-edit-button"
                         onClick={() => setActiveProfileField(card.key)}
-                        aria-label={`${card.title} 수정`}
+                        aria-label={`${card.title} ?섏젙`}
                       >
-                        ✎
+                        ??
                       </button>
                     </div>
                   )}
@@ -195,43 +196,47 @@ export function SettingsPage() {
 
             <article className="resource-card settings-panel-card settings-panel-card--actions" data-guide-target="settings-backup">
               <div className="settings-panel-copy">
-                <span className="section-kicker">백업</span>
+                <span className="section-kicker">諛깆뾽</span>
                 <h3 className="mb-1">데이터 내보내기와 가져오기</h3>
-                <p className="mb-0 text-secondary">현재 가계부 데이터를 JSON 파일로 저장하거나 다시 불러옵니다.</p>
+                <p className="mb-0 text-secondary">?꾩옱 媛怨꾨? ?곗씠?곕? JSON ?뚯씪濡???ν븯嫄곕굹 ?ㅼ떆 遺덈윭?듬땲??</p>
               </div>
               <div className="settings-panel-actions">
                 <button className="btn btn-primary" onClick={() => setIsExportConfirmOpen(true)}>
-                  전체 데이터 내보내기
+                  ?꾩껜 ?곗씠???대낫?닿린
                 </button>
-                <label className="btn btn-outline-primary">
-                  백업 파일 가져오기
-                  <input
-                    hidden
-                    type="file"
-                    accept=".json,application/json,text/json,application/octet-stream"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (file) {
-                        const isJsonFile = file.name.toLowerCase().endsWith(".json");
-                        if (!isJsonFile) {
-                          window.alert("JSON 백업 파일만 가져올 수 있어요.");
-                          event.currentTarget.value = "";
-                          return;
-                        }
-                        void importState(file);
+                <button
+                  type="button"
+                  className="btn btn-outline-primary"
+                  onClick={() => backupImportInputRef.current?.click()}
+                >
+                  諛깆뾽 ?뚯씪 媛?몄삤湲?
+                </button>
+                <input
+                  ref={backupImportInputRef}
+                  hidden
+                  type="file"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) {
+                      const isJsonFile = file.name.toLowerCase().endsWith(".json");
+                      if (!isJsonFile) {
+                        window.alert("JSON 諛깆뾽 ?뚯씪留?媛?몄삱 ???덉뼱??");
+                        event.currentTarget.value = "";
+                        return;
                       }
-                      event.currentTarget.value = "";
-                    }}
-                  />
-                </label>
+                      void importState(file);
+                    }
+                    event.currentTarget.value = "";
+                  }}
+                />
               </div>
             </article>
 
             <article className="resource-card settings-panel-card settings-panel-card--actions" data-guide-target="settings-theme">
               <div className="settings-panel-copy">
                 <span className="section-kicker">화면 관리</span>
-                <h3 className="mb-1">테마</h3>
-                <p className="mb-0 text-secondary">앱에서 사용할 기본 테마를 전환합니다.</p>
+                <h3 className="mb-1">?뚮쭏</h3>
+                <p className="mb-0 text-secondary">?깆뿉???ъ슜??湲곕낯 ?뚮쭏瑜??꾪솚?⑸땲??</p>
               </div>
               <div className="settings-panel-actions">
                 <button
@@ -243,7 +248,7 @@ export function SettingsPage() {
                     completeGuideStepAction(workspaceId, themeMode === "dark" ? "settings-theme-return" : "settings-theme");
                   }}
                 >
-                  <span className="theme-toggle-button-label">테마</span>
+                  <span className="theme-toggle-button-label">?뚮쭏</span>
                   <strong>{themeMode === "dark" ? "Light" : "Dark"}</strong>
                 </button>
               </div>
@@ -251,9 +256,9 @@ export function SettingsPage() {
 
             <article className="resource-card settings-panel-card" data-guide-target="settings-loop-priority">
               <div className="settings-panel-copy">
-                <span className="section-kicker">루프 추천</span>
-                <h3 className="mb-1">루프 추천 카테고리</h3>
-                <p className="mb-0 text-secondary">여기서 고른 카테고리 안에서만 루프스테이션 추천을 보여줍니다.</p>
+                <span className="section-kicker">猷⑦봽 異붿쿇</span>
+                <h3 className="mb-1">猷⑦봽 異붿쿇 移댄뀒怨좊━</h3>
+                <p className="mb-0 text-secondary">?ш린??怨좊Ⅸ 移댄뀒怨좊━ ?덉뿉?쒕쭔 猷⑦봽?ㅽ뀒?댁뀡 異붿쿇??蹂댁뿬以띾땲??</p>
               </div>
               <div className="settings-loop-priority-list">
                 {loopPriorityOptions.map((option) => {
@@ -282,13 +287,13 @@ export function SettingsPage() {
       </section>
       <AppModal
         open={isExportConfirmOpen}
-        title="전체 데이터 내보내기"
-        description="전체 데이터를 백업 파일로 내보내시겠습니까?"
+        title="?꾩껜 ?곗씠???대낫?닿린"
+        description="?꾩껜 ?곗씠?곕? 諛깆뾽 ?뚯씪濡??대낫?댁떆寃좎뒿?덇퉴?"
         onClose={() => setIsExportConfirmOpen(false)}
         footer={
           <>
             <button type="button" className="btn btn-outline-secondary" onClick={() => setIsExportConfirmOpen(false)}>
-              취소
+              痍⑥냼
             </button>
             <button
               type="button"
@@ -298,12 +303,12 @@ export function SettingsPage() {
                 setIsExportConfirmOpen(false);
               }}
             >
-              내보내기
+              ?대낫?닿린
             </button>
           </>
         }
       >
-        <p className="mb-0 text-secondary">현재 워크스페이스 데이터가 JSON 백업 파일로 저장됩니다.</p>
+        <p className="mb-0 text-secondary">?꾩옱 ?뚰겕?ㅽ럹?댁뒪 ?곗씠?곌? JSON 諛깆뾽 ?뚯씪濡???λ맗?덈떎.</p>
       </AppModal>
     </div>
   );
