@@ -1,6 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import type { DragEvent } from "react";
+import type { DragEvent, TouchEvent } from "react";
 import { useRef } from "react";
 import { Fragment } from "react";
 import { monthKey } from "../../shared/utils/date";
@@ -506,6 +506,31 @@ function getCalendarDays(monthValue: string) {
       isCurrentMonth: dateKey.startsWith(monthValue),
       dayOfWeek: nextDate.getDay(),
     };
+  });
+}
+
+function clampDayToMonth(monthValue: string, day: number) {
+  const [year, month] = monthValue.split("-").map(Number);
+  if (!year || !month) return 1;
+  const lastDay = new Date(year, month, 0).getDate();
+  if (!Number.isFinite(day)) return 1;
+  return Math.max(1, Math.min(lastDay, day));
+}
+
+function scrollIntoNearestAppMain(target: HTMLElement, offset = 16) {
+  const scrollContainer = target.closest<HTMLElement>(".app-main");
+  if (!scrollContainer) {
+    target.scrollIntoView({ block: "start", behavior: "smooth" });
+    return;
+  }
+
+  const containerRect = scrollContainer.getBoundingClientRect();
+  const targetRect = target.getBoundingClientRect();
+  const nextTop = scrollContainer.scrollTop + (targetRect.top - containerRect.top) - offset;
+
+  scrollContainer.scrollTo({
+    top: Math.max(0, nextTop),
+    behavior: "smooth",
   });
 }
 
@@ -1459,6 +1484,10 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
   const [selectedStatementHistoryYear, setSelectedStatementHistoryYear] = useState(String(new Date().getFullYear()));
   const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false);
   const [isStatementUploadModalOpen, setIsStatementUploadModalOpen] = useState(false);
+  const [isMobileCalendarSwipeViewport, setIsMobileCalendarSwipeViewport] = useState(false);
+  const [calendarSwipeViewportWidth, setCalendarSwipeViewportWidth] = useState(0);
+  const [calendarSwipeOffset, setCalendarSwipeOffset] = useState(0);
+  const [isCalendarSwipeAnimating, setIsCalendarSwipeAnimating] = useState(false);
   const [previewBundle, setPreviewBundle] = useState<WorkspaceBundle | null>(null);
   const [previewFileName, setPreviewFileName] = useState("");
   const [isPreparingPreview, setIsPreparingPreview] = useState(false);
@@ -1488,6 +1517,14 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
   const statementImportDragDepthRef = useRef(0);
   const statementImportFileInputRef = useRef<HTMLInputElement | null>(null);
   const dashboardCalendarTransactionsRef = useRef<HTMLDivElement | null>(null);
+  const calendarSwipeViewportRef = useRef<HTMLDivElement | null>(null);
+  const calendarSwipeStartXRef = useRef<number | null>(null);
+  const calendarSwipeStartYRef = useRef<number | null>(null);
+  const calendarSwipeOffsetRef = useRef(0);
+  const calendarSwipeIsDraggingRef = useRef(false);
+  const calendarSwipeSuppressClickRef = useRef(false);
+  const calendarSwipeAnimationTimerRef = useRef<number | null>(null);
+  const shouldScrollCalendarTransactionsRef = useRef(false);
   const previewStatementMonthOptions = useMemo(() => getPreviewStatementMonthOptions(previewBundle), [previewBundle]);
   const defaultPreviewStatementMonth = previewStatementMonthOptions.at(-1) ?? "";
   const previewCardMatches = useMemo(
@@ -2110,9 +2147,46 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
       ),
     [calendarMonthValue, scope.transactions, selectedCalendarOwnerId],
   );
-  const calendarCells = useMemo<CalendarCell[]>(() => {
-    const transactionMap = new Map<string, { expenseAmount: number; transactionCount: number; merchants: string[] }>();
-    calendarExpenseTransactions.forEach((transaction) => {
+  const calendarSwipeMonthKeys = useMemo(
+    () => [getPreviousMonthKey(calendarMonthValue), calendarMonthValue, getNextMonthKey(calendarMonthValue)],
+    [calendarMonthValue],
+  );
+  const calendarCellsByMonth = useMemo(() => {
+    const monthSet = new Set(calendarSwipeMonthKeys);
+    const transactionsByMonth = new Map<string, Transaction[]>();
+    monthSet.forEach((month) => {
+      transactionsByMonth.set(month, []);
+    });
+
+    scope.transactions.forEach((transaction) => {
+      if (
+        transaction.status !== "active" ||
+        transaction.transactionType !== "expense" ||
+        !transaction.isExpenseImpact ||
+        (selectedCalendarOwnerId === "all" ? false : transaction.ownerPersonId !== selectedCalendarOwnerId)
+      ) {
+        if (selectedCalendarOwnerId === "all") {
+          if (
+            transaction.status !== "active" ||
+            transaction.transactionType !== "expense" ||
+            !transaction.isExpenseImpact
+          ) {
+            return;
+          }
+        } else {
+          return;
+        }
+      }
+
+      const targetMonth = monthKey(transaction.occurredAt);
+      if (!monthSet.has(targetMonth)) return;
+      transactionsByMonth.get(targetMonth)?.push(transaction);
+    });
+
+    const cellsByMonth = new Map<string, CalendarCell[]>();
+    monthSet.forEach((targetMonth) => {
+      const transactionMap = new Map<string, { expenseAmount: number; transactionCount: number; merchants: string[] }>();
+      (transactionsByMonth.get(targetMonth) ?? []).forEach((transaction) => {
         const dateKey = transaction.occurredAt.slice(0, 10);
         const merchantName = transaction.merchantName.trim() || "이름 없는 결제";
         const current = transactionMap.get(dateKey) ?? { expenseAmount: 0, transactionCount: 0, merchants: [] };
@@ -2124,81 +2198,105 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
         transactionMap.set(dateKey, current);
       });
 
-    const loopMemoMap = new Map<string, Map<string, CalendarMemo>>();
-    const addLoopMemo = (dateKey: string, merchantName: string, text: string) => {
-      const current = loopMemoMap.get(dateKey) ?? new Map<string, CalendarMemo>();
-      const existing = current.get(text);
-      if (existing) {
-        if (!existing.merchantNames.includes(merchantName)) {
-          existing.merchantNames.push(merchantName);
+      const loopMemoMap = new Map<string, Map<string, CalendarMemo>>();
+      const addLoopMemo = (dateKey: string, merchantName: string, text: string) => {
+        const current = loopMemoMap.get(dateKey) ?? new Map<string, CalendarMemo>();
+        const existing = current.get(text);
+        if (existing) {
+          if (!existing.merchantNames.includes(merchantName)) {
+            existing.merchantNames.push(merchantName);
+          }
+        } else {
+          current.set(text, { text, merchantNames: [merchantName] });
         }
-      } else {
-        current.set(text, { text, merchantNames: [merchantName] });
-      }
-      loopMemoMap.set(dateKey, current);
-    };
-
-    managedLoops.forEach((loop) => {
-      const insight = loopInsightByGroupKey.get(loop.key);
-      const text = createLoopMemo(loop, categoryNameMap);
-
-      let hasActualLoopTransactionInMonth = false;
-      loop.transactions.forEach((transaction) => {
-        const occurredDateKey = transaction.occurredAt.slice(0, 10);
-        if (!occurredDateKey.startsWith(calendarMonthValue)) return;
-        hasActualLoopTransactionInMonth = true;
-        addLoopMemo(occurredDateKey, loop.merchantName, text);
-      });
-
-      if (!hasActualLoopTransactionInMonth && insight) {
-        const projectedLoopDate = getLoopProjectedDateWithinMonth(
-          insight.latestOccurredAt,
-          insight.averageIntervalDays,
-          calendarMonthValue,
-          latestStatementMonth,
-        );
-        if (projectedLoopDate) {
-          addLoopMemo(projectedLoopDate, loop.merchantName, text);
-        }
-      }
-    });
-
-    return getCalendarDays(calendarMonthValue).map((day) => {
-      const expenseAmount = transactionMap.get(day.dateKey)?.expenseAmount ?? 0;
-      const transactionCount = transactionMap.get(day.dateKey)?.transactionCount ?? 0;
-      const merchants = transactionMap.get(day.dateKey)?.merchants ?? [];
-      const memos = [...(loopMemoMap.get(day.dateKey)?.values() ?? [])];
-      const holidayLabel = getFixedHolidayLabel(day.dateKey);
-      const chips: CalendarChip[] = [];
-
-      if (holidayLabel) {
-        chips.push({ label: holidayLabel, tone: "holiday" });
-      }
-      if (merchants[0] && transactionCount) {
-        chips.push({
-          label: `${merchants[0]}${transactionCount > 1 ? ` 외 ${transactionCount - 1}건` : ""}`,
-          tone: "expense",
-        });
-      }
-      memos.slice(0, 1).forEach((memo) => {
-        chips.push({ label: memo.text, tone: "memo" });
-      });
-
-      return {
-        ...day,
-        expenseAmount,
-        transactionCount,
-        merchants,
-        holidayLabel,
-        chips,
-        memos,
+        loopMemoMap.set(dateKey, current);
       };
+
+      managedLoops.forEach((loop) => {
+        const insight = loopInsightByGroupKey.get(loop.key);
+        const text = createLoopMemo(loop, categoryNameMap);
+
+        let hasActualLoopTransactionInMonth = false;
+        loop.transactions.forEach((transaction) => {
+          const occurredDateKey = transaction.occurredAt.slice(0, 10);
+          if (!occurredDateKey.startsWith(targetMonth)) return;
+          hasActualLoopTransactionInMonth = true;
+          addLoopMemo(occurredDateKey, loop.merchantName, text);
+        });
+
+        if (!hasActualLoopTransactionInMonth && insight) {
+          const projectedLoopDate = getLoopProjectedDateWithinMonth(
+            insight.latestOccurredAt,
+            insight.averageIntervalDays,
+            targetMonth,
+            latestStatementMonth,
+          );
+          if (projectedLoopDate) {
+            addLoopMemo(projectedLoopDate, loop.merchantName, text);
+          }
+        }
+      });
+
+      cellsByMonth.set(
+        targetMonth,
+        getCalendarDays(targetMonth).map((day) => {
+          const expenseAmount = transactionMap.get(day.dateKey)?.expenseAmount ?? 0;
+          const transactionCount = transactionMap.get(day.dateKey)?.transactionCount ?? 0;
+          const merchants = transactionMap.get(day.dateKey)?.merchants ?? [];
+          const memos = [...(loopMemoMap.get(day.dateKey)?.values() ?? [])];
+          const holidayLabel = getFixedHolidayLabel(day.dateKey);
+          const chips: CalendarChip[] = [];
+
+          if (holidayLabel) {
+            chips.push({ label: holidayLabel, tone: "holiday" });
+          }
+          if (merchants[0] && transactionCount) {
+            chips.push({
+              label: `${merchants[0]}${transactionCount > 1 ? ` 외 ${transactionCount - 1}건` : ""}`,
+              tone: "expense",
+            });
+          }
+          memos.slice(0, 1).forEach((memo) => {
+            chips.push({ label: memo.text, tone: "memo" });
+          });
+
+          return {
+            ...day,
+            expenseAmount,
+            transactionCount,
+            merchants,
+            holidayLabel,
+            chips,
+            memos,
+          };
+        }),
+      );
     });
-  }, [calendarExpenseTransactions, calendarMonthValue, categoryNameMap, latestStatementMonth, loopInsightByGroupKey, managedLoops]);
+
+    return cellsByMonth;
+  }, [calendarSwipeMonthKeys, categoryNameMap, latestStatementMonth, loopInsightByGroupKey, managedLoops, scope.transactions, selectedCalendarOwnerId]);
+  const calendarCells = calendarCellsByMonth.get(calendarMonthValue) ?? [];
   const selectedCalendarIndex = Math.max(0, calendarCells.findIndex((item) => item.dateKey === selectedCalendarDate));
   const selectedCalendarCell = calendarCells[selectedCalendarIndex] ?? calendarCells[0] ?? null;
   const canMoveCalendarMonthPrev = calendarMonthOptions.some((option) => option.value === getPreviousMonthKey(calendarMonthValue));
   const canMoveCalendarMonthNext = calendarMonthOptions.some((option) => option.value === getNextMonthKey(calendarMonthValue));
+  const applyCalendarMonthChange = (nextMonthValue: string) => {
+    const selectedDay = Number(selectedCalendarDate.slice(8, 10));
+    const nextDay = clampDayToMonth(nextMonthValue, selectedDay);
+    setSelectedCalendarMonth(nextMonthValue);
+    setSelectedCalendarDate(`${nextMonthValue}-${String(nextDay).padStart(2, "0")}`);
+  };
+  const handleCalendarMonthPrev = () => {
+    if (!canMoveCalendarMonthPrev) return;
+    applyCalendarMonthChange(getPreviousMonthKey(calendarMonthValue));
+  };
+  const handleCalendarMonthNext = () => {
+    if (!canMoveCalendarMonthNext) return;
+    applyCalendarMonthChange(getNextMonthKey(calendarMonthValue));
+  };
+  const calendarSwipeTranslateX = calendarSwipeViewportWidth
+    ? -calendarSwipeViewportWidth + calendarSwipeOffset
+    : 0;
   const selectedCalendarTransactions = useMemo(
     () =>
       calendarExpenseTransactions.filter(
@@ -2364,6 +2462,201 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
     () => loopConfirmTransactions.filter((transaction) => transaction.id !== loopConfirmState?.transactionId),
     [loopConfirmState?.transactionId, loopConfirmTransactions],
   );
+  const renderCalendarBoard = (monthValue: string, monthCells: CalendarCell[]) => (
+    <>
+      <div className="dashboard-calendar-weekdays" aria-hidden="true">
+        {CALENDAR_WEEKDAY_LABELS.map((label, index) => (
+          <span
+            key={`${monthValue}-${label}`}
+            className={`dashboard-calendar-weekday${index === 0 ? " is-sunday" : ""}${index === 6 ? " is-saturday" : ""}`}
+          >
+            {label}
+          </span>
+        ))}
+      </div>
+      <div className="dashboard-calendar-grid">
+        {monthCells.map((cell) => {
+          const isActiveMonth = monthValue === calendarMonthValue;
+          const isSelected = isActiveMonth && selectedCalendarCell?.dateKey === cell.dateKey;
+          return (
+            <button
+              key={`${monthValue}-${cell.dateKey}`}
+              type="button"
+              className={`dashboard-calendar-cell${cell.isCurrentMonth ? "" : " is-outside"}${isSelected ? " is-selected" : ""}`}
+              onClick={() => {
+                if (calendarSwipeIsDraggingRef.current || calendarSwipeSuppressClickRef.current) {
+                  return;
+                }
+                if (!isActiveMonth) {
+                  applyCalendarMonthChange(monthValue);
+                }
+                setSelectedCalendarDate(cell.dateKey);
+              }}
+            >
+              <div className="dashboard-calendar-cell-head">
+                <span
+                  className={`dashboard-calendar-date${cell.dayOfWeek === 0 ? " is-sunday" : ""}${cell.dayOfWeek === 6 ? " is-saturday" : ""}`}
+                >
+                  {Number(cell.dateKey.slice(8, 10))}
+                </span>
+                {cell.holidayLabel ? <span className="dashboard-calendar-holiday-label">{cell.holidayLabel}</span> : null}
+              </div>
+              <strong className="dashboard-calendar-amount">{cell.expenseAmount ? formatCurrency(cell.expenseAmount) : "-"}</strong>
+              {cell.expenseAmount > 0 || cell.memos.length > 0 ? (
+                <div className="dashboard-calendar-marker-row" aria-hidden="true">
+                  {cell.expenseAmount > 0 ? <span className="dashboard-calendar-marker is-expense" /> : null}
+                  {cell.memos.length > 0 ? <span className="dashboard-calendar-marker is-memo" /> : null}
+                </div>
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+    </>
+  );
+
+  const handleCalendarSwipeStart = (event: TouchEvent<HTMLDivElement>) => {
+    if (!isMobileCalendarSwipeViewport || isCalendarSwipeAnimating || event.touches.length !== 1) return;
+    calendarSwipeStartXRef.current = event.touches[0]?.clientX ?? null;
+    calendarSwipeStartYRef.current = event.touches[0]?.clientY ?? null;
+    calendarSwipeOffsetRef.current = 0;
+    calendarSwipeIsDraggingRef.current = false;
+    calendarSwipeSuppressClickRef.current = false;
+    setCalendarSwipeOffset(0);
+  };
+
+  const handleCalendarSwipeMove = (event: TouchEvent<HTMLDivElement>) => {
+    if (!isMobileCalendarSwipeViewport || isCalendarSwipeAnimating || calendarSwipeStartXRef.current === null) return;
+    const currentX = event.touches[0]?.clientX ?? 0;
+    const currentY = event.touches[0]?.clientY ?? 0;
+    const deltaX = currentX - calendarSwipeStartXRef.current;
+    const deltaY = currentY - (calendarSwipeStartYRef.current ?? currentY);
+
+    if (!calendarSwipeIsDraggingRef.current) {
+      const absX = Math.abs(deltaX);
+      const absY = Math.abs(deltaY);
+      if (absX < 6) return;
+      if (absY > absX) {
+        calendarSwipeStartXRef.current = null;
+        calendarSwipeStartYRef.current = null;
+        calendarSwipeOffsetRef.current = 0;
+        setCalendarSwipeOffset(0);
+        return;
+      }
+      calendarSwipeIsDraggingRef.current = true;
+      calendarSwipeSuppressClickRef.current = true;
+    }
+
+    event.preventDefault();
+    let nextOffset = deltaX;
+    if ((nextOffset > 0 && !canMoveCalendarMonthPrev) || (nextOffset < 0 && !canMoveCalendarMonthNext)) {
+      nextOffset *= 0.28;
+    }
+    calendarSwipeOffsetRef.current = nextOffset;
+    setCalendarSwipeOffset(nextOffset);
+  };
+
+  const handleCalendarSwipeEnd = () => {
+    if (!isMobileCalendarSwipeViewport || isCalendarSwipeAnimating || calendarSwipeStartXRef.current === null) {
+      calendarSwipeStartXRef.current = null;
+      calendarSwipeStartYRef.current = null;
+      calendarSwipeIsDraggingRef.current = false;
+      return;
+    }
+
+    const travel = calendarSwipeOffsetRef.current;
+    const width = calendarSwipeViewportWidth;
+    const threshold = width ? Math.min(72, width * 0.12) : 42;
+    let nextMonthValue: string | null = null;
+    let settleOffset = 0;
+
+    if (travel <= -threshold && canMoveCalendarMonthNext) {
+      nextMonthValue = getNextMonthKey(calendarMonthValue);
+      settleOffset = -width;
+    } else if (travel >= threshold && canMoveCalendarMonthPrev) {
+      nextMonthValue = getPreviousMonthKey(calendarMonthValue);
+      settleOffset = width;
+    }
+
+    if (!calendarSwipeIsDraggingRef.current) {
+      calendarSwipeStartXRef.current = null;
+      calendarSwipeStartYRef.current = null;
+      calendarSwipeOffsetRef.current = 0;
+      setCalendarSwipeOffset(0);
+      window.setTimeout(() => {
+        calendarSwipeSuppressClickRef.current = false;
+      }, 0);
+      return;
+    }
+
+    setIsCalendarSwipeAnimating(true);
+    setCalendarSwipeOffset(settleOffset);
+
+    if (calendarSwipeAnimationTimerRef.current !== null) {
+      window.clearTimeout(calendarSwipeAnimationTimerRef.current);
+    }
+
+    calendarSwipeAnimationTimerRef.current = window.setTimeout(() => {
+      if (nextMonthValue) {
+        applyCalendarMonthChange(nextMonthValue);
+      }
+      calendarSwipeStartXRef.current = null;
+      calendarSwipeStartYRef.current = null;
+      calendarSwipeOffsetRef.current = 0;
+      setCalendarSwipeOffset(0);
+      setIsCalendarSwipeAnimating(false);
+      window.setTimeout(() => {
+        calendarSwipeIsDraggingRef.current = false;
+        calendarSwipeSuppressClickRef.current = false;
+      }, 0);
+      calendarSwipeAnimationTimerRef.current = null;
+    }, 220);
+  };
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 720px)");
+    const syncViewportMode = () => {
+      setIsMobileCalendarSwipeViewport(mediaQuery.matches);
+    };
+
+    syncViewportMode();
+    mediaQuery.addEventListener("change", syncViewportMode);
+
+    return () => {
+      mediaQuery.removeEventListener("change", syncViewportMode);
+    };
+  }, []);
+  useEffect(() => {
+    if (!isMobileCalendarSwipeViewport) {
+      setCalendarSwipeViewportWidth(0);
+      setCalendarSwipeOffset(0);
+      calendarSwipeOffsetRef.current = 0;
+      calendarSwipeStartXRef.current = null;
+      setIsCalendarSwipeAnimating(false);
+      if (calendarSwipeAnimationTimerRef.current !== null) {
+        window.clearTimeout(calendarSwipeAnimationTimerRef.current);
+        calendarSwipeAnimationTimerRef.current = null;
+      }
+      return;
+    }
+
+    const measureCalendarSwipeViewport = () => {
+      setCalendarSwipeViewportWidth(calendarSwipeViewportRef.current?.clientWidth ?? 0);
+    };
+
+    measureCalendarSwipeViewport();
+    window.addEventListener("resize", measureCalendarSwipeViewport);
+
+    return () => {
+      window.removeEventListener("resize", measureCalendarSwipeViewport);
+    };
+  }, [isMobileCalendarSwipeViewport]);
+  useEffect(() => {
+    return () => {
+      if (calendarSwipeAnimationTimerRef.current !== null) {
+        window.clearTimeout(calendarSwipeAnimationTimerRef.current);
+      }
+    };
+  }, []);
   useEffect(() => {
     if (selectedCalendarDate.startsWith(calendarMonthValue)) return;
     setSelectedCalendarDate(`${calendarMonthValue}-01`);
@@ -2482,7 +2775,8 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
   useEffect(() => {
     if (!activeDashboardWorkflowReview) return;
     const row = document.querySelector<HTMLElement>(`[data-transaction-review-row="${activeDashboardWorkflowReview.primaryTransactionId}"]`);
-    row?.scrollIntoView({ block: "center", behavior: "smooth" });
+    if (!row) return;
+    scrollIntoNearestAppMain(row, 24);
   }, [activeDashboardWorkflowReview, selectedCalendarDate]);
   useEffect(() => {
     if (!dashboardCalendarProcessingMode) return;
@@ -2504,17 +2798,37 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
       const needsScroll = rect.top < 120 || rect.bottom > viewportHeight - 40;
 
       if (needsScroll) {
-        fallbackTarget.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        scrollIntoNearestAppMain(fallbackTarget, 20);
       }
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [dashboardCalendarProcessingMode, selectedCalendarDate, displayedCalendarTransactions.length]);
+  }, [dashboardCalendarProcessingMode, displayedCalendarTransactions.length, selectedCalendarDate]);
+  useEffect(() => {
+    if (!shouldScrollCalendarTransactionsRef.current) return;
+    if (!dashboardCalendarProcessingMode) return;
+    if (pendingDashboardCalendarProcessingMode !== null) return;
+
+    const timer = window.setTimeout(() => {
+      const target =
+        dashboardCalendarTransactionsRef.current?.querySelector<HTMLElement>(".transaction-review-row.is-review-primary") ??
+        dashboardCalendarTransactionsRef.current?.querySelector<HTMLElement>("[data-dashboard-calendar-row]") ??
+        dashboardCalendarTransactionsRef.current;
+
+      if (target) {
+        scrollIntoNearestAppMain(target, 20);
+      }
+      shouldScrollCalendarTransactionsRef.current = false;
+    }, 240);
+
+    return () => window.clearTimeout(timer);
+  }, [dashboardCalendarProcessingMode, pendingDashboardCalendarProcessingMode, selectedCalendarDate, displayedCalendarTransactions.length]);
   const handleStartDashboardCalendarProcessing = (mode: Exclude<DashboardCalendarProcessingMode, null>) => {
     const monthStartDateKey = `${calendarMonthValue}-01`;
     const relevantDateKeys = mode === "review" ? calendarReviewDateKeys : calendarUncategorizedDateKeys;
     const nextDateKey = relevantDateKeys.find((dateKey) => dateKey >= monthStartDateKey) ?? monthStartDateKey;
 
+    shouldScrollCalendarTransactionsRef.current = true;
     setDashboardCalendarProcessingMode(mode);
     setIsDashboardCalendarAutoReviewOnly(mode === "review");
     setIsDashboardCalendarUncategorizedOnly(mode === "uncategorized");
@@ -3305,7 +3619,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
             <button
               type="button"
               className="dashboard-calendar-month-button"
-              onClick={() => setSelectedCalendarMonth(getPreviousMonthKey(calendarMonthValue))}
+              onClick={handleCalendarMonthPrev}
               disabled={!canMoveCalendarMonthPrev}
               aria-label="이전 달"
             >
@@ -3314,7 +3628,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
             <button
               type="button"
               className="dashboard-calendar-month-button"
-              onClick={() => setSelectedCalendarMonth(getNextMonthKey(calendarMonthValue))}
+              onClick={handleCalendarMonthNext}
               disabled={!canMoveCalendarMonthNext}
               aria-label="다음 달"
             >
@@ -3486,41 +3800,39 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
 
       <div className="dashboard-calendar-layout">
         <div>
-          <div className="dashboard-calendar-weekdays" aria-hidden="true">
-            {CALENDAR_WEEKDAY_LABELS.map((label, index) => (
-              <span
-                key={label}
-                className={`dashboard-calendar-weekday${index === 0 ? " is-sunday" : ""}${index === 6 ? " is-saturday" : ""}`}
-              >
-                {label}
-              </span>
-            ))}
+          <div className="dashboard-calendar-board dashboard-calendar-board--desktop">
+            {renderCalendarBoard(calendarMonthValue, calendarCells)}
           </div>
-          <div className="dashboard-calendar-grid">
-            {calendarCells.map((cell) => (
-              <button
-                key={cell.dateKey}
-                type="button"
-                className={`dashboard-calendar-cell${cell.isCurrentMonth ? "" : " is-outside"}${selectedCalendarCell?.dateKey === cell.dateKey ? " is-selected" : ""}`}
-                onClick={() => setSelectedCalendarDate(cell.dateKey)}
-              >
-                <div className="dashboard-calendar-cell-head">
-                  <span
-                    className={`dashboard-calendar-date${cell.dayOfWeek === 0 ? " is-sunday" : ""}${cell.dayOfWeek === 6 ? " is-saturday" : ""}`}
-                  >
-                    {Number(cell.dateKey.slice(8, 10))}
-                  </span>
-                  {cell.holidayLabel ? <span className="dashboard-calendar-holiday-label">{cell.holidayLabel}</span> : null}
+          <div
+            ref={calendarSwipeViewportRef}
+            className="dashboard-calendar-swipe-board"
+            onTouchStartCapture={handleCalendarSwipeStart}
+            onTouchMoveCapture={handleCalendarSwipeMove}
+            onTouchEndCapture={handleCalendarSwipeEnd}
+            onTouchCancelCapture={handleCalendarSwipeEnd}
+            onClickCapture={(event) => {
+              if (!calendarSwipeSuppressClickRef.current) return;
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+          >
+            <div
+              className={`dashboard-calendar-swipe-track${isCalendarSwipeAnimating ? " is-animating" : ""}`}
+              style={{
+                width: calendarSwipeViewportWidth ? `${calendarSwipeViewportWidth * calendarSwipeMonthKeys.length}px` : undefined,
+                transform: `translate3d(${calendarSwipeTranslateX}px, 0, 0)`,
+              }}
+            >
+              {calendarSwipeMonthKeys.map((monthValue) => (
+                <div
+                  key={monthValue}
+                  className="dashboard-calendar-swipe-panel"
+                  style={{ width: calendarSwipeViewportWidth ? `${calendarSwipeViewportWidth}px` : undefined }}
+                >
+                  {renderCalendarBoard(monthValue, calendarCellsByMonth.get(monthValue) ?? [])}
                 </div>
-                <strong className="dashboard-calendar-amount">{cell.expenseAmount ? formatCurrency(cell.expenseAmount) : "-"}</strong>
-                {(cell.expenseAmount > 0 || cell.memos.length > 0) ? (
-                  <div className="dashboard-calendar-marker-row" aria-hidden="true">
-                    {cell.expenseAmount > 0 ? <span className="dashboard-calendar-marker is-expense" /> : null}
-                    {cell.memos.length > 0 ? <span className="dashboard-calendar-marker is-memo" /> : null}
-                  </div>
-                ) : null}
-              </button>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
 
@@ -5023,6 +5335,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
         title="수입"
         onClose={() => setIsIncomeModalOpen(false)}
         dialogClassName="dashboard-income-modal"
+        mobilePresentation="sheet"
       >
         <IncomeManagementContent />
       </AppModal>
@@ -5033,6 +5346,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
         description="카드 명세서를 먼저 미리보기로 확인하고, 연도별 업로드 기록까지 한 자리에서 볼 수 있습니다."
         onClose={handleCloseStatementUploadModal}
         dialogClassName="dashboard-statement-upload-modal"
+        mobilePresentation="sheet"
       >
         <div className="dashboard-statement-upload-modal-body">
           <section className="dashboard-statement-modal-section-card">

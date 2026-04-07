@@ -2407,22 +2407,24 @@ label,
   bottom: 0;
   z-index: 70;
   display: grid;
-  align-content: start;
-  gap: 1rem;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  align-content: stretch;
+  gap: 0.95rem;
   width: min(21rem, calc(100vw - 2rem));
   padding:
-    max(1rem, env(safe-area-inset-top))
+    max(1.25rem, env(safe-area-inset-top))
     1rem
     max(1rem, env(safe-area-inset-bottom))
     max(1rem, env(safe-area-inset-left));
   border-right: 1px solid color-mix(in srgb, var(--app-line) 86%, white 14%);
+  border-radius: 0 1.8rem 1.8rem 0;
   background:
-    radial-gradient(circle at top left, rgba(37, 99, 235, 0.12), transparent 32%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.98));
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(249, 250, 255, 0.96)),
+    #ffffff;
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
   transform: translateX(calc(-100% - 1rem));
   transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .app-mobile-drawer.is-open {
@@ -2430,27 +2432,29 @@ label,
 }
 
 .app-mobile-drawer-head {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 0.85rem;
-}
-
-.app-mobile-drawer-copy {
-  margin: 0;
-  color: var(--app-muted);
-  font-size: 0.92rem;
-  line-height: 1.6;
+  display: grid;
+  gap: 0.55rem;
 }
 
 .app-mobile-drawer-section {
   display: grid;
   gap: 0.7rem;
+  min-height: 0;
+  align-content: start;
+}
+
+.app-mobile-drawer-footer {
+  display: grid;
+  gap: 0.4rem;
 }
 
 .app-top-nav.is-drawer-nav {
   display: grid;
-  gap: 0.5rem;
+  gap: 0.24rem;
+  align-content: start;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 0.15rem;
 }
 
 .app-top-nav.is-drawer-nav .app-top-nav-group-divider {
@@ -2469,13 +2473,15 @@ label,
 }
 
 .app-top-nav.is-drawer-nav .is-drawer-parent {
-  min-height: 3rem;
-  padding: 0.8rem 0.95rem;
-  border: 1px solid color-mix(in srgb, var(--app-line) 84%, white 16%);
-  border-radius: 1rem;
-  background: rgba(255, 255, 255, 0.86);
-  font-size: 0.98rem;
+  min-height: 2.7rem;
+  padding: 0.58rem 0.72rem;
+  border: 1px solid transparent;
+  border-radius: 0.95rem;
+  background: transparent;
+  color: #5d6582;
+  font-size: 0.95rem;
   font-weight: 800;
+  box-shadow: none;
 }
 
 .app-top-nav.is-drawer-nav .nav-parent-button.is-drawer-parent {
@@ -2485,6 +2491,7 @@ label,
 .app-top-nav-caret {
   font-size: 1rem;
   line-height: 1;
+  color: #7a82ab;
 }
 
 .app-top-subnav.is-drawer-subnav {
@@ -7082,15 +7089,37 @@ label,
 
 .dashboard-calendar-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(260px, 0.9fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
   align-items: stretch;
 }
 
+.dashboard-calendar-board--desktop {
+  display: block;
+}
+
+.dashboard-calendar-swipe-board {
+  display: none;
+}
+
+.dashboard-calendar-swipe-track {
+  display: flex;
+}
+
+.dashboard-calendar-swipe-track.is-animating {
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.dashboard-calendar-swipe-panel {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+
 .dashboard-calendar-hero-head {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
+  align-items: end;
   gap: 1rem;
   margin-bottom: 1rem;
 }
@@ -7105,8 +7134,10 @@ label,
 
 .dashboard-calendar-month-nav {
   display: inline-flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 0.45rem;
+  min-height: 2.35rem;
+  align-self: end;
 }
 
 .dashboard-calendar-month-button {
@@ -7141,16 +7172,22 @@ label,
 .dashboard-calendar-month-button span {
   font-size: 1.45rem;
   line-height: 1;
-  transform: translateY(-0.05rem);
+  transform: none;
 }
 
 .dashboard-calendar-hero-date {
-  display: block;
+  display: inline-flex;
+  align-items: flex-end;
+  justify-content: center;
+  min-height: 2.35rem;
   text-align: center;
   font-family: "NanumOkBi", "Nanum Pen Script", "Gamja Flower", "Segoe Print", "Comic Sans MS", sans-serif;
   font-size: 1.62rem;
   font-weight: 700;
   letter-spacing: 0.01em;
+  line-height: 1;
+  align-self: end;
+  padding-bottom: 0.08rem;
 }
 
 .dashboard-calendar-hero-spacer {
@@ -7340,6 +7377,7 @@ label,
   align-content: stretch;
   height: 100%;
 }
+
 
 .dashboard-calendar-transactions {
   display: grid;
@@ -7920,6 +7958,7 @@ label,
   background: rgba(250, 250, 255, 0.96);
   color: #7c84a6;
   box-shadow: none;
+  align-self: end;
 }
 
 .dashboard-calendar-hero-date {
@@ -7928,6 +7967,8 @@ label,
   font-weight: 700;
   letter-spacing: 0.01em;
   color: #47506b;
+  min-height: 2.2rem;
+  padding-bottom: 0.02rem;
 }
 
 .dashboard-calendar-owner-select-trigger {
@@ -11514,6 +11555,30 @@ textarea:focus {
   }
 }
 
+@keyframes modal-sheet-up {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes modal-sheet-down {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+}
+
 @media (max-width: 1080px) {
   .app-shell,
   .page-grid {
@@ -11521,8 +11586,9 @@ textarea:focus {
   }
 
   .app-shell {
+    height: 100vh;
     min-height: 100vh;
-    padding: 1rem;
+    padding: 0;
     margin: 0;
     border: 0;
     border-radius: 0;
@@ -11532,12 +11598,6 @@ textarea:focus {
 
   .app-sidebar {
     display: none;
-  }
-
-  .app-topbar {
-    top: 1rem;
-    left: 1rem;
-    right: 1rem;
   }
 
   .dashboard-calendar-layout,
@@ -11586,29 +11646,34 @@ textarea:focus {
     --dashboard-diary-sheet-height: 14.5rem;
   }
 
-  .card[data-guide-target="records-moon-calendar"] > .stats-grid {
+  .card[data-guide-target="records-moon-calendar"] > .stats-grid,
+  .page-section[data-guide-target="records-moon-calendar"] > .stats-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 0.6rem;
   }
 
-  .card[data-guide-target="records-moon-calendar"] > .stats-grid .stat-card {
+  .card[data-guide-target="records-moon-calendar"] > .stats-grid .stat-card,
+  .page-section[data-guide-target="records-moon-calendar"] > .stats-grid .stat-card {
     min-height: 5.6rem;
     padding: 0.75rem 0.72rem;
     border-radius: 0.9rem;
   }
 
-  .card[data-guide-target="records-moon-calendar"] > .stats-grid .stat-card strong {
+  .card[data-guide-target="records-moon-calendar"] > .stats-grid .stat-card strong,
+  .page-section[data-guide-target="records-moon-calendar"] > .stats-grid .stat-card strong {
     margin-top: 0.22rem;
     font-size: 1.08rem;
     letter-spacing: 0.04em;
   }
 
-  .card[data-guide-target="records-moon-calendar"] > .stats-grid .stat-label {
+  .card[data-guide-target="records-moon-calendar"] > .stats-grid .stat-label,
+  .page-section[data-guide-target="records-moon-calendar"] > .stats-grid .stat-label {
     font-size: 0.72rem;
     line-height: 1.25;
   }
 
-  .card[data-guide-target="records-moon-calendar"] > .stats-grid .stat-delta {
+  .card[data-guide-target="records-moon-calendar"] > .stats-grid .stat-delta,
+  .page-section[data-guide-target="records-moon-calendar"] > .stats-grid .stat-delta {
     margin-top: 0.18rem;
     font-size: 0.74rem;
     letter-spacing: 0.04em;
@@ -11627,7 +11692,7 @@ textarea:focus {
   }
 
   .app-main {
-    padding: 5.8rem 1rem 5rem;
+    padding: 4.1rem 1rem 5rem;
   }
 
   .hero-panel {
@@ -11842,8 +11907,9 @@ textarea:focus {
     display: flex;
     flex-direction: row;
     flex-wrap: nowrap;
-    justify-content: flex-start;
+    justify-content: center;
     align-items: center;
+    position: relative;
     margin: 0;
     max-width: none;
     min-height: 3rem;
@@ -11864,16 +11930,23 @@ textarea:focus {
   .app-topbar.condensed .app-topbar-compact-header {
     display: flex;
     align-items: center;
-    justify-self: start;
-    flex: 1 1 auto;
+    justify-content: center;
+    justify-self: center;
+    flex: 0 1 auto;
     width: auto;
+    max-width: calc(100% - 6rem);
     min-width: 0;
     gap: 0;
     padding: 0;
+    text-align: center;
   }
 
   .mobile-nav-toggle {
     display: inline-flex;
+    position: absolute;
+    left: 0.55rem;
+    top: 50%;
+    transform: translateY(-50%);
     order: 0;
     flex: 0 0 auto;
     width: 2.5rem;
@@ -11882,6 +11955,7 @@ textarea:focus {
     border-radius: 0;
     background: transparent;
     box-shadow: none;
+    z-index: 2;
   }
 
   .mobile-nav-toggle span {
@@ -11895,6 +11969,9 @@ textarea:focus {
     white-space: nowrap;
     display: inline-flex;
     align-items: center;
+    justify-content: center;
+    width: auto;
+    max-width: 100%;
   }
 
   .app-topbar.condensed .app-topbar-logo-link {
@@ -11905,16 +11982,19 @@ textarea:focus {
     --app-brand-symbol-size: 2.35rem;
     --app-brand-gap: 0.38rem;
     align-items: center;
+    justify-content: center;
   }
 
   .app-topbar-logo-link.app-topbar-mobile-brand .app-brand-word {
     font-size: 1.42rem;
     letter-spacing: 0.02em;
     line-height: 1;
+    text-align: center;
   }
 
   .app-topbar-logo-link.app-topbar-mobile-brand .app-brand-word-stack {
     gap: 0;
+    align-items: center;
   }
 
   .app-brand-block h1 {
@@ -11981,19 +12061,53 @@ textarea:focus {
     grid-template-columns: 1fr;
   }
 
-  .dashboard-calendar-transactions-head,
   .dashboard-diary-head {
     display: flex;
     flex-direction: column;
     align-items: stretch;
   }
 
-  .dashboard-calendar-hero-head {
-    position: relative;
+  .dashboard-calendar-transactions-head {
     display: grid;
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    gap: 0.35rem;
+    gap: 0.5rem 0.7rem;
+  }
+
+  .dashboard-calendar-transactions-title-block {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: nowrap;
+    min-width: 0;
+  }
+
+  .dashboard-calendar-transactions-title {
+    min-width: 0;
+    font-size: 1rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .dashboard-calendar-transactions-status-badge {
+    flex: 0 0 auto;
+  }
+
+  .dashboard-calendar-transactions-toolbar {
+    justify-self: end;
+    flex-wrap: nowrap;
+  }
+
+  .dashboard-calendar-transactions-toolbar .btn {
+    white-space: nowrap;
+  }
+
+  .dashboard-calendar-hero-head {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.55rem;
     padding-top: 0.1rem;
   }
 
@@ -12002,12 +12116,14 @@ textarea:focus {
   }
 
   .dashboard-calendar-month-nav {
-    position: absolute;
-    inset: 50% 0 auto 0;
-    transform: translateY(-50%);
-    justify-content: space-between;
-    width: 100%;
-    pointer-events: none;
+    position: static;
+    inset: auto;
+    transform: none;
+    justify-content: flex-start;
+    width: auto;
+    pointer-events: auto;
+    min-height: 2.2rem;
+    align-items: center;
   }
 
   .dashboard-calendar-month-nav > * {
@@ -12016,19 +12132,21 @@ textarea:focus {
 
   .dashboard-calendar-hero-date {
     justify-self: center;
-    padding-inline: 3rem;
+    padding-inline: 0;
     text-align: center;
+    align-self: center;
   }
 
   .dashboard-calendar-owner-select,
-  .dashboard-section-toolbar,
   .dashboard-calendar-owner-select-trigger {
-    width: 100%;
+    width: auto;
     min-width: 0;
   }
 
   .dashboard-section-toolbar {
-    margin-top: 0.25rem;
+    margin-top: 0;
+    width: auto;
+    justify-self: end;
   }
 
   .dashboard-calendar-grid,
@@ -12131,11 +12249,60 @@ textarea:focus {
     padding: 0.75rem;
   }
 
+  .app-modal-backdrop.app-modal-backdrop--mobile-sheet {
+    place-items: end stretch;
+    padding: 0;
+  }
+
   .app-modal-dialog {
     width: min(46rem, calc(100vw - 1rem));
     max-height: calc(100vh - 0.75rem);
     padding: 0.95rem;
     border-radius: 1.2rem 1.2rem 0 0;
+  }
+
+  .app-modal-dialog.app-modal-dialog--mobile-sheet {
+    width: 100vw;
+    max-width: 100vw;
+    max-height: min(88vh, calc(100vh - 0.2rem));
+    margin-top: auto;
+    margin-bottom: 0;
+    padding: 0.45rem 1rem calc(1rem + env(safe-area-inset-bottom));
+    border-radius: 1.35rem 1.35rem 0 0 !important;
+    border-inline: 0;
+    border-bottom: 0;
+    box-shadow: 0 -10px 32px rgba(15, 23, 42, 0.14);
+    transform-origin: bottom center;
+    will-change: transform, opacity;
+    animation: modal-sheet-up 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .app-modal-dialog.app-modal-dialog--mobile-sheet::before {
+    border-radius: 1.35rem 1.35rem 0 0 !important;
+  }
+
+  .app-modal-dialog.app-modal-dialog--mobile-sheet.dashboard-income-modal,
+  .app-modal-dialog.app-modal-dialog--mobile-sheet.dashboard-statement-upload-modal,
+  .app-modal-dialog.app-modal-dialog--mobile-sheet.dashboard-processing-confirm-modal {
+    width: 100vw;
+    max-width: 100vw;
+    max-height: min(88vh, calc(100vh - 0.2rem));
+  }
+
+  .app-modal-sheet-handle {
+    width: 2.6rem;
+    height: 0.3rem;
+    margin: 0 auto 0.55rem;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.48);
+  }
+
+  .app-modal-backdrop.is-closing {
+    animation: modal-fade 180ms ease reverse forwards;
+  }
+
+  .app-modal-dialog.app-modal-dialog--mobile-sheet.is-closing {
+    animation: modal-sheet-down 220ms ease forwards;
   }
 
   .app-modal-header,
@@ -12385,27 +12552,56 @@ textarea:focus {
     grid-template-columns: 1fr;
   }
 
-  .card[data-guide-target="records-moon-calendar"] > .stats-grid {
+  .card[data-guide-target="records-moon-calendar"] > .stats-grid,
+  .page-section[data-guide-target="records-moon-calendar"] > .stats-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 0.45rem;
   }
 
-  .card[data-guide-target="records-moon-calendar"] > .stats-grid .stat-card {
+  .card[data-guide-target="records-moon-calendar"] > .stats-grid .stat-card,
+  .page-section[data-guide-target="records-moon-calendar"] > .stats-grid .stat-card {
     min-height: 5rem;
     padding: 0.62rem 0.56rem;
   }
 
-  .card[data-guide-target="records-moon-calendar"] > .stats-grid .stat-card strong {
+  .card[data-guide-target="records-moon-calendar"] > .stats-grid .stat-card strong,
+  .page-section[data-guide-target="records-moon-calendar"] > .stats-grid .stat-card strong {
     font-size: 0.96rem;
   }
 
   .card[data-guide-target="records-moon-calendar"] > .stats-grid .stat-label,
-  .card[data-guide-target="records-moon-calendar"] > .stats-grid .stat-delta {
+  .card[data-guide-target="records-moon-calendar"] > .stats-grid .stat-delta,
+  .page-section[data-guide-target="records-moon-calendar"] > .stats-grid .stat-label,
+  .page-section[data-guide-target="records-moon-calendar"] > .stats-grid .stat-delta {
     font-size: 0.68rem;
   }
 
   .dashboard-calendar-hero-date {
     font-size: 1.3rem;
+  }
+
+  .dashboard-calendar-board--desktop {
+    display: none;
+  }
+
+  .dashboard-calendar-swipe-board {
+    display: block;
+    overflow: hidden;
+    touch-action: pan-y;
+    user-select: none;
+    overscroll-behavior-x: contain;
+  }
+
+  .page-section[data-guide-target="records-moon-calendar"],
+  .dashboard-calendar-layout,
+  .dashboard-diary-card,
+  .dashboard-calendar-transactions {
+    overflow-anchor: none;
+  }
+
+  .dashboard-calendar-swipe-panel .dashboard-calendar-weekdays,
+  .dashboard-calendar-swipe-panel .dashboard-calendar-grid {
+    gap: 0.38rem;
   }
 
   .dashboard-calendar-cell {
@@ -12433,6 +12629,19 @@ textarea:focus {
     min-height: 2.8rem;
     height: 2.8rem;
     padding-inline: 0.45rem;
+  }
+
+  .mobile-nav-toggle {
+    left: 0.45rem;
+  }
+
+  .app-mobile-drawer {
+    width: min(18.5rem, calc(100vw - 1.25rem));
+    padding:
+      max(1rem, env(safe-area-inset-top))
+      0.85rem
+      max(0.9rem, env(safe-area-inset-bottom))
+      max(0.85rem, env(safe-area-inset-left));
   }
 
   .mobile-nav-toggle {
@@ -13803,7 +14012,7 @@ textarea:focus {
   }
 
   .dashboard-diary-grid {
-    grid-template-columns: repeat(7, minmax(0, 1fr));
+    grid-template-columns: repeat(10, minmax(0, 1fr));
   }
 
   .dashboard-diary-cell {
@@ -13812,18 +14021,10 @@ textarea:focus {
   }
 
   .dashboard-diary-cell:nth-child(10n + 1) {
-    border-left: 0;
-  }
-
-  .dashboard-diary-cell:nth-child(7n + 1) {
     border-left: 1px solid rgba(244, 195, 195, 0.95);
   }
 
   .dashboard-diary-cell:nth-child(-n + 10) {
-    border-top: 0;
-  }
-
-  .dashboard-diary-cell:nth-child(-n + 7) {
     border-top: 1px solid rgba(244, 195, 195, 0.95);
   }
 

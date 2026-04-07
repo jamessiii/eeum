@@ -1,8 +1,7 @@
 ﻿import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { HashRouter, Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { GUIDE_V1_RESET_EVENT, readGuideRuntime } from "../domain/guidance/guideRuntime";
-import { Fragment } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { MotionProvider } from "./motion/MotionProvider";
 import { AppModal } from "./components/AppModal";
 import { AppGuidePanel } from "./components/AppGuidePanel";
@@ -150,7 +149,13 @@ function getActiveMainKey(pathname: string, navItems: NavItem[]) {
   return partial?.to ?? null;
 }
 
-function AppSidebarNav({ isDeveloperModeUnlocked }: { isDeveloperModeUnlocked: boolean }) {
+function AppSidebarNav({
+  isDeveloperModeUnlocked,
+  onNavigate,
+}: {
+  isDeveloperModeUnlocked: boolean;
+  onNavigate?: () => void;
+}) {
   const location = useLocation();
   const navItems = useMemo(
     () => (isDeveloperModeUnlocked ? [...baseNavItems, developerNavItem] : baseNavItems),
@@ -167,62 +172,13 @@ function AppSidebarNav({ isDeveloperModeUnlocked }: { isDeveloperModeUnlocked: b
             end={item.end}
             className={({ isActive: isLinkActive }) => `sidebar-nav-parent sidebar-nav-link${isLinkActive || activeKey === item.to ? " is-active" : ""}`}
             data-guide-target={navGuideTargetMap[item.to] ?? undefined}
+            onClick={onNavigate}
           >
             <span className={`nav-sidebar-icon nav-sidebar-icon--${navIconKeyMap[item.to] ?? "dot"}`} aria-hidden="true" />
             <span className="sidebar-nav-parent-label">{item.label}</span>
           </NavLink>
         </div>
       ))}
-    </nav>
-  );
-}
-
-function AppTopNav({
-  isDeveloperModeUnlocked,
-  variant = "desktop",
-  onNavigate,
-}: {
-  isDeveloperModeUnlocked: boolean;
-  variant?: "desktop" | "drawer" | "sidebar";
-  onNavigate?: () => void;
-}) {
-  const location = useLocation();
-  const navItems = useMemo(
-    () => (isDeveloperModeUnlocked ? [...baseNavItems, developerNavItem] : baseNavItems),
-    [isDeveloperModeUnlocked],
-  );
-  const isDrawer = variant === "drawer";
-  const isSidebar = variant === "sidebar";
-
-  const activeKey = useMemo<string | null>(() => getActiveMainKey(location.pathname || "/", navItems), [location.pathname, navItems]);
-
-  return (
-    <nav className={`app-top-nav${isDrawer ? " is-drawer-nav" : ""}${isSidebar ? " is-sidebar-nav" : ""}`} data-guide-target="nav-menu">
-      {navItems.map((item, index) => {
-        return (
-          <Fragment key={item.to}>
-            {index > 0 ? (
-              <span className="app-top-nav-group-divider" aria-hidden="true">
-                |
-              </span>
-            ) : null}
-            <div className={`app-top-nav-group${item.to === activeKey ? " is-active" : ""}${isDrawer ? " is-drawer-group" : ""}`}>
-              <NavLink
-                to={item.to}
-                end={item.end}
-                className={`nav-link nav-parent-link${item.to === activeKey ? " active" : ""}${isDrawer ? " is-drawer-parent" : ""}${isSidebar ? " is-sidebar-parent" : ""}`}
-                data-guide-target={navGuideTargetMap[item.to] ?? undefined}
-                onClick={onNavigate}
-              >
-                {isSidebar ? (
-                  <span className={`nav-sidebar-icon nav-sidebar-icon--${navIconKeyMap[item.to] ?? "dot"}`} aria-hidden="true" />
-                ) : null}
-                <span className="nav-item-label">{item.label}</span>
-              </NavLink>
-            </div>
-          </Fragment>
-        );
-      })}
     </nav>
   );
 }
@@ -371,6 +327,7 @@ function AppBrandMark({ size = "compact" }: { size?: "compact" | "expanded" }) {
 
 function AppFrame() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { addPerson, createEmptyWorkspace, isReady, state } = useAppState();
   const { isDeveloperModeUnlocked, registerUnlockTap, lockDeveloperMode } = useDeveloperMode();
   useThemeMode();
@@ -383,6 +340,7 @@ function AppFrame() {
   const [isGuidePanelForceCollapsed, setIsGuidePanelForceCollapsed] = useState(true);
   const [isOnboardingEntering, setIsOnboardingEntering] = useState(false);
   const hasPlayedGuideBeaconIntroRef = useRef(false);
+  const hasNormalizedInitialRouteRef = useRef(false);
 
   useEffect(() => {
     let frameId = 0;
@@ -522,6 +480,18 @@ function AppFrame() {
   }, [location.pathname, location.search]);
 
   useEffect(() => {
+    if (!isReady) return;
+    if (!state.workspaces.length) return;
+    if (hasNormalizedInitialRouteRef.current) return;
+
+    hasNormalizedInitialRouteRef.current = true;
+
+    if (location.pathname !== "/dashboard") {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [isReady, location.pathname, navigate, state.workspaces.length]);
+
+  useEffect(() => {
     if (typeof document === "undefined") return;
 
     document.body.classList.toggle("app-mobile-nav-open", isMobileNavOpen);
@@ -557,9 +527,9 @@ function AppFrame() {
       <aside className="app-sidebar" aria-label="주요 메뉴">
         <div className="app-sidebar-panel">
           <div className="app-sidebar-header">
-            <button type="button" className="sidebar-brand-button app-sidebar-brand" onClick={registerUnlockTap}>
+            <Link to="/dashboard" className="sidebar-brand-button app-sidebar-brand" onClick={registerUnlockTap} aria-label="소비일기 첫장으로 이동">
               <AppBrandMark size="expanded" />
-            </button>
+            </Link>
             <p className="app-sidebar-copy">작은 소비도, 소중한 기억이 되도록.</p>
           </div>
 
@@ -576,55 +546,53 @@ function AppFrame() {
       </aside>
 
       <header className="app-topbar condensed">
-        <div className="app-topbar-main">
-          <div className="app-brand-block app-topbar-desktop-copy">
-            <div className="app-topbar-title-cluster">
-              <div className="app-topbar-title-nav" aria-hidden="true">
-                <button type="button" className="app-topbar-title-arrow">‹</button>
-                <button type="button" className="app-topbar-title-arrow">›</button>
-              </div>
-              <strong>{desktopHeaderTitle}</strong>
+        <div className="app-brand-block app-topbar-desktop-copy">
+          <div className="app-topbar-title-cluster">
+            <div className="app-topbar-title-nav" aria-hidden="true">
+              <button type="button" className="app-topbar-title-arrow">‹</button>
+              <button type="button" className="app-topbar-title-arrow">›</button>
             </div>
+            <strong>{desktopHeaderTitle}</strong>
           </div>
-          <button
-            type="button"
-            className={`mobile-nav-toggle${isMobileNavOpen ? " is-open" : ""}`}
-            aria-label={isMobileNavOpen ? "메뉴 닫기" : "메뉴 열기"}
-            aria-expanded={isMobileNavOpen}
-            onClick={() => setIsMobileNavOpen((current) => !current)}
+        </div>
+        <button
+          type="button"
+          className={`mobile-nav-toggle${isMobileNavOpen ? " is-open" : ""}`}
+          aria-label={isMobileNavOpen ? "메뉴 닫기" : "메뉴 열기"}
+          aria-expanded={isMobileNavOpen}
+          onClick={() => setIsMobileNavOpen((current) => !current)}
+        >
+          <span />
+          <span />
+          <span />
+        </button>
+        <div className="app-topbar-compact-header">
+          <Link
+            to="/dashboard"
+            className="app-topbar-logo-link app-topbar-mobile-brand"
+            aria-label="소비일기 첫장으로 이동"
+            onClick={registerUnlockTap}
           >
-            <span />
-            <span />
-            <span />
-          </button>
-          <div className="app-topbar-compact-header">
-            <Link
-              to="/collections/card"
-              className="app-topbar-logo-link app-topbar-mobile-brand"
-              aria-label="소비일기 결제내역으로 이동"
-              onClick={registerUnlockTap}
-            >
-              <AppBrandMark size="compact" />
+            <AppBrandMark size="compact" />
+          </Link>
+        </div>
+        <div className="app-topbar-actions">
+          <div className="app-topbar-settings-cluster">
+            <div className="app-topbar-date-chip">{activeWorkspace.name}</div>
+            <Link to="/dashboard" className="app-topbar-ghost-button">
+              오늘
             </Link>
-          </div>
-          <div className="app-topbar-actions">
-            <div className="app-topbar-settings-cluster">
-              <div className="app-topbar-date-chip">{activeWorkspace.name}</div>
-              <Link to="/dashboard" className="app-topbar-ghost-button">
-                오늘
-              </Link>
-              <Link to="/collections/card" className="app-topbar-primary-button">
-                + 기록하기
-              </Link>
-              <NavLink
-                to="/settings"
-                className={({ isActive }) => `app-topbar-settings-link${isActive ? " active" : ""}`}
-                aria-label="설정"
-                title="설정"
-              >
-                설정
-              </NavLink>
-            </div>
+            <Link to="/collections/card" className="app-topbar-primary-button">
+              + 기록하기
+            </Link>
+            <NavLink
+              to="/settings"
+              className={({ isActive }) => `app-topbar-settings-link${isActive ? " active" : ""}`}
+              aria-label="설정"
+              title="설정"
+            >
+              설정
+            </NavLink>
           </div>
         </div>
       </header>
@@ -636,13 +604,26 @@ function AppFrame() {
       />
       <aside className={`app-mobile-drawer${isMobileNavOpen ? " is-open" : ""}`} aria-hidden={!isMobileNavOpen}>
         <div className="app-mobile-drawer-head">
-          <button type="button" className="sidebar-brand-button" onClick={registerUnlockTap}>
+          <Link
+            to="/dashboard"
+            className="sidebar-brand-button"
+            aria-label="소비일기 첫장으로 이동"
+            onClick={() => {
+              registerUnlockTap();
+              setIsMobileNavOpen(false);
+            }}
+          >
             <AppBrandMark size="compact" />
-          </button>
+          </Link>
         </div>
         <div className="app-mobile-drawer-section">
           <span className="sidebar-kicker">전체 메뉴</span>
-          <AppTopNav isDeveloperModeUnlocked={isDeveloperModeUnlocked} variant="drawer" onNavigate={() => setIsMobileNavOpen(false)} />
+          <AppSidebarNav isDeveloperModeUnlocked={isDeveloperModeUnlocked} onNavigate={() => setIsMobileNavOpen(false)} />
+        </div>
+        <div className="app-mobile-drawer-footer">
+          <div className="app-sidebar-note">
+            <img className="app-sidebar-note-image" src={`${ASSET_BASE}slogan.png`} alt="기록이 쌓이면, 마음의 흐름이 보여요" />
+          </div>
         </div>
       </aside>
 

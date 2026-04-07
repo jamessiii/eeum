@@ -1,4 +1,4 @@
-import { useEffect, type PropsWithChildren, type ReactNode } from "react";
+import { useEffect, useRef, useState, type PropsWithChildren, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 type AppModalProps = PropsWithChildren<{
@@ -9,11 +9,54 @@ type AppModalProps = PropsWithChildren<{
   footer?: ReactNode;
   onClose: () => void;
   dialogClassName?: string;
+  mobilePresentation?: "dialog" | "sheet";
 }>;
 
-export function AppModal({ open, title, ariaLabel, description, footer, onClose, children, dialogClassName }: AppModalProps) {
+export function AppModal({
+  open,
+  title,
+  ariaLabel,
+  description,
+  footer,
+  onClose,
+  children,
+  dialogClassName,
+  mobilePresentation = "dialog",
+}: AppModalProps) {
+  const [isRendered, setIsRendered] = useState(open);
+  const [isClosing, setIsClosing] = useState(false);
+  const closeTimerRef = useRef<number | null>(null);
+
   useEffect(() => {
-    if (!open || typeof document === "undefined") return;
+    if (open) {
+      if (closeTimerRef.current) {
+        window.clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
+      setIsRendered(true);
+      setIsClosing(false);
+      return;
+    }
+
+    if (!isRendered) return;
+
+    setIsClosing(true);
+    closeTimerRef.current = window.setTimeout(() => {
+      setIsRendered(false);
+      setIsClosing(false);
+      closeTimerRef.current = null;
+    }, 220);
+
+    return () => {
+      if (closeTimerRef.current) {
+        window.clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
+    };
+  }, [isRendered, open]);
+
+  useEffect(() => {
+    if (!isRendered || typeof document === "undefined") return;
 
     const root = document.documentElement;
     const body = document.body;
@@ -37,19 +80,26 @@ export function AppModal({ open, title, ariaLabel, description, footer, onClose,
 
       body.dataset.appModalCount = String(remainingCount);
     };
-  }, [open]);
+  }, [isRendered]);
 
-  if (!open) return null;
+  if (!isRendered) return null;
 
   const modal = (
-    <div className="app-modal-backdrop" role="presentation" onClick={onClose}>
+    <div
+      className={`app-modal-backdrop${mobilePresentation === "sheet" ? " app-modal-backdrop--mobile-sheet" : ""}${isClosing ? " is-closing" : ""}`}
+      role="presentation"
+      onClick={onClose}
+    >
       <section
-        className={`app-modal-dialog${dialogClassName ? ` ${dialogClassName}` : ""}`}
+        className={`app-modal-dialog${dialogClassName ? ` ${dialogClassName}` : ""}${
+          mobilePresentation === "sheet" ? " app-modal-dialog--mobile-sheet" : ""
+        }${isClosing ? " is-closing" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-label={ariaLabel ?? (typeof title === "string" ? title : "dialog")}
         onClick={(event) => event.stopPropagation()}
       >
+        {mobilePresentation === "sheet" ? <div className="app-modal-sheet-handle" aria-hidden="true" /> : null}
         <header className="app-modal-header">
           <div>
             <h3>{title}</h3>
