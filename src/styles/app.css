@@ -3577,9 +3577,9 @@ label,
   display: block;
   margin-top: 0.4rem;
   font-size: 1.4rem;
-  font-family: var(--app-handwriting-font);
+  font-family: "Pretendard", "Noto Sans KR", Arial, sans-serif;
   color: #5d584f;
-  letter-spacing: 0.1em;
+  letter-spacing: -0.01em;
   transition: transform 220ms ease, color 220ms ease;
 }
 
@@ -3607,8 +3607,8 @@ label,
   color: #9a9186;
   font-size: 0.9rem;
   font-weight: 700;
-  font-family: var(--app-handwriting-font);
-  letter-spacing: 0.1em;
+  font-family: "Pretendard", "Noto Sans KR", Arial, sans-serif;
+  letter-spacing: -0.01em;
   line-height: 1.35;
   width: fit-content;
   text-align: left;
@@ -5632,14 +5632,14 @@ label,
 }
 
 .table-responsive .table tbody td {
-  font-family: var(--app-handwriting-font);
+  font-family: "Pretendard", "Noto Sans KR", Arial, sans-serif;
   color: var(--app-grid-body-color);
-  letter-spacing: var(--app-grid-body-letter-spacing);
-  line-height: var(--app-grid-body-line-height);
+  letter-spacing: 0;
+  line-height: 1.5;
 }
 
 .table-responsive .table tbody td {
-  font-size: var(--app-grid-body-font-size);
+  font-size: 0.95rem;
 }
 
 .table-responsive .table tbody td :is(
@@ -7422,6 +7422,20 @@ label,
   font-family: var(--app-handwriting-font);
 }
 
+.dashboard-calendar-empty-copy {
+  display: grid;
+  gap: 0.2rem;
+  color: var(--app-grid-body-color);
+  font-family: var(--app-handwriting-font);
+  letter-spacing: 0.02em;
+}
+
+.dashboard-calendar-empty-copy p {
+  margin: 0;
+  font-size: 1.12rem;
+  line-height: 1.5;
+}
+
 .dashboard-calendar-transactions-status-badge {
   display: inline-flex;
   align-items: center;
@@ -7937,13 +7951,27 @@ label,
   color: #505877;
 }
 
+.page-section[data-guide-target="records-moon-calendar"] > .stats-grid .stat-card strong,
+.page-section[data-guide-target="records-moon-calendar"] > .stats-grid .stat-delta {
+  font-family: var(--app-handwriting-font);
+}
+
+.page-section[data-guide-target="records-moon-calendar"] > .stats-grid .stat-card strong {
+  color: #505877;
+  letter-spacing: 0.02em;
+}
+
+.page-section[data-guide-target="records-moon-calendar"] > .stats-grid .stat-delta {
+  letter-spacing: 0.02em;
+}
+
 .card[data-guide-target="records-moon-calendar"] > .stats-grid .stat-card-head {
   align-items: flex-start;
 }
 
 .card[data-guide-target="records-moon-calendar"] > .stats-grid .stat-label {
   color: #6f7797;
-  font-family: var(--app-handwriting-font);
+  font-family: "Pretendard", "Noto Sans KR", Arial, sans-serif;
   font-size: 0.92rem;
   font-weight: 700;
   letter-spacing: 0.01em;
@@ -8641,6 +8669,48 @@ label,
   font-size: 15px;
   font-weight: 800;
   letter-spacing: -0.02em;
+}
+
+.page-section[data-guide-target="dashboard-summary"] .stat-card strong,
+.page-section[data-guide-target="dashboard-summary"] .stat-delta,
+.page-section[data-guide-target="dashboard-summary"] .insight-status-card strong {
+  font-family: var(--app-handwriting-font);
+}
+
+.page-section[data-guide-target="dashboard-summary"] .stat-card strong,
+.page-section[data-guide-target="dashboard-summary"] .insight-status-card strong {
+  letter-spacing: 0.04em;
+}
+
+.page-section[data-guide-target="dashboard-summary"] .stat-delta {
+  letter-spacing: 0.02em;
+}
+
+.dashboard-calendar-transactions .table-responsive .table tbody td {
+  font-family: var(--app-handwriting-font);
+  letter-spacing: var(--app-grid-body-letter-spacing);
+  line-height: var(--app-grid-body-line-height);
+  font-size: var(--app-grid-body-font-size);
+}
+
+.dashboard-calendar-transactions .table-responsive .table thead th,
+.dashboard-calendar-transactions .table-responsive .table tbody td :is(
+  button,
+  input,
+  textarea,
+  select,
+  .btn,
+  .badge,
+  .form-control,
+  .form-select,
+  .app-select-trigger,
+  .transaction-row-header-badge,
+  .transaction-category-editor,
+  .transaction-review-inline-panel
+) {
+  font-family: "Pretendard", "Noto Sans KR", Arial, sans-serif;
+  letter-spacing: 0;
+  line-height: 1.5;
 }
 
 .tag-color-chip {
@@ -11720,6 +11790,7 @@ textarea:focus {
   .page-section[data-guide-target="records-moon-calendar"] > .stats-grid .stat-card strong {
     margin-top: 0.22rem;
     font-size: 1.08rem;
+    font-family: var(--app-handwriting-font);
     letter-spacing: 0.04em;
   }
 
@@ -11733,6 +11804,7 @@ textarea:focus {
   .page-section[data-guide-target="records-moon-calendar"] > .stats-grid .stat-delta {
     margin-top: 0.18rem;
     font-size: 0.74rem;
+    font-family: var(--app-handwriting-font);
     letter-spacing: 0.04em;
   }
 }
@@ -12741,6 +12813,7 @@ textarea:focus {
   .card[data-guide-target="records-moon-calendar"] > .stats-grid .stat-card strong,
   .page-section[data-guide-target="records-moon-calendar"] > .stats-grid .stat-card strong {
     font-size: 0.96rem;
+    font-family: var(--app-handwriting-font);
   }
 
   .card[data-guide-target="records-moon-calendar"] > .stats-grid .stat-label,
@@ -12748,6 +12821,11 @@ textarea:focus {
   .page-section[data-guide-target="records-moon-calendar"] > .stats-grid .stat-label,
   .page-section[data-guide-target="records-moon-calendar"] > .stats-grid .stat-delta {
     font-size: 0.68rem;
+  }
+
+  .card[data-guide-target="records-moon-calendar"] > .stats-grid .stat-delta,
+  .page-section[data-guide-target="records-moon-calendar"] > .stats-grid .stat-delta {
+    font-family: var(--app-handwriting-font);
   }
 
   .dashboard-calendar-hero-date {
@@ -14259,14 +14337,6 @@ textarea:focus {
     margin-top: 0.18rem;
     font-size: 0.72rem;
     line-height: 1.35;
-  }
-
-  .board-case-actions .board-case-action-button--compact {
-    min-height: 2.15rem;
-    padding: 0.34rem 0.66rem;
-    border-radius: 0.82rem;
-    font-size: 0.76rem;
-    line-height: 1.1;
   }
 
   .people-subboard {

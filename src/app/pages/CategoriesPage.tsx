@@ -1,6 +1,6 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { BoardCase, BoardCaseSection } from "../components/BoardCase";
+import { BoardCaseSection } from "../components/BoardCase";
 import { AppModal } from "../components/AppModal";
 import { AppSelect } from "../components/AppSelect";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
@@ -329,177 +329,174 @@ export function CategoriesPage({ embedded = false }: { embedded?: boolean }) {
 
   return (
     <div className={embedded ? "" : "page-stack"}>
-      <BoardCase
-        embedded={embedded}
-        data-guide-target="categories-page-overview"
-        title="카테고리 설정"
-        description="그룹과 하위 카테고리를 같은 보드 포맷에서 관리합니다. 드래그 앤 드롭, 숨기기, 삭제, 기본값 초기화는 그대로 유지됩니다."
-        actions={
-          <>
-            <button
-              type="button"
-              className={`board-case-action-button board-case-action-button--compact${isHiddenPanelOpen ? " is-active" : ""}`}
-              data-guide-target="categories-hidden-toggle"
-              onClick={() => setIsHiddenPanelOpen((current) => !current)}
-            >
-              숨김 {hiddenCategories.length}
+      <div className="board-case-header" data-guide-target="categories-page-overview">
+        <div className="board-case-header-copy">
+          <h2>카테고리 설정</h2>
+          <p>그룹과 하위 카테고리를 같은 보드 포맷에서 관리합니다. 드래그 앤 드롭, 숨기기, 삭제, 기본값 초기화는 그대로 유지됩니다.</p>
+        </div>
+        <div className="board-case-actions">
+          <button
+            type="button"
+            className={`board-case-action-button${isHiddenPanelOpen ? " is-active" : ""}`}
+            data-guide-target="categories-hidden-toggle"
+            onClick={() => setIsHiddenPanelOpen((current) => !current)}
+          >
+            숨김 {hiddenCategories.length}
+          </button>
+          <button
+            type="button"
+            className="board-case-action-button"
+            data-guide-target="categories-reset-defaults"
+            onClick={() => setIsResetDefaultsModalOpen(true)}
+          >
+            기본값 초기화
+          </button>
+        </div>
+      </div>
+      {!groups.length ? (
+        <EmptyStateCallout
+          kicker="첫 구조"
+          title="먼저 카테고리 그룹을 만들어주세요"
+          description="생활비 같은 상위 그룹을 만들고, 그 아래에 실제 거래가 매핑되는 하위 카테고리를 추가하면 됩니다."
+          actions={
+            <button type="button" className="btn btn-primary btn-sm" data-guide-target="categories-create-group" onClick={createGroupSection}>
+              그룹 만들기
             </button>
-            <button
-              type="button"
-              className="board-case-action-button board-case-action-button--compact"
-              data-guide-target="categories-reset-defaults"
-              onClick={() => setIsResetDefaultsModalOpen(true)}
-            >
-              기본값 초기화
-            </button>
-          </>
-        }
-      >
-        {!groups.length ? (
-          <EmptyStateCallout
-            kicker="첫 구조"
-            title="먼저 카테고리 그룹을 만들어주세요"
-            description="생활비 같은 상위 그룹을 만들고, 그 아래에 실제 거래가 매핑되는 하위 카테고리를 추가하면 됩니다."
-            actions={
-              <button type="button" className="btn btn-primary btn-sm" data-guide-target="categories-create-group" onClick={createGroupSection}>
-                그룹 만들기
-              </button>
-            }
-          />
-        ) : (
-          <div className="board-case-stack">
-            {groups.map((group, groupIndex) => {
-              const childCategories = getChildCategories(scope.categories, group.id);
-              const isInlineEditing = inlineEditingGroupId === group.id;
-              return (
-                <BoardCaseSection
-                  key={group.id}
-                  title={
-                    isInlineEditing ? (
-                      <input
-                        className="board-case-title-input"
-                        value={inlineGroupName}
-                        onChange={(event) => setInlineGroupName(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") {
-                            event.preventDefault();
-                            submitInlineGroupEdit();
-                          }
-                          if (event.key === "Escape") {
-                            event.preventDefault();
-                            stopInlineGroupEdit();
-                          }
-                        }}
-                        onBlur={submitInlineGroupEdit}
-                        aria-label={`${group.name} 그룹 이름`}
-                        autoFocus
-                      />
-                    ) : (
-                      <h3>{group.name}</h3>
-                    )
-                  }
-                  meta={`카테고리 ${childCategories.length}개`}
-                  className={`category-case-section${getDragStateClassName(group.id)}`}
-                  style={getMotionStyle(groupIndex + 2)}
-                  draggable={!isInlineEditing}
-                  onDragStart={(event) => startDrag({ categoryId: group.id, categoryType: "group", isHidden: false }, event)}
-                  onDragEnd={resetDragState}
+          }
+        />
+      ) : (
+        <div className="board-case-stack">
+          {groups.map((group, groupIndex) => {
+            const childCategories = getChildCategories(scope.categories, group.id);
+            const isInlineEditing = inlineEditingGroupId === group.id;
+            return (
+              <BoardCaseSection
+                key={group.id}
+                title={
+                  isInlineEditing ? (
+                    <input
+                      className="board-case-title-input"
+                      value={inlineGroupName}
+                      onChange={(event) => setInlineGroupName(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          submitInlineGroupEdit();
+                        }
+                        if (event.key === "Escape") {
+                          event.preventDefault();
+                          stopInlineGroupEdit();
+                        }
+                      }}
+                      onBlur={submitInlineGroupEdit}
+                      aria-label={`${group.name} 그룹 이름`}
+                      autoFocus
+                    />
+                  ) : (
+                    <h3>{group.name}</h3>
+                  )
+                }
+                meta={`카테고리 ${childCategories.length}개`}
+                className={`category-case-section${getDragStateClassName(group.id)}`}
+                style={getMotionStyle(groupIndex + 2)}
+                draggable={!isInlineEditing}
+                onDragStart={(event) => startDrag({ categoryId: group.id, categoryType: "group", isHidden: false }, event)}
+                onDragEnd={resetDragState}
+                onDragOver={(event) => {
+                  if (dragItem?.categoryType !== "group") return;
+                  event.preventDefault();
+                }}
+                onDrop={(event) => handleGroupDrop(event, groupIndex)}
+                action={
+                  <button
+                    type="button"
+                    className="board-case-edit-button"
+                    onMouseDown={isInlineEditing ? (event) => event.preventDefault() : undefined}
+                    onClick={() => {
+                      if (isInlineEditing) {
+                        submitInlineGroupEdit();
+                        return;
+                      }
+                      startInlineGroupEdit(group);
+                    }}
+                    aria-label={isInlineEditing ? `${group.name} 그룹 이름 저장` : `${group.name} 그룹 이름 수정`}
+                  >
+                    {isInlineEditing ? "✓" : "✎"}
+                  </button>
+                }
+              >
+                <div
+                  className="category-case-grid"
                   onDragOver={(event) => {
-                    if (dragItem?.categoryType !== "group") return;
+                    if (dragItem?.categoryType !== "category") return;
                     event.preventDefault();
                   }}
-                  onDrop={(event) => handleGroupDrop(event, groupIndex)}
-                  action={
-                    <button
-                      type="button"
-                      className="board-case-edit-button"
-                      onMouseDown={isInlineEditing ? (event) => event.preventDefault() : undefined}
-                      onClick={() => {
-                        if (isInlineEditing) {
-                          submitInlineGroupEdit();
-                          return;
-                        }
-                        startInlineGroupEdit(group);
-                      }}
-                      aria-label={isInlineEditing ? `${group.name} 그룹 이름 저장` : `${group.name} 그룹 이름 수정`}
-                    >
-                      {isInlineEditing ? "✓" : "✎"}
-                    </button>
-                  }
+                  onDrop={(event) => handleCategoryAppendDrop(event, group.id, childCategories.length)}
                 >
-                  <div
-                    className="category-case-grid"
-                    onDragOver={(event) => {
-                      if (dragItem?.categoryType !== "category") return;
-                      event.preventDefault();
-                    }}
-                    onDrop={(event) => handleCategoryAppendDrop(event, group.id, childCategories.length)}
-                  >
-                    {childCategories.map((category, categoryIndex) => (
-                      <article
-                        key={category.id}
-                        className={`category-case-card${getDragStateClassName(category.id)}`}
-                        draggable
-                        onDragStart={(event) =>
-                          startDrag(
-                            {
-                              categoryId: category.id,
-                              categoryType: "category",
-                              parentCategoryId: category.parentCategoryId,
-                              isHidden: false,
-                            },
-                            event,
-                          )
-                        }
-                        onDragEnd={resetDragState}
-                        onDragOver={(event) => {
-                          if (dragItem?.categoryType !== "category") return;
-                          event.preventDefault();
+                  {childCategories.map((category, categoryIndex) => (
+                    <article
+                      key={category.id}
+                      className={`category-case-card${getDragStateClassName(category.id)}`}
+                      draggable
+                      onDragStart={(event) =>
+                        startDrag(
+                          {
+                            categoryId: category.id,
+                            categoryType: "category",
+                            parentCategoryId: category.parentCategoryId,
+                            isHidden: false,
+                          },
+                          event,
+                        )
+                      }
+                      onDragEnd={resetDragState}
+                      onDragOver={(event) => {
+                        if (dragItem?.categoryType !== "category") return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                      }}
+                      onDrop={(event) => {
+                        event.stopPropagation();
+                        handleCategoryDrop(event, group.id, categoryIndex);
+                      }}
+                      onClick={() => openEditCategoryModal(category)}
+                    >
+                      <button
+                        type="button"
+                        className="board-case-edit-button category-case-card-edit"
+                        onClick={(event) => {
                           event.stopPropagation();
+                          openEditCategoryModal(category);
                         }}
-                        onDrop={(event) => {
-                          event.stopPropagation();
-                          handleCategoryDrop(event, group.id, categoryIndex);
-                        }}
-                        onClick={() => openEditCategoryModal(category)}
+                        aria-label={`${category.name} 카테고리 수정`}
                       >
-                        <button
-                          type="button"
-                          className="board-case-edit-button category-case-card-edit"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            openEditCategoryModal(category);
-                          }}
-                          aria-label={`${category.name} 카테고리 수정`}
-                        >
-                          ✎
-                        </button>
-                        <div className="category-case-card-copy">
-                          <strong>{category.name}</strong>
-                          <span>{category.fixedOrVariable === "fixed" ? "고정 지출" : "변동 지출"}</span>
-                        </div>
-                        <div className={`category-case-pill${category.fixedOrVariable === "fixed" ? " is-fixed" : ""}`}>
-                          {category.fixedOrVariable === "fixed" ? "고정" : "변동"}
-                        </div>
-                      </article>
-                    ))}
+                        ✎
+                      </button>
+                      <div className="category-case-card-copy">
+                        <strong>{category.name}</strong>
+                        <span>{category.fixedOrVariable === "fixed" ? "고정 지출" : "변동 지출"}</span>
+                      </div>
+                      <div className={`category-case-pill${category.fixedOrVariable === "fixed" ? " is-fixed" : ""}`}>
+                        {category.fixedOrVariable === "fixed" ? "고정" : "변동"}
+                      </div>
+                    </article>
+                  ))}
 
-                    <button type="button" className="category-case-add-card" onClick={() => openCreateChildModal(group)}>
-                      <span className="category-case-add-plus">+</span>
-                      <strong>{group.name}에 추가</strong>
-                    </button>
-                  </div>
-                </BoardCaseSection>
-              );
-            })}
-          </div>
-        )}
+                  <button type="button" className="category-case-add-card" onClick={() => openCreateChildModal(group)}>
+                    <span className="category-case-add-plus">+</span>
+                    <strong>{group.name}에 추가</strong>
+                  </button>
+                </div>
+              </BoardCaseSection>
+            );
+          })}
+        </div>
+      )}
 
-        <button type="button" className="category-case-group-add" data-guide-target="categories-create-group" onClick={createGroupSection}>
-          <span>+</span>
-          <strong>새 그룹 추가</strong>
-        </button>
-      </BoardCase>
+      <button type="button" className="category-case-group-add" data-guide-target="categories-create-group" onClick={createGroupSection}>
+        <span>+</span>
+        <strong>새 그룹 추가</strong>
+      </button>
 
       {isHiddenPanelOpen ? (
         <aside className="category-hidden-panel">

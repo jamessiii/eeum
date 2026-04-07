@@ -3879,7 +3879,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
         <div className="dashboard-calendar-transactions-head">
           <div className="dashboard-calendar-transactions-title-block">
             <h3 className="dashboard-calendar-transactions-title">
-              {`${formatFullKoreanDateLabel(selectedCalendarCell?.dateKey ?? selectedCalendarDate)}의 결제내역`}
+              {`${formatFullKoreanDateLabel(selectedCalendarCell?.dateKey ?? selectedCalendarDate)}의 소비내역`}
             </h3>
             {dashboardCalendarProcessingMode === "review" ? (
               <span className="dashboard-calendar-transactions-status-badge">자동검토중</span>
@@ -4070,16 +4070,16 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
               </tbody>
             </table>
           </div>
+        ) : selectedCalendarTransactions.length ? (
+          <p className="mb-0 text-secondary">현재 토글 조건에 맞는 결제내역이 없습니다.</p>
+        ) : dashboardCalendarProcessingMode === "review" ? (
+          <p className="mb-0 text-secondary">이번 달에 남은 검토 필요 결제내역이 없습니다.</p>
+        ) : dashboardCalendarProcessingMode === "uncategorized" ? (
+          <p className="mb-0 text-secondary">이번 달에 남은 미분류 결제내역이 없습니다.</p>
         ) : (
-          <p className="mb-0 text-secondary">
-            {selectedCalendarTransactions.length
-              ? "현재 토글 조건에 맞는 결제내역이 없습니다."
-              : dashboardCalendarProcessingMode === "review"
-                ? "이번 달에 남은 검토 필요 결제내역이 없습니다."
-                : dashboardCalendarProcessingMode === "uncategorized"
-                  ? "이번 달에 남은 미분류 결제내역이 없습니다."
-                  : "이 날짜에는 아직 정리된 소비내역이 없습니다."}
-          </p>
+          <div className="dashboard-calendar-empty-copy" aria-live="polite">
+            <p>오늘은 돈을 아꼈다!</p>
+          </div>
         )}
       </div>
     </section>
@@ -4994,7 +4994,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
               {foundationRemainingCount ? "사용자, 계좌, 카드 연결만 먼저 맞추면 됩니다." : "이제 거래와 대시보드 흐름을 집중해서 보면 됩니다."}
             </p>
           </div>
-          <Link to="/connections/assets" className="btn btn-outline-primary btn-s">
+          <Link to="/connections/assets" className="btn btn-outline-primary btn-sm">
             설정 이어가기
           </Link>
         </div>
@@ -5006,7 +5006,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
               {peopleSetupRemaining ? "설정 필요" : "준비 완료"}
             </span>
             <p className="mb-0 text-secondary">{peopleSetupRemaining ? "사용자 정보부터 정리해 주세요." : "사용자 정보가 준비되었습니다."}</p>
-            <Link to="/connections/assets" className="btn btn-outline-primary btn-s mt-3">
+            <Link to="/connections/assets" className="btn btn-outline-primary btn-sm mt-3">
               사용자 관리
             </Link>
           </article>
@@ -5017,7 +5017,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
               {unmappedAccountCount ? `${unmappedAccountCount}개 미연결` : "준비 완료"}
             </span>
             <p className="mb-0 text-secondary">{unmappedAccountCount ? "소유자가 없는 계좌가 남아 있습니다." : "계좌 정보가 준비되었습니다."}</p>
-            <Link to="/connections/assets" className="btn btn-outline-primary btn-s mt-3">
+            <Link to="/connections/assets" className="btn btn-outline-primary btn-sm mt-3">
               계좌 관리
             </Link>
           </article>
@@ -5028,7 +5028,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
               {unmappedCardCount ? `${unmappedCardCount}개 미연결` : "준비 완료"}
             </span>
             <p className="mb-0 text-secondary">{unmappedCardCount ? "카드 연결 정보가 덜 정리되었습니다." : "카드 정보가 준비되었습니다."}</p>
-            <Link to="/connections/assets" className="btn btn-outline-primary btn-s mt-3">
+            <Link to="/connections/assets" className="btn btn-outline-primary btn-sm mt-3">
               카드 관리
             </Link>
           </article>

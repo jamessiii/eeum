@@ -11,7 +11,6 @@ import type { Account, Category } from "../../shared/types/models";
 import { getMotionStyle } from "../../shared/utils/motion";
 import { AppModal } from "../components/AppModal";
 import { AppSelect } from "../components/AppSelect";
-import { BoardCase } from "../components/BoardCase";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
@@ -1357,39 +1356,37 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   }));
   const embeddedPeopleSection = (
     <>
-      <BoardCase
-        embedded={embedded}
-        data-guide-target="people-page-overview"
-        title="자산 설정"
-        description="사용자별 계좌와 카드를 같은 보드 형식에서 관리합니다."
-        actions={
-          <>
-            <button
-              type="button"
-              className={`board-case-action-button board-case-action-button--compact${isCategoryLinkPanelOpen ? " is-active is-strong" : ""}`}
-              data-guide-target="people-category-link-toggle"
-              onClick={() => {
-                setIsCategoryLinkPanelOpen(true);
-                setIsHiddenPanelOpen(false);
-                completeGuideStepAction(workspaceId, "people-category-link-toggle");
-              }}
-            >
-              카테고리 연결
-            </button>
-            <button
-              type="button"
-              className={`board-case-action-button board-case-action-button--compact${isHiddenPanelOpen ? " is-active" : ""}`}
-              data-guide-target="people-hidden-toggle"
-              onClick={() => {
-                setIsHiddenPanelOpen((current) => !current);
-                completeGuideStepAction(workspaceId, "people-hidden-assets");
-              }}
-            >
-              숨김 {hiddenPeople.length + hiddenAccounts.length + hiddenCards.length}
-            </button>
-          </>
-        }
-    >
+      <div className="board-case-header" data-guide-target="people-page-overview">
+        <div className="board-case-header-copy">
+          <h2>자산 설정</h2>
+          <p>사용자별 계좌와 카드를 같은 보드 형식에서 관리합니다.</p>
+        </div>
+        <div className="board-case-actions">
+          <button
+            type="button"
+            className={`board-case-action-button${isCategoryLinkPanelOpen ? " is-active is-strong" : ""}`}
+            data-guide-target="people-category-link-toggle"
+            onClick={() => {
+              setIsCategoryLinkPanelOpen(true);
+              setIsHiddenPanelOpen(false);
+              completeGuideStepAction(workspaceId, "people-category-link-toggle");
+            }}
+          >
+            카테고리 연결
+          </button>
+          <button
+            type="button"
+            className={`board-case-action-button${isHiddenPanelOpen ? " is-active" : ""}`}
+            data-guide-target="people-hidden-toggle"
+            onClick={() => {
+              setIsHiddenPanelOpen((current) => !current);
+              completeGuideStepAction(workspaceId, "people-hidden-assets");
+            }}
+          >
+            숨김 {hiddenPeople.length + hiddenAccounts.length + hiddenCards.length}
+          </button>
+        </div>
+      </div>
       {!embeddedSections.length ? (
         <EmptyStateCallout
           kicker="첫 단계"
@@ -1739,7 +1736,6 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
         <span>+</span>
         <strong>새 사용자 추가</strong>
       </button>
-    </BoardCase>
 
     {isHiddenPanelOpen ? (
         <aside className="category-hidden-panel" data-guide-target="people-hidden-panel">
