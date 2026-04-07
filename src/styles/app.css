@@ -12500,6 +12500,38 @@ textarea:focus {
     justify-content: flex-start;
   }
 
+  .settings-summary-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.55rem;
+  }
+
+  .settings-profile-card {
+    gap: 0.5rem;
+    min-height: 0;
+    padding: 0.7rem 0.62rem;
+    border-radius: 0.9rem;
+  }
+
+  .settings-profile-card h3 {
+    font-size: 0.76rem;
+    line-height: 1.18;
+  }
+
+  .settings-profile-display-row {
+    gap: 0.35rem;
+    min-height: 2rem;
+  }
+
+  .settings-profile-value-static {
+    font-size: 0.98rem;
+    line-height: 1.05;
+  }
+
+  .settings-profile-edit-button {
+    width: 1.9rem;
+    height: 1.9rem;
+  }
+
   .settings-tab-strip {
     flex-wrap: nowrap;
     overflow-x: auto;
