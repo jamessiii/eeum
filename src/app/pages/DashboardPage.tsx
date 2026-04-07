@@ -1487,6 +1487,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
   const [isMobileCalendarSwipeViewport, setIsMobileCalendarSwipeViewport] = useState(false);
   const [calendarSwipeViewportWidth, setCalendarSwipeViewportWidth] = useState(0);
   const [calendarSwipeOffset, setCalendarSwipeOffset] = useState(0);
+  const [isCalendarSwipeDragging, setIsCalendarSwipeDragging] = useState(false);
   const [isCalendarSwipeAnimating, setIsCalendarSwipeAnimating] = useState(false);
   const [previewBundle, setPreviewBundle] = useState<WorkspaceBundle | null>(null);
   const [previewFileName, setPreviewFileName] = useState("");
@@ -2525,6 +2526,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
     calendarSwipeOffsetRef.current = 0;
     calendarSwipeIsDraggingRef.current = false;
     calendarSwipeSuppressClickRef.current = false;
+    setIsCalendarSwipeDragging(false);
     setCalendarSwipeOffset(0);
   };
 
@@ -2549,6 +2551,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
       }
       calendarSwipeIsDraggingRef.current = true;
       calendarSwipeSuppressClickRef.current = true;
+      setIsCalendarSwipeDragging(true);
     }
 
     event.preventDefault();
@@ -2566,6 +2569,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
       calendarSwipeStartXRef.current = null;
       calendarSwipeStartYRef.current = null;
       calendarSwipeIsDraggingRef.current = false;
+      setIsCalendarSwipeDragging(false);
       return;
     }
 
@@ -2589,6 +2593,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
       calendarSwipeStartYRef.current = null;
       calendarSwipeOffsetRef.current = 0;
       setCalendarSwipeOffset(0);
+      setIsCalendarSwipeDragging(false);
       window.setTimeout(() => {
         calendarSwipeSuppressClickRef.current = false;
       }, 0);
@@ -2596,6 +2601,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
     }
 
     setIsCalendarSwipeAnimating(true);
+    setIsCalendarSwipeDragging(false);
     setCalendarSwipeOffset(settleOffset);
 
     if (calendarSwipeAnimationTimerRef.current !== null) {
@@ -2617,7 +2623,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
         calendarSwipeSuppressClickRef.current = false;
       }, 0);
       calendarSwipeAnimationTimerRef.current = null;
-    }, 220);
+    }, 320);
   };
   useEffect(() => {
     const mediaQuery = window.matchMedia("(max-width: 720px)");
@@ -2640,6 +2646,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
       calendarSwipeOffsetRef.current = 0;
       calendarSwipeStartXRef.current = null;
       calendarSwipeStartYRef.current = null;
+      setIsCalendarSwipeDragging(false);
       setIsCalendarSwipeAnimating(false);
       if (calendarSwipeAnimationTimerRef.current !== null) {
         window.clearTimeout(calendarSwipeAnimationTimerRef.current);
@@ -3826,9 +3833,9 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
             }}
           >
             <div
-              className={`dashboard-calendar-swipe-track${isCalendarSwipeAnimating ? " is-animating" : ""}`}
+              className={`dashboard-calendar-swipe-track${isCalendarSwipeAnimating ? " is-animating" : ""}${isCalendarSwipeDragging ? " is-dragging" : ""}`}
               style={{
-                transform: `translate3d(${calendarSwipeTranslateX}px, 0, 0)`,
+                transform: `translate3d(${calendarSwipeTranslateX}, 0, 0)`,
               }}
             >
               {calendarSwipeMonthKeys.map((monthValue) => (
