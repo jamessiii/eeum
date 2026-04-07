@@ -2515,7 +2515,8 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
   );
 
   const handleCalendarSwipeStart = (event: PointerEvent<HTMLDivElement>) => {
-    if (!isMobileCalendarSwipeViewport || isCalendarSwipeAnimating) return;
+    if (isCalendarSwipeAnimating) return;
+    if (calendarSwipeViewportRef.current?.offsetParent === null) return;
     if (event.pointerType === "mouse" && event.button !== 0) return;
     calendarSwipePointerIdRef.current = event.pointerId;
     event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -2528,7 +2529,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
   };
 
   const handleCalendarSwipeMove = (event: PointerEvent<HTMLDivElement>) => {
-    if (!isMobileCalendarSwipeViewport || isCalendarSwipeAnimating || calendarSwipeStartXRef.current === null) return;
+    if (isCalendarSwipeAnimating || calendarSwipeStartXRef.current === null) return;
     if (calendarSwipePointerIdRef.current !== event.pointerId) return;
     const currentX = event.clientX;
     const currentY = event.clientY;
@@ -2560,7 +2561,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
   };
 
   const handleCalendarSwipeEnd = () => {
-    if (!isMobileCalendarSwipeViewport || isCalendarSwipeAnimating || calendarSwipeStartXRef.current === null) {
+    if (isCalendarSwipeAnimating || calendarSwipeStartXRef.current === null) {
       calendarSwipePointerIdRef.current = null;
       calendarSwipeStartXRef.current = null;
       calendarSwipeStartYRef.current = null;

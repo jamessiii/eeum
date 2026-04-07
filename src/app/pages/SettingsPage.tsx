@@ -208,7 +208,7 @@ export function SettingsPage() {
                   <input
                     hidden
                     type="file"
-                    accept=".json"
+                    accept=".json,application/json,text/json"
                     onChange={(event) => {
                       const file = event.target.files?.[0];
                       if (file) void importState(file);
