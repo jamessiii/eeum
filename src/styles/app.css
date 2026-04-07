@@ -7100,10 +7100,15 @@ label,
 
 .dashboard-calendar-swipe-board {
   display: none;
+  width: 100%;
+  min-width: 0;
+  position: relative;
 }
 
 .dashboard-calendar-swipe-track {
   display: flex;
+  width: 300%;
+  min-width: 0;
 }
 
 .dashboard-calendar-swipe-track.is-animating {
@@ -7111,7 +7116,7 @@ label,
 }
 
 .dashboard-calendar-swipe-panel {
-  flex: 0 0 auto;
+  flex: 0 0 33.333333%;
   min-width: 0;
 }
 
@@ -11912,9 +11917,9 @@ textarea:focus {
     position: relative;
     margin: 0;
     max-width: none;
-    min-height: 3rem;
-    height: 3rem;
-    padding: 0 0.55rem;
+    min-height: 3.2rem;
+    height: 3.2rem;
+    padding: 0.08rem 0.55rem 0.12rem;
     gap: 0.5rem;
     border: 0;
     border-radius: 0;
@@ -11949,8 +11954,8 @@ textarea:focus {
     transform: translateY(-50%);
     order: 0;
     flex: 0 0 auto;
-    width: 2.5rem;
-    height: 2.5rem;
+    width: 2.58rem;
+    height: 2.58rem;
     border: 0;
     border-radius: 0;
     background: transparent;
@@ -11979,7 +11984,7 @@ textarea:focus {
   }
 
   .app-topbar-logo-link.app-topbar-mobile-brand .app-brand-mark {
-    --app-brand-symbol-size: 2.35rem;
+    --app-brand-symbol-size: 2.42rem;
     --app-brand-gap: 0.38rem;
     align-items: center;
     justify-content: center;

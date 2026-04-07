@@ -1,6 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import type { DragEvent, TouchEvent } from "react";
+import type { DragEvent, PointerEvent } from "react";
 import { useRef } from "react";
 import { Fragment } from "react";
 import { monthKey } from "../../shared/utils/date";
@@ -1518,6 +1518,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
   const statementImportFileInputRef = useRef<HTMLInputElement | null>(null);
   const dashboardCalendarTransactionsRef = useRef<HTMLDivElement | null>(null);
   const calendarSwipeViewportRef = useRef<HTMLDivElement | null>(null);
+  const calendarSwipePointerIdRef = useRef<number | null>(null);
   const calendarSwipeStartXRef = useRef<number | null>(null);
   const calendarSwipeStartYRef = useRef<number | null>(null);
   const calendarSwipeOffsetRef = useRef(0);
@@ -2294,9 +2295,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
     if (!canMoveCalendarMonthNext) return;
     applyCalendarMonthChange(getNextMonthKey(calendarMonthValue));
   };
-  const calendarSwipeTranslateX = calendarSwipeViewportWidth
-    ? -calendarSwipeViewportWidth + calendarSwipeOffset
-    : 0;
+  const calendarSwipeTranslateX = `calc(-33.333333% + ${calendarSwipeOffset}px)`;
   const selectedCalendarTransactions = useMemo(
     () =>
       calendarExpenseTransactions.filter(
@@ -2515,20 +2514,24 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
     </>
   );
 
-  const handleCalendarSwipeStart = (event: TouchEvent<HTMLDivElement>) => {
-    if (!isMobileCalendarSwipeViewport || isCalendarSwipeAnimating || event.touches.length !== 1) return;
-    calendarSwipeStartXRef.current = event.touches[0]?.clientX ?? null;
-    calendarSwipeStartYRef.current = event.touches[0]?.clientY ?? null;
+  const handleCalendarSwipeStart = (event: PointerEvent<HTMLDivElement>) => {
+    if (!isMobileCalendarSwipeViewport || isCalendarSwipeAnimating) return;
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    calendarSwipePointerIdRef.current = event.pointerId;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    calendarSwipeStartXRef.current = event.clientX;
+    calendarSwipeStartYRef.current = event.clientY;
     calendarSwipeOffsetRef.current = 0;
     calendarSwipeIsDraggingRef.current = false;
     calendarSwipeSuppressClickRef.current = false;
     setCalendarSwipeOffset(0);
   };
 
-  const handleCalendarSwipeMove = (event: TouchEvent<HTMLDivElement>) => {
+  const handleCalendarSwipeMove = (event: PointerEvent<HTMLDivElement>) => {
     if (!isMobileCalendarSwipeViewport || isCalendarSwipeAnimating || calendarSwipeStartXRef.current === null) return;
-    const currentX = event.touches[0]?.clientX ?? 0;
-    const currentY = event.touches[0]?.clientY ?? 0;
+    if (calendarSwipePointerIdRef.current !== event.pointerId) return;
+    const currentX = event.clientX;
+    const currentY = event.clientY;
     const deltaX = currentX - calendarSwipeStartXRef.current;
     const deltaY = currentY - (calendarSwipeStartYRef.current ?? currentY);
 
@@ -2558,6 +2561,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
 
   const handleCalendarSwipeEnd = () => {
     if (!isMobileCalendarSwipeViewport || isCalendarSwipeAnimating || calendarSwipeStartXRef.current === null) {
+      calendarSwipePointerIdRef.current = null;
       calendarSwipeStartXRef.current = null;
       calendarSwipeStartYRef.current = null;
       calendarSwipeIsDraggingRef.current = false;
@@ -2579,6 +2583,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
     }
 
     if (!calendarSwipeIsDraggingRef.current) {
+      calendarSwipePointerIdRef.current = null;
       calendarSwipeStartXRef.current = null;
       calendarSwipeStartYRef.current = null;
       calendarSwipeOffsetRef.current = 0;
@@ -2600,6 +2605,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
       if (nextMonthValue) {
         applyCalendarMonthChange(nextMonthValue);
       }
+      calendarSwipePointerIdRef.current = null;
       calendarSwipeStartXRef.current = null;
       calendarSwipeStartYRef.current = null;
       calendarSwipeOffsetRef.current = 0;
@@ -2629,8 +2635,10 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
     if (!isMobileCalendarSwipeViewport) {
       setCalendarSwipeViewportWidth(0);
       setCalendarSwipeOffset(0);
+      calendarSwipePointerIdRef.current = null;
       calendarSwipeOffsetRef.current = 0;
       calendarSwipeStartXRef.current = null;
+      calendarSwipeStartYRef.current = null;
       setIsCalendarSwipeAnimating(false);
       if (calendarSwipeAnimationTimerRef.current !== null) {
         window.clearTimeout(calendarSwipeAnimationTimerRef.current);
@@ -3806,10 +3814,10 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
           <div
             ref={calendarSwipeViewportRef}
             className="dashboard-calendar-swipe-board"
-            onTouchStartCapture={handleCalendarSwipeStart}
-            onTouchMoveCapture={handleCalendarSwipeMove}
-            onTouchEndCapture={handleCalendarSwipeEnd}
-            onTouchCancelCapture={handleCalendarSwipeEnd}
+            onPointerDownCapture={handleCalendarSwipeStart}
+            onPointerMoveCapture={handleCalendarSwipeMove}
+            onPointerUpCapture={handleCalendarSwipeEnd}
+            onPointerCancelCapture={handleCalendarSwipeEnd}
             onClickCapture={(event) => {
               if (!calendarSwipeSuppressClickRef.current) return;
               event.preventDefault();
@@ -3819,16 +3827,11 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
             <div
               className={`dashboard-calendar-swipe-track${isCalendarSwipeAnimating ? " is-animating" : ""}`}
               style={{
-                width: calendarSwipeViewportWidth ? `${calendarSwipeViewportWidth * calendarSwipeMonthKeys.length}px` : undefined,
                 transform: `translate3d(${calendarSwipeTranslateX}px, 0, 0)`,
               }}
             >
               {calendarSwipeMonthKeys.map((monthValue) => (
-                <div
-                  key={monthValue}
-                  className="dashboard-calendar-swipe-panel"
-                  style={{ width: calendarSwipeViewportWidth ? `${calendarSwipeViewportWidth}px` : undefined }}
-                >
+                <div key={monthValue} className="dashboard-calendar-swipe-panel">
                   {renderCalendarBoard(monthValue, calendarCellsByMonth.get(monthValue) ?? [])}
                 </div>
               ))}
