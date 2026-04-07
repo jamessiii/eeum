@@ -36,6 +36,7 @@ const SettingsPage = lazy(() => import("./pages/SettingsPage").then((module) => 
 const DeveloperPage = lazy(() => import("./pages/DeveloperPage").then((module) => ({ default: module.DeveloperPage })));
 
 const DEVELOPER_MODE_KEY = "spending-diary.developer-mode";
+const ASSET_BASE = import.meta.env.BASE_URL;
 
 type NavItem = {
   to: string;
@@ -359,7 +360,7 @@ function RecordsPage({ view }: { view: "moon" | "sun" }) {
 function AppBrandMark({ size = "compact" }: { size?: "compact" | "expanded" }) {
   return (
     <span className={`app-brand-mark app-brand-mark--${size}`} aria-label="소비일기">
-      <img className="app-brand-image" src="/logo2.png" alt="" aria-hidden="true" />
+      <img className="app-brand-image" src={`${ASSET_BASE}logo2.png`} alt="" aria-hidden="true" />
       <span className="app-brand-word-stack">
         <span className="app-brand-word">소비일기</span>
         {size === "expanded" ? null : null}
@@ -568,7 +569,7 @@ function AppFrame() {
 
           <div className="app-sidebar-footer">
             <div className="app-sidebar-note">
-              <img className="app-sidebar-note-image" src="/slogan.png" alt="기록이 쌓이면, 마음의 흐름이 보여요" />
+              <img className="app-sidebar-note-image" src={`${ASSET_BASE}slogan.png`} alt="기록이 쌓이면, 마음의 흐름이 보여요" />
             </div>
           </div>
         </div>
@@ -639,8 +640,6 @@ function AppFrame() {
             <AppBrandMark size="compact" />
           </button>
         </div>
-        <p className="app-mobile-drawer-copy">핵심 메뉴와 중요한 이동 경로를 모바일 화면에서 한 번에 다루기 쉽게 다시 정리했습니다.</p>
-
         <div className="app-mobile-drawer-section">
           <span className="sidebar-kicker">전체 메뉴</span>
           <AppTopNav isDeveloperModeUnlocked={isDeveloperModeUnlocked} variant="drawer" onNavigate={() => setIsMobileNavOpen(false)} />
