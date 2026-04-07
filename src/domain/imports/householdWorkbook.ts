@@ -1,11 +1,48 @@
 import * as XLSX from "xlsx";
 import { createFinancialProfileBase, createStarterCategories, createStarterTags, createWorkspaceBase } from "../app/defaults";
-import type { Account, Card, Category, Person, ReviewItem, Transaction, WorkspaceBundle } from "../../shared/types/models";
+import type { Account, Card, Category, ImportRecord, Person, ReviewItem, Transaction, WorkspaceBundle } from "../../shared/types/models";
 import { excelSerialToIso } from "../../shared/utils/date";
 import { createId } from "../../shared/utils/id";
 
 function normalizeText(value: unknown): string {
   return String(value ?? "").trim();
+}
+
+function normalizeFingerprintText(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
+async function digestHex(input: string | ArrayBuffer) {
+  const source = typeof input === "string" ? new TextEncoder().encode(input) : new Uint8Array(input);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", source);
+  return Array.from(new Uint8Array(hashBuffer))
+    .map((value) => value.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function buildImportFingerprints(file: File, buffer: ArrayBuffer, transactions: Transaction[]) {
+  const fileFingerprint = await digestHex(buffer);
+  const contentSource = [
+    normalizeFingerprintText(file.name.replace(/\.[^.]+$/u, "")),
+    ...transactions
+      .map((transaction) =>
+        [
+          transaction.occurredAt.slice(0, 10),
+          transaction.settledAt?.slice(0, 10) ?? "",
+          transaction.transactionType,
+          transaction.status,
+          transaction.amount.toFixed(0),
+          normalizeFingerprintText(transaction.merchantName),
+          normalizeFingerprintText(transaction.description),
+        ].join("|"),
+      )
+      .sort(),
+  ].join("\n");
+  const contentFingerprint = await digestHex(contentSource);
+  return { fileFingerprint, contentFingerprint };
 }
 
 function normalizeHeaderCell(value: unknown): string {
@@ -1873,6 +1910,19 @@ export async function parseHouseholdWorkbook(file: File, context?: ImportClassif
     );
   }
 
+  const importFingerprints = await buildImportFingerprints(file, buffer, transactions);
+  const importRecord: ImportRecord = {
+    id: createId("import"),
+    workspaceId: workspace.id,
+    fileName: file.name,
+    importedAt: new Date().toISOString(),
+    parserId: transactions.length > 0 ? "household-statement-import" : "household-v2-workbook",
+    rowCount: transactions.length,
+    reviewCount: reviews.length,
+    fileFingerprint: importFingerprints.fileFingerprint,
+    contentFingerprint: importFingerprints.contentFingerprint,
+  };
+
   return {
     workspace,
     financialProfile,
@@ -1883,17 +1933,7 @@ export async function parseHouseholdWorkbook(file: File, context?: ImportClassif
     tags,
     transactions,
     reviews,
-    imports: [
-      {
-        id: createId("import"),
-        workspaceId: workspace.id,
-        fileName: file.name,
-        importedAt: new Date().toISOString(),
-        parserId: transactions.length > 0 ? "household-statement-import" : "household-v2-workbook",
-        rowCount: transactions.length,
-        reviewCount: reviews.length,
-      },
-    ],
+    imports: [importRecord],
     settlements: [],
     incomeEntries: [],
   };

@@ -419,6 +419,8 @@ function normalizeAppState(rawState: AppState): AppState {
     imports: rawState.imports.map((record) => ({
       ...record,
       statementMonth: record.statementMonth ?? null,
+      fileFingerprint: record.fileFingerprint ?? null,
+      contentFingerprint: record.contentFingerprint ?? null,
     })),
     settlements: (rawState.settlements ?? []).map((record) => ({
       ...record,
@@ -1009,6 +1011,8 @@ function rebaseImportedBundleIntoWorkspace(state: AppState, workspaceId: string,
         workspaceId,
         fileName: bundle.imports[0]?.fileName ?? bundle.workspace.name,
         statementMonth,
+        fileFingerprint: bundle.imports[0]?.fileFingerprint ?? null,
+        contentFingerprint: bundle.imports[0]?.contentFingerprint ?? null,
         importedAt: new Date().toISOString(),
         parserId: bundle.imports[0]?.parserId ?? "household-v2-workbook",
         rowCount: transactions.length,
@@ -1039,6 +1043,23 @@ function createWorkspaceBundleSnapshot(state: AppState, workspaceId: string): Wo
     settlements: scope.settlements,
     incomeEntries: scope.incomeEntries,
   };
+}
+
+function findDuplicateImportRecord(state: AppState, workspaceId: string, bundle: WorkspaceBundle) {
+  const incomingRecord = bundle.imports[0];
+  if (!incomingRecord) return null;
+
+  const fileFingerprint = incomingRecord.fileFingerprint ?? null;
+  const contentFingerprint = incomingRecord.contentFingerprint ?? null;
+
+  return (
+    state.imports.find(
+      (record) =>
+        record.workspaceId === workspaceId &&
+        ((fileFingerprint && record.fileFingerprint === fileFingerprint) ||
+          (contentFingerprint && record.contentFingerprint === contentFingerprint)),
+    ) ?? null
+  );
 }
 
 function adaptBundleToWorkspace(
@@ -2487,6 +2508,17 @@ export function AppStateProvider({ children }: PropsWithChildren) {
       commitImportedBundle(bundle, fileName) {
         const latestState = stateRef.current;
         const activeWorkspaceId = latestState.activeWorkspaceId;
+        if (activeWorkspaceId) {
+          const duplicateImportRecord = findDuplicateImportRecord(latestState, activeWorkspaceId, bundle);
+          if (duplicateImportRecord) {
+            showToast(
+              `${duplicateImportRecord.fileName} 명세서와 같은 내용이 이미 업로드되어 있습니다.`,
+              "error",
+            );
+            throw new Error("duplicate-import-record");
+          }
+        }
+
         const payload = activeWorkspaceId ? rebaseImportedBundleIntoWorkspace(state, activeWorkspaceId, bundle) : bundle;
         dispatch({ type: "mergeBundle", payload });
         showToast(`${fileName} 업로드를 완료했습니다.`, "success");

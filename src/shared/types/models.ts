@@ -143,6 +143,8 @@ export interface ImportRecord {
   workspaceId: ID;
   fileName: string;
   statementMonth?: string | null;
+  fileFingerprint?: string | null;
+  contentFingerprint?: string | null;
   importedAt: string;
   parserId: string;
   rowCount: number;

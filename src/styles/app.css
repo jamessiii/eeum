@@ -9605,12 +9605,326 @@ textarea:focus {
   min-width: 0;
 }
 
+.settings-panel-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
 .settings-panel-actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 0.75rem;
   align-self: center;
+}
+
+.settings-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.8rem;
+  padding: 0.28rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  background: rgba(241, 245, 249, 0.92);
+  color: #475569;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.settings-status-badge.is-connected {
+  border-color: rgba(14, 116, 144, 0.22);
+  background: rgba(207, 250, 254, 0.92);
+  color: #0f766e;
+}
+
+.settings-sync-meta {
+  margin: 0.55rem 0 0;
+  color: var(--app-muted);
+  font-size: 0.84rem;
+}
+
+.settings-dotori-modal {
+  width: min(36rem, calc(100vw - 2rem));
+}
+
+.settings-sync-status-card {
+  display: grid;
+  gap: 0.55rem;
+  padding: 1rem 1.05rem;
+  border: 1px solid color-mix(in srgb, var(--app-line) 78%, white 22%);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--app-panel) 94%, white 6%);
+}
+
+.settings-sync-form-grid {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.settings-sync-field {
+  display: grid;
+  gap: 0.42rem;
+}
+
+.settings-sync-field span {
+  font-size: 0.83rem;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--app-text) 86%, var(--app-muted) 14%);
+}
+
+.settings-sync-hints {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.settings-dotori-modal.settings-dotori-modal--auth {
+  width: min(78rem, calc(100vw - 2rem));
+  padding: 0;
+  overflow: hidden;
+}
+
+.settings-dotori-modal.settings-dotori-modal--auth .app-modal-header {
+  display: none;
+}
+
+.settings-dotori-modal.settings-dotori-modal--auth .app-modal-body {
+  padding: 0;
+  overflow: hidden;
+  max-height: min(80vh, 52rem);
+}
+
+.settings-dotori-modal.settings-dotori-modal--auth::before {
+  background: transparent;
+}
+
+.dotori-login-shell {
+  display: grid;
+}
+
+.dotori-login-window {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(23rem, 0.8fr);
+  min-height: 41rem;
+  background: rgba(255, 251, 245, 0.96);
+}
+
+.dotori-login-art {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 18rem;
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    "brand ."
+    ". hero";
+  gap: 1.5rem;
+  padding: 2.4rem 2.1rem 2rem;
+  background:
+    radial-gradient(circle at 20% 12%, rgba(233, 196, 106, 0.22), transparent 24%),
+    linear-gradient(180deg, #fff8ef 0%, #f5e8d7 100%);
+}
+
+.dotori-login-brand-lockup {
+  grid-area: brand;
+  display: grid;
+  align-content: start;
+  gap: 1.5rem;
+}
+
+.dotori-login-brand-image {
+  width: min(24rem, 100%);
+  height: auto;
+}
+
+.dotori-login-brand-copy {
+  margin: 0;
+  color: #7c6551;
+  font-size: 1.7rem;
+  line-height: 1.75;
+  font-weight: 700;
+  white-space: normal;
+}
+
+.dotori-login-hero-logo-wrap {
+  grid-area: hero;
+  align-self: end;
+  justify-self: end;
+}
+
+.dotori-login-hero-logo {
+  width: min(16rem, 100%);
+  height: auto;
+}
+
+.dotori-login-panel {
+  display: grid;
+  align-content: center;
+  gap: 1.4rem;
+  padding: 2.75rem 2rem;
+  background: linear-gradient(180deg, rgba(255, 253, 249, 0.98) 0%, rgba(248, 240, 229, 0.96) 100%);
+}
+
+.dotori-login-header {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 1rem;
+}
+
+.dotori-login-server-icon {
+  display: grid;
+  place-items: center;
+  width: 4.625rem;
+  height: 4.625rem;
+  border-radius: 1.5rem;
+  background: linear-gradient(180deg, #fffdfa 0%, #f8ecde 100%);
+  border: 1px solid rgba(139, 94, 60, 0.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    0 16px 32px rgba(88, 59, 33, 0.08);
+}
+
+.dotori-login-server-icon img {
+  width: 2.875rem;
+  height: 2.875rem;
+}
+
+.dotori-login-header-copy {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.dotori-login-header-copy h3 {
+  margin: 0;
+  color: #5b3d28;
+  font-size: clamp(1.7rem, 2vw, 2.3rem);
+  font-weight: 800;
+}
+
+.dotori-login-eyebrow {
+  margin: 0;
+  color: #5f714d;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.dotori-login-form,
+.dotori-connected-panel {
+  display: grid;
+  gap: 1rem;
+}
+
+.dotori-form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 5.25rem;
+  gap: 0.7rem;
+}
+
+.dotori-field {
+  display: grid;
+  gap: 0.38rem;
+}
+
+.dotori-field > span {
+  color: #7c6551;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.dotori-field input {
+  width: 100%;
+  height: 2.8rem;
+  padding: 0 0.85rem;
+  border: 1px solid rgba(139, 94, 60, 0.16);
+  border-radius: 0.65rem;
+  background: rgba(255, 253, 249, 0.96);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+
+.dotori-field input:focus {
+  border-color: rgba(139, 94, 60, 0.42);
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(233, 196, 106, 0.18);
+}
+
+.dotori-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  color: #5b3d28;
+  font-weight: 600;
+}
+
+.dotori-checkbox-row input[type="checkbox"] {
+  width: 1.05rem;
+  height: 1.05rem;
+  accent-color: #8b5e3c;
+}
+
+.dotori-login-error {
+  margin: 0;
+  color: #8b1e3f;
+  font-size: 0.92rem;
+  min-height: 1.35rem;
+}
+
+.dotori-login-error.hidden {
+  visibility: hidden;
+}
+
+.dotori-login-submit {
+  min-height: 3rem;
+  border: none;
+  border-radius: 0.7rem;
+  background: linear-gradient(180deg, #8b5e3c 0%, #744826 100%);
+  color: #fff8ee;
+  font-weight: 800;
+  box-shadow: 0 14px 24px rgba(109, 69, 38, 0.18);
+}
+
+.dotori-login-submit:hover {
+  background: linear-gradient(180deg, #976848 0%, #7d4f2c 100%);
+}
+
+.dotori-login-submit:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.dotori-sync-status-card {
+  display: grid;
+  gap: 0.7rem;
+  padding: 1rem 1.05rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(139, 94, 60, 0.14);
+  background: rgba(255, 251, 245, 0.92);
+}
+
+.dotori-connected-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  color: #7c6551;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.dotori-connected-meta span {
+  padding: 0.28rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(139, 94, 60, 0.08);
+}
+
+.dotori-connected-actions {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.dotori-connected-actions > .btn {
+  width: 100%;
 }
 
 .settings-tab-strip {
