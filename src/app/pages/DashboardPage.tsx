@@ -3860,16 +3860,18 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
               ))}
             </div>
           </div>
-          <div className="dashboard-diary-memo">
-            {selectedCalendarCell?.memos.length ? (
-              selectedCalendarCell.memos.map((memo) => (
-                <p key={`${memo.text}-${memo.merchantNames.join("|")}`}>
-                  {memo.text}
-                  <small>({memo.merchantNames.join(", ")})</small>
-                </p>
-              ))
-            ) : null}
-          </div>
+          {!isMobileCalendarSwipeViewport || selectedCalendarCell?.memos.length ? (
+            <div className="dashboard-diary-memo">
+              {selectedCalendarCell?.memos.length
+                ? selectedCalendarCell.memos.map((memo) => (
+                    <p key={`${memo.text}-${memo.merchantNames.join("|")}`}>
+                      {memo.text}
+                      <small>({memo.merchantNames.join(", ")})</small>
+                    </p>
+                  ))
+                : null}
+            </div>
+          ) : null}
         </article>
       </div>
 
@@ -4992,41 +4994,41 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
               {foundationRemainingCount ? "사용자, 계좌, 카드 연결만 먼저 맞추면 됩니다." : "이제 거래와 대시보드 흐름을 집중해서 보면 됩니다."}
             </p>
           </div>
-          <Link to="/connections/assets" className="btn btn-outline-primary btn-sm">
+          <Link to="/connections/assets" className="btn btn-outline-primary btn-s">
             설정 이어가기
           </Link>
         </div>
         <div className="resource-grid foundation-resource-grid">
           <article className="resource-card" style={getMotionStyle(2)}>
             <h3>사용자</h3>
-            <p className="mb-0 text-secondary">활성 {activePeopleCount}명 / 전체 {scope.people.length}명</p>
+            <p className="mb-0 text-secondary">활성 {activePeopleCount}명 / {scope.people.length}명</p>
             <span className={`badge ${peopleSetupRemaining ? "text-bg-warning" : "text-bg-success"}`}>
               {peopleSetupRemaining ? "설정 필요" : "준비 완료"}
             </span>
             <p className="mb-0 text-secondary">{peopleSetupRemaining ? "사용자 정보부터 정리해 주세요." : "사용자 정보가 준비되었습니다."}</p>
-            <Link to="/connections/assets" className="btn btn-outline-primary btn-sm mt-3">
+            <Link to="/connections/assets" className="btn btn-outline-primary btn-s mt-3">
               사용자 관리
             </Link>
           </article>
           <article className="resource-card" style={getMotionStyle(3)}>
             <h3>계좌</h3>
-            <p className="mb-0 text-secondary">연결 완료 {ownedAccountCount}개 / 전체 {scope.accounts.length}개</p>
+            <p className="mb-0 text-secondary">연결 {ownedAccountCount}개 / {scope.accounts.length}개</p>
             <span className={`badge ${unmappedAccountCount ? "text-bg-warning" : "text-bg-success"}`}>
               {unmappedAccountCount ? `${unmappedAccountCount}개 미연결` : "준비 완료"}
             </span>
             <p className="mb-0 text-secondary">{unmappedAccountCount ? "소유자가 없는 계좌가 남아 있습니다." : "계좌 정보가 준비되었습니다."}</p>
-            <Link to="/connections/assets" className="btn btn-outline-primary btn-sm mt-3">
+            <Link to="/connections/assets" className="btn btn-outline-primary btn-s mt-3">
               계좌 관리
             </Link>
           </article>
           <article className="resource-card" style={getMotionStyle(4)}>
             <h3>카드</h3>
-            <p className="mb-0 text-secondary">연결 완료 {linkedCardCount}개 / 전체 {scope.cards.length}개</p>
+            <p className="mb-0 text-secondary">연결 {linkedCardCount}개 / {scope.cards.length}개</p>
             <span className={`badge ${unmappedCardCount ? "text-bg-warning" : "text-bg-success"}`}>
               {unmappedCardCount ? `${unmappedCardCount}개 미연결` : "준비 완료"}
             </span>
             <p className="mb-0 text-secondary">{unmappedCardCount ? "카드 연결 정보가 덜 정리되었습니다." : "카드 정보가 준비되었습니다."}</p>
-            <Link to="/connections/assets" className="btn btn-outline-primary btn-sm mt-3">
+            <Link to="/connections/assets" className="btn btn-outline-primary btn-s mt-3">
               카드 관리
             </Link>
           </article>

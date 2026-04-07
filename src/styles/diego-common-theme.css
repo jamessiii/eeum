@@ -428,6 +428,24 @@ textarea:focus {
   box-shadow: none !important;
 }
 
+.table-responsive .btn.btn-s {
+  min-height: 28px !important;
+  padding: 5px 9px !important;
+  border-radius: 10px !important;
+  font-size: 11px !important;
+  line-height: 1.1 !important;
+  box-shadow: none !important;
+}
+
+.table-responsive .btn.btn-xs {
+  min-height: 24px !important;
+  padding: 3px 7px !important;
+  border-radius: 9px !important;
+  font-size: 10px !important;
+  line-height: 1.1 !important;
+  box-shadow: none !important;
+}
+
 .table-responsive .form-select.form-select-sm,
 .table-responsive .form-control.form-control-sm {
   min-height: 30px !important;

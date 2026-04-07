@@ -1366,7 +1366,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
           <>
             <button
               type="button"
-              className={`board-case-action-button${isCategoryLinkPanelOpen ? " is-active is-strong" : ""}`}
+              className={`board-case-action-button board-case-action-button--compact${isCategoryLinkPanelOpen ? " is-active is-strong" : ""}`}
               data-guide-target="people-category-link-toggle"
               onClick={() => {
                 setIsCategoryLinkPanelOpen(true);
@@ -1378,7 +1378,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
             </button>
             <button
               type="button"
-              className={`board-case-action-button${isHiddenPanelOpen ? " is-active" : ""}`}
+              className={`board-case-action-button board-case-action-button--compact${isHiddenPanelOpen ? " is-active" : ""}`}
               data-guide-target="people-hidden-toggle"
               onClick={() => {
                 setIsHiddenPanelOpen((current) => !current);
@@ -1583,7 +1583,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                                 참여 {participantNames.length}명{accountRoleLabel ? ` · ${accountRoleLabel}` : ""}
                               </span>
                             ) : null}
-                            <span>{account.accountNumberMasked || "계좌번호 미입력"}</span>
+                            <span className="people-account-number-line">{account.accountNumberMasked || "계좌번호 미입력"}</span>
                             {isMeeting && participantNames.length ? (
                               <span className="people-meeting-account-participants">{participantNames.join(" · ")}</span>
                             ) : null}

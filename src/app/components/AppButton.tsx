@@ -2,7 +2,7 @@ import { forwardRef, type ButtonHTMLAttributes } from "react";
 import clsx from "clsx";
 
 type AppButtonVariant = "primary" | "secondary" | "neutral" | "outlinePrimary" | "danger" | "outlineDanger";
-type AppButtonSize = "md" | "sm";
+type AppButtonSize = "md" | "sm" | "s";
 
 type AppButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: AppButtonVariant;
@@ -26,7 +26,7 @@ export const AppButton = forwardRef<HTMLButtonElement, AppButtonProps>(function 
     <button
       ref={ref}
       type={type}
-      className={clsx("btn", variantClassNameMap[variant], size === "sm" && "btn-sm", className)}
+      className={clsx("btn", variantClassNameMap[variant], size === "sm" && "btn-sm", size === "s" && "btn-s", className)}
       {...props}
     />
   );
