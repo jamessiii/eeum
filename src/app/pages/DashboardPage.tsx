@@ -2351,10 +2351,6 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
         )
     : "오늘은 기록이 아직 없다. 참 조용했다.";
   const todayDiaryCells = useMemo(() => createDiaryCells(todayDiary, 70, 10, 1), [todayDiary]);
-  const selectedCalendarDayLabel = useMemo(
-    () => formatFullKoreanDateLabel(selectedCalendarCell?.dateKey ?? selectedCalendarDate),
-    [selectedCalendarCell?.dateKey, selectedCalendarDate],
-  );
   const loopConfirmTransactions = useMemo(() => {
     if (!loopConfirmState) return [];
     const selectedIdSet = new Set(loopConfirmState.candidateIds);
@@ -3529,14 +3525,6 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
         </div>
 
         <article className="dashboard-diary-card">
-          <div className="dashboard-diary-head">
-            <div className="dashboard-diary-title-block">
-              <strong>{selectedCalendarDayLabel.replace("요일", "")}</strong>
-              <span className="dashboard-diary-head-action" aria-hidden="true">
-                •••
-              </span>
-            </div>
-          </div>
           <div className="dashboard-diary-sheet">
             <div className="dashboard-diary-grid" aria-label={todayDiary}>
               {todayDiaryCells.map((character, index) => (
