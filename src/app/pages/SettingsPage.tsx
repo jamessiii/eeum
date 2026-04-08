@@ -235,15 +235,8 @@ export function SettingsPage() {
   const handleDotoriSave = () =>
     withDotoriAction("save", async () => {
       const fileName = formatDotoriBackupFileName();
-      let latestRemoteBackup: DotoriBackupMetadata | null = null;
-      try {
-        latestRemoteBackup = await loadLatestDotoriBackupMetadata(dotoriForm, DOTORI_BACKUP_FOLDER_NAME);
-      } catch (error) {
-        if (!(error instanceof Error) || !error.message.includes("404")) {
-          throw error;
-        }
-      }
-      if (latestRemoteBackup && !isSameDotoriBackupVersion(dotoriSyncedBackup, latestRemoteBackup)) {
+      const latestRemoteBackup = await loadLatestDotoriBackupMetadata(dotoriForm, DOTORI_BACKUP_FOLDER_NAME);
+      if (latestRemoteBackup.exists !== false && latestRemoteBackup.fileName && !isSameDotoriBackupVersion(dotoriSyncedBackup, latestRemoteBackup)) {
         throw new Error("도토리창고에 로컬보다 최신 백업이 있습니다. 먼저 가져오기를 실행해주세요.");
       }
       const savedBackup = await saveDotoriBackup(dotoriForm, {
@@ -261,6 +254,13 @@ export function SettingsPage() {
   const handleDotoriUpdate = () =>
     withDotoriAction("update", async () => {
       const latestBackup = await loadLatestDotoriBackup(dotoriForm, DOTORI_BACKUP_FOLDER_NAME);
+      if (latestBackup.exists === false || !latestBackup.fileName || !latestBackup.content) {
+        const message = "아직 저장된 백업이 없습니다. 먼저 내보내기를 진행해 주세요.";
+        setIsDotoriConnected(true);
+        setDotoriStatusMessage(message);
+        showToast(message, "info");
+        return;
+      }
       const backupFile = new File([latestBackup.content], latestBackup.fileName, {
         type: "application/json",
       });

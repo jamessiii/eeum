@@ -7,13 +7,15 @@
 };
 
 type DotoriLatestBackupResponse = {
-  fileName: string;
-  content: string;
+  exists?: boolean;
+  fileName: string | null;
+  content: string | null;
   savedAt?: string | null;
 };
 
 export type DotoriBackupMetadata = {
-  fileName: string;
+  exists?: boolean;
+  fileName: string | null;
   savedAt?: string | null;
 };
 
