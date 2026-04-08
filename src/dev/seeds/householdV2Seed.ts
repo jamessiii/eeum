@@ -17,11 +17,10 @@ function findCategoryId(categories: WorkspaceBundle["categories"], name: string 
 
 export function createHouseholdV2DemoBundle(): WorkspaceBundle {
   const workspace = createWorkspaceBase("가계부 v2 테스트", "demo");
-  const financialProfile = createFinancialProfileBase(workspace.id);
+  const categories = createStarterCategories(workspace.id);
+  const financialProfile = createFinancialProfileBase(workspace.id, categories);
   financialProfile.monthlyNetIncome = 7_200_000;
   financialProfile.targetSavingsRate = 0.25;
-
-  const categories = createStarterCategories(workspace.id);
   const tags = createStarterTags(workspace.id);
 
   const people: Person[] = [

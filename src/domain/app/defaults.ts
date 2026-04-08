@@ -12,7 +12,7 @@ function mergeById<T extends { id: string }>(current: T[], incoming: T[]) {
 
 export function createEmptyState(): AppState {
   return {
-    schemaVersion: 7,
+    schemaVersion: 9,
     activeWorkspaceId: null,
     workspaces: [],
     financialProfiles: [],
@@ -40,7 +40,28 @@ export function createWorkspaceBase(name: string, source: Workspace["source"]): 
   };
 }
 
-export function createFinancialProfileBase(workspaceId: string): FinancialProfile {
+export function createDefaultLoopPriorityCategoryIds(categories: Category[]) {
+  const transportGroupIds = new Set(
+    categories
+      .filter((category) => category.categoryType === "group" && category.name === "교통/차량")
+      .map((category) => category.id),
+  );
+
+  return categories
+    .filter(
+      (category) =>
+        category.categoryType === "category" &&
+        !category.isHidden &&
+        category.direction !== "income" &&
+        (category.fixedOrVariable === "fixed" ||
+          category.name === "기부금" ||
+          (category.parentCategoryId ? transportGroupIds.has(category.parentCategoryId) : false)),
+    )
+    .sort((left, right) => left.sortOrder - right.sortOrder)
+    .map((category) => category.id);
+}
+
+export function createFinancialProfileBase(workspaceId: string, categories: Category[] = []): FinancialProfile {
   return {
     id: createId("financial_profile"),
     workspaceId,
@@ -48,7 +69,7 @@ export function createFinancialProfileBase(workspaceId: string): FinancialProfil
     targetSavingsRate: 0.2,
     warningSpendRate: 0.8,
     warningFixedCostRate: 0.55,
-    loopPriorityCategoryIds: [],
+    loopPriorityCategoryIds: createDefaultLoopPriorityCategoryIds(categories),
   };
 }
 

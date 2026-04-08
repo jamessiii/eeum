@@ -62,6 +62,7 @@ function getRecommendationFamilyKey(value: string) {
 
 export function LoopStationPage() {
   const {
+    setFinancialProfile,
     setTransactionLoopFlagBatch,
     setTransactionLoopDisplayNameBatch,
     setTransactionLoopGroupOverrideBatch,
@@ -97,8 +98,30 @@ export function LoopStationPage() {
   const recommendationByKey = useMemo(() => new Map(loopRecommendations.map((item) => [item.merchantKey, item])), [loopRecommendations]);
   const categoryMap = useMemo(() => new Map(scope.categories.map((category) => [category.id, category])), [scope.categories]);
   const categoryNameMap = useMemo(() => new Map(scope.categories.map((category) => [category.id, category.name])), [scope.categories]);
+  const loopPriorityOptions = useMemo(
+    () =>
+      scope.categories
+        .filter((category) => category.categoryType === "category" && !category.isHidden && category.direction !== "income")
+        .map((category) => ({
+          id: category.id,
+          label: getCategoryLabel(category, categoryMap),
+        }))
+        .sort((left, right) => left.label.localeCompare(right.label, "ko")),
+    [categoryMap, scope.categories],
+  );
+  const selectedLoopPriorityCategoryIds = scope.financialProfile?.loopPriorityCategoryIds ?? [];
   const ownerNameMap = useMemo(() => new Map(scope.people.map((person) => [person.id, person.displayName || person.name])), [scope.people]);
   const transactionMap = useMemo(() => new Map(scope.transactions.map((transaction) => [transaction.id, transaction])), [scope.transactions]);
+
+  const updateLoopPriorityCategories = (nextCategoryIds: string[]) => {
+    setFinancialProfile(workspaceId, {
+      monthlyNetIncome: scope.financialProfile?.monthlyNetIncome ?? 0,
+      targetSavingsRate: scope.financialProfile?.targetSavingsRate ?? 0,
+      warningSpendRate: scope.financialProfile?.warningSpendRate ?? 0,
+      warningFixedCostRate: scope.financialProfile?.warningFixedCostRate ?? 0,
+      loopPriorityCategoryIds: nextCategoryIds,
+    });
+  };
 
   useEffect(() => {
     if (managedSelectionDragMode === null) return;
@@ -266,6 +289,34 @@ export function LoopStationPage() {
           </div>
           <div className="section-head-actions">
             <span className="badge text-bg-light">{loopRecommendations.length}</span>
+          </div>
+        </div>
+        <div className="resource-card loop-station-filter-card">
+          <div className="loop-station-filter-copy">
+            <span className="section-kicker">추천 기준</span>
+            <h3>루프 추천 카테고리</h3>
+            <p>여기서 고른 카테고리 안에서만 루프 추천을 보여줍니다.</p>
+          </div>
+          <div className="settings-loop-priority-list">
+            {loopPriorityOptions.map((option) => {
+              const isSelected = selectedLoopPriorityCategoryIds.includes(option.id);
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  className={`settings-loop-priority-chip${isSelected ? " is-selected" : ""}`}
+                  onClick={() =>
+                    updateLoopPriorityCategories(
+                      isSelected
+                        ? selectedLoopPriorityCategoryIds.filter((categoryId) => categoryId !== option.id)
+                        : [...selectedLoopPriorityCategoryIds, option.id],
+                    )
+                  }
+                >
+                  {option.label}
+                </button>
+              );
+            })}
           </div>
         </div>
         {loopRecommendations.length ? (

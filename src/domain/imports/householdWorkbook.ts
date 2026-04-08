@@ -864,9 +864,9 @@ export async function parseHouseholdWorkbook(file: File, context?: ImportClassif
   const workbook = XLSX.read(buffer, { type: "array" });
 
   const workspace = createWorkspaceBase(file.name.replace(/\.xlsx?$/i, ""), "imported");
-  const financialProfile = createFinancialProfileBase(workspace.id);
   const categories =
     context?.categories?.length ? cloneCategoriesForWorkspace(context.categories, workspace.id) : createStarterCategories(workspace.id);
+  const financialProfile = createFinancialProfileBase(workspace.id, categories);
   const tags = createStarterTags(workspace.id);
   const historicalProfiles = buildHistoricalMerchantProfiles(context?.transactions ?? [], context?.categories ?? []);
 

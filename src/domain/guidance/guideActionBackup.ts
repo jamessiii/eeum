@@ -5,6 +5,11 @@ type GuideActionBackupState = {
   workspaceBundle: WorkspaceBundle;
 };
 
+export type GuideActionBackupSnapshot = {
+  workspaceId: string;
+  state: GuideActionBackupState;
+};
+
 function getGuideActionBackupKey(workspaceId: string, stepId: string) {
   return `spending-diary.guide-action-backup.${workspaceId}.${stepId}`;
 }
@@ -33,6 +38,30 @@ export function readGuideActionBackup(workspaceId: string, stepId: string): Guid
 export function writeGuideActionBackup(workspaceId: string, stepId: string, nextState: GuideActionBackupState) {
   if (!canUseStorage()) return;
   window.localStorage.setItem(getGuideActionBackupKey(workspaceId, stepId), JSON.stringify(nextState));
+}
+
+export function listGuideActionBackupSnapshots(workspaceId: string): GuideActionBackupSnapshot[] {
+  if (!canUseStorage()) return [];
+  const prefix = `spending-diary.guide-action-backup.${workspaceId}.`;
+  const snapshots: GuideActionBackupSnapshot[] = [];
+  for (let index = 0; index < window.localStorage.length; index += 1) {
+    const key = window.localStorage.key(index);
+    if (!key || !key.startsWith(prefix)) continue;
+    const stepId = key.slice(prefix.length);
+    const state = readGuideActionBackup(workspaceId, stepId);
+    if (!state) continue;
+    snapshots.push({
+      workspaceId,
+      state,
+    });
+  }
+  return snapshots;
+}
+
+export function restoreGuideActionBackupSnapshots(snapshots: GuideActionBackupSnapshot[]) {
+  snapshots.forEach((snapshot) => {
+    writeGuideActionBackup(snapshot.workspaceId, snapshot.state.stepId, snapshot.state);
+  });
 }
 
 export function clearGuideActionBackup(workspaceId: string, stepId: string) {

@@ -31,8 +31,8 @@ export function createGuideSampleBundle({
   ownerName?: string | null;
 } = {}): WorkspaceBundle {
   const workspace = createWorkspaceBase("가이드 샘플", "imported");
-  const financialProfile = createFinancialProfileBase(workspace.id);
   const categories = createStarterCategories(workspace.id);
+  const financialProfile = createFinancialProfileBase(workspace.id, categories);
 
   const subscriptionCategory = findCategory(categories, "구독료");
   const foodCategory = findCategory(categories, "식비");

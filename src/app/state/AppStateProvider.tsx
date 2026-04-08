@@ -2,12 +2,21 @@ import { createContext, useContext, useEffect, useMemo, useReducer, useRef, useS
 import { clearAppState, loadAppState, saveAppState } from "../../data/db/appDb";
 import {
   createEmptyState,
+  createDefaultLoopPriorityCategoryIds,
   createFinancialProfileBase,
   createStarterCategories,
   createStarterTags,
   createWorkspaceBase,
   mergeWorkspaceBundle,
 } from "../../domain/app/defaults";
+import {
+  createBackupContent,
+  createWorkspaceDataPackageContent,
+  parseBackupPayload,
+  parseWorkspaceDataPackage,
+  restoreBackupGuideData,
+  type WorkspaceDataPackageKind,
+} from "../../domain/app/backup";
 import { isActiveExpenseTransaction } from "../../domain/transactions/meta";
 import { clearGuideSampleState, hasGuideSampleState, readGuideSampleState, writeGuideSampleState } from "../../domain/guidance/guideSampleState";
 import { clearGuideSampleBackup, readGuideSampleBackup, writeGuideSampleBackup } from "../../domain/guidance/guideSampleBackup";
@@ -349,10 +358,20 @@ function normalizeAppState(rawState: AppState): AppState {
   const validAccountIds = new Set(rawState.accounts.map((account) => `${account.workspaceId}:${account.id}`));
   const normalizedState = {
     ...rawState,
-    schemaVersion: Math.max(rawState.schemaVersion ?? 0, 7),
+    schemaVersion: Math.max(rawState.schemaVersion ?? 0, 9),
     financialProfiles: rawState.financialProfiles.map((profile) => ({
       ...profile,
-      loopPriorityCategoryIds: profile.loopPriorityCategoryIds ?? [],
+      loopPriorityCategoryIds:
+        (rawState.schemaVersion ?? 0) < 9
+          ? Array.from(
+              new Set([
+                ...(profile.loopPriorityCategoryIds ?? []),
+                ...createDefaultLoopPriorityCategoryIds(
+                  rawState.categories.filter((category) => category.workspaceId === profile.workspaceId),
+                ),
+              ]),
+            )
+          : (profile.loopPriorityCategoryIds ?? []),
     })),
     people: rawState.people.map((person) => ({
       ...person,
@@ -1043,6 +1062,38 @@ function createWorkspaceBundleSnapshot(state: AppState, workspaceId: string): Wo
     settlements: scope.settlements,
     incomeEntries: scope.incomeEntries,
   };
+}
+
+function applyWorkspaceDataPackageToState(
+  state: AppState,
+  workspaceId: string,
+  packageKind: WorkspaceDataPackageKind,
+  packageData: ReturnType<typeof parseWorkspaceDataPackage>["data"],
+) {
+  const currentBundle = createWorkspaceBundleSnapshot(state, workspaceId);
+  if (!currentBundle) {
+    throw new Error("workspace-not-found");
+  }
+
+  const nextBundle: WorkspaceBundle =
+    packageKind === "foundation"
+      ? {
+          ...currentBundle,
+          financialProfile: packageData.financialProfile ?? currentBundle.financialProfile,
+          people: packageData.people,
+          accounts: packageData.accounts,
+          cards: packageData.cards,
+          categories: packageData.categories,
+          tags: packageData.tags,
+        }
+      : {
+          ...currentBundle,
+          transactions: packageData.transactions,
+          reviews: packageData.reviews,
+          imports: packageData.imports,
+        };
+
+  return replaceWorkspaceBundleInState(state, workspaceId, nextBundle);
 }
 
 function findDuplicateImportRecord(state: AppState, workspaceId: string, bundle: WorkspaceBundle) {
@@ -2324,6 +2375,8 @@ interface AppStateContextValue {
   resetApp: () => Promise<void>;
   exportState: () => void;
   importState: (file: File) => Promise<void>;
+  exportWorkspaceDataPackage: (workspaceId: string, packageKind: WorkspaceDataPackageKind) => void;
+  importWorkspaceDataPackage: (workspaceId: string, file: File, expectedKind: WorkspaceDataPackageKind) => Promise<void>;
   resolveReview: (reviewId: string) => void;
   dismissReview: (reviewId: string) => void;
   applyReviewSuggestion: (reviewId: string) => void;
@@ -2633,21 +2686,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         showToast("로컬 데이터를 초기화했습니다.", "success");
       },
       exportState() {
-        const blob = new Blob(
-          [
-            JSON.stringify(
-              {
-                appVersion: "0.1.0",
-                schemaVersion: state.schemaVersion,
-                exportedAt: new Date().toISOString(),
-                data: state,
-              },
-              null,
-              2,
-            ),
-          ],
-          { type: "application/json;charset=utf-8" },
-        );
+        const blob = new Blob([createBackupContent(state)], { type: "application/json;charset=utf-8" });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
@@ -2658,13 +2697,58 @@ export function AppStateProvider({ children }: PropsWithChildren) {
       },
       async importState(file) {
         const text = await file.text();
-        const parsed = JSON.parse(text) as { data?: AppState };
-        if (!parsed.data) {
+        let parsed: ReturnType<typeof parseBackupPayload>;
+        try {
+          parsed = parseBackupPayload(text);
+        } catch {
           showToast("백업 파일 형식을 확인해주세요.", "error");
           throw new Error("backup-data-missing");
         }
+        restoreBackupGuideData(parsed.guideData);
         dispatch({ type: "replaceState", payload: normalizeAppState(parsed.data) });
         showToast(`${file.name} 백업을 불러왔습니다.`, "success");
+      },
+      exportWorkspaceDataPackage(workspaceId, packageKind) {
+        const content = createWorkspaceDataPackageContent(state, workspaceId, packageKind);
+        const suffix = packageKind === "foundation" ? "foundation" : "transactions";
+        const blob = new Blob([content], { type: "application/json;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `household-${suffix}-${new Date().toISOString().slice(0, 10)}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+        showToast(
+          packageKind === "foundation" ? "기본 설정 묶음을 다운로드했습니다." : "명세서와 소비이력 묶음을 다운로드했습니다.",
+          "success",
+        );
+      },
+      async importWorkspaceDataPackage(workspaceId, file, expectedKind) {
+        const text = await file.text();
+        let parsed: ReturnType<typeof parseWorkspaceDataPackage>;
+        try {
+          parsed = parseWorkspaceDataPackage(text);
+        } catch {
+          showToast("묶음 파일 형식을 확인해주세요.", "error");
+          throw new Error("workspace-package-data-missing");
+        }
+        if (parsed.packageKind !== expectedKind) {
+          showToast(
+            expectedKind === "foundation"
+              ? "기본 설정 묶음 파일을 선택해주세요."
+              : "명세서와 소비이력 묶음 파일을 선택해주세요.",
+            "error",
+          );
+          throw new Error("workspace-package-kind-mismatch");
+        }
+        const nextState = applyWorkspaceDataPackageToState(stateRef.current, workspaceId, parsed.packageKind, parsed.data);
+        dispatch({ type: "replaceState", payload: nextState });
+        showToast(
+          parsed.packageKind === "foundation"
+            ? `${file.name} 기본 설정 묶음을 불러왔습니다.`
+            : `${file.name} 명세서와 소비이력 묶음을 불러왔습니다.`,
+          "success",
+        );
       },
       resolveReview(reviewId) {
         dispatch({ type: "resolveReview", payload: { reviewId, status: "resolved" } });

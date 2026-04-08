@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { completeGuideStepAction } from "../../domain/guidance/guideRuntime";
-import { getCategoryLabel } from "../../domain/categories/meta";
+﻿import { useEffect, useRef, useState } from "react";
+import { createBackupContent } from "../../domain/app/backup";
 import { formatPercent } from "../../shared/utils/format";
 import {
   healthCheckDotoriStorage,
@@ -14,7 +13,6 @@ import { AppModal } from "../components/AppModal";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
 import { useToast } from "../toast/ToastProvider";
-import { useThemeMode } from "../useThemeMode";
 
 type ProfileDraftState = {
   targetSavingsRate: string;
@@ -74,10 +72,14 @@ function isSameDotoriBackupVersion(left: DotoriBackupMetadata | null, right: Dot
   return left.fileName === right.fileName && (left.savedAt ?? null) === (right.savedAt ?? null);
 }
 
+function isJsonBackupFile(file: File) {
+  return file.name.toLowerCase().endsWith(".json");
+}
+
 export function SettingsPage() {
-  const { exportState, importState, setFinancialProfile, state } = useAppState();
+  const { exportState, importState, exportWorkspaceDataPackage, importWorkspaceDataPackage, setFinancialProfile, state } =
+    useAppState();
   const { showToast } = useToast();
-  const { themeMode, toggleThemeMode } = useThemeMode();
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const profile = scope.financialProfile;
@@ -92,21 +94,8 @@ export function SettingsPage() {
   const [dotoriLatestFileName, setDotoriLatestFileName] = useState<string | null>(null);
   const [dotoriSyncedBackup, setDotoriSyncedBackup] = useState<DotoriBackupMetadata | null>(null);
   const backupImportInputRef = useRef<HTMLInputElement | null>(null);
-  const categoryMap = useMemo(() => new Map(scope.categories.map((category) => [category.id, category])), [scope.categories]);
-  const loopPriorityOptions = useMemo(
-    () =>
-      scope.categories
-        .filter((category) => category.categoryType === "category" && !category.isHidden && category.direction !== "income")
-        .map((category) => ({
-          id: category.id,
-          label: getCategoryLabel(category, categoryMap),
-          name: category.name,
-        }))
-        .sort((left, right) => left.label.localeCompare(right.label, "ko")),
-    [categoryMap, scope.categories],
-  );
-  const selectedLoopPriorityCategoryIds = profile?.loopPriorityCategoryIds ?? [];
-
+  const transactionPackageImportInputRef = useRef<HTMLInputElement | null>(null);
+  const foundationPackageImportInputRef = useRef<HTMLInputElement | null>(null);
   useEffect(() => {
     setProfileDraft(createProfileDraft(profile));
     setActiveProfileField(null);
@@ -139,16 +128,6 @@ export function SettingsPage() {
       warningSpendRate: Number(nextDraft.warningSpendRate || 0) / 100,
       warningFixedCostRate: Number(nextDraft.warningFixedCostRate || 0) / 100,
       loopPriorityCategoryIds: profile?.loopPriorityCategoryIds ?? [],
-    });
-  };
-
-  const updateLoopPriorityCategories = (nextCategoryIds: string[]) => {
-    setFinancialProfile(workspaceId, {
-      monthlyNetIncome: profile?.monthlyNetIncome ?? 0,
-      targetSavingsRate: profile?.targetSavingsRate ?? 0,
-      warningSpendRate: profile?.warningSpendRate ?? 0,
-      warningFixedCostRate: profile?.warningFixedCostRate ?? 0,
-      loopPriorityCategoryIds: nextCategoryIds,
     });
   };
 
@@ -222,18 +201,6 @@ export function SettingsPage() {
     dotoriForm.password.trim() !== "";
   const dotoriStatusLabel = isDotoriConnected ? "연결됨" : "미연결";
 
-  const createBackupContent = () =>
-    JSON.stringify(
-      {
-        appVersion: "0.1.0",
-        schemaVersion: state.schemaVersion,
-        exportedAt: new Date().toISOString(),
-        data: state,
-      },
-      null,
-      2,
-    );
-
   const withDotoriAction = async (action: "connect" | "save" | "update", execute: () => Promise<void>) => {
     if (!isDotoriFormComplete) {
       showToast("호스트, 포트, 아이디, 비밀번호를 모두 입력해주세요.", "error");
@@ -280,7 +247,7 @@ export function SettingsPage() {
       const savedBackup = await saveDotoriBackup(dotoriForm, {
         folderName: DOTORI_BACKUP_FOLDER_NAME,
         fileName,
-        content: createBackupContent(),
+        content: createBackupContent(state),
       });
       setIsDotoriConnected(true);
       setDotoriLatestFileName(savedBackup.fileName);
@@ -384,22 +351,28 @@ export function SettingsPage() {
               ))}
             </div>
 
-            <article className="resource-card settings-panel-card settings-panel-card--actions" data-guide-target="settings-backup">
+            <article className="resource-card settings-panel-card settings-panel-card--actions settings-panel-card--backup" data-guide-target="settings-backup">
               <div className="settings-panel-copy">
                 <span className="section-kicker">백업</span>
                 <h3 className="mb-1">데이터 내보내기와 가져오기</h3>
                 <p className="mb-0 text-secondary">현재 가계부 데이터를 JSON 파일로 저장하거나 다시 불러옵니다.</p>
               </div>
-              <div className="settings-panel-actions">
+              <div className="settings-backup-groups">
+                <section className="settings-backup-group">
+                  <div className="settings-backup-group-copy">
+                    <span className="settings-backup-group-label">전체 백업</span>
+                    <p className="settings-backup-group-description">모든 데이터를 한 번에 저장하거나 다시 불러옵니다.</p>
+                  </div>
+                  <div className="settings-panel-actions settings-backup-action-row">
                 <button className="btn btn-primary" onClick={() => setIsExportConfirmOpen(true)}>
-                  전체 데이터 내보내기
+                  내보내기
                 </button>
                 <button
                   type="button"
                   className="btn btn-outline-primary"
                   onClick={() => backupImportInputRef.current?.click()}
                 >
-                  백업 파일 가져오기
+                  가져오기
                 </button>
                 <input
                   ref={backupImportInputRef}
@@ -408,8 +381,7 @@ export function SettingsPage() {
                   onChange={(event) => {
                     const file = event.target.files?.[0];
                     if (file) {
-                      const isJsonFile = file.name.toLowerCase().endsWith(".json");
-                      if (!isJsonFile) {
+                      if (!isJsonBackupFile(file)) {
                         window.alert("JSON 백업 파일만 가져올 수 있어요.");
                         event.currentTarget.value = "";
                         return;
@@ -419,6 +391,86 @@ export function SettingsPage() {
                     event.currentTarget.value = "";
                   }}
                 />
+                  </div>
+                </section>
+                <section className="settings-backup-group">
+                  <div className="settings-backup-group-copy">
+                    <span className="settings-backup-group-label">거래 데이터</span>
+                    <p className="settings-backup-group-description">명세서 업로드 기록과 카테고리화된 소비이력을 따로 옮깁니다.</p>
+                  </div>
+                  <div className="settings-panel-actions settings-backup-action-row">
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => exportWorkspaceDataPackage(workspaceId, "transactions")}
+                >
+                  내보내기
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-outline-primary"
+                  onClick={() => transactionPackageImportInputRef.current?.click()}
+                >
+                  가져오기
+                </button>
+                <input
+                  ref={transactionPackageImportInputRef}
+                  hidden
+                  type="file"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) {
+                      if (!isJsonBackupFile(file)) {
+                        window.alert("JSON 파일만 가져올 수 있어요.");
+                        event.currentTarget.value = "";
+                        return;
+                      }
+                      void importWorkspaceDataPackage(workspaceId, file, "transactions");
+                    }
+                    event.currentTarget.value = "";
+                  }}
+                />
+                  </div>
+                </section>
+                <section className="settings-backup-group">
+                  <div className="settings-backup-group-copy">
+                    <span className="settings-backup-group-label">자산·분류 설정</span>
+                    <p className="settings-backup-group-description">사용자, 계좌, 카드, 카테고리 같은 기본 설정만 따로 관리합니다.</p>
+                  </div>
+                  <div className="settings-panel-actions settings-backup-action-row">
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => exportWorkspaceDataPackage(workspaceId, "foundation")}
+                >
+                  내보내기
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-outline-primary"
+                  onClick={() => foundationPackageImportInputRef.current?.click()}
+                >
+                  가져오기
+                </button>
+                <input
+                  ref={foundationPackageImportInputRef}
+                  hidden
+                  type="file"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) {
+                      if (!isJsonBackupFile(file)) {
+                        window.alert("JSON 파일만 가져올 수 있어요.");
+                        event.currentTarget.value = "";
+                        return;
+                      }
+                      void importWorkspaceDataPackage(workspaceId, file, "foundation");
+                    }
+                    event.currentTarget.value = "";
+                  }}
+                />
+                  </div>
+                </section>
               </div>
             </article>
 
@@ -439,63 +491,13 @@ export function SettingsPage() {
               </div>
             </article>
 
-            <article className="resource-card settings-panel-card settings-panel-card--actions" data-guide-target="settings-theme">
-              <div className="settings-panel-copy">
-                <span className="section-kicker">화면 관리</span>
-                <h3 className="mb-1">테마</h3>
-                <p className="mb-0 text-secondary">앱에서 사용하는 기본 테마를 전환합니다.</p>
-              </div>
-              <div className="settings-panel-actions">
-                <button
-                  type="button"
-                  className="theme-toggle-button"
-                  data-guide-target="settings-theme-toggle"
-                  onClick={() => {
-                    toggleThemeMode();
-                    completeGuideStepAction(workspaceId, themeMode === "dark" ? "settings-theme-return" : "settings-theme");
-                  }}
-                >
-                  <span className="theme-toggle-button-label">테마</span>
-                  <strong>{themeMode === "dark" ? "Light" : "Dark"}</strong>
-                </button>
-              </div>
-            </article>
-
-            <article className="resource-card settings-panel-card" data-guide-target="settings-loop-priority">
-              <div className="settings-panel-copy">
-                <span className="section-kicker">루프 추천</span>
-                <h3 className="mb-1">루프 추천 카테고리</h3>
-                <p className="mb-0 text-secondary">여기서 고른 카테고리 안에서만 루프스테이션 추천을 보여줍니다.</p>
-              </div>
-              <div className="settings-loop-priority-list">
-                {loopPriorityOptions.map((option) => {
-                  const isSelected = selectedLoopPriorityCategoryIds.includes(option.id);
-                  return (
-                    <button
-                      key={option.id}
-                      type="button"
-                      className={`settings-loop-priority-chip${isSelected ? " is-selected" : ""}`}
-                      onClick={() =>
-                        updateLoopPriorityCategories(
-                          isSelected
-                            ? selectedLoopPriorityCategoryIds.filter((categoryId) => categoryId !== option.id)
-                            : [...selectedLoopPriorityCategoryIds, option.id],
-                        )
-                      }
-                    >
-                      {option.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </article>
           </section>
         </div>
       </section>
 
       <AppModal
         open={isExportConfirmOpen}
-        title="전체 데이터 내보내기"
+        title="내보내기"
         description="전체 데이터를 백업 파일로 내보내시겠어요?"
         onClose={() => setIsExportConfirmOpen(false)}
         footer={
@@ -578,7 +580,7 @@ export function SettingsPage() {
                       onClick={() => void handleDotoriSave()}
                       disabled={dotoriAction !== null || !isDotoriFormComplete}
                     >
-                      {dotoriAction === "save" ? "저장 중..." : "저장하기"}
+                      {dotoriAction === "save" ? "내보내는 중..." : "내보내기"}
                     </button>
                     <button
                       type="button"
@@ -586,7 +588,7 @@ export function SettingsPage() {
                       onClick={() => void handleDotoriUpdate()}
                       disabled={dotoriAction !== null || !isDotoriFormComplete}
                     >
-                      {dotoriAction === "update" ? "불러오는 중..." : "불러오기"}
+                      {dotoriAction === "update" ? "가져오는 중..." : "가져오기"}
                     </button>
                     <button
                       type="button"
@@ -674,3 +676,5 @@ export function SettingsPage() {
     </div>
   );
 }
+
+

@@ -2,7 +2,7 @@ export const GUIDE_V1_RESET_EVENT = "spending-diary:guide-v1-reset";
 
 export type GuideFlowMode = "prompt" | "active" | "tips" | "completed";
 
-type GuideRuntimeSnapshot = {
+type GuideRuntimeReplaySnapshot = {
   flowMode: GuideFlowMode;
   visitedStepIds: string[];
   dismissedTipIds: string[];
@@ -13,7 +13,12 @@ type GuideRuntimeState = {
   replayStepIndex: number | null;
   visitedStepIds: string[];
   dismissedTipIds: string[];
-  replaySnapshot: GuideRuntimeSnapshot | null;
+  replaySnapshot: GuideRuntimeReplaySnapshot | null;
+};
+
+export type GuideRuntimeSnapshot = {
+  workspaceId: string;
+  state: GuideRuntimeState;
 };
 
 const DEFAULT_GUIDE_RUNTIME_STATE: GuideRuntimeState = {
@@ -71,6 +76,17 @@ export function readGuideRuntime(workspaceId: string): GuideRuntimeState {
 function writeGuideRuntime(workspaceId: string, nextState: GuideRuntimeState) {
   if (!canUseStorage()) return;
   window.localStorage.setItem(getGuideRuntimeKey(workspaceId), JSON.stringify(nextState));
+}
+
+export function readGuideRuntimeSnapshot(workspaceId: string): GuideRuntimeSnapshot {
+  return {
+    workspaceId,
+    state: readGuideRuntime(workspaceId),
+  };
+}
+
+export function restoreGuideRuntimeSnapshot(snapshot: GuideRuntimeSnapshot) {
+  writeGuideRuntime(snapshot.workspaceId, snapshot.state);
 }
 
 export function startGuideFlow(workspaceId: string) {

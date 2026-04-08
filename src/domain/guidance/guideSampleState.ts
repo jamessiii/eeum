@@ -8,6 +8,11 @@ type GuideSampleState = {
   incomeIds: string[];
 };
 
+export type GuideSampleStateSnapshot = {
+  workspaceId: string;
+  state: GuideSampleState;
+};
+
 const DEFAULT_GUIDE_SAMPLE_STATE: GuideSampleState = {
   personIds: [],
   accountIds: [],
@@ -54,6 +59,17 @@ export function readGuideSampleState(workspaceId: string): GuideSampleState {
 export function writeGuideSampleState(workspaceId: string, nextState: GuideSampleState) {
   if (!canUseStorage()) return;
   window.localStorage.setItem(getGuideSampleStateKey(workspaceId), JSON.stringify(nextState));
+}
+
+export function readGuideSampleStateSnapshot(workspaceId: string): GuideSampleStateSnapshot {
+  return {
+    workspaceId,
+    state: readGuideSampleState(workspaceId),
+  };
+}
+
+export function restoreGuideSampleStateSnapshot(snapshot: GuideSampleStateSnapshot) {
+  writeGuideSampleState(snapshot.workspaceId, snapshot.state);
 }
 
 export function clearGuideSampleState(workspaceId: string) {
