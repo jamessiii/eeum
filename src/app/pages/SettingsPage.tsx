@@ -214,7 +214,9 @@ export function SettingsPage() {
       await execute();
     } catch (error) {
       const message = error instanceof Error ? error.message : "도토리창고 요청 중 오류가 발생했습니다.";
-      setIsDotoriConnected(false);
+      if (action === "connect") {
+        setIsDotoriConnected(false);
+      }
       setDotoriStatusMessage(message);
       showToast(message, "error");
     } finally {
@@ -242,7 +244,7 @@ export function SettingsPage() {
         }
       }
       if (latestRemoteBackup && !isSameDotoriBackupVersion(dotoriSyncedBackup, latestRemoteBackup)) {
-        throw new Error("?꾪넗由ъ갹怨좎뿉 濡쒖뺄蹂대떎 ?ㅼ쟾 諛깆뾽???덉뒿?덈떎. 癒쇱? 遺덈윭?ㅺ린瑜??ㅽ뻾?댁＜?몄슂.");
+        throw new Error("도토리창고에 로컬보다 최신 백업이 있습니다. 먼저 가져오기를 실행해주세요.");
       }
       const savedBackup = await saveDotoriBackup(dotoriForm, {
         folderName: DOTORI_BACKUP_FOLDER_NAME,

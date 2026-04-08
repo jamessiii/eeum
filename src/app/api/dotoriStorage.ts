@@ -1,4 +1,4 @@
-export type DotoriConnectionForm = {
+﻿export type DotoriConnectionForm = {
   host: string;
   port: string;
   username: string;
@@ -112,3 +112,4 @@ export async function loadLatestDotoriBackupMetadata(form: DotoriConnectionForm,
     `/api/spending-diary/backups/latest/meta?${searchParams.toString()}`,
   );
 }
+
