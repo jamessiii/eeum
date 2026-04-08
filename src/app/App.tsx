@@ -541,6 +541,9 @@ function AppFrame() {
             <div className="app-sidebar-note">
               <img className="app-sidebar-note-image" src={`${ASSET_BASE}slogan.png`} alt="기록이 쌓이면, 마음의 흐름이 보여요" />
             </div>
+            <div className="app-sidebar-banner">
+              <img className="app-sidebar-banner-image" src={`${ASSET_BASE}dotori-banner.png`} alt="도토리창고 배너" />
+            </div>
           </div>
         </div>
       </aside>
@@ -623,6 +626,9 @@ function AppFrame() {
         <div className="app-mobile-drawer-footer">
           <div className="app-sidebar-note">
             <img className="app-sidebar-note-image" src={`${ASSET_BASE}slogan.png`} alt="기록이 쌓이면, 마음의 흐름이 보여요" />
+          </div>
+          <div className="app-sidebar-banner">
+            <img className="app-sidebar-banner-image" src={`${ASSET_BASE}dotori-banner.png`} alt="도토리창고 배너" />
           </div>
         </div>
       </aside>
