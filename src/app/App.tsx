@@ -909,7 +909,6 @@ function AppFrame() {
             type?: string;
             snapshot?: DotoriPresenceSnapshot;
             metadata?: DotoriBackupMetadata;
-            clientId?: string | null;
             error?: string;
           };
           if (message.type === "presence-snapshot" && message.snapshot) {
@@ -921,9 +920,6 @@ function AppFrame() {
             return;
           }
           if (message.type === "backup-updated" && message.metadata?.fileName) {
-            if (message.clientId && message.clientId === dotoriClientIdRef.current) {
-              return;
-            }
             setDotoriRemoteBackupHint(message.metadata);
             setDotoriRemoteSyncSignal((current) => current + 1);
           }
@@ -1162,7 +1158,6 @@ function AppFrame() {
             folderName: DOTORI_BACKUP_FOLDER_NAME,
             fileName: createDotoriBackupFileName(),
             content: localBackupContent,
-            clientId: dotoriClientIdRef.current,
           });
 
           const nextSession: DotoriSyncSession = {
