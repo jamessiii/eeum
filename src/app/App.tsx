@@ -120,6 +120,34 @@ function getDesktopHeaderTitle(pathname: string) {
   return "소비일기";
 }
 
+function getPresencePageLabel(pathname: string) {
+  if (pathname === "/dashboard") return "첫장";
+  if (pathname.startsWith("/connections/assets")) return "자산";
+  if (pathname.startsWith("/connections/categories")) return "분류";
+  if (pathname === "/settlements") return "이체";
+  if (pathname.startsWith("/loops")) return "루프스테이션";
+  if (pathname.startsWith("/records/moon")) return "달기록";
+  if (pathname.startsWith("/records/sun")) return "해기록";
+  if (pathname === "/settings") return "설정";
+  if (pathname.startsWith("/dev")) return "DEV";
+  return "소비일기";
+}
+
+function getPresenceAccent(seed: string) {
+  const palette = [
+    { background: "rgba(77, 135, 255, 0.12)", border: "rgba(77, 135, 255, 0.28)", text: "#436fd4" },
+    { background: "rgba(239, 128, 69, 0.12)", border: "rgba(239, 128, 69, 0.26)", text: "#c7672b" },
+    { background: "rgba(87, 167, 124, 0.14)", border: "rgba(87, 167, 124, 0.24)", text: "#3f8a60" },
+    { background: "rgba(171, 105, 209, 0.13)", border: "rgba(171, 105, 209, 0.24)", text: "#8f55b3" },
+    { background: "rgba(59, 168, 174, 0.14)", border: "rgba(59, 168, 174, 0.26)", text: "#2f8a90" },
+  ];
+  let hash = 0;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash * 31 + seed.charCodeAt(index)) >>> 0;
+  }
+  return palette[hash % palette.length];
+}
+
 function useDeveloperMode() {
   const [isDeveloperModeUnlocked, setIsDeveloperModeUnlocked] = useState(false);
   const [, setUnlockAttempts] = useState<number[]>([]);
@@ -181,9 +209,11 @@ function getActiveMainKey(pathname: string, navItems: NavItem[]) {
 function AppSidebarNav({
   isDeveloperModeUnlocked,
   onNavigate,
+  presenceConnections = [],
 }: {
   isDeveloperModeUnlocked: boolean;
   onNavigate?: () => void;
+  presenceConnections?: DotoriPresenceSnapshot["connections"];
 }) {
   const location = useLocation();
   const navItems = useMemo(
@@ -194,20 +224,48 @@ function AppSidebarNav({
 
   return (
     <nav className="sidebar-nav" aria-label="주요 메뉴" data-guide-target="nav-menu">
-      {[...navItems, { to: "/settings", label: "설정" }].map((item) => (
+      {[...navItems, { to: "/settings", label: "설정" }].map((item) => {
+        const itemPresenceConnections = presenceConnections.filter((connection) => connection.page === item.label);
+        return (
         <div key={item.to} className={`sidebar-nav-section${activeKey === item.to ? " is-active" : ""}`}>
           <NavLink
             to={item.to}
             end={item.end}
-            className={({ isActive: isLinkActive }) => `sidebar-nav-parent sidebar-nav-link${isLinkActive || activeKey === item.to ? " is-active" : ""}`}
+            className={({ isActive: isLinkActive }) => `sidebar-nav-parent sidebar-nav-link${isLinkActive || activeKey === item.to ? " is-active" : ""}${itemPresenceConnections.length ? " has-presence" : ""}`}
             data-guide-target={navGuideTargetMap[item.to] ?? undefined}
             onClick={onNavigate}
           >
             <span className={`nav-sidebar-icon nav-sidebar-icon--${navIconKeyMap[item.to] ?? "dot"}`} aria-hidden="true" />
-            <span className="sidebar-nav-parent-label">{item.label}</span>
+            <span className="sidebar-nav-parent-label">
+              <span>{item.label}</span>
+              {itemPresenceConnections.length ? (
+                <span className="sidebar-nav-presence-list" aria-hidden="true">
+                  {itemPresenceConnections
+                    .slice(0, 3)
+                    .map((connection) => {
+                      const accent = getPresenceAccent(connection.username);
+                      return (
+                        <span
+                          key={`${item.to}-${connection.clientId}`}
+                          className="sidebar-nav-presence-badge"
+                          style={
+                            {
+                              "--presence-bg": accent.background,
+                              "--presence-border": accent.border,
+                              "--presence-text": accent.text,
+                            } as never
+                          }
+                        >
+                          {connection.username}
+                        </span>
+                      );
+                    })}
+                </span>
+              ) : null}
+            </span>
           </NavLink>
         </div>
-      ))}
+      )})}
     </nav>
   );
 }
@@ -663,7 +721,7 @@ function AppFrame() {
       try {
         const snapshot = await sendDotoriPresenceHeartbeat(dotoriSession.form, {
           clientId: dotoriClientIdRef.current,
-          page: getDesktopHeaderTitle(location.pathname),
+          page: getPresencePageLabel(location.pathname),
           workspaceName: state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId)?.name ?? null,
           autoSyncEnabled: dotoriSession.autoSyncEnabled,
           dotoriConnected: dotoriSession.connected,
@@ -837,7 +895,7 @@ function AppFrame() {
           </div>
 
           <div className="app-sidebar-nav">
-            <AppSidebarNav isDeveloperModeUnlocked={isDeveloperModeUnlocked} />
+            <AppSidebarNav isDeveloperModeUnlocked={isDeveloperModeUnlocked} presenceConnections={otherPresenceConnections} />
           </div>
 
           <div className="app-sidebar-footer">
@@ -932,7 +990,11 @@ function AppFrame() {
         </div>
         <div className="app-mobile-drawer-section">
           <span className="sidebar-kicker">전체 메뉴</span>
-          <AppSidebarNav isDeveloperModeUnlocked={isDeveloperModeUnlocked} onNavigate={() => setIsMobileNavOpen(false)} />
+          <AppSidebarNav
+            isDeveloperModeUnlocked={isDeveloperModeUnlocked}
+            onNavigate={() => setIsMobileNavOpen(false)}
+            presenceConnections={otherPresenceConnections}
+          />
         </div>
         <div className="app-mobile-drawer-footer">
           <DotoriStatusPanel

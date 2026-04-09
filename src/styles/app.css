@@ -2837,6 +2837,26 @@ label,
   font-size: 0.95rem;
   font-weight: 700;
   text-align: left;
+  position: relative;
+}
+
+.sidebar-nav-parent.has-presence {
+  background:
+    linear-gradient(135deg, rgba(113, 133, 210, 0.08), rgba(255, 255, 255, 0.48)),
+    rgba(255, 255, 255, 0.68);
+  border-color: rgba(147, 161, 214, 0.2);
+}
+
+.sidebar-nav-parent.has-presence::after {
+  content: "";
+  position: absolute;
+  left: 0.42rem;
+  top: 0.42rem;
+  bottom: 0.42rem;
+  width: 0.18rem;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(120, 142, 220, 0.9), rgba(187, 198, 255, 0.9));
+  opacity: 0.72;
 }
 
 .sidebar-nav-parent.is-active,
@@ -2851,6 +2871,34 @@ label,
 
 .sidebar-nav-parent-label {
   min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+}
+
+.sidebar-nav-presence-list {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.24rem;
+  min-width: 0;
+}
+
+.sidebar-nav-presence-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.16rem;
+  padding: 0.08rem 0.34rem;
+  border-radius: 999px;
+  background: var(--presence-bg);
+  border: 1px solid var(--presence-border);
+  color: var(--presence-text);
+  font-size: 0.62rem;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .app-top-nav.is-sidebar-nav .app-top-nav-group-divider {
