@@ -525,6 +525,8 @@ function AppFrame() {
   const dotoriAutoSyncTimeoutRef = useRef<number | null>(null);
   const dotoriAutoSyncErrorMessageRef = useRef<string | null>(null);
   const dotoriAutoImportRunningRef = useRef(false);
+  const dotoriSessionRef = useRef(dotoriSession);
+  const localBackupCommitIdRef = useRef<string | null>(null);
   const dotoriClientIdRef = useRef<string>(getDotoriClientId());
   const dotoriPresenceSocketRef = useRef<WebSocket | null>(null);
   const dotoriPresenceReconnectTimeoutRef = useRef<number | null>(null);
@@ -547,6 +549,15 @@ function AppFrame() {
     () => state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId)?.name ?? null,
     [state.activeWorkspaceId, state.workspaces],
   );
+
+  useEffect(() => {
+    dotoriSessionRef.current = dotoriSession;
+  }, [dotoriSession]);
+
+  useEffect(() => {
+    localBackupCommitIdRef.current = localBackupSummary.backupCommitId ?? null;
+  }, [localBackupSummary.backupCommitId]);
+
   const dotoriPresencePayload = useMemo(
     () => ({
       clientId: dotoriClientIdRef.current,
@@ -977,7 +988,12 @@ function AppFrame() {
       if (dotoriAutoImportRunningRef.current) return;
 
       try {
-        const latestRemoteBackup = await loadLatestDotoriBackup(dotoriSession.form, DOTORI_BACKUP_FOLDER_NAME);
+        const currentSession = dotoriSessionRef.current;
+        if (!currentSession.connected || !currentSession.autoSyncEnabled) {
+          return;
+        }
+
+        const latestRemoteBackup = await loadLatestDotoriBackup(currentSession.form, DOTORI_BACKUP_FOLDER_NAME);
         const remoteSummary =
           latestRemoteBackup.exists === false || !latestRemoteBackup.content
             ? createEmptyBackupPreviewSummary()
@@ -992,14 +1008,14 @@ function AppFrame() {
           return;
         }
 
-        if (isSameDotoriBackupVersion(dotoriSession.syncedBackup, latestRemoteMetadata)) {
+        if (isSameDotoriBackupVersion(currentSession.syncedBackup, latestRemoteMetadata)) {
           return;
         }
 
-        const isLocalClean = isSameDotoriBackupVersion(dotoriSession.syncedBackup, {
+        const isLocalClean = isSameDotoriBackupVersion(currentSession.syncedBackup, {
           fileName: null,
           savedAt: null,
-          backupCommitId: localBackupSummary.backupCommitId,
+          backupCommitId: localBackupCommitIdRef.current,
         });
 
         if (!isLocalClean) {
@@ -1027,7 +1043,7 @@ function AppFrame() {
         );
 
         const nextSession: DotoriSyncSession = {
-          ...dotoriSession,
+          ...currentSession,
           latestFileName: latestRemoteBackup.fileName,
           syncedBackup: nextSyncedBackup,
         };
@@ -1057,12 +1073,19 @@ function AppFrame() {
     dotoriReachability,
     dotoriRemoteBackupHint,
     dotoriRemoteSyncSignal,
-    dotoriSession,
+    dotoriSession.autoSyncEnabled,
+    dotoriSession.connected,
     importState,
     isReady,
-    localBackupSummary.backupCommitId,
     showToast,
   ]);
+
+  useEffect(() => {
+    if (!isReady || !dotoriSession.connected || !dotoriSession.autoSyncEnabled || dotoriReachability !== "online") {
+      return;
+    }
+    setDotoriRemoteSyncSignal((current) => current + 1);
+  }, [dotoriReachability, dotoriSession.autoSyncEnabled, dotoriSession.connected, isReady]);
 
   useEffect(() => {
     if (dotoriAutoSyncTimeoutRef.current) {
@@ -1134,6 +1157,7 @@ function AppFrame() {
               backupCommitId: localBackupSummary.backupCommitId,
             },
           };
+          setDotoriRemoteBackupHint(nextSession.syncedBackup);
           dotoriAutoSyncErrorMessageRef.current = null;
           writeDotoriSyncSession(nextSession);
           setDotoriSession(nextSession);
