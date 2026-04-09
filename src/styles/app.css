@@ -2901,6 +2901,43 @@ label,
   white-space: nowrap;
 }
 
+.dotori-presence-target-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.dotori-presence-target-badge-list {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  flex-wrap: wrap;
+}
+
+.dotori-presence-target-badge-list.is-floating {
+  position: absolute;
+  top: 0.72rem;
+  left: 0.72rem;
+  z-index: 1;
+  max-width: calc(100% - 3.8rem);
+}
+
+.dotori-presence-target-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.1rem;
+  padding: 0.04rem 0.34rem;
+  border-radius: 999px;
+  background: var(--presence-bg);
+  border: 1px solid var(--presence-border);
+  color: var(--presence-text);
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
 .app-top-nav.is-sidebar-nav .app-top-nav-group-divider {
   display: none;
 }
@@ -13995,6 +14032,26 @@ textarea:focus {
   transform: translateY(-2px);
   border-color: var(--app-line-strong);
   box-shadow: var(--app-shadow);
+}
+
+.category-case-section.is-presence-target,
+.category-case-card.is-presence-target {
+  border-color: color-mix(in srgb, #4d87ff 54%, var(--app-line) 46%);
+  box-shadow:
+    0 0 0 1px rgba(77, 135, 255, 0.12),
+    0 22px 40px rgba(77, 135, 255, 0.08);
+}
+
+.category-case-section.is-presence-target {
+  background:
+    linear-gradient(180deg, rgba(77, 135, 255, 0.06), rgba(77, 135, 255, 0.02)),
+    color-mix(in srgb, var(--app-panel) 92%, rgba(15, 23, 42, 0.02) 8%);
+}
+
+.category-case-card.is-presence-target {
+  background:
+    linear-gradient(180deg, rgba(77, 135, 255, 0.08), rgba(77, 135, 255, 0.03)),
+    color-mix(in srgb, var(--app-panel) 96%, rgba(15, 23, 42, 0.04) 4%);
 }
 
 .category-case-section[draggable="true"],

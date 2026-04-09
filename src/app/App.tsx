@@ -8,15 +8,16 @@ import {
 import { GUIDE_V1_RESET_EVENT, readGuideRuntime } from "../domain/guidance/guideRuntime";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  clearDotoriPresence,
+  createDotoriPresenceSocketUrl,
   healthCheckDotoriStorage,
   loadLatestDotoriBackup,
   saveDotoriBackup,
-  sendDotoriPresenceHeartbeat,
   type DotoriBackupMetadata,
   type DotoriPresenceSnapshot,
 } from "./api/dotoriStorage";
+import { getPresenceAccent } from "./dotoriPresenceVisuals";
 import { MotionProvider } from "./motion/MotionProvider";
+import { DotoriPresenceProvider, type DotoriPresenceTarget } from "./presence/DotoriPresenceContext";
 import { AppModal } from "./components/AppModal";
 import { AppGuidePanel } from "./components/AppGuidePanel";
 import {
@@ -62,7 +63,6 @@ const DEVELOPER_MODE_KEY = "spending-diary.developer-mode";
 const ASSET_BASE = import.meta.env.BASE_URL;
 const DOTORI_AUTO_SYNC_DEBOUNCE_MS = 1200;
 const DOTORI_HEALTH_POLL_INTERVAL_MS = 20 * 1000;
-const DOTORI_PRESENCE_HEARTBEAT_INTERVAL_MS = 3 * 1000;
 
 type DotoriReachabilityState = "idle" | "online" | "offline";
 
@@ -131,21 +131,6 @@ function getPresencePageLabel(pathname: string) {
   if (pathname === "/settings") return "설정";
   if (pathname.startsWith("/dev")) return "DEV";
   return "소비일기";
-}
-
-function getPresenceAccent(seed: string) {
-  const palette = [
-    { background: "rgba(77, 135, 255, 0.12)", border: "rgba(77, 135, 255, 0.28)", text: "#436fd4" },
-    { background: "rgba(239, 128, 69, 0.12)", border: "rgba(239, 128, 69, 0.26)", text: "#c7672b" },
-    { background: "rgba(87, 167, 124, 0.14)", border: "rgba(87, 167, 124, 0.24)", text: "#3f8a60" },
-    { background: "rgba(171, 105, 209, 0.13)", border: "rgba(171, 105, 209, 0.24)", text: "#8f55b3" },
-    { background: "rgba(59, 168, 174, 0.14)", border: "rgba(59, 168, 174, 0.26)", text: "#2f8a90" },
-  ];
-  let hash = 0;
-  for (let index = 0; index < seed.length; index += 1) {
-    hash = (hash * 31 + seed.charCodeAt(index)) >>> 0;
-  }
-  return palette[hash % palette.length];
 }
 
 function useDeveloperMode() {
@@ -475,6 +460,12 @@ function AppFrame() {
   const [isDotoriAutoSyncRunning, setIsDotoriAutoSyncRunning] = useState(false);
   const [dotoriReachability, setDotoriReachability] = useState<DotoriReachabilityState>("idle");
   const [dotoriPresence, setDotoriPresence] = useState<DotoriPresenceSnapshot>({ onlineCount: 0, connections: [] });
+  const [dotoriPresenceRenderTick, setDotoriPresenceRenderTick] = useState(0);
+  const [dotoriPresenceTarget, setDotoriPresenceTarget] = useState<DotoriPresenceTarget>({
+    kind: null,
+    id: null,
+    label: null,
+  });
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [guideBeaconState, setGuideBeaconState] = useState<"hidden" | "entering" | "idle">("hidden");
   const [isGuideBeaconMounted, setIsGuideBeaconMounted] = useState(false);
@@ -486,9 +477,54 @@ function AppFrame() {
   const dotoriAutoSyncTimeoutRef = useRef<number | null>(null);
   const dotoriAutoSyncErrorMessageRef = useRef<string | null>(null);
   const dotoriClientIdRef = useRef<string>(getDotoriClientId());
+  const dotoriPresenceSocketRef = useRef<WebSocket | null>(null);
+  const dotoriPresenceReconnectTimeoutRef = useRef<number | null>(null);
+  const dotoriPresenceIntentionalCloseRef = useRef(false);
+  const dotoriPresencePayloadRef = useRef<{
+    clientId: string;
+    page: string;
+    workspaceName: string | null;
+    targetKind: string | null;
+    targetId: string | null;
+    targetLabel: string | null;
+    autoSyncEnabled: boolean;
+    dotoriConnected: boolean;
+    vpnReachable: boolean;
+  } | null>(null);
 
   const localBackupContent = useMemo(() => createBackupContent(state), [state]);
   const localBackupSummary = useMemo(() => summarizeBackupPayload(localBackupContent), [localBackupContent]);
+  const activeWorkspaceName = useMemo(
+    () => state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId)?.name ?? null,
+    [state.activeWorkspaceId, state.workspaces],
+  );
+  const dotoriPresencePayload = useMemo(
+    () => ({
+      clientId: dotoriClientIdRef.current,
+      page: getPresencePageLabel(location.pathname),
+      workspaceName: activeWorkspaceName,
+      targetKind: dotoriPresenceTarget.kind,
+      targetId: dotoriPresenceTarget.id,
+      targetLabel: dotoriPresenceTarget.label,
+      autoSyncEnabled: dotoriSession.autoSyncEnabled,
+      dotoriConnected: dotoriSession.connected,
+      vpnReachable: dotoriReachability === "online",
+    }),
+    [
+      activeWorkspaceName,
+      dotoriPresenceTarget.id,
+      dotoriPresenceTarget.kind,
+      dotoriPresenceTarget.label,
+      dotoriReachability,
+      dotoriSession.autoSyncEnabled,
+      dotoriSession.connected,
+      location.pathname,
+    ],
+  );
+
+  useEffect(() => {
+    dotoriPresencePayloadRef.current = dotoriPresencePayload;
+  }, [dotoriPresencePayload]);
 
   useEffect(() => {
     let frameId = 0;
@@ -628,6 +664,10 @@ function AppFrame() {
   }, [location.pathname, location.search]);
 
   useEffect(() => {
+    setDotoriPresenceTarget({ kind: null, id: null, label: null });
+  }, [location.pathname]);
+
+  useEffect(() => {
     if (!isReady) return;
     if (!state.workspaces.length) return;
     if (hasNormalizedInitialRouteRef.current) return;
@@ -709,53 +749,129 @@ function AppFrame() {
   }, [dotoriSession.form]);
 
   useEffect(() => {
-    if (!dotoriSession.connected || dotoriReachability !== "online") {
+    const isConnectionReady =
+      dotoriSession.connected &&
+      dotoriReachability === "online" &&
+      Boolean(
+        dotoriSession.form.host.trim() &&
+          dotoriSession.form.port.trim() &&
+          dotoriSession.form.username.trim() &&
+          dotoriSession.form.password.trim(),
+      );
+
+    if (!isConnectionReady) {
+      dotoriPresenceIntentionalCloseRef.current = true;
+      if (dotoriPresenceReconnectTimeoutRef.current) {
+        window.clearTimeout(dotoriPresenceReconnectTimeoutRef.current);
+        dotoriPresenceReconnectTimeoutRef.current = null;
+      }
+      if (dotoriPresenceSocketRef.current) {
+        dotoriPresenceSocketRef.current.close();
+        dotoriPresenceSocketRef.current = null;
+      }
       setDotoriPresence({ onlineCount: 0, connections: [] });
       return;
     }
 
-    let cancelled = false;
-    let intervalId = 0;
-
-    const sendHeartbeat = async () => {
-      try {
-        const snapshot = await sendDotoriPresenceHeartbeat(dotoriSession.form, {
-          clientId: dotoriClientIdRef.current,
-          page: getPresencePageLabel(location.pathname),
-          workspaceName: state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId)?.name ?? null,
-          autoSyncEnabled: dotoriSession.autoSyncEnabled,
-          dotoriConnected: dotoriSession.connected,
-          vpnReachable: dotoriReachability === "online",
-        });
-        if (!cancelled) {
-          setDotoriPresence(snapshot);
-        }
-      } catch {
-        if (!cancelled) {
-          setDotoriPresence({ onlineCount: 0, connections: [] });
-        }
+    const connectPresenceSocket = () => {
+      if (dotoriPresenceReconnectTimeoutRef.current) {
+        window.clearTimeout(dotoriPresenceReconnectTimeoutRef.current);
+        dotoriPresenceReconnectTimeoutRef.current = null;
       }
+
+      const socket = new WebSocket(createDotoriPresenceSocketUrl(dotoriSession.form));
+      dotoriPresenceIntentionalCloseRef.current = false;
+      dotoriPresenceSocketRef.current = socket;
+
+      socket.addEventListener("open", () => {
+        socket.send(
+          JSON.stringify({
+            type: "auth",
+            username: dotoriSession.form.username.trim(),
+            password: dotoriSession.form.password,
+            ...(dotoriPresencePayloadRef.current ?? {
+              clientId: dotoriClientIdRef.current,
+              page: "소비일기",
+              workspaceName: null,
+              targetKind: null,
+              targetId: null,
+              targetLabel: null,
+              autoSyncEnabled: false,
+              dotoriConnected: true,
+              vpnReachable: true,
+            }),
+          }),
+        );
+      });
+
+      socket.addEventListener("message", (event) => {
+        try {
+          const message = JSON.parse(String(event.data || "{}")) as {
+            type?: string;
+            snapshot?: DotoriPresenceSnapshot;
+            error?: string;
+          };
+          if (message.type === "presence-snapshot" && message.snapshot) {
+            setDotoriPresence({
+              ...message.snapshot,
+              connections: [...message.snapshot.connections],
+            });
+            setDotoriPresenceRenderTick((current) => current + 1);
+          }
+        } catch {
+          setDotoriPresence({ onlineCount: 0, connections: [] });
+          setDotoriPresenceRenderTick((current) => current + 1);
+        }
+      });
+
+      socket.addEventListener("close", () => {
+        if (dotoriPresenceSocketRef.current === socket) {
+          dotoriPresenceSocketRef.current = null;
+        }
+        setDotoriPresence({ onlineCount: 0, connections: [] });
+        setDotoriPresenceRenderTick((current) => current + 1);
+        if (!dotoriPresenceIntentionalCloseRef.current) {
+          dotoriPresenceReconnectTimeoutRef.current = window.setTimeout(() => {
+            connectPresenceSocket();
+          }, 1000);
+        }
+      });
+
+      socket.addEventListener("error", () => {
+        if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+          socket.close();
+        }
+      });
     };
 
-    void sendHeartbeat();
-    intervalId = window.setInterval(() => {
-      void sendHeartbeat();
-    }, DOTORI_PRESENCE_HEARTBEAT_INTERVAL_MS);
+    connectPresenceSocket();
 
     return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
-      void clearDotoriPresence(dotoriSession.form, dotoriClientIdRef.current).catch(() => {});
+      dotoriPresenceIntentionalCloseRef.current = true;
+      if (dotoriPresenceReconnectTimeoutRef.current) {
+        window.clearTimeout(dotoriPresenceReconnectTimeoutRef.current);
+        dotoriPresenceReconnectTimeoutRef.current = null;
+      }
+      if (dotoriPresenceSocketRef.current) {
+        dotoriPresenceSocketRef.current.close();
+        dotoriPresenceSocketRef.current = null;
+      }
     };
-  }, [
-    dotoriReachability,
-    dotoriSession.autoSyncEnabled,
-    dotoriSession.connected,
-    dotoriSession.form,
-    location.pathname,
-    state.activeWorkspaceId,
-    state.workspaces,
-  ]);
+  }, [dotoriReachability, dotoriSession.connected, dotoriSession.form]);
+
+  useEffect(() => {
+    const socket = dotoriPresenceSocketRef.current;
+    if (!socket || socket.readyState !== WebSocket.OPEN || !dotoriSession.connected || dotoriReachability !== "online") {
+      return;
+    }
+
+    socket.send(
+      JSON.stringify({
+        type: "update",
+        ...dotoriPresencePayload,
+      }),
+    );
+  }, [dotoriPresencePayload, dotoriReachability, dotoriSession.connected]);
 
   useEffect(() => {
     if (dotoriAutoSyncTimeoutRef.current) {
@@ -884,6 +1000,13 @@ function AppFrame() {
   };
 
   return (
+    <DotoriPresenceProvider
+      value={{
+        presenceConnections: otherPresenceConnections,
+        currentTarget: dotoriPresenceTarget,
+        setCurrentTarget: setDotoriPresenceTarget,
+      }}
+    >
     <div className={`app-shell${isOnboardingEntering ? " is-onboarding-entering" : ""}`}>
       <aside className="app-sidebar" aria-label="주요 메뉴">
         <div className="app-sidebar-panel">
@@ -895,7 +1018,11 @@ function AppFrame() {
           </div>
 
           <div className="app-sidebar-nav">
-            <AppSidebarNav isDeveloperModeUnlocked={isDeveloperModeUnlocked} presenceConnections={otherPresenceConnections} />
+            <AppSidebarNav
+              key={`sidebar-desktop-${dotoriPresenceRenderTick}`}
+              isDeveloperModeUnlocked={isDeveloperModeUnlocked}
+              presenceConnections={otherPresenceConnections}
+            />
           </div>
 
           <div className="app-sidebar-footer">
@@ -991,6 +1118,7 @@ function AppFrame() {
         <div className="app-mobile-drawer-section">
           <span className="sidebar-kicker">전체 메뉴</span>
           <AppSidebarNav
+            key={`sidebar-mobile-${dotoriPresenceRenderTick}`}
             isDeveloperModeUnlocked={isDeveloperModeUnlocked}
             onNavigate={() => setIsMobileNavOpen(false)}
             presenceConnections={otherPresenceConnections}
@@ -1065,6 +1193,7 @@ function AppFrame() {
       </AppModal>
 
     </div>
+    </DotoriPresenceProvider>
   );
 }
 

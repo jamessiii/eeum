@@ -18,6 +18,9 @@ export type DotoriPresenceConnection = {
   clientId: string;
   page: string;
   workspaceName: string | null;
+  targetKind?: string | null;
+  targetId?: string | null;
+  targetLabel?: string | null;
   autoSyncEnabled: boolean;
   dotoriConnected: boolean;
   vpnReachable: boolean;
@@ -64,6 +67,15 @@ function normalizeBaseUrl(form: DotoriConnectionForm) {
   const parsed = new URL(normalizedHost);
   parsed.port = port;
   return parsed.toString().replace(/\/+$/, "");
+}
+
+export function createDotoriPresenceSocketUrl(form: DotoriConnectionForm) {
+  const baseUrl = new URL(normalizeBaseUrl(form));
+  baseUrl.protocol = baseUrl.protocol === "https:" ? "wss:" : "ws:";
+  baseUrl.pathname = "/ws/spending-diary-presence";
+  baseUrl.search = "";
+  baseUrl.hash = "";
+  return baseUrl.toString();
 }
 
 function createAuthorizationHeader(username: string, password: string) {

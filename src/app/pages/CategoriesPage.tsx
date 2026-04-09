@@ -9,6 +9,8 @@ import { getWorkspaceScope } from "../state/selectors";
 import { getCategoryGroups, getChildCategories, getHiddenCategories } from "../../domain/categories/meta";
 import { getMotionStyle } from "../../shared/utils/motion";
 import type { Category } from "../../shared/types/models";
+import { getPresenceAccent } from "../dotoriPresenceVisuals";
+import { useDotoriPresenceContext } from "../presence/DotoriPresenceContext";
 
 type CategoryDraftState = {
   name: string;
@@ -64,6 +66,7 @@ function getTransparentDragImage() {
 
 export function CategoriesPage({ embedded = false }: { embedded?: boolean }) {
   const { addCategory, deleteCategory, moveCategory, resetCategoriesToDefaults, state, updateCategory } = useAppState();
+  const { presenceConnections, setCurrentTarget } = useDotoriPresenceContext();
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const categoryMap = useMemo(() => new Map(scope.categories.map((category) => [category.id, category])), [scope.categories]);
@@ -92,6 +95,71 @@ export function CategoriesPage({ embedded = false }: { embedded?: boolean }) {
   const editingCategory = editingCategoryId ? categoryMap.get(editingCategoryId) ?? null : null;
   const createChildGroup = createChildGroupId ? categoryMap.get(createChildGroupId) ?? null : null;
   const pendingDeleteCategory = pendingDeleteCategoryId ? categoryMap.get(pendingDeleteCategoryId) ?? null : null;
+  const categoryPresenceConnections = useMemo(
+    () => presenceConnections.filter((connection) => connection.page === "분류"),
+    [presenceConnections],
+  );
+
+  useEffect(() => {
+    if (dragItem) {
+      setCurrentTarget({
+        kind: dragItem.categoryType === "group" ? "category-group" : "category",
+        id: dragItem.categoryId,
+        label: categoryMap.get(dragItem.categoryId)?.name ?? null,
+      });
+      return;
+    }
+
+    if (editingCategory) {
+      setCurrentTarget({
+        kind: "category",
+        id: editingCategory.id,
+        label: editingCategory.name,
+      });
+      return;
+    }
+
+    if (pendingDeleteCategory) {
+      setCurrentTarget({
+        kind: pendingDeleteCategory.categoryType === "group" ? "category-group" : "category",
+        id: pendingDeleteCategory.id,
+        label: pendingDeleteCategory.name,
+      });
+      return;
+    }
+
+    if (createChildGroup) {
+      setCurrentTarget({
+        kind: "category-group",
+        id: createChildGroup.id,
+        label: createChildGroup.name,
+      });
+      return;
+    }
+
+    const inlineEditingGroup = inlineEditingGroupId ? categoryMap.get(inlineEditingGroupId) ?? null : null;
+    if (inlineEditingGroup) {
+      setCurrentTarget({
+        kind: "category-group",
+        id: inlineEditingGroup.id,
+        label: inlineEditingGroup.name,
+      });
+      return;
+    }
+
+    setCurrentTarget({ kind: null, id: null, label: null });
+  }, [
+    categoryMap,
+    createChildGroup,
+    dragItem,
+    editingCategory,
+    inlineEditingGroupId,
+    pendingDeleteCategory,
+    setCurrentTarget,
+  ]);
+
+  const getPresenceForTarget = (targetKind: "category-group" | "category", targetId: string) =>
+    categoryPresenceConnections.filter((connection) => connection.targetKind === targetKind && connection.targetId === targetId);
 
   useEffect(() => {
     if (dragItem) {
@@ -369,35 +437,60 @@ export function CategoriesPage({ embedded = false }: { embedded?: boolean }) {
           {groups.map((group, groupIndex) => {
             const childCategories = getChildCategories(scope.categories, group.id);
             const isInlineEditing = inlineEditingGroupId === group.id;
+            const groupPresenceConnections = getPresenceForTarget("category-group", group.id);
             return (
               <BoardCaseSection
                 key={group.id}
                 title={
-                  isInlineEditing ? (
-                    <input
-                      className="board-case-title-input"
-                      value={inlineGroupName}
-                      onChange={(event) => setInlineGroupName(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          submitInlineGroupEdit();
-                        }
-                        if (event.key === "Escape") {
-                          event.preventDefault();
-                          stopInlineGroupEdit();
-                        }
-                      }}
-                      onBlur={submitInlineGroupEdit}
-                      aria-label={`${group.name} 그룹 이름`}
-                      autoFocus
-                    />
-                  ) : (
-                    <h3>{group.name}</h3>
-                  )
+                  <div className="dotori-presence-target-head">
+                    {isInlineEditing ? (
+                      <input
+                        className="board-case-title-input"
+                        value={inlineGroupName}
+                        onChange={(event) => setInlineGroupName(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            submitInlineGroupEdit();
+                          }
+                          if (event.key === "Escape") {
+                            event.preventDefault();
+                            stopInlineGroupEdit();
+                          }
+                        }}
+                        onBlur={submitInlineGroupEdit}
+                        aria-label={`${group.name} 그룹 이름`}
+                        autoFocus
+                      />
+                    ) : (
+                      <h3>{group.name}</h3>
+                    )}
+                    {groupPresenceConnections.length ? (
+                      <span className="dotori-presence-target-badge-list" aria-hidden="true">
+                        {groupPresenceConnections.map((connection) => {
+                          const accent = getPresenceAccent(connection.username);
+                          return (
+                            <span
+                              key={`${group.id}-${connection.clientId}`}
+                              className="dotori-presence-target-badge"
+                              style={
+                                {
+                                  "--presence-bg": accent.background,
+                                  "--presence-border": accent.border,
+                                  "--presence-text": accent.text,
+                                } as never
+                              }
+                            >
+                              {connection.username}
+                            </span>
+                          );
+                        })}
+                      </span>
+                    ) : null}
+                  </div>
                 }
                 meta={`카테고리 ${childCategories.length}개`}
-                className={`category-case-section${getDragStateClassName(group.id)}`}
+                className={`category-case-section${getDragStateClassName(group.id)}${groupPresenceConnections.length ? " is-presence-target" : ""}`}
                 style={getMotionStyle(groupIndex + 2)}
                 draggable={!isInlineEditing}
                 onDragStart={(event) => startDrag({ categoryId: group.id, categoryType: "group", isHidden: false }, event)}
@@ -434,52 +527,79 @@ export function CategoriesPage({ embedded = false }: { embedded?: boolean }) {
                   onDrop={(event) => handleCategoryAppendDrop(event, group.id, childCategories.length)}
                 >
                   {childCategories.map((category, categoryIndex) => (
-                    <article
-                      key={category.id}
-                      className={`category-case-card${getDragStateClassName(category.id)}`}
-                      draggable
-                      onDragStart={(event) =>
-                        startDrag(
-                          {
-                            categoryId: category.id,
-                            categoryType: "category",
-                            parentCategoryId: category.parentCategoryId,
-                            isHidden: false,
-                          },
-                          event,
-                        )
-                      }
-                      onDragEnd={resetDragState}
-                      onDragOver={(event) => {
-                        if (dragItem?.categoryType !== "category") return;
-                        event.preventDefault();
-                        event.stopPropagation();
-                      }}
-                      onDrop={(event) => {
-                        event.stopPropagation();
-                        handleCategoryDrop(event, group.id, categoryIndex);
-                      }}
-                      onClick={() => openEditCategoryModal(category)}
-                    >
-                      <button
-                        type="button"
-                        className="board-case-edit-button category-case-card-edit"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          openEditCategoryModal(category);
-                        }}
-                        aria-label={`${category.name} 카테고리 수정`}
-                      >
-                        ✎
-                      </button>
-                      <div className="category-case-card-copy">
-                        <strong>{category.name}</strong>
-                        <span>{category.fixedOrVariable === "fixed" ? "고정 지출" : "변동 지출"}</span>
-                      </div>
-                      <div className={`category-case-pill${category.fixedOrVariable === "fixed" ? " is-fixed" : ""}`}>
-                        {category.fixedOrVariable === "fixed" ? "고정" : "변동"}
-                      </div>
-                    </article>
+                    (() => {
+                      const categoryPresenceConnections = getPresenceForTarget("category", category.id);
+                      return (
+                        <article
+                          key={category.id}
+                          className={`category-case-card${getDragStateClassName(category.id)}${categoryPresenceConnections.length ? " is-presence-target" : ""}`}
+                          draggable
+                          onDragStart={(event) =>
+                            startDrag(
+                              {
+                                categoryId: category.id,
+                                categoryType: "category",
+                                parentCategoryId: category.parentCategoryId,
+                                isHidden: false,
+                              },
+                              event,
+                            )
+                          }
+                          onDragEnd={resetDragState}
+                          onDragOver={(event) => {
+                            if (dragItem?.categoryType !== "category") return;
+                            event.preventDefault();
+                            event.stopPropagation();
+                          }}
+                          onDrop={(event) => {
+                            event.stopPropagation();
+                            handleCategoryDrop(event, group.id, categoryIndex);
+                          }}
+                          onClick={() => openEditCategoryModal(category)}
+                        >
+                          {categoryPresenceConnections.length ? (
+                            <span className="dotori-presence-target-badge-list is-floating" aria-hidden="true">
+                              {categoryPresenceConnections.map((connection) => {
+                                const accent = getPresenceAccent(connection.username);
+                                return (
+                                  <span
+                                    key={`${category.id}-${connection.clientId}`}
+                                    className="dotori-presence-target-badge"
+                                    style={
+                                      {
+                                        "--presence-bg": accent.background,
+                                        "--presence-border": accent.border,
+                                        "--presence-text": accent.text,
+                                      } as never
+                                    }
+                                  >
+                                    {connection.username}
+                                  </span>
+                                );
+                              })}
+                            </span>
+                          ) : null}
+                          <button
+                            type="button"
+                            className="board-case-edit-button category-case-card-edit"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openEditCategoryModal(category);
+                            }}
+                            aria-label={`${category.name} 카테고리 수정`}
+                          >
+                            ✎
+                          </button>
+                          <div className="category-case-card-copy">
+                            <strong>{category.name}</strong>
+                            <span>{category.fixedOrVariable === "fixed" ? "고정 지출" : "변동 지출"}</span>
+                          </div>
+                          <div className={`category-case-pill${category.fixedOrVariable === "fixed" ? " is-fixed" : ""}`}>
+                            {category.fixedOrVariable === "fixed" ? "고정" : "변동"}
+                          </div>
+                        </article>
+                      );
+                    })()
                   ))}
 
                   <button type="button" className="category-case-add-card" onClick={() => openCreateChildModal(group)}>
