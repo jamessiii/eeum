@@ -129,7 +129,7 @@ export async function healthCheckDotoriStorage(form: DotoriConnectionForm) {
 
 export async function saveDotoriBackup(
   form: DotoriConnectionForm,
-  payload: { folderName: string; fileName: string; content: string },
+  payload: { folderName: string; fileName: string; content: string; clientId?: string },
 ) {
   return requestDotori<DotoriBackupMetadata>(form, "/api/spending-diary/backups", {
     method: "POST",
