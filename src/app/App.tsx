@@ -1017,7 +1017,6 @@ function AppFrame() {
           savedAt: null,
           backupCommitId: localBackupCommitIdRef.current,
         });
-        });
 
         if (!isLocalClean) {
           return;
@@ -1043,11 +1042,11 @@ function AppFrame() {
           }),
         );
 
-          const nextSession: DotoriSyncSession = {
-            ...currentSession,
-            latestFileName: latestRemoteBackup.fileName,
-            syncedBackup: nextSyncedBackup,
-          };
+        const nextSession: DotoriSyncSession = {
+          ...currentSession,
+          latestFileName: latestRemoteBackup.fileName,
+          syncedBackup: nextSyncedBackup,
+        };
         setDotoriRemoteBackupHint(nextSyncedBackup);
         dotoriAutoSyncErrorMessageRef.current = null;
         writeDotoriSyncSession(nextSession);
