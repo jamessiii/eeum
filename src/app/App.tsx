@@ -75,16 +75,19 @@ type NavItem = {
   end?: boolean;
 };
 
-const baseNavItems: NavItem[] = [
+type NavEntry = NavItem | { type: "divider"; id: string };
+
+const baseNavItems: NavEntry[] = [
   { to: "/dashboard", label: "첫장" },
-  { to: "/connections/assets", label: "자산" },
-  { to: "/connections/categories", label: "분류" },
-  { to: "/settlements", label: "이체" },
-  { to: "/loops", label: "루프스테이션" },
-  { to: "/records/moon", label: "달기록" },
-  { to: "/records/sun", label: "해기록" },
+  { to: "/settlements", label: "마무리" },
+  { to: "/records", label: "돌아보기" },
+  { type: "divider", id: "nav-divider-primary" },
+  { to: "/connections/assets", label: "카드/계좌" },
+  { to: "/connections/categories", label: "카테고리" },
+  { to: "/loops", label: "고정비" },
+  { type: "divider", id: "nav-divider-secondary" },
 ];
-const developerNavItem: NavItem = { to: "/dev", label: "DEV" };
+const developerNavItem: NavEntry = { to: "/dev", label: "DEV" };
 
 const navGuideTargetMap: Record<string, string> = {
   "/dashboard": "nav-dashboard",
@@ -92,32 +95,32 @@ const navGuideTargetMap: Record<string, string> = {
   "/connections/categories": "nav-sub-categories",
   "/settlements": "nav-sub-transfers",
   "/loops": "nav-sub-loops",
-  "/records/moon": "nav-sub-moon",
-  "/records/sun": "nav-sub-sun",
+  "/records": "nav-sub-moon",
   "/dev": "nav-dev",
   "/settings": "nav-settings",
 };
 
 const navIconKeyMap: Record<string, string> = {
-  "/dashboard": "home",
-  "/connections/assets": "link",
-  "/connections/categories": "link",
-  "/settlements": "flow",
-  "/loops": "flow",
-  "/records/moon": "note",
-  "/records/sun": "note",
+  "/dashboard": "menu-home",
+  "/connections/assets": "menu-card-account",
+  "/connections/categories": "menu-category",
+  "/settlements": "menu-finish",
+  "/loops": "menu-fixed-cost",
+  "/records": "menu-review",
   "/dev": "lab",
-  "/settings": "settings",
+  "/settings": "menu-settings",
 };
 
 function getDesktopHeaderTitle(pathname: string) {
-  if (pathname === "/dashboard" || pathname.startsWith("/records/moon")) {
+  if (pathname === "/dashboard") {
     const today = new Date();
     return `${today.getFullYear()}년 ${today.getMonth() + 1}월`;
   }
-  if (pathname.startsWith("/records/sun")) return "해 기록";
+  if (pathname.startsWith("/records")) return "돌아보기";
   if (pathname.startsWith("/connections")) return "연결";
-  if (pathname.startsWith("/flows") || pathname === "/settlements" || pathname.startsWith("/loops")) return "흐름";
+  if (pathname === "/settlements") return "마무리";
+  if (pathname.startsWith("/loops")) return "고정비";
+  if (pathname.startsWith("/flows")) return "흐름";
   if (pathname.startsWith("/collections")) return "기록";
   if (pathname === "/settings") return "설정";
   return "소비일기";
@@ -125,15 +128,22 @@ function getDesktopHeaderTitle(pathname: string) {
 
 function getPresencePageLabel(pathname: string) {
   if (pathname === "/dashboard") return "첫장";
-  if (pathname.startsWith("/connections/assets")) return "자산";
-  if (pathname.startsWith("/connections/categories")) return "분류";
-  if (pathname === "/settlements") return "이체";
-  if (pathname.startsWith("/loops")) return "루프스테이션";
-  if (pathname.startsWith("/records/moon")) return "달기록";
-  if (pathname.startsWith("/records/sun")) return "해기록";
+  if (pathname.startsWith("/connections/assets")) return "카드/계좌";
+  if (pathname.startsWith("/connections/categories")) return "카테고리";
+  if (pathname === "/settlements") return "마무리";
+  if (pathname.startsWith("/loops")) return "고정비";
+  if (pathname.startsWith("/records")) return "돌아보기";
   if (pathname === "/settings") return "설정";
   if (pathname.startsWith("/dev")) return "DEV";
   return "소비일기";
+}
+
+function isNavItem(entry: NavEntry): entry is NavItem {
+  return "to" in entry;
+}
+
+function isImageNavIcon(iconKey: string) {
+  return iconKey.startsWith("menu-");
 }
 
 function useDeveloperMode() {
@@ -185,8 +195,7 @@ function getActiveMainKey(pathname: string, navItems: NavItem[]) {
     return "/connections/assets";
   if (pathname === "/settlements") return "/settlements";
   if (pathname.startsWith("/loops")) return "/loops";
-  if (pathname.startsWith("/records/moon") || pathname === "/dashboard") return pathname === "/dashboard" ? "/dashboard" : "/records/moon";
-  if (pathname.startsWith("/records/sun")) return "/records/sun";
+  if (pathname.startsWith("/records")) return "/records";
   if (pathname === "/dev") return "/dev";
   const exact = navItems.find((item) => item.to === pathname);
   if (exact) return exact.to;
@@ -204,15 +213,20 @@ function AppSidebarNav({
   presenceConnections?: DotoriPresenceSnapshot["connections"];
 }) {
   const location = useLocation();
-  const navItems = useMemo(
+  const navEntries = useMemo(
     () => (isDeveloperModeUnlocked ? [...baseNavItems, developerNavItem] : baseNavItems),
     [isDeveloperModeUnlocked],
   );
+  const navItems = useMemo(() => navEntries.filter(isNavItem), [navEntries]);
   const activeKey = useMemo(() => getActiveMainKey(location.pathname || "/", navItems), [location.pathname, navItems]);
 
   return (
     <nav className="sidebar-nav" aria-label="주요 메뉴" data-guide-target="nav-menu">
-      {[...navItems, { to: "/settings", label: "설정" }].map((item) => {
+      {[...navEntries, { to: "/settings", label: "설정" }].map((item, index) => {
+        if (!isNavItem(item)) {
+          return <div key={item.id ?? `divider-${index}`} className="sidebar-nav-divider" aria-hidden="true" />;
+        }
+        const iconKey = navIconKeyMap[item.to] ?? "dot";
         const itemPresenceConnections = presenceConnections.filter((connection) => connection.page === item.label);
         return (
         <div key={item.to} className={`sidebar-nav-section${activeKey === item.to ? " is-active" : ""}`}>
@@ -223,7 +237,17 @@ function AppSidebarNav({
             data-guide-target={navGuideTargetMap[item.to] ?? undefined}
             onClick={onNavigate}
           >
-            <span className={`nav-sidebar-icon nav-sidebar-icon--${navIconKeyMap[item.to] ?? "dot"}`} aria-hidden="true" />
+            <span
+              className={`nav-sidebar-icon nav-sidebar-icon--${iconKey}${isImageNavIcon(iconKey) ? " is-image-icon" : ""}`}
+              style={
+                isImageNavIcon(iconKey)
+                  ? ({
+                      "--nav-icon-image": `url(${ASSET_BASE}menu-icons/${iconKey}.png)`,
+                    } as never)
+                  : undefined
+              }
+              aria-hidden="true"
+            />
             <span className="sidebar-nav-parent-label">
               <span>{item.label}</span>
               {itemPresenceConnections.length ? (
@@ -292,10 +316,12 @@ function AppRoutes({
         <Route path="/collections/income" element={<IncomePage />} />
         <Route
           path="/records"
-          element={<SectionIndexRedirect defaultPath="/records/moon" alternatePath="/records/sun" viewKey="view" alternateValue="year" />}
+          element={<SectionIndexRedirect defaultPath="/records/month" alternatePath="/records/year" viewKey="view" alternateValue="year" />}
         />
-        <Route path="/records/moon" element={<RecordsPage view="moon" />} />
-        <Route path="/records/sun" element={<RecordsPage view="sun" />} />
+        <Route path="/records/month" element={<RecordsPage view="month" />} />
+        <Route path="/records/year" element={<RecordsPage view="year" />} />
+        <Route path="/records/moon" element={<PathRedirect to="/records/month" />} />
+        <Route path="/records/sun" element={<PathRedirect to="/records/year" />} />
         <Route
           path="/connections"
           element={
@@ -373,10 +399,28 @@ function SectionIndexRedirect({
   return <Navigate to={`${nextPath}${nextSearch ? `?${nextSearch}` : ""}`} replace />;
 }
 
-function RecordsPage({ view }: { view: "moon" | "sun" }) {
+function RecordsPage({ view }: { view: "month" | "year" }) {
   return (
-    <>
-      {view === "moon" ? (
+    <div className="page-stack">
+      <section className="records-view-shell">
+        <div className="records-view-tabs" role="tablist" aria-label="통계 보기 방식">
+          <NavLink
+            to="/records/month"
+            className={({ isActive }) => `records-view-tab${isActive ? " is-active" : ""}`}
+            aria-current={view === "month" ? "page" : undefined}
+          >
+            월별
+          </NavLink>
+          <NavLink
+            to="/records/year"
+            className={({ isActive }) => `records-view-tab${isActive ? " is-active" : ""}`}
+            aria-current={view === "year" ? "page" : undefined}
+          >
+            연도별
+          </NavLink>
+        </div>
+      </section>
+      {view === "month" ? (
         <DashboardPage mode="moon" />
       ) : (
         <>
@@ -384,7 +428,7 @@ function RecordsPage({ view }: { view: "moon" | "sun" }) {
           <LoopAnnualPage />
         </>
       )}
-    </>
+    </div>
   );
 }
 
@@ -418,21 +462,24 @@ function DotoriStatusPanel({
   return (
     <div className="app-sidebar-status-panel">
       <div className="app-sidebar-status-row">
-        <strong>내부망</strong>
+        <strong>VPN</strong>
         <span className={`app-sidebar-status-pill${reachabilityState === "online" ? " is-online" : reachabilityState === "offline" ? " is-offline" : ""}`}>
           {vpnStatusLabel}
         </span>
       </div>
       <div className="app-sidebar-status-row">
         <strong>도토리창고</strong>
-        <span className="app-sidebar-status-text">{connectionStatusLabel}</span>
+        <span className={`app-sidebar-status-pill${connectionStatusLabel === "ON" ? " is-online" : " is-offline"}`}>
+          {connectionStatusLabel}
+        </span>
       </div>
       <div className="app-sidebar-status-row">
         <strong>자동동기화</strong>
-        <span className="app-sidebar-status-text">{autoSyncStatusLabel}</span>
+        <span className={`app-sidebar-status-pill${autoSyncStatusLabel === "ON" ? " is-online" : " is-offline"}`}>
+          {autoSyncStatusLabel}
+        </span>
       </div>
-      <div className="app-sidebar-status-row">
-        <strong>동시접속</strong>
+      <div className="app-sidebar-status-row app-sidebar-status-row--full">
         <span className="app-sidebar-status-text">{concurrentStatusLabel}</span>
       </div>
       {otherConnections.length ? (
@@ -460,7 +507,7 @@ function AppFrame() {
   const [isCreateWorkspaceOpen, setIsCreateWorkspaceOpen] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [dotoriSession, setDotoriSession] = useState<DotoriSyncSession>(() => readDotoriSyncSession());
-  const [isDotoriAutoSyncRunning, setIsDotoriAutoSyncRunning] = useState(false);
+  const [, setIsDotoriAutoSyncRunning] = useState(false);
   const [dotoriReachability, setDotoriReachability] = useState<DotoriReachabilityState>("idle");
   const [dotoriPresence, setDotoriPresence] = useState<DotoriPresenceSnapshot>({ onlineCount: 0, connections: [] });
   const [dotoriPresenceRenderTick, setDotoriPresenceRenderTick] = useState(0);
@@ -1012,19 +1059,17 @@ function AppFrame() {
   const otherPresenceConnections = dotoriPresence.connections.filter((connection) => connection.clientId !== dotoriClientIdRef.current);
   const vpnStatusLabel =
     dotoriReachability === "online"
-      ? "내부망 연결 가능"
+      ? "ON"
       : dotoriReachability === "offline"
-        ? "연결 확인 필요"
-        : "연결 정보 대기";
-  const connectionStatusLabel = dotoriSession.connected ? "도토리창고 연결됨" : "연결 전";
+        ? "OFF"
+        : "OFF";
+  const connectionStatusLabel = dotoriSession.connected ? "ON" : "OFF";
   const autoSyncStatusLabel = dotoriSession.autoSyncEnabled
-    ? isDotoriAutoSyncRunning
-      ? "자동동기화 진행 중"
-      : "자동동기화 대기 중"
-    : "수동 동기화";
+    ? "ON"
+    : "OFF";
   const concurrentStatusLabel =
     dotoriReachability !== "online"
-      ? "연결 후 확인"
+      ? "접속 상태 확인 전"
       : otherPresenceConnections.length
         ? `${otherPresenceConnections.length}명 함께 접속 중`
         : "나만 접속 중";
@@ -1075,12 +1120,6 @@ function AppFrame() {
               reachabilityState={dotoriReachability}
               otherConnections={otherPresenceConnections}
             />
-            <div className="app-sidebar-note">
-              <img className="app-sidebar-note-image" src={`${ASSET_BASE}slogan.png`} alt="기록이 쌓이면, 마음의 흐름이 보여요" />
-            </div>
-            <div className="app-sidebar-banner">
-              <img className="app-sidebar-banner-image" src={`${ASSET_BASE}dotori-banner.png`} alt="도토리창고 배너" />
-            </div>
           </div>
         </div>
       </aside>
@@ -1174,12 +1213,6 @@ function AppFrame() {
             reachabilityState={dotoriReachability}
             otherConnections={otherPresenceConnections}
           />
-          <div className="app-sidebar-note">
-            <img className="app-sidebar-note-image" src={`${ASSET_BASE}slogan.png`} alt="기록이 쌓이면, 마음의 흐름이 보여요" />
-          </div>
-          <div className="app-sidebar-banner">
-            <img className="app-sidebar-banner-image" src={`${ASSET_BASE}dotori-banner.png`} alt="도토리창고 배너" />
-          </div>
         </div>
       </aside>
 

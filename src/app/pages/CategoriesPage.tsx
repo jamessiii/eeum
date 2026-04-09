@@ -91,63 +91,64 @@ export function CategoriesPage({ embedded = false }: { embedded?: boolean }) {
   const [isHiddenPanelOpen, setIsHiddenPanelOpen] = useState(false);
   const [pendingDeleteCategoryId, setPendingDeleteCategoryId] = useState<string | null>(null);
   const [isResetDefaultsModalOpen, setIsResetDefaultsModalOpen] = useState(false);
+  const lastPresenceTargetRef = useRef<string>("");
 
   const editingCategory = editingCategoryId ? categoryMap.get(editingCategoryId) ?? null : null;
   const createChildGroup = createChildGroupId ? categoryMap.get(createChildGroupId) ?? null : null;
   const pendingDeleteCategory = pendingDeleteCategoryId ? categoryMap.get(pendingDeleteCategoryId) ?? null : null;
   const categoryPresenceConnections = useMemo(
-    () => presenceConnections.filter((connection) => connection.page === "분류"),
+    () => presenceConnections.filter((connection) => connection.page === "카테고리"),
     [presenceConnections],
   );
 
   useEffect(() => {
+    let nextTarget = { kind: null, id: null, label: null } as {
+      kind: string | null;
+      id: string | null;
+      label: string | null;
+    };
+
     if (dragItem) {
-      setCurrentTarget({
+      nextTarget = {
         kind: dragItem.categoryType === "group" ? "category-group" : "category",
         id: dragItem.categoryId,
         label: categoryMap.get(dragItem.categoryId)?.name ?? null,
-      });
-      return;
-    }
-
-    if (editingCategory) {
-      setCurrentTarget({
+      };
+    } else if (editingCategory) {
+      nextTarget = {
         kind: "category",
         id: editingCategory.id,
         label: editingCategory.name,
-      });
-      return;
-    }
-
-    if (pendingDeleteCategory) {
-      setCurrentTarget({
+      };
+    } else if (pendingDeleteCategory) {
+      nextTarget = {
         kind: pendingDeleteCategory.categoryType === "group" ? "category-group" : "category",
         id: pendingDeleteCategory.id,
         label: pendingDeleteCategory.name,
-      });
-      return;
-    }
-
-    if (createChildGroup) {
-      setCurrentTarget({
+      };
+    } else if (createChildGroup) {
+      nextTarget = {
         kind: "category-group",
         id: createChildGroup.id,
         label: createChildGroup.name,
-      });
-      return;
+      };
+    } else {
+      const inlineEditingGroup = inlineEditingGroupId ? categoryMap.get(inlineEditingGroupId) ?? null : null;
+      if (inlineEditingGroup) {
+        nextTarget = {
+          kind: "category-group",
+          id: inlineEditingGroup.id,
+          label: inlineEditingGroup.name,
+        };
+      }
     }
 
-    const inlineEditingGroup = inlineEditingGroupId ? categoryMap.get(inlineEditingGroupId) ?? null : null;
-    if (inlineEditingGroup) {
-      setCurrentTarget({
-        kind: "category-group",
-        id: inlineEditingGroup.id,
-        label: inlineEditingGroup.name,
-      });
+    const nextTargetKey = `${nextTarget.kind ?? ""}|${nextTarget.id ?? ""}|${nextTarget.label ?? ""}`;
+    if (lastPresenceTargetRef.current === nextTargetKey) {
       return;
     }
-
-    setCurrentTarget({ kind: null, id: null, label: null });
+    lastPresenceTargetRef.current = nextTargetKey;
+    setCurrentTarget(nextTarget);
   }, [
     categoryMap,
     createChildGroup,

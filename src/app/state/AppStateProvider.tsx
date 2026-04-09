@@ -371,7 +371,11 @@ function normalizeAppState(rawState: AppState): AppState {
                 ),
               ]),
             )
-          : (profile.loopPriorityCategoryIds ?? []),
+          : (profile.loopPriorityCategoryIds?.length ?? 0) > 0
+            ? profile.loopPriorityCategoryIds ?? []
+            : createDefaultLoopPriorityCategoryIds(
+                rawState.categories.filter((category) => category.workspaceId === profile.workspaceId),
+              ),
     })),
     people: rawState.people.map((person) => ({
       ...person,
@@ -1125,7 +1129,8 @@ function adaptBundleToWorkspace(
       updatedAt: new Date().toISOString(),
     },
     financialProfile: {
-      ...(currentFinancialProfile ?? bundle.financialProfile),
+      ...(currentFinancialProfile ?? {}),
+      ...(bundle.financialProfile ?? {}),
       workspaceId,
     },
     people: bundle.people.map((person) => ({ ...person, workspaceId })),
