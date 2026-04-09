@@ -62,7 +62,7 @@ const DEVELOPER_MODE_KEY = "spending-diary.developer-mode";
 const ASSET_BASE = import.meta.env.BASE_URL;
 const DOTORI_AUTO_SYNC_DEBOUNCE_MS = 1200;
 const DOTORI_HEALTH_POLL_INTERVAL_MS = 20 * 1000;
-const DOTORI_PRESENCE_HEARTBEAT_INTERVAL_MS = 12 * 1000;
+const DOTORI_PRESENCE_HEARTBEAT_INTERVAL_MS = 3 * 1000;
 
 type DotoriReachabilityState = "idle" | "online" | "offline";
 
