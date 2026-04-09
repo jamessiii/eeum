@@ -12,10 +12,8 @@ import { getMotionStyle } from "../../shared/utils/motion";
 import { AppModal } from "../components/AppModal";
 import { AppSelect } from "../components/AppSelect";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
-import { useDotoriPresenceContext } from "../presence/DotoriPresenceContext";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
-import { useToast } from "../toast/ToastProvider";
 
 const ACCOUNT_TYPE_OPTIONS = [
   { value: "checking", label: "입출금" },
@@ -434,8 +432,6 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
     updatePerson,
   } =
     useAppState();
-  const { presenceConnections, setCurrentTarget } = useDotoriPresenceContext();
-  const { showToast } = useToast();
   const [inlineEditingPersonId, setInlineEditingPersonId] = useState<string | null>(null);
   const [inlinePersonName, setInlinePersonName] = useState("");
   const [pendingInlinePersonName, setPendingInlinePersonName] = useState<string | null>(null);
@@ -485,7 +481,6 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   } | null>(null);
   const categoryLinkPanelGuideMoveStartRef = useRef<{ left: number; top: number } | null>(null);
   const pendingGuideDragTransactionRef = useRef<PendingGuideDragTransaction | null>(null);
-  const lastPresenceTargetRef = useRef("");
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const currentGuideStep = useMemo(() => getWorkspaceGuide(state, workspaceId).currentStep, [state, workspaceId]);
@@ -506,10 +501,6 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
           .map((group) => [group.id, group.name]),
       ),
     [scope.categories],
-  );
-  const assetPresenceConnections = useMemo(
-    () => presenceConnections.filter((connection) => connection.page === "카드/계좌"),
-    [presenceConnections],
   );
   const allLeafCategories = useMemo(
     () =>
@@ -593,68 +584,6 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
     [editingAccount, linkedCategoriesByAccountId],
   );
   const editingCard = useMemo(() => scope.cards.find((card) => card.id === editingCardId) ?? null, [scope.cards, editingCardId]);
-
-  useEffect(() => {
-    let nextTarget = { kind: null, id: null, label: null } as {
-      kind: string | null;
-      id: string | null;
-      label: string | null;
-    };
-
-    if (dragItem?.itemType === "account" || dragItem?.itemType === "card") {
-      const targetCollection = dragItem.itemType === "account" ? scope.accounts : scope.cards;
-      const targetItem = targetCollection.find((item) => item.id === dragItem.id) ?? null;
-      nextTarget = {
-        kind: dragItem.itemType,
-        id: dragItem.id,
-        label: targetItem ? ("alias" in targetItem ? targetItem.alias || targetItem.name : targetItem.name) : null,
-      };
-    } else if (editingAccount) {
-      nextTarget = {
-        kind: "account",
-        id: editingAccount.id,
-        label: editingAccount.alias || editingAccount.name,
-      };
-    } else if (editingCard) {
-      nextTarget = {
-        kind: "card",
-        id: editingCard.id,
-        label: editingCard.name,
-      };
-    } else if (pendingDeleteItem?.itemType === "account") {
-      const pendingAccount = scope.accounts.find((account) => account.id === pendingDeleteItem.id) ?? null;
-      nextTarget = {
-        kind: "account",
-        id: pendingDeleteItem.id,
-        label: pendingAccount ? pendingAccount.alias || pendingAccount.name : null,
-      };
-    } else if (pendingDeleteItem?.itemType === "card") {
-      const pendingCard = scope.cards.find((card) => card.id === pendingDeleteItem.id) ?? null;
-      nextTarget = {
-        kind: "card",
-        id: pendingDeleteItem.id,
-        label: pendingCard?.name ?? null,
-      };
-    }
-
-    const nextTargetKey = `${nextTarget.kind ?? ""}|${nextTarget.id ?? ""}|${nextTarget.label ?? ""}`;
-    if (lastPresenceTargetRef.current === nextTargetKey) {
-      return;
-    }
-    lastPresenceTargetRef.current = nextTargetKey;
-    setCurrentTarget(nextTarget);
-  }, [dragItem, editingAccount, editingCard, pendingDeleteItem, scope.accounts, scope.cards, setCurrentTarget]);
-
-  const getTargetEditors = (targetKind: "account" | "card", targetId: string) =>
-    assetPresenceConnections.filter((connection) => connection.targetKind === targetKind && connection.targetId === targetId);
-
-  const showLockedTargetToast = (targetKind: "account" | "card", targetId: string, fallbackLabel: string) => {
-    const editors = getTargetEditors(targetKind, targetId);
-    if (!editors.length) return false;
-    const editorNames = Array.from(new Set(editors.map((connection) => connection.username))).join(", ");
-    showToast(`${editorNames || "다른 사용자"}가 ${fallbackLabel} 편집 중이라 지금은 수정할 수 없습니다.`, "info");
-    return true;
-  };
   const activeCardLinkMessage = useMemo(() => {
     if (!activeCardLinkTargetId) return "";
     const targetCard = scope.cards.find((card) => card.id === activeCardLinkTargetId);
@@ -1122,28 +1051,14 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
       return;
     }
     if (item.itemType === "account") {
-      const targetAccount = scope.accounts.find((account) => account.id === item.id);
-      if (targetAccount && showLockedTargetToast("account", item.id, targetAccount.alias || targetAccount.name)) return;
       updateAccount(workspaceId, item.id, { isHidden });
       return;
-    }
-    if (item.itemType === "card") {
-      const targetCard = scope.cards.find((card) => card.id === item.id);
-      if (targetCard && showLockedTargetToast("card", item.id, targetCard.name)) return;
     }
     updateCard(workspaceId, item.id, { isHidden });
   };
 
   const requestDeleteItem = (item: DragItem) => {
     if (item.itemType === "categoryLink" || item.itemType === "categoryGroupLink") return;
-    if (item.itemType === "account") {
-      const targetAccount = scope.accounts.find((account) => account.id === item.id);
-      if (targetAccount && showLockedTargetToast("account", item.id, targetAccount.alias || targetAccount.name)) return;
-    }
-    if (item.itemType === "card") {
-      const targetCard = scope.cards.find((card) => card.id === item.id);
-      if (targetCard && showLockedTargetToast("card", item.id, targetCard.name)) return;
-    }
     setPendingDeleteItem({ itemType: item.itemType, id: item.id });
   };
 
@@ -1200,20 +1115,6 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   };
 
   const startDrag = (item: DragItem, event: React.DragEvent<HTMLElement>) => {
-    if (item.itemType === "account") {
-      const targetAccount = scope.accounts.find((account) => account.id === item.id);
-      if (targetAccount && showLockedTargetToast("account", item.id, targetAccount.alias || targetAccount.name)) {
-        event.preventDefault();
-        return;
-      }
-    }
-    if (item.itemType === "card") {
-      const targetCard = scope.cards.find((card) => card.id === item.id);
-      if (targetCard && showLockedTargetToast("card", item.id, targetCard.name)) {
-        event.preventDefault();
-        return;
-      }
-    }
     event.stopPropagation();
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", item.id);
@@ -1341,8 +1242,6 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
     if (!dragItem || dragItem.itemType !== "account" || dragItem.ownerPersonId !== ownerPersonId) return;
     event.preventDefault();
     event.stopPropagation();
-    const targetCard = scope.cards.find((card) => card.id === cardId) ?? null;
-    if (targetCard && showLockedTargetToast("card", cardId, targetCard.name)) return;
     if (dragItem.isHidden) {
       applyHiddenState(dragItem, false);
       completeGuideDragTransaction("people-hidden-restore-drop");
@@ -1666,7 +1565,6 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                           type="button"
                           className="board-case-edit-button category-case-card-edit"
                           onClick={() => {
-                            if (showLockedTargetToast("account", account.id, account.alias || account.name)) return;
                             setEditingAccountId(account.id);
                             setEditAccountDraft(createDraftFromAccount(account));
                           }}
@@ -1786,7 +1684,6 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                           type="button"
                           className="board-case-edit-button category-case-card-edit"
                           onClick={() => {
-                            if (showLockedTargetToast("card", card.id, card.name)) return;
                             setEditingCardId(card.id);
                             setEditCardDraft(createDraftFromCard(card));
                           }}
@@ -2132,10 +2029,8 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
               if (pendingDeletePerson) {
                 deletePerson(workspaceId, pendingDeletePerson.id);
               } else if (pendingDeleteAccount) {
-                if (showLockedTargetToast("account", pendingDeleteAccount.id, pendingDeleteAccount.alias || pendingDeleteAccount.name)) return;
                 deleteAccount(workspaceId, pendingDeleteAccount.id);
               } else if (pendingDeleteCard) {
-                if (showLockedTargetToast("card", pendingDeleteCard.id, pendingDeleteCard.name)) return;
                 deleteCard(workspaceId, pendingDeleteCard.id);
               }
               setPendingDeleteItem(null);
@@ -2293,7 +2188,6 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
               event.preventDefault();
               const values = normalizeAccountDraftValues(editAccountDraft);
               if (!values.name) return;
-              if (showLockedTargetToast("account", editingAccount.id, editingAccount.alias || editingAccount.name)) return;
               updateAccount(workspaceId, editingAccount.id, values);
               setEditingAccountId(null);
               setEditAccountDraft(EMPTY_PERSON_ACCOUNT_DRAFT);
@@ -2461,7 +2355,6 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
               event.preventDefault();
               const values = normalizeCardDraftValues(editCardDraft);
               if (!values.name) return;
-              if (showLockedTargetToast("card", editingCard.id, editingCard.name)) return;
               updateCard(workspaceId, editingCard.id, values);
               setEditingCardId(null);
               setEditCardDraft(EMPTY_PERSON_CARD_DRAFT);
