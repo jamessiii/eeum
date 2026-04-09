@@ -563,7 +563,7 @@ export function CategoriesPage({ embedded = false }: { embedded?: boolean }) {
                       return (
                         <article
                           key={category.id}
-                          className={`category-case-card${getDragStateClassName(category.id)}${categoryPresenceConnections.length ? " is-presence-target" : ""}`}
+                          className={`category-case-card${getDragStateClassName(category.id)}${categoryPresenceConnections.length ? " is-presence-target has-presence-badge" : ""}`}
                           draggable
                           onDragStart={(event) =>
                             startDrag(

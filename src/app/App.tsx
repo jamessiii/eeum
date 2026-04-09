@@ -496,7 +496,7 @@ function DotoriStatusPanel({
 function AppFrame() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { addPerson, createEmptyWorkspace, isReady, state } = useAppState();
+  const { addPerson, createEmptyWorkspace, importState, isReady, state } = useAppState();
   const { showToast } = useToast();
   const { isDeveloperModeUnlocked, registerUnlockTap, lockDeveloperMode } = useDeveloperMode();
   useThemeMode();
@@ -507,6 +507,8 @@ function AppFrame() {
   const [dotoriReachability, setDotoriReachability] = useState<DotoriReachabilityState>("idle");
   const [dotoriPresence, setDotoriPresence] = useState<DotoriPresenceSnapshot>({ onlineCount: 0, connections: [] });
   const [dotoriPresenceRenderTick, setDotoriPresenceRenderTick] = useState(0);
+  const [dotoriRemoteSyncSignal, setDotoriRemoteSyncSignal] = useState(0);
+  const [dotoriRemoteBackupHint, setDotoriRemoteBackupHint] = useState<DotoriBackupMetadata | null>(null);
   const [dotoriPresenceTarget, setDotoriPresenceTarget] = useState<DotoriPresenceTarget>({
     kind: null,
     id: null,
@@ -522,6 +524,7 @@ function AppFrame() {
   const hasNormalizedInitialRouteRef = useRef(false);
   const dotoriAutoSyncTimeoutRef = useRef<number | null>(null);
   const dotoriAutoSyncErrorMessageRef = useRef<string | null>(null);
+  const dotoriAutoImportRunningRef = useRef(false);
   const dotoriClientIdRef = useRef<string>(getDotoriClientId());
   const dotoriPresenceSocketRef = useRef<WebSocket | null>(null);
   const dotoriPresenceReconnectTimeoutRef = useRef<number | null>(null);
@@ -893,6 +896,7 @@ function AppFrame() {
           const message = JSON.parse(String(event.data || "{}")) as {
             type?: string;
             snapshot?: DotoriPresenceSnapshot;
+            metadata?: DotoriBackupMetadata;
             error?: string;
           };
           if (message.type === "presence-snapshot" && message.snapshot) {
@@ -901,6 +905,11 @@ function AppFrame() {
               connections: [...message.snapshot.connections],
             });
             setDotoriPresenceRenderTick((current) => current + 1);
+            return;
+          }
+          if (message.type === "backup-updated" && message.metadata?.fileName) {
+            setDotoriRemoteBackupHint(message.metadata);
+            setDotoriRemoteSyncSignal((current) => current + 1);
           }
         } catch {
           setDotoriPresence({ onlineCount: 0, connections: [] });
@@ -958,9 +967,112 @@ function AppFrame() {
   }, [dotoriPresencePayload, dotoriReachability, dotoriSession.connected]);
 
   useEffect(() => {
+    if (!isReady || !dotoriSession.connected || !dotoriSession.autoSyncEnabled || dotoriReachability !== "online") {
+      return;
+    }
+
+    let cancelled = false;
+
+    const syncFromRemote = async () => {
+      if (dotoriAutoImportRunningRef.current) return;
+
+      try {
+        const latestRemoteBackup = await loadLatestDotoriBackup(dotoriSession.form, DOTORI_BACKUP_FOLDER_NAME);
+        const remoteSummary =
+          latestRemoteBackup.exists === false || !latestRemoteBackup.content
+            ? createEmptyBackupPreviewSummary()
+            : summarizeBackupPayload(latestRemoteBackup.content);
+        const latestRemoteMetadata: DotoriBackupMetadata = {
+          exists: latestRemoteBackup.exists,
+          fileName: latestRemoteBackup.fileName,
+          savedAt: latestRemoteBackup.savedAt ?? null,
+          backupCommitId: remoteSummary.backupCommitId,
+        };
+        if (cancelled || latestRemoteMetadata.exists === false || !latestRemoteMetadata.fileName) {
+          return;
+        }
+
+        if (isSameDotoriBackupVersion(dotoriSession.syncedBackup, latestRemoteMetadata)) {
+          return;
+        }
+
+        const isLocalClean = isSameDotoriBackupVersion(dotoriSession.syncedBackup, {
+          fileName: null,
+          savedAt: null,
+          backupCommitId: localBackupSummary.backupCommitId,
+        });
+
+        if (!isLocalClean) {
+          return;
+        }
+
+        dotoriAutoImportRunningRef.current = true;
+        setIsDotoriAutoSyncRunning(true);
+
+        if (cancelled || latestRemoteBackup.exists === false || !latestRemoteBackup.fileName || !latestRemoteBackup.content) {
+          return;
+        }
+
+        const nextSyncedBackup: DotoriBackupMetadata = {
+          exists: latestRemoteBackup.exists,
+          fileName: latestRemoteBackup.fileName,
+          savedAt: latestRemoteBackup.savedAt ?? null,
+          backupCommitId: remoteSummary.backupCommitId,
+        };
+
+        await importState(
+          new File([latestRemoteBackup.content], latestRemoteBackup.fileName, {
+            type: "application/json",
+          }),
+        );
+
+        const nextSession: DotoriSyncSession = {
+          ...dotoriSession,
+          latestFileName: latestRemoteBackup.fileName,
+          syncedBackup: nextSyncedBackup,
+        };
+        setDotoriRemoteBackupHint(nextSyncedBackup);
+        dotoriAutoSyncErrorMessageRef.current = null;
+        writeDotoriSyncSession(nextSession);
+        setDotoriSession(nextSession);
+        showToast(`${latestRemoteBackup.fileName} 최신본을 자동으로 불러왔습니다.`, "info");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "도토리창고 자동가져오기 중 오류가 발생했습니다.";
+        if (dotoriAutoSyncErrorMessageRef.current !== message) {
+          dotoriAutoSyncErrorMessageRef.current = message;
+          showToast(message, "error");
+        }
+      } finally {
+        dotoriAutoImportRunningRef.current = false;
+        setIsDotoriAutoSyncRunning(false);
+      }
+    };
+
+    void syncFromRemote();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    dotoriReachability,
+    dotoriRemoteBackupHint,
+    dotoriRemoteSyncSignal,
+    dotoriSession,
+    importState,
+    isReady,
+    localBackupSummary.backupCommitId,
+    showToast,
+  ]);
+
+  useEffect(() => {
     if (dotoriAutoSyncTimeoutRef.current) {
       window.clearTimeout(dotoriAutoSyncTimeoutRef.current);
       dotoriAutoSyncTimeoutRef.current = null;
+    }
+
+    if (dotoriAutoImportRunningRef.current) {
+      setIsDotoriAutoSyncRunning(false);
+      return;
     }
 
     if (!isReady || !dotoriSession.connected || !dotoriSession.autoSyncEnabled) {
