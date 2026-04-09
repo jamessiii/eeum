@@ -2935,8 +2935,8 @@ label,
 
 .dotori-presence-target-badge-list.is-floating {
   position: absolute;
-  top: 0.72rem;
-  left: 0.72rem;
+  top: 0.54rem;
+  left: 0.56rem;
   z-index: 1;
   max-width: calc(100% - 3.8rem);
 }
@@ -14210,6 +14210,10 @@ textarea:focus {
   gap: 0.35rem;
   padding-top: 0;
   padding-right: 2.6rem;
+}
+
+.category-case-card.has-presence-badge .category-case-card-copy {
+  padding-top: 1.05rem;
 }
 
 .category-case-card-copy strong {

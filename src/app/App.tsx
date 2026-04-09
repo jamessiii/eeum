@@ -496,7 +496,7 @@ function DotoriStatusPanel({
 function AppFrame() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { addPerson, createEmptyWorkspace, isReady, state } = useAppState();
+  const { addPerson, createEmptyWorkspace, importState, isReady, state } = useAppState();
   const { showToast } = useToast();
   const { isDeveloperModeUnlocked, registerUnlockTap, lockDeveloperMode } = useDeveloperMode();
   useThemeMode();
@@ -507,6 +507,8 @@ function AppFrame() {
   const [dotoriReachability, setDotoriReachability] = useState<DotoriReachabilityState>("idle");
   const [dotoriPresence, setDotoriPresence] = useState<DotoriPresenceSnapshot>({ onlineCount: 0, connections: [] });
   const [dotoriPresenceRenderTick, setDotoriPresenceRenderTick] = useState(0);
+  const [dotoriRemoteSyncSignal, setDotoriRemoteSyncSignal] = useState(0);
+  const [dotoriRemoteBackupHint, setDotoriRemoteBackupHint] = useState<DotoriBackupMetadata | null>(null);
   const [dotoriPresenceTarget, setDotoriPresenceTarget] = useState<DotoriPresenceTarget>({
     kind: null,
     id: null,
@@ -905,6 +907,7 @@ function AppFrame() {
           const message = JSON.parse(String(event.data || "{}")) as {
             type?: string;
             snapshot?: DotoriPresenceSnapshot;
+            metadata?: DotoriBackupMetadata;
             error?: string;
           };
           if (message.type === "presence-snapshot" && message.snapshot) {
@@ -913,6 +916,11 @@ function AppFrame() {
               connections: [...message.snapshot.connections],
             });
             setDotoriPresenceRenderTick((current) => current + 1);
+            return;
+          }
+          if (message.type === "backup-updated" && message.metadata?.fileName) {
+            setDotoriRemoteBackupHint(message.metadata);
+            setDotoriRemoteSyncSignal((current) => current + 1);
           }
         } catch {
           setDotoriPresence({ onlineCount: 0, connections: [] });
@@ -1009,6 +1017,7 @@ function AppFrame() {
           savedAt: null,
           backupCommitId: localBackupCommitIdRef.current,
         });
+        });
 
         if (!isLocalClean) {
           return;
@@ -1034,11 +1043,11 @@ function AppFrame() {
           }),
         );
 
-        const nextSession: DotoriSyncSession = {
-          ...currentSession,
-          latestFileName: latestRemoteBackup.fileName,
-          syncedBackup: nextSyncedBackup,
-        };
+          const nextSession: DotoriSyncSession = {
+            ...currentSession,
+            latestFileName: latestRemoteBackup.fileName,
+            syncedBackup: nextSyncedBackup,
+          };
         setDotoriRemoteBackupHint(nextSyncedBackup);
         dotoriAutoSyncErrorMessageRef.current = null;
         writeDotoriSyncSession(nextSession);
@@ -1083,6 +1092,11 @@ function AppFrame() {
     if (dotoriAutoSyncTimeoutRef.current) {
       window.clearTimeout(dotoriAutoSyncTimeoutRef.current);
       dotoriAutoSyncTimeoutRef.current = null;
+    }
+
+    if (dotoriAutoImportRunningRef.current) {
+      setIsDotoriAutoSyncRunning(false);
+      return;
     }
 
     if (!isReady || !dotoriSession.connected || !dotoriSession.autoSyncEnabled) {
