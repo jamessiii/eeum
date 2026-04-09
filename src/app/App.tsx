@@ -1109,6 +1109,7 @@ function AppFrame() {
       dotoriSkipAutoSaveCommitIdRef.current &&
       dotoriSkipAutoSaveCommitIdRef.current === (localBackupSummary.backupCommitId ?? null)
     ) {
+      dotoriSkipAutoSaveCommitIdRef.current = null;
       setIsDotoriAutoSyncRunning(false);
       return;
     }
