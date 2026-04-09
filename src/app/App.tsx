@@ -508,6 +508,7 @@ function AppFrame() {
   const [dotoriPresence, setDotoriPresence] = useState<DotoriPresenceSnapshot>({ onlineCount: 0, connections: [] });
   const [dotoriPresenceRenderTick, setDotoriPresenceRenderTick] = useState(0);
   const [dotoriRemoteSyncSignal, setDotoriRemoteSyncSignal] = useState(0);
+  const [dotoriRemoteBackupHint, setDotoriRemoteBackupHint] = useState<DotoriBackupMetadata | null>(null);
   const [dotoriPresenceTarget, setDotoriPresenceTarget] = useState<DotoriPresenceTarget>({
     kind: null,
     id: null,
@@ -923,6 +924,7 @@ function AppFrame() {
             if (message.clientId && message.clientId === dotoriClientIdRef.current) {
               return;
             }
+            setDotoriRemoteBackupHint(message.metadata);
             setDotoriRemoteSyncSignal((current) => current + 1);
           }
         } catch {
@@ -1051,6 +1053,7 @@ function AppFrame() {
           latestFileName: latestRemoteBackup.fileName,
           syncedBackup: nextSyncedBackup,
         };
+        setDotoriRemoteBackupHint(nextSyncedBackup);
         dotoriAutoSyncErrorMessageRef.current = null;
         writeDotoriSyncSession(nextSession);
         setDotoriSession(nextSession);
@@ -1074,6 +1077,7 @@ function AppFrame() {
     };
   }, [
     dotoriReachability,
+    dotoriRemoteBackupHint,
     dotoriRemoteSyncSignal,
     dotoriSession.autoSyncEnabled,
     dotoriSession.connected,
@@ -1169,6 +1173,7 @@ function AppFrame() {
               backupCommitId: localBackupSummary.backupCommitId,
             },
           };
+          setDotoriRemoteBackupHint(nextSession.syncedBackup);
           dotoriAutoSyncErrorMessageRef.current = null;
           writeDotoriSyncSession(nextSession);
           setDotoriSession(nextSession);
