@@ -7,7 +7,15 @@ import {
 } from "../domain/app/backup";
 import { GUIDE_V1_RESET_EVENT, readGuideRuntime } from "../domain/guidance/guideRuntime";
 import { Link, useNavigate } from "react-router-dom";
-import { loadLatestDotoriBackup, saveDotoriBackup, type DotoriBackupMetadata } from "./api/dotoriStorage";
+import {
+  clearDotoriPresence,
+  healthCheckDotoriStorage,
+  loadLatestDotoriBackup,
+  saveDotoriBackup,
+  sendDotoriPresenceHeartbeat,
+  type DotoriBackupMetadata,
+  type DotoriPresenceSnapshot,
+} from "./api/dotoriStorage";
 import { MotionProvider } from "./motion/MotionProvider";
 import { AppModal } from "./components/AppModal";
 import { AppGuidePanel } from "./components/AppGuidePanel";
@@ -15,6 +23,7 @@ import {
   createDotoriBackupFileName,
   DOTORI_BACKUP_FOLDER_NAME,
   DOTORI_SYNC_SESSION_EVENT,
+  getDotoriClientId,
   isSameDotoriBackupVersion,
   readDotoriSyncSession,
   writeDotoriSyncSession,
@@ -52,6 +61,10 @@ const DeveloperPage = lazy(() => import("./pages/DeveloperPage").then((module) =
 const DEVELOPER_MODE_KEY = "spending-diary.developer-mode";
 const ASSET_BASE = import.meta.env.BASE_URL;
 const DOTORI_AUTO_SYNC_DEBOUNCE_MS = 1200;
+const DOTORI_HEALTH_POLL_INTERVAL_MS = 20 * 1000;
+const DOTORI_PRESENCE_HEARTBEAT_INTERVAL_MS = 12 * 1000;
+
+type DotoriReachabilityState = "idle" | "online" | "offline";
 
 type NavItem = {
   to: string;
@@ -341,6 +354,56 @@ function AppBrandMark({ size = "compact" }: { size?: "compact" | "expanded" }) {
   );
 }
 
+function DotoriStatusPanel({
+  vpnStatusLabel,
+  connectionStatusLabel,
+  autoSyncStatusLabel,
+  concurrentStatusLabel,
+  reachabilityState,
+  otherConnections,
+}: {
+  vpnStatusLabel: string;
+  connectionStatusLabel: string;
+  autoSyncStatusLabel: string;
+  concurrentStatusLabel: string;
+  reachabilityState: DotoriReachabilityState;
+  otherConnections: DotoriPresenceSnapshot["connections"];
+}) {
+  return (
+    <div className="app-sidebar-status-panel">
+      <div className="app-sidebar-status-row">
+        <strong>내부망</strong>
+        <span className={`app-sidebar-status-pill${reachabilityState === "online" ? " is-online" : reachabilityState === "offline" ? " is-offline" : ""}`}>
+          {vpnStatusLabel}
+        </span>
+      </div>
+      <div className="app-sidebar-status-row">
+        <strong>도토리창고</strong>
+        <span className="app-sidebar-status-text">{connectionStatusLabel}</span>
+      </div>
+      <div className="app-sidebar-status-row">
+        <strong>자동동기화</strong>
+        <span className="app-sidebar-status-text">{autoSyncStatusLabel}</span>
+      </div>
+      <div className="app-sidebar-status-row">
+        <strong>동시접속</strong>
+        <span className="app-sidebar-status-text">{concurrentStatusLabel}</span>
+      </div>
+      {otherConnections.length ? (
+        <div className="app-sidebar-status-presence">
+          {otherConnections.slice(0, 3).map((connection) => (
+            <span key={`${connection.clientId}-${connection.lastSeenAt}`} className="app-sidebar-status-presence-chip">
+              {connection.username}
+              {connection.workspaceName ? ` · ${connection.workspaceName}` : ""}
+              {connection.page ? ` · ${connection.page}` : ""}
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function AppFrame() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -352,6 +415,8 @@ function AppFrame() {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [dotoriSession, setDotoriSession] = useState<DotoriSyncSession>(() => readDotoriSyncSession());
   const [isDotoriAutoSyncRunning, setIsDotoriAutoSyncRunning] = useState(false);
+  const [dotoriReachability, setDotoriReachability] = useState<DotoriReachabilityState>("idle");
+  const [dotoriPresence, setDotoriPresence] = useState<DotoriPresenceSnapshot>({ onlineCount: 0, connections: [] });
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [guideBeaconState, setGuideBeaconState] = useState<"hidden" | "entering" | "idle">("hidden");
   const [isGuideBeaconMounted, setIsGuideBeaconMounted] = useState(false);
@@ -362,6 +427,7 @@ function AppFrame() {
   const hasNormalizedInitialRouteRef = useRef(false);
   const dotoriAutoSyncTimeoutRef = useRef<number | null>(null);
   const dotoriAutoSyncErrorMessageRef = useRef<string | null>(null);
+  const dotoriClientIdRef = useRef<string>(getDotoriClientId());
 
   const localBackupContent = useMemo(() => createBackupContent(state), [state]);
   const localBackupSummary = useMemo(() => summarizeBackupPayload(localBackupContent), [localBackupContent]);
@@ -552,6 +618,88 @@ function AppFrame() {
   }, []);
 
   useEffect(() => {
+    if (!dotoriSession.form.host.trim() || !dotoriSession.form.port.trim() || !dotoriSession.form.username.trim() || !dotoriSession.form.password.trim()) {
+      setDotoriReachability("idle");
+      return;
+    }
+
+    let cancelled = false;
+    let intervalId = 0;
+
+    const checkHealth = async () => {
+      try {
+        await healthCheckDotoriStorage(dotoriSession.form);
+        if (!cancelled) {
+          setDotoriReachability("online");
+        }
+      } catch {
+        if (!cancelled) {
+          setDotoriReachability("offline");
+        }
+      }
+    };
+
+    void checkHealth();
+    intervalId = window.setInterval(() => {
+      void checkHealth();
+    }, DOTORI_HEALTH_POLL_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [dotoriSession.form]);
+
+  useEffect(() => {
+    if (!dotoriSession.connected || dotoriReachability !== "online") {
+      setDotoriPresence({ onlineCount: 0, connections: [] });
+      return;
+    }
+
+    let cancelled = false;
+    let intervalId = 0;
+
+    const sendHeartbeat = async () => {
+      try {
+        const snapshot = await sendDotoriPresenceHeartbeat(dotoriSession.form, {
+          clientId: dotoriClientIdRef.current,
+          page: getDesktopHeaderTitle(location.pathname),
+          workspaceName: state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId)?.name ?? null,
+          autoSyncEnabled: dotoriSession.autoSyncEnabled,
+          dotoriConnected: dotoriSession.connected,
+          vpnReachable: dotoriReachability === "online",
+        });
+        if (!cancelled) {
+          setDotoriPresence(snapshot);
+        }
+      } catch {
+        if (!cancelled) {
+          setDotoriPresence({ onlineCount: 0, connections: [] });
+        }
+      }
+    };
+
+    void sendHeartbeat();
+    intervalId = window.setInterval(() => {
+      void sendHeartbeat();
+    }, DOTORI_PRESENCE_HEARTBEAT_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+      void clearDotoriPresence(dotoriSession.form, dotoriClientIdRef.current).catch(() => {});
+    };
+  }, [
+    dotoriReachability,
+    dotoriSession.autoSyncEnabled,
+    dotoriSession.connected,
+    dotoriSession.form,
+    location.pathname,
+    state.activeWorkspaceId,
+    state.workspaces,
+  ]);
+
+  useEffect(() => {
     if (dotoriAutoSyncTimeoutRef.current) {
       window.clearTimeout(dotoriAutoSyncTimeoutRef.current);
       dotoriAutoSyncTimeoutRef.current = null;
@@ -646,8 +794,25 @@ function AppFrame() {
   if (!activeWorkspace) return <EmptyWorkspaceScreen />;
 
   const desktopHeaderTitle = getDesktopHeaderTitle(location.pathname);
-  const shouldShowDotoriConnectedBadge = dotoriSession.connected;
-  const shouldShowDotoriAutoSyncBadge = dotoriSession.connected && dotoriSession.autoSyncEnabled;
+  const otherPresenceConnections = dotoriPresence.connections.filter((connection) => connection.clientId !== dotoriClientIdRef.current);
+  const vpnStatusLabel =
+    dotoriReachability === "online"
+      ? "내부망 연결 가능"
+      : dotoriReachability === "offline"
+        ? "연결 확인 필요"
+        : "연결 정보 대기";
+  const connectionStatusLabel = dotoriSession.connected ? "도토리창고 연결됨" : "연결 전";
+  const autoSyncStatusLabel = dotoriSession.autoSyncEnabled
+    ? isDotoriAutoSyncRunning
+      ? "자동동기화 진행 중"
+      : "자동동기화 대기 중"
+    : "수동 동기화";
+  const concurrentStatusLabel =
+    dotoriReachability !== "online"
+      ? "연결 후 확인"
+      : otherPresenceConnections.length
+        ? `${otherPresenceConnections.length}명 함께 접속 중`
+        : "나만 접속 중";
 
   const closeCreateWorkspaceModal = () => {
     setIsCreateWorkspaceOpen(false);
@@ -665,19 +830,9 @@ function AppFrame() {
       <aside className="app-sidebar" aria-label="주요 메뉴">
         <div className="app-sidebar-panel">
           <div className="app-sidebar-header">
-            <div className="app-sidebar-header-top">
-              <Link to="/dashboard" className="sidebar-brand-button app-sidebar-brand" onClick={registerUnlockTap} aria-label="소비일기 첫장으로 이동">
-                <AppBrandMark size="expanded" />
-              </Link>
-              {shouldShowDotoriConnectedBadge || shouldShowDotoriAutoSyncBadge ? (
-                <div className="app-sidebar-dotori-badges">
-                  {shouldShowDotoriConnectedBadge ? <span className="app-sidebar-dotori-badge">도토리창고 연결됨</span> : null}
-                  {shouldShowDotoriAutoSyncBadge ? (
-                    <span className={`app-sidebar-dotori-badge is-syncing${isDotoriAutoSyncRunning ? " is-running" : ""}`}>자동동기화중</span>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
+            <Link to="/dashboard" className="sidebar-brand-button app-sidebar-brand" onClick={registerUnlockTap} aria-label="소비일기 첫장으로 이동">
+              <AppBrandMark size="expanded" />
+            </Link>
             <p className="app-sidebar-copy">작은 소비도, 소중한 기억이 되도록.</p>
           </div>
 
@@ -686,6 +841,14 @@ function AppFrame() {
           </div>
 
           <div className="app-sidebar-footer">
+            <DotoriStatusPanel
+              vpnStatusLabel={vpnStatusLabel}
+              connectionStatusLabel={connectionStatusLabel}
+              autoSyncStatusLabel={autoSyncStatusLabel}
+              concurrentStatusLabel={concurrentStatusLabel}
+              reachabilityState={dotoriReachability}
+              otherConnections={otherPresenceConnections}
+            />
             <div className="app-sidebar-note">
               <img className="app-sidebar-note-image" src={`${ASSET_BASE}slogan.png`} alt="기록이 쌓이면, 마음의 흐름이 보여요" />
             </div>
@@ -772,6 +935,14 @@ function AppFrame() {
           <AppSidebarNav isDeveloperModeUnlocked={isDeveloperModeUnlocked} onNavigate={() => setIsMobileNavOpen(false)} />
         </div>
         <div className="app-mobile-drawer-footer">
+          <DotoriStatusPanel
+            vpnStatusLabel={vpnStatusLabel}
+            connectionStatusLabel={connectionStatusLabel}
+            autoSyncStatusLabel={autoSyncStatusLabel}
+            concurrentStatusLabel={concurrentStatusLabel}
+            reachabilityState={dotoriReachability}
+            otherConnections={otherPresenceConnections}
+          />
           <div className="app-sidebar-note">
             <img className="app-sidebar-note-image" src={`${ASSET_BASE}slogan.png`} alt="기록이 쌓이면, 마음의 흐름이 보여요" />
           </div>

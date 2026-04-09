@@ -1741,47 +1741,8 @@ label,
   gap: 0.55rem;
 }
 
-.app-sidebar-header-top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
 .app-sidebar-brand {
   width: 100%;
-}
-
-.app-sidebar-dotori-badges {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 0.4rem;
-}
-
-.app-sidebar-dotori-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.36rem 0.62rem;
-  border-radius: 999px;
-  background: rgba(96, 125, 96, 0.11);
-  border: 1px solid rgba(96, 125, 96, 0.18);
-  color: #5f714d;
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  white-space: nowrap;
-}
-
-.app-sidebar-dotori-badge.is-syncing {
-  background: rgba(92, 119, 182, 0.1);
-  border-color: rgba(92, 119, 182, 0.18);
-  color: #4e6799;
-}
-
-.app-sidebar-dotori-badge.is-syncing.is-running {
-  background: rgba(92, 119, 182, 0.16);
-  box-shadow: 0 8px 18px rgba(92, 119, 182, 0.14);
 }
 
 .app-sidebar-copy {
@@ -1801,6 +1762,90 @@ label,
   display: grid;
   gap: 0.4rem;
   align-content: start;
+}
+
+.app-sidebar-status-panel {
+  display: grid;
+  gap: 0.32rem;
+  padding: 0.65rem 0.72rem;
+  border-radius: 0.92rem;
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.84), transparent 56%),
+    linear-gradient(180deg, rgba(249, 245, 238, 0.94), rgba(245, 238, 228, 0.92));
+  border: 1px solid rgba(139, 94, 60, 0.12);
+  box-shadow: 0 10px 20px rgba(109, 69, 38, 0.05);
+}
+
+.app-sidebar-status-row {
+  display: grid;
+  grid-template-columns: 3.5rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.42rem;
+  min-width: 0;
+}
+
+.app-sidebar-status-row strong {
+  color: #775540;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.app-sidebar-status-text {
+  color: #6e6253;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.2;
+  min-width: 0;
+}
+
+.app-sidebar-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  min-height: 1.42rem;
+  padding: 0.14rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.14);
+  color: #6e7a8d;
+  font-size: 0.68rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.app-sidebar-status-pill.is-online {
+  background: rgba(63, 143, 105, 0.14);
+  color: #3f775a;
+}
+
+.app-sidebar-status-pill.is-offline {
+  background: rgba(212, 69, 69, 0.12);
+  color: #b14545;
+}
+
+.app-sidebar-status-presence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.28rem;
+  margin-top: 0.18rem;
+  padding-top: 0.28rem;
+  border-top: 1px dashed rgba(139, 94, 60, 0.12);
+}
+
+.app-sidebar-status-presence-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 1.32rem;
+  padding: 0.1rem 0.46rem;
+  border-radius: 999px;
+  background: rgba(115, 131, 178, 0.08);
+  color: #6c7890;
+  font-size: 0.67rem;
+  font-weight: 700;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .app-sidebar-note {

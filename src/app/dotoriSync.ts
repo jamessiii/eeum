@@ -1,6 +1,8 @@
 import type { DotoriBackupMetadata, DotoriConnectionForm } from "./api/dotoriStorage";
 
 const DOTORI_SYNC_SESSION_KEY = "spending-diary.dotori-sync-session";
+const DOTORI_CLIENT_ID_KEY = "spending-diary.dotori-client-id";
+
 export const DOTORI_SYNC_SESSION_EVENT = "spending-diary:dotori-sync-session";
 export const DOTORI_BACKUP_FOLDER_NAME = "소비일기 데이터베이스";
 
@@ -78,6 +80,19 @@ export function clearDotoriSyncSession(form?: DotoriConnectionForm) {
 
 export function createDotoriBackupFileName(date = new Date()) {
   return `${date.getFullYear()}년${date.getMonth() + 1}월${date.getDate()}일의기록.json`;
+}
+
+export function getDotoriClientId() {
+  if (typeof window === "undefined") {
+    return "server";
+  }
+
+  const current = window.localStorage.getItem(DOTORI_CLIENT_ID_KEY);
+  if (current) return current;
+
+  const next = window.crypto?.randomUUID?.() ?? `client-${Date.now()}`;
+  window.localStorage.setItem(DOTORI_CLIENT_ID_KEY, next);
+  return next;
 }
 
 export function isSameDotoriBackupVersion(left: DotoriBackupMetadata | null, right: DotoriBackupMetadata | null) {

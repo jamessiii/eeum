@@ -13,6 +13,24 @@ type DotoriLatestBackupResponse = {
   savedAt?: string | null;
 };
 
+export type DotoriPresenceConnection = {
+  username: string;
+  clientId: string;
+  page: string;
+  workspaceName: string | null;
+  autoSyncEnabled: boolean;
+  dotoriConnected: boolean;
+  vpnReachable: boolean;
+  connectedAt: string;
+  lastSeenAt: string;
+};
+
+export type DotoriPresenceSnapshot = {
+  ok?: boolean;
+  onlineCount: number;
+  connections: DotoriPresenceConnection[];
+};
+
 export type DotoriBackupMetadata = {
   exists?: boolean;
   fileName: string | null;
@@ -26,7 +44,7 @@ type DotoriErrorResponse = {
 };
 
 type DotoriRequestOptions = {
-  method?: "GET" | "POST";
+  method?: "GET" | "POST" | "DELETE";
   body?: string;
 };
 
@@ -114,5 +132,33 @@ export async function loadLatestDotoriBackupMetadata(form: DotoriConnectionForm,
     form,
     `/api/spending-diary/backups/latest/meta?${searchParams.toString()}`,
   );
+}
+
+export async function sendDotoriPresenceHeartbeat(
+  form: DotoriConnectionForm,
+  payload: {
+    clientId: string;
+    page: string;
+    workspaceName: string | null;
+    autoSyncEnabled: boolean;
+    dotoriConnected: boolean;
+    vpnReachable: boolean;
+  },
+) {
+  return requestDotori<DotoriPresenceSnapshot>(form, "/api/spending-diary/presence/heartbeat", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function loadDotoriPresence(form: DotoriConnectionForm) {
+  return requestDotori<DotoriPresenceSnapshot>(form, "/api/spending-diary/presence");
+}
+
+export async function clearDotoriPresence(form: DotoriConnectionForm, clientId: string) {
+  const searchParams = new URLSearchParams({ clientId });
+  return requestDotori<DotoriPresenceSnapshot>(form, `/api/spending-diary/presence?${searchParams.toString()}`, {
+    method: "DELETE",
+  });
 }
 
