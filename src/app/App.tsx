@@ -779,7 +779,19 @@ function AppFrame() {
         dotoriPresenceReconnectTimeoutRef.current = null;
       }
 
-      const socket = new WebSocket(createDotoriPresenceSocketUrl(dotoriSession.form));
+      const socketUrl = createDotoriPresenceSocketUrl(dotoriSession.form);
+      if (typeof window !== "undefined" && window.location.protocol === "https:" && socketUrl.startsWith("ws://")) {
+        setDotoriPresence({ onlineCount: 0, connections: [] });
+        return;
+      }
+
+      let socket: WebSocket;
+      try {
+        socket = new WebSocket(socketUrl);
+      } catch {
+        setDotoriPresence({ onlineCount: 0, connections: [] });
+        return;
+      }
       dotoriPresenceIntentionalCloseRef.current = false;
       dotoriPresenceSocketRef.current = socket;
 
