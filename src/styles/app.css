@@ -2948,45 +2948,6 @@ label,
   gap: 0.18rem;
 }
 
-.app-runtime-error-shell {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 2rem;
-}
-
-.app-runtime-error-card {
-  width: min(760px, 100%);
-  padding: 1.4rem 1.6rem;
-  border-radius: 1.4rem;
-  border: 1px solid rgba(220, 38, 38, 0.22);
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 24px 50px rgba(15, 23, 42, 0.12);
-  color: #1f2937;
-}
-
-.app-runtime-error-card strong {
-  display: block;
-  margin-bottom: 0.55rem;
-  font-size: 1rem;
-}
-
-.app-runtime-error-card p {
-  margin: 0 0 0.75rem;
-  color: #b91c1c;
-  font-weight: 700;
-}
-
-.app-runtime-error-card pre {
-  margin: 0;
-  max-height: 280px;
-  overflow: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-size: 0.76rem;
-  line-height: 1.45;
-}
-
 .app-top-nav.is-sidebar-nav .nav-parent-link,
 .app-top-nav.is-sidebar-nav .nav-sub-link {
   justify-content: flex-start;
