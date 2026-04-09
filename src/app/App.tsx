@@ -525,6 +525,7 @@ function AppFrame() {
   const dotoriAutoSyncTimeoutRef = useRef<number | null>(null);
   const dotoriAutoSyncErrorMessageRef = useRef<string | null>(null);
   const dotoriAutoImportRunningRef = useRef(false);
+  const dotoriSkipAutoSaveCommitIdRef = useRef<string | null>(null);
   const dotoriSessionRef = useRef(dotoriSession);
   const localBackupCommitIdRef = useRef<string | null>(null);
   const dotoriClientIdRef = useRef<string>(getDotoriClientId());
@@ -1035,6 +1036,7 @@ function AppFrame() {
           savedAt: latestRemoteBackup.savedAt ?? null,
           backupCommitId: remoteSummary.backupCommitId,
         };
+        dotoriSkipAutoSaveCommitIdRef.current = remoteSummary.backupCommitId ?? null;
 
         await importState(
           new File([latestRemoteBackup.content], latestRemoteBackup.fileName, {
@@ -1099,6 +1101,15 @@ function AppFrame() {
     }
 
     if (!isReady || !dotoriSession.connected || !dotoriSession.autoSyncEnabled) {
+      setIsDotoriAutoSyncRunning(false);
+      return;
+    }
+
+    if (
+      dotoriSkipAutoSaveCommitIdRef.current &&
+      dotoriSkipAutoSaveCommitIdRef.current === (localBackupSummary.backupCommitId ?? null)
+    ) {
+      dotoriSkipAutoSaveCommitIdRef.current = null;
       setIsDotoriAutoSyncRunning(false);
       return;
     }
