@@ -146,6 +146,10 @@ function isImageNavIcon(iconKey: string) {
   return iconKey.startsWith("menu-");
 }
 
+function createMenuIconSrc(iconKey: string) {
+  return `${ASSET_BASE}menu-icons/${iconKey}.png`;
+}
+
 function useDeveloperMode() {
   const [isDeveloperModeUnlocked, setIsDeveloperModeUnlocked] = useState(false);
   const [, setUnlockAttempts] = useState<number[]>([]);
@@ -237,17 +241,11 @@ function AppSidebarNav({
             data-guide-target={navGuideTargetMap[item.to] ?? undefined}
             onClick={onNavigate}
           >
-            <span
-              className={`nav-sidebar-icon nav-sidebar-icon--${iconKey}${isImageNavIcon(iconKey) ? " is-image-icon" : ""}`}
-              style={
-                isImageNavIcon(iconKey)
-                  ? ({
-                      "--nav-icon-image": `url(${ASSET_BASE}menu-icons/${iconKey}.png)`,
-                    } as never)
-                  : undefined
-              }
-              aria-hidden="true"
-            />
+            {isImageNavIcon(iconKey) ? (
+              <img className="nav-sidebar-icon-image" src={createMenuIconSrc(iconKey)} alt="" aria-hidden="true" />
+            ) : (
+              <span className={`nav-sidebar-icon nav-sidebar-icon--${iconKey}`} aria-hidden="true" />
+            )}
             <span className="sidebar-nav-parent-label">
               <span>{item.label}</span>
               {itemPresenceConnections.length ? (
