@@ -1,10 +1,25 @@
 ﻿import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { HashRouter, Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
+import {
+  createBackupContent,
+  createEmptyBackupPreviewSummary,
+  summarizeBackupPayload,
+} from "../domain/app/backup";
 import { GUIDE_V1_RESET_EVENT, readGuideRuntime } from "../domain/guidance/guideRuntime";
 import { Link, useNavigate } from "react-router-dom";
+import { loadLatestDotoriBackup, saveDotoriBackup, type DotoriBackupMetadata } from "./api/dotoriStorage";
 import { MotionProvider } from "./motion/MotionProvider";
 import { AppModal } from "./components/AppModal";
 import { AppGuidePanel } from "./components/AppGuidePanel";
+import {
+  createDotoriBackupFileName,
+  DOTORI_BACKUP_FOLDER_NAME,
+  DOTORI_SYNC_SESSION_EVENT,
+  isSameDotoriBackupVersion,
+  readDotoriSyncSession,
+  writeDotoriSyncSession,
+  type DotoriSyncSession,
+} from "./dotoriSync";
 import { EmptyWorkspaceScreen, ONBOARDING_COMPLETE_KEY, WORKSPACE_SETUP_KEY } from "./pages/EmptyWorkspaceScreen";
 import { LoadingScreen } from "./pages/LoadingScreen";
 import { AppStateProvider, useAppState } from "./state/AppStateProvider";
@@ -36,6 +51,7 @@ const DeveloperPage = lazy(() => import("./pages/DeveloperPage").then((module) =
 
 const DEVELOPER_MODE_KEY = "spending-diary.developer-mode";
 const ASSET_BASE = import.meta.env.BASE_URL;
+const DOTORI_AUTO_SYNC_DEBOUNCE_MS = 1200;
 
 type NavItem = {
   to: string;
@@ -329,10 +345,13 @@ function AppFrame() {
   const location = useLocation();
   const navigate = useNavigate();
   const { addPerson, createEmptyWorkspace, isReady, state } = useAppState();
+  const { showToast } = useToast();
   const { isDeveloperModeUnlocked, registerUnlockTap, lockDeveloperMode } = useDeveloperMode();
   useThemeMode();
   const [isCreateWorkspaceOpen, setIsCreateWorkspaceOpen] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [dotoriSession, setDotoriSession] = useState<DotoriSyncSession>(() => readDotoriSyncSession());
+  const [isDotoriAutoSyncRunning, setIsDotoriAutoSyncRunning] = useState(false);
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [guideBeaconState, setGuideBeaconState] = useState<"hidden" | "entering" | "idle">("hidden");
   const [isGuideBeaconMounted, setIsGuideBeaconMounted] = useState(false);
@@ -341,6 +360,11 @@ function AppFrame() {
   const [isOnboardingEntering, setIsOnboardingEntering] = useState(false);
   const hasPlayedGuideBeaconIntroRef = useRef(false);
   const hasNormalizedInitialRouteRef = useRef(false);
+  const dotoriAutoSyncTimeoutRef = useRef<number | null>(null);
+  const dotoriAutoSyncErrorMessageRef = useRef<string | null>(null);
+
+  const localBackupContent = useMemo(() => createBackupContent(state), [state]);
+  const localBackupSummary = useMemo(() => summarizeBackupPayload(localBackupContent), [localBackupContent]);
 
   useEffect(() => {
     let frameId = 0;
@@ -503,6 +527,118 @@ function AppFrame() {
     };
   }, [isMobileNavOpen]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const syncSession = () => {
+      setDotoriSession(readDotoriSyncSession());
+    };
+
+    const handleCustomSync = () => {
+      syncSession();
+    };
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key && event.key !== "spending-diary.dotori-sync-session") return;
+      syncSession();
+    };
+
+    window.addEventListener(DOTORI_SYNC_SESSION_EVENT, handleCustomSync as EventListener);
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      window.removeEventListener(DOTORI_SYNC_SESSION_EVENT, handleCustomSync as EventListener);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (dotoriAutoSyncTimeoutRef.current) {
+      window.clearTimeout(dotoriAutoSyncTimeoutRef.current);
+      dotoriAutoSyncTimeoutRef.current = null;
+    }
+
+    if (!isReady || !dotoriSession.connected || !dotoriSession.autoSyncEnabled) {
+      setIsDotoriAutoSyncRunning(false);
+      return;
+    }
+
+    if (isSameDotoriBackupVersion(dotoriSession.syncedBackup, { fileName: null, savedAt: null, backupCommitId: localBackupSummary.backupCommitId })) {
+      setIsDotoriAutoSyncRunning(false);
+      return;
+    }
+
+    dotoriAutoSyncTimeoutRef.current = window.setTimeout(() => {
+      void (async () => {
+        setIsDotoriAutoSyncRunning(true);
+
+        try {
+          const latestRemoteBackup = await loadLatestDotoriBackup(dotoriSession.form, DOTORI_BACKUP_FOLDER_NAME);
+          const remoteSummary =
+            latestRemoteBackup.exists === false || !latestRemoteBackup.content
+              ? createEmptyBackupPreviewSummary()
+              : summarizeBackupPayload(latestRemoteBackup.content);
+          const latestRemoteMetadata: DotoriBackupMetadata = {
+            exists: latestRemoteBackup.exists,
+            fileName: latestRemoteBackup.fileName,
+            savedAt: latestRemoteBackup.savedAt ?? null,
+            backupCommitId: remoteSummary.backupCommitId,
+          };
+
+          if (
+            latestRemoteBackup.exists !== false &&
+            latestRemoteBackup.fileName &&
+            !isSameDotoriBackupVersion(dotoriSession.syncedBackup, latestRemoteMetadata)
+          ) {
+            const nextSession: DotoriSyncSession = {
+              ...dotoriSession,
+              autoSyncEnabled: false,
+              latestFileName: latestRemoteMetadata.fileName,
+              syncedBackup: latestRemoteMetadata,
+            };
+            writeDotoriSyncSession(nextSession);
+            setDotoriSession(nextSession);
+            setIsDotoriAutoSyncRunning(false);
+            showToast("도토리창고 최신본이 바뀌어 자동동기화를 멈췄습니다. 먼저 가져오기를 진행해주세요.", "error");
+            return;
+          }
+
+          const savedBackup = await saveDotoriBackup(dotoriSession.form, {
+            folderName: DOTORI_BACKUP_FOLDER_NAME,
+            fileName: createDotoriBackupFileName(),
+            content: localBackupContent,
+          });
+
+          const nextSession: DotoriSyncSession = {
+            ...dotoriSession,
+            latestFileName: savedBackup.fileName,
+            syncedBackup: {
+              ...savedBackup,
+              backupCommitId: localBackupSummary.backupCommitId,
+            },
+          };
+          dotoriAutoSyncErrorMessageRef.current = null;
+          writeDotoriSyncSession(nextSession);
+          setDotoriSession(nextSession);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "도토리창고 자동동기화 중 오류가 발생했습니다.";
+          if (dotoriAutoSyncErrorMessageRef.current !== message) {
+            dotoriAutoSyncErrorMessageRef.current = message;
+            showToast(message, "error");
+          }
+        } finally {
+          setIsDotoriAutoSyncRunning(false);
+        }
+      })();
+    }, DOTORI_AUTO_SYNC_DEBOUNCE_MS);
+
+    return () => {
+      if (dotoriAutoSyncTimeoutRef.current) {
+        window.clearTimeout(dotoriAutoSyncTimeoutRef.current);
+        dotoriAutoSyncTimeoutRef.current = null;
+      }
+    };
+  }, [dotoriSession, isReady, localBackupContent, localBackupSummary, showToast]);
+
   if (!isReady) return <LoadingScreen />;
   if (!state.workspaces.length) return <EmptyWorkspaceScreen />;
 
@@ -510,6 +646,8 @@ function AppFrame() {
   if (!activeWorkspace) return <EmptyWorkspaceScreen />;
 
   const desktopHeaderTitle = getDesktopHeaderTitle(location.pathname);
+  const shouldShowDotoriConnectedBadge = dotoriSession.connected;
+  const shouldShowDotoriAutoSyncBadge = dotoriSession.connected && dotoriSession.autoSyncEnabled;
 
   const closeCreateWorkspaceModal = () => {
     setIsCreateWorkspaceOpen(false);
@@ -527,9 +665,19 @@ function AppFrame() {
       <aside className="app-sidebar" aria-label="주요 메뉴">
         <div className="app-sidebar-panel">
           <div className="app-sidebar-header">
-            <Link to="/dashboard" className="sidebar-brand-button app-sidebar-brand" onClick={registerUnlockTap} aria-label="소비일기 첫장으로 이동">
-              <AppBrandMark size="expanded" />
-            </Link>
+            <div className="app-sidebar-header-top">
+              <Link to="/dashboard" className="sidebar-brand-button app-sidebar-brand" onClick={registerUnlockTap} aria-label="소비일기 첫장으로 이동">
+                <AppBrandMark size="expanded" />
+              </Link>
+              {shouldShowDotoriConnectedBadge || shouldShowDotoriAutoSyncBadge ? (
+                <div className="app-sidebar-dotori-badges">
+                  {shouldShowDotoriConnectedBadge ? <span className="app-sidebar-dotori-badge">도토리창고 연결됨</span> : null}
+                  {shouldShowDotoriAutoSyncBadge ? (
+                    <span className={`app-sidebar-dotori-badge is-syncing${isDotoriAutoSyncRunning ? " is-running" : ""}`}>자동동기화중</span>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
             <p className="app-sidebar-copy">작은 소비도, 소중한 기억이 되도록.</p>
           </div>
 

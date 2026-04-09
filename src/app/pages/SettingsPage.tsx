@@ -1,15 +1,29 @@
 ﻿import { useEffect, useRef, useState } from "react";
-import { createBackupContent } from "../../domain/app/backup";
+import {
+  compareBackupSummaries,
+  createEmptyBackupPreviewSummary,
+  createBackupContent,
+  summarizeBackupPayload,
+  type BackupComparisonSummary,
+  type BackupPreviewSummary,
+} from "../../domain/app/backup";
 import { formatPercent } from "../../shared/utils/format";
 import {
   healthCheckDotoriStorage,
   loadLatestDotoriBackup,
-  loadLatestDotoriBackupMetadata,
   saveDotoriBackup,
   type DotoriBackupMetadata,
   type DotoriConnectionForm,
 } from "../api/dotoriStorage";
 import { AppModal } from "../components/AppModal";
+import {
+  clearDotoriSyncSession,
+  createDotoriBackupFileName,
+  DOTORI_BACKUP_FOLDER_NAME,
+  isSameDotoriBackupVersion,
+  readDotoriSyncSession,
+  writeDotoriSyncSession,
+} from "../dotoriSync";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
 import { useToast } from "../toast/ToastProvider";
@@ -23,7 +37,6 @@ type ProfileDraftState = {
 type EditableProfileField = keyof ProfileDraftState;
 
 const ASSET_BASE = import.meta.env.BASE_URL;
-const DOTORI_BACKUP_FOLDER_NAME = "소비일기 데이터베이스";
 const DOTORI_LOGIN_STORAGE_KEY = "spending-diary.dotori-login";
 
 function createProfileDraft(profile: ReturnType<typeof getWorkspaceScope>["financialProfile"]): ProfileDraftState {
@@ -53,10 +66,6 @@ function formatDraftPercent(value: string) {
   return formatPercent(Number(value) / 100);
 }
 
-function formatDotoriBackupFileName(date = new Date()) {
-  return `${date.getFullYear()}년${date.getMonth() + 1}월${date.getDate()}일의기록.json`;
-}
-
 function readSavedDotoriLogin() {
   try {
     const raw = window.localStorage.getItem(DOTORI_LOGIN_STORAGE_KEY);
@@ -67,13 +76,13 @@ function readSavedDotoriLogin() {
   }
 }
 
-function isSameDotoriBackupVersion(left: DotoriBackupMetadata | null, right: DotoriBackupMetadata | null) {
-  if (!left || !right) return false;
-  return left.fileName === right.fileName && (left.savedAt ?? null) === (right.savedAt ?? null);
-}
-
 function isJsonBackupFile(file: File) {
   return file.name.toLowerCase().endsWith(".json");
+}
+
+function formatDiffValue(delta: number) {
+  if (delta === 0) return "(-)";
+  return `(${Math.abs(delta).toLocaleString()} ${delta > 0 ? "↑" : "↓"})`;
 }
 
 export function SettingsPage() {
@@ -93,6 +102,24 @@ export function SettingsPage() {
   const [dotoriStatusMessage, setDotoriStatusMessage] = useState("도토리창고 연결을 확인해주세요.");
   const [dotoriLatestFileName, setDotoriLatestFileName] = useState<string | null>(null);
   const [dotoriSyncedBackup, setDotoriSyncedBackup] = useState<DotoriBackupMetadata | null>(null);
+  const [isDotoriAutoSyncEnabled, setIsDotoriAutoSyncEnabled] = useState(false);
+  const [dotoriImportPreview, setDotoriImportPreview] = useState<{
+    file: File;
+    fileName: string;
+    savedAt: string | null;
+    summary: BackupPreviewSummary;
+    comparison: BackupComparisonSummary;
+  } | null>(null);
+  const [dotoriSavePreview, setDotoriSavePreview] = useState<{
+    fileName: string;
+    content: string;
+    summary: BackupPreviewSummary;
+    comparison: BackupComparisonSummary;
+    isFirstBackup: boolean;
+    remoteFileName: string | null;
+  } | null>(null);
+  const [isDotoriImportDetailOpen, setIsDotoriImportDetailOpen] = useState(false);
+  const [isDotoriSaveDetailOpen, setIsDotoriSaveDetailOpen] = useState(false);
   const backupImportInputRef = useRef<HTMLInputElement | null>(null);
   const transactionPackageImportInputRef = useRef<HTMLInputElement | null>(null);
   const foundationPackageImportInputRef = useRef<HTMLInputElement | null>(null);
@@ -102,6 +129,21 @@ export function SettingsPage() {
   }, [workspaceId, profile?.targetSavingsRate, profile?.warningSpendRate, profile?.warningFixedCostRate]);
 
   useEffect(() => {
+    const savedSession = readDotoriSyncSession();
+    if (savedSession.connected) {
+      setDotoriForm(savedSession.form);
+      setIsDotoriConnected(true);
+      setDotoriLatestFileName(savedSession.latestFileName);
+      setDotoriSyncedBackup(savedSession.syncedBackup);
+      setIsDotoriAutoSyncEnabled(savedSession.autoSyncEnabled);
+      setDotoriStatusMessage(
+        savedSession.latestFileName
+          ? `${savedSession.latestFileName} 기준으로 도토리창고와 연결되어 있습니다.`
+          : "도토리창고와 연결되었습니다.",
+      );
+      return;
+    }
+
     const savedLogin = readSavedDotoriLogin();
     if (!savedLogin) return;
     setDotoriForm((current) => ({
@@ -113,13 +155,6 @@ export function SettingsPage() {
       rememberCredentials: savedLogin.rememberCredentials !== false,
     }));
   }, []);
-
-  useEffect(() => {
-    setIsDotoriConnected(false);
-    setDotoriSyncedBackup(null);
-    setDotoriStatusMessage("도토리창고 연결을 확인해주세요.");
-    setDotoriLatestFileName(null);
-  }, [dotoriForm.host, dotoriForm.port, dotoriForm.username, dotoriForm.password]);
 
   const persistProfileDraft = (nextDraft: ProfileDraftState) => {
     setFinancialProfile(workspaceId, {
@@ -136,7 +171,24 @@ export function SettingsPage() {
   };
 
   const updateDotoriForm = (field: keyof DotoriConnectionForm, value: string | boolean) => {
-    setDotoriForm((current) => ({ ...current, [field]: value as never }));
+    setDotoriForm((current) => {
+      const nextForm = { ...current, [field]: value as never };
+      if (field === "host" || field === "port" || field === "username" || field === "password") {
+        if (isDotoriConnected || dotoriSyncedBackup || dotoriLatestFileName || isDotoriAutoSyncEnabled) {
+          setIsDotoriConnected(false);
+          setIsDotoriAutoSyncEnabled(false);
+          setDotoriSyncedBackup(null);
+          setDotoriStatusMessage("도토리창고 연결 정보를 바꿔 연결을 다시 확인해주세요.");
+          setDotoriLatestFileName(null);
+          setDotoriImportPreview(null);
+          setDotoriSavePreview(null);
+          setIsDotoriImportDetailOpen(false);
+          setIsDotoriSaveDetailOpen(false);
+          clearDotoriSyncSession(nextForm);
+        }
+      }
+      return nextForm;
+    });
   };
 
   const persistDotoriCredentials = () => {
@@ -155,6 +207,24 @@ export function SettingsPage() {
         rememberCredentials: true,
       }),
     );
+  };
+
+  const persistDotoriSession = (
+    overrides: Partial<{
+      form: DotoriConnectionForm;
+      connected: boolean;
+      autoSyncEnabled: boolean;
+      latestFileName: string | null;
+      syncedBackup: DotoriBackupMetadata | null;
+    }> = {},
+  ) => {
+    writeDotoriSyncSession({
+      form: overrides.form ?? dotoriForm,
+      connected: overrides.connected ?? isDotoriConnected,
+      autoSyncEnabled: overrides.autoSyncEnabled ?? isDotoriAutoSyncEnabled,
+      latestFileName: overrides.latestFileName ?? dotoriLatestFileName,
+      syncedBackup: overrides.syncedBackup ?? dotoriSyncedBackup,
+    });
   };
 
   const commitProfileDraft = () => {
@@ -229,26 +299,75 @@ export function SettingsPage() {
       await healthCheckDotoriStorage(dotoriForm);
       setIsDotoriConnected(true);
       setDotoriStatusMessage("도토리창고와 연결되었습니다.");
+      persistDotoriSession({
+        connected: true,
+        autoSyncEnabled: isDotoriAutoSyncEnabled,
+      });
       showToast("도토리창고 로그인 확인이 완료되었습니다.", "success");
     });
 
   const handleDotoriSave = () =>
     withDotoriAction("save", async () => {
-      const fileName = formatDotoriBackupFileName();
-      const latestRemoteBackup = await loadLatestDotoriBackupMetadata(dotoriForm, DOTORI_BACKUP_FOLDER_NAME);
-      if (latestRemoteBackup.exists !== false && latestRemoteBackup.fileName && !isSameDotoriBackupVersion(dotoriSyncedBackup, latestRemoteBackup)) {
+      const fileName = createDotoriBackupFileName();
+      const latestRemoteBackup = await loadLatestDotoriBackup(dotoriForm, DOTORI_BACKUP_FOLDER_NAME);
+      const content = createBackupContent(state);
+      const localSummary = summarizeBackupPayload(content);
+      const remoteSummary =
+        latestRemoteBackup.exists === false || !latestRemoteBackup.content
+          ? createEmptyBackupPreviewSummary()
+          : summarizeBackupPayload(latestRemoteBackup.content);
+      const latestRemoteMetadata: DotoriBackupMetadata = {
+        exists: latestRemoteBackup.exists,
+        fileName: latestRemoteBackup.fileName,
+        savedAt: latestRemoteBackup.savedAt ?? null,
+        backupCommitId: remoteSummary.backupCommitId,
+      };
+      if (latestRemoteBackup.exists !== false && latestRemoteBackup.fileName && !isSameDotoriBackupVersion(dotoriSyncedBackup, latestRemoteMetadata)) {
         throw new Error("도토리창고에 로컬보다 최신 백업이 있습니다. 먼저 가져오기를 실행해주세요.");
       }
+      setDotoriSavePreview({
+        fileName,
+        content,
+        summary: localSummary,
+        comparison: compareBackupSummaries(remoteSummary, localSummary),
+        isFirstBackup: latestRemoteBackup.exists === false || !latestRemoteBackup.fileName,
+        remoteFileName: latestRemoteBackup.fileName ?? null,
+      });
+      setIsDotoriSaveDetailOpen(false);
+      setIsDotoriConnected(true);
+      setDotoriStatusMessage(
+        latestRemoteBackup.exists === false || !latestRemoteBackup.fileName
+          ? "첫 백업으로 저장하기 전에 요약을 확인해주세요."
+          : `${fileName} 파일로 저장하기 전에 변경 내용을 확인해주세요.`,
+      );
+    });
+
+  const handleConfirmDotoriSave = () =>
+    withDotoriAction("save", async () => {
+      if (!dotoriSavePreview) return;
       const savedBackup = await saveDotoriBackup(dotoriForm, {
         folderName: DOTORI_BACKUP_FOLDER_NAME,
-        fileName,
-        content: createBackupContent(state),
+        fileName: dotoriSavePreview.fileName,
+        content: dotoriSavePreview.content,
       });
       setIsDotoriConnected(true);
       setDotoriLatestFileName(savedBackup.fileName);
-      setDotoriSyncedBackup(savedBackup);
-      setDotoriStatusMessage(`${fileName} 파일을 저장했습니다.`);
-      showToast(`${fileName} 파일을 도토리창고에 저장했습니다.`, "success");
+      setDotoriSyncedBackup({
+        ...savedBackup,
+        backupCommitId: dotoriSavePreview.summary.backupCommitId,
+      });
+      setDotoriStatusMessage(`${savedBackup.fileName} 파일을 저장했습니다.`);
+      persistDotoriSession({
+        connected: true,
+        latestFileName: savedBackup.fileName,
+        syncedBackup: {
+          ...savedBackup,
+          backupCommitId: dotoriSavePreview.summary.backupCommitId,
+        },
+      });
+      showToast(`${savedBackup.fileName} 파일을 도토리창고에 저장했습니다.`, "success");
+      setDotoriSavePreview(null);
+      setIsDotoriSaveDetailOpen(false);
     });
 
   const handleDotoriUpdate = () =>
@@ -264,21 +383,70 @@ export function SettingsPage() {
       const backupFile = new File([latestBackup.content], latestBackup.fileName, {
         type: "application/json",
       });
-      await importState(backupFile);
+      const incomingSummary = summarizeBackupPayload(latestBackup.content);
+      const currentSummary = summarizeBackupPayload(createBackupContent(state));
       setIsDotoriConnected(true);
-      setDotoriLatestFileName(latestBackup.fileName);
-      setDotoriSyncedBackup({
+      setDotoriImportPreview({
+        file: backupFile,
         fileName: latestBackup.fileName,
         savedAt: latestBackup.savedAt ?? null,
+        summary: incomingSummary,
+        comparison: compareBackupSummaries(currentSummary, incomingSummary),
       });
-      setDotoriStatusMessage(`${latestBackup.fileName} 파일을 최신본으로 불러왔습니다.`);
-      showToast(`${latestBackup.fileName} 최신 백업을 불러왔습니다.`, "success");
+      setIsDotoriImportDetailOpen(false);
+      setDotoriStatusMessage(`${latestBackup.fileName} 파일의 요약을 확인한 뒤 불러오기를 진행해주세요.`);
     });
+
+  const handleConfirmDotoriImport = () =>
+    withDotoriAction("update", async () => {
+      if (!dotoriImportPreview) return;
+      await importState(dotoriImportPreview.file);
+      setIsDotoriConnected(true);
+      setDotoriLatestFileName(dotoriImportPreview.fileName);
+      setDotoriSyncedBackup({
+        fileName: dotoriImportPreview.fileName,
+        savedAt: dotoriImportPreview.savedAt,
+        backupCommitId: dotoriImportPreview.summary.backupCommitId,
+      });
+      setDotoriStatusMessage(`${dotoriImportPreview.fileName} 파일을 최신본으로 불러왔습니다.`);
+      persistDotoriSession({
+        connected: true,
+        latestFileName: dotoriImportPreview.fileName,
+        syncedBackup: {
+          fileName: dotoriImportPreview.fileName,
+          savedAt: dotoriImportPreview.savedAt,
+          backupCommitId: dotoriImportPreview.summary.backupCommitId,
+        },
+      });
+      showToast(`${dotoriImportPreview.fileName} 최신 백업을 불러왔습니다.`, "success");
+      setDotoriImportPreview(null);
+      setIsDotoriImportDetailOpen(false);
+    });
+
+  const handleDotoriAutoSyncToggle = (checked: boolean) => {
+    setIsDotoriAutoSyncEnabled(checked);
+    setDotoriStatusMessage(
+      checked
+        ? "자동동기화가 켜졌습니다. 입력, 수정, 삭제가 생기면 도토리창고에 자동으로 반영됩니다."
+        : "자동동기화가 꺼졌습니다. 필요할 때 내보내기와 가져오기를 직접 실행해주세요.",
+    );
+    persistDotoriSession({
+      connected: isDotoriConnected,
+      autoSyncEnabled: checked,
+    });
+    showToast(checked ? "도토리창고 자동동기화를 시작했습니다." : "도토리창고 자동동기화를 중지했습니다.", checked ? "success" : "info");
+  };
 
   const handleDotoriDisconnect = () => {
     setIsDotoriConnected(false);
+    setIsDotoriAutoSyncEnabled(false);
     setDotoriSyncedBackup(null);
     setDotoriStatusMessage("도토리창고 접속을 종료했습니다.");
+    setDotoriImportPreview(null);
+    setDotoriSavePreview(null);
+    setIsDotoriImportDetailOpen(false);
+    setIsDotoriSaveDetailOpen(false);
+    clearDotoriSyncSession(dotoriForm);
     showToast("도토리창고 연결을 종료했습니다.", "info");
   };
 
@@ -575,6 +743,21 @@ export function SettingsPage() {
                     {dotoriLatestFileName ? <p className="mb-0 text-secondary">최근 처리 파일: {dotoriLatestFileName}</p> : null}
                   </div>
 
+                  <label className="transaction-filter-toggle dotori-auto-sync-toggle">
+                    <span className="transaction-filter-toggle-label">
+                      자동동기화
+                      <small>{isDotoriAutoSyncEnabled ? "입력, 수정, 삭제 시 자동 저장" : "수동 내보내기/가져오기 유지"}</small>
+                    </span>
+                    <input
+                      className="transaction-filter-toggle-input"
+                      type="checkbox"
+                      checked={isDotoriAutoSyncEnabled}
+                      onChange={(event) => handleDotoriAutoSyncToggle(event.target.checked)}
+                      disabled={dotoriAction !== null || !isDotoriConnected}
+                    />
+                    <span className="transaction-filter-toggle-switch" aria-hidden="true" />
+                  </label>
+
                   <div className="dotori-connected-actions">
                     <button
                       type="button"
@@ -674,6 +857,356 @@ export function SettingsPage() {
             </div>
           </div>
         </div>
+      </AppModal>
+
+      <AppModal
+        open={dotoriSavePreview !== null}
+        title="내보낼 데이터 요약"
+        description="도토리창고 최신 백업과 비교해 지금 저장하면 어떤 점이 바뀌는지 먼저 확인합니다."
+        onClose={() => {
+          if (dotoriAction !== null) return;
+          setDotoriSavePreview(null);
+          setIsDotoriSaveDetailOpen(false);
+        }}
+        dialogClassName="settings-dotori-preview-modal"
+        footer={
+          <>
+            <button
+              type="button"
+              className="btn btn-outline-secondary"
+              onClick={() => {
+                setDotoriSavePreview(null);
+                setIsDotoriSaveDetailOpen(false);
+              }}
+              disabled={dotoriAction !== null}
+            >
+              취소
+            </button>
+            <button type="button" className="btn btn-primary" onClick={() => void handleConfirmDotoriSave()} disabled={dotoriAction !== null}>
+              {dotoriAction === "save" ? "저장하는 중..." : "이대로 저장하기"}
+            </button>
+          </>
+        }
+      >
+        {dotoriSavePreview ? (
+          <div className="dotori-import-preview">
+            <div className="dotori-import-preview-card">
+              <div className="dotori-import-preview-heading">
+                <strong>{dotoriSavePreview.fileName}</strong>
+                <span>
+                  {dotoriSavePreview.isFirstBackup
+                    ? "도토리창고 첫 백업으로 저장됩니다."
+                    : `${dotoriSavePreview.remoteFileName ?? "기존 백업"} 기준으로 덮어써집니다.`}
+                </span>
+              </div>
+              <div className="dotori-import-preview-grid">
+                <div>
+                  <span>거래</span>
+                  <strong>
+                    {dotoriSavePreview.summary.totals.transactions.toLocaleString()}건{" "}
+                    <em className={`dotori-import-preview-diff${dotoriSavePreview.comparison.transactions.delta > 0 ? " is-positive" : dotoriSavePreview.comparison.transactions.delta < 0 ? " is-negative" : ""}`}>
+                      {formatDiffValue(dotoriSavePreview.comparison.transactions.delta)}
+                    </em>
+                  </strong>
+                </div>
+                <div>
+                  <span>명세서</span>
+                  <strong>
+                    {dotoriSavePreview.summary.totals.imports.toLocaleString()}건{" "}
+                    <em className={`dotori-import-preview-diff${dotoriSavePreview.comparison.imports.delta > 0 ? " is-positive" : dotoriSavePreview.comparison.imports.delta < 0 ? " is-negative" : ""}`}>
+                      {formatDiffValue(dotoriSavePreview.comparison.imports.delta)}
+                    </em>
+                  </strong>
+                </div>
+                <div>
+                  <span>카테고리</span>
+                  <strong>
+                    그룹 {dotoriSavePreview.summary.summaries.reduce((sum, workspace) => sum + workspace.categoryGroupCount, 0).toLocaleString()}개 / 전체{" "}
+                    {dotoriSavePreview.summary.totals.categories.toLocaleString()}개{" "}
+                    <em className={`dotori-import-preview-diff${dotoriSavePreview.comparison.categories.delta > 0 ? " is-positive" : dotoriSavePreview.comparison.categories.delta < 0 ? " is-negative" : ""}`}>
+                      전체 {formatDiffValue(dotoriSavePreview.comparison.categories.delta)}
+                    </em>
+                    <em className={`dotori-import-preview-diff${dotoriSavePreview.comparison.categoryGroups.delta > 0 ? " is-positive" : dotoriSavePreview.comparison.categoryGroups.delta < 0 ? " is-negative" : ""}`}>
+                      그룹 {formatDiffValue(dotoriSavePreview.comparison.categoryGroups.delta)}
+                    </em>
+                  </strong>
+                </div>
+                <div>
+                  <span>사용자</span>
+                  <strong>
+                    {dotoriSavePreview.summary.totals.people.toLocaleString()}명{" "}
+                    <em className={`dotori-import-preview-diff${dotoriSavePreview.comparison.people.delta > 0 ? " is-positive" : dotoriSavePreview.comparison.people.delta < 0 ? " is-negative" : ""}`}>
+                      {formatDiffValue(dotoriSavePreview.comparison.people.delta)}
+                    </em>
+                  </strong>
+                </div>
+                <div>
+                  <span>계좌</span>
+                  <strong>
+                    {dotoriSavePreview.summary.totals.accounts.toLocaleString()}개{" "}
+                    <em className={`dotori-import-preview-diff${dotoriSavePreview.comparison.accounts.delta > 0 ? " is-positive" : dotoriSavePreview.comparison.accounts.delta < 0 ? " is-negative" : ""}`}>
+                      {formatDiffValue(dotoriSavePreview.comparison.accounts.delta)}
+                    </em>
+                  </strong>
+                </div>
+                <div>
+                  <span>카드</span>
+                  <strong>
+                    {dotoriSavePreview.summary.totals.cards.toLocaleString()}개{" "}
+                    <em className={`dotori-import-preview-diff${dotoriSavePreview.comparison.cards.delta > 0 ? " is-positive" : dotoriSavePreview.comparison.cards.delta < 0 ? " is-negative" : ""}`}>
+                      {formatDiffValue(dotoriSavePreview.comparison.cards.delta)}
+                    </em>
+                  </strong>
+                </div>
+              </div>
+            </div>
+
+            <div className="dotori-import-preview-card">
+              <p className="dotori-import-preview-section-title">명세서 요약</p>
+              <div className="dotori-import-preview-list">
+                {dotoriSavePreview.summary.summaries.flatMap((workspace) =>
+                  workspace.importSummaries.map((importSummary) => (
+                    <div key={importSummary.importRecordId} className="dotori-import-preview-list-item">
+                      <div className="dotori-import-preview-list-head">
+                        <strong>{importSummary.fileName}</strong>
+                        <span>{workspace.workspaceName}</span>
+                      </div>
+                      <div className="dotori-import-preview-chips">
+                        <span>행 수 {importSummary.rowCount.toLocaleString()}건</span>
+                        <span>남은 검토 {importSummary.pendingReviewCount.toLocaleString()}건</span>
+                        <span>미분류 {importSummary.uncategorizedCount.toLocaleString()}건</span>
+                      </div>
+                    </div>
+                  )),
+                )}
+                {dotoriSavePreview.summary.summaries.every((workspace) => workspace.importSummaries.length === 0) ? (
+                  <div className="dotori-import-preview-empty">저장된 명세서 목록이 없습니다.</div>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="dotori-import-preview-card">
+              <div className="dotori-import-preview-detail-header">
+                <p className="dotori-import-preview-section-title">변경 상세</p>
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary btn-sm"
+                  onClick={() => setIsDotoriSaveDetailOpen((current) => !current)}
+                >
+                  {isDotoriSaveDetailOpen ? "상세 닫기" : "상세보기"}
+                </button>
+              </div>
+
+              {isDotoriSaveDetailOpen ? (
+                <div className="dotori-import-preview-detail-grid">
+                  {([
+                    ["명세서", dotoriSavePreview.comparison.details.imports],
+                    ["사용자", dotoriSavePreview.comparison.details.people],
+                    ["계좌", dotoriSavePreview.comparison.details.accounts],
+                    ["카드", dotoriSavePreview.comparison.details.cards],
+                    ["카테고리 그룹", dotoriSavePreview.comparison.details.categoryGroups],
+                    ["카테고리", dotoriSavePreview.comparison.details.categories],
+                  ] as const).map(([label, items]) => (
+                    <div key={label} className="dotori-import-preview-detail-card">
+                      <strong>{label}</strong>
+                      {items.added.length || items.removed.length ? (
+                        <div className="dotori-import-preview-chips">
+                          {items.added.map((item) => (
+                            <span key={`save-add-${label}-${item}`} className="dotori-import-preview-chip dotori-import-preview-chip--added">
+                              {item}
+                            </span>
+                          ))}
+                          {items.removed.map((item) => (
+                            <span key={`save-remove-${label}-${item}`} className="dotori-import-preview-chip dotori-import-preview-chip--removed">
+                              {item}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="dotori-import-preview-empty">변경 없음</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="dotori-import-preview-empty">상세보기를 열면 도토리 최신본 대비 추가·제외 항목을 확인할 수 있습니다.</p>
+              )}
+            </div>
+          </div>
+        ) : null}
+      </AppModal>
+
+      <AppModal
+        open={dotoriImportPreview !== null}
+        title="불러올 데이터 요약"
+        description="도토리창고 최신 백업을 현재 소비일기 데이터에 반영하기 전에 요약을 먼저 확인합니다."
+        onClose={() => {
+          if (dotoriAction !== null) return;
+          setDotoriImportPreview(null);
+          setIsDotoriImportDetailOpen(false);
+        }}
+        dialogClassName="settings-dotori-preview-modal"
+        footer={
+          <>
+            <button
+              type="button"
+              className="btn btn-outline-secondary"
+              onClick={() => {
+                setDotoriImportPreview(null);
+                setIsDotoriImportDetailOpen(false);
+              }}
+              disabled={dotoriAction !== null}
+            >
+              취소
+            </button>
+            <button type="button" className="btn btn-primary" onClick={() => void handleConfirmDotoriImport()} disabled={dotoriAction !== null}>
+              {dotoriAction === "update" ? "불러오는 중..." : "이 데이터로 불러오기"}
+            </button>
+          </>
+        }
+      >
+        {dotoriImportPreview ? (
+          <div className="dotori-import-preview">
+            <div className="dotori-import-preview-card">
+              <div className="dotori-import-preview-heading">
+                <strong>{dotoriImportPreview.fileName}</strong>
+                {dotoriImportPreview.savedAt ? <span>{new Date(dotoriImportPreview.savedAt).toLocaleString("ko-KR")}</span> : null}
+              </div>
+              <div className="dotori-import-preview-grid">
+                <div>
+                  <span>거래</span>
+                  <strong>
+                    {dotoriImportPreview.summary.totals.transactions.toLocaleString()}건{" "}
+                    <em className={`dotori-import-preview-diff${dotoriImportPreview.comparison.transactions.delta > 0 ? " is-positive" : dotoriImportPreview.comparison.transactions.delta < 0 ? " is-negative" : ""}`}>
+                      {formatDiffValue(dotoriImportPreview.comparison.transactions.delta)}
+                    </em>
+                  </strong>
+                </div>
+                <div>
+                  <span>명세서</span>
+                  <strong>
+                    {dotoriImportPreview.summary.totals.imports.toLocaleString()}건{" "}
+                    <em className={`dotori-import-preview-diff${dotoriImportPreview.comparison.imports.delta > 0 ? " is-positive" : dotoriImportPreview.comparison.imports.delta < 0 ? " is-negative" : ""}`}>
+                      {formatDiffValue(dotoriImportPreview.comparison.imports.delta)}
+                    </em>
+                  </strong>
+                </div>
+                <div>
+                  <span>카테고리</span>
+                  <strong>
+                    그룹 {dotoriImportPreview.summary.summaries.reduce((sum, workspace) => sum + workspace.categoryGroupCount, 0).toLocaleString()}개 / 전체{" "}
+                    {dotoriImportPreview.summary.totals.categories.toLocaleString()}개{" "}
+                    <em className={`dotori-import-preview-diff${dotoriImportPreview.comparison.categories.delta > 0 ? " is-positive" : dotoriImportPreview.comparison.categories.delta < 0 ? " is-negative" : ""}`}>
+                      전체 {formatDiffValue(dotoriImportPreview.comparison.categories.delta)}
+                    </em>
+                    <em className={`dotori-import-preview-diff${dotoriImportPreview.comparison.categoryGroups.delta > 0 ? " is-positive" : dotoriImportPreview.comparison.categoryGroups.delta < 0 ? " is-negative" : ""}`}>
+                      그룹 {formatDiffValue(dotoriImportPreview.comparison.categoryGroups.delta)}
+                    </em>
+                  </strong>
+                </div>
+                <div>
+                  <span>사용자</span>
+                  <strong>
+                    {dotoriImportPreview.summary.totals.people.toLocaleString()}명{" "}
+                    <em className={`dotori-import-preview-diff${dotoriImportPreview.comparison.people.delta > 0 ? " is-positive" : dotoriImportPreview.comparison.people.delta < 0 ? " is-negative" : ""}`}>
+                      {formatDiffValue(dotoriImportPreview.comparison.people.delta)}
+                    </em>
+                  </strong>
+                </div>
+                <div>
+                  <span>계좌</span>
+                  <strong>
+                    {dotoriImportPreview.summary.totals.accounts.toLocaleString()}개{" "}
+                    <em className={`dotori-import-preview-diff${dotoriImportPreview.comparison.accounts.delta > 0 ? " is-positive" : dotoriImportPreview.comparison.accounts.delta < 0 ? " is-negative" : ""}`}>
+                      {formatDiffValue(dotoriImportPreview.comparison.accounts.delta)}
+                    </em>
+                  </strong>
+                </div>
+                <div>
+                  <span>카드</span>
+                  <strong>
+                    {dotoriImportPreview.summary.totals.cards.toLocaleString()}개{" "}
+                    <em className={`dotori-import-preview-diff${dotoriImportPreview.comparison.cards.delta > 0 ? " is-positive" : dotoriImportPreview.comparison.cards.delta < 0 ? " is-negative" : ""}`}>
+                      {formatDiffValue(dotoriImportPreview.comparison.cards.delta)}
+                    </em>
+                  </strong>
+                </div>
+              </div>
+            </div>
+
+            <div className="dotori-import-preview-card">
+              <p className="dotori-import-preview-section-title">명세서 요약</p>
+              <div className="dotori-import-preview-list">
+                {dotoriImportPreview.summary.summaries.flatMap((workspace) =>
+                  workspace.importSummaries.map((importSummary) => (
+                    <div key={importSummary.importRecordId} className="dotori-import-preview-list-item">
+                      <div className="dotori-import-preview-list-head">
+                        <strong>{importSummary.fileName}</strong>
+                        <span>{workspace.workspaceName}</span>
+                      </div>
+                      <div className="dotori-import-preview-chips">
+                        <span>행 수 {importSummary.rowCount.toLocaleString()}건</span>
+                        <span>남은 검토 {importSummary.pendingReviewCount.toLocaleString()}건</span>
+                        <span>미분류 {importSummary.uncategorizedCount.toLocaleString()}건</span>
+                      </div>
+                    </div>
+                  )),
+                )}
+                {dotoriImportPreview.summary.summaries.every((workspace) => workspace.importSummaries.length === 0) ? (
+                  <div className="dotori-import-preview-empty">저장된 명세서 목록이 없습니다.</div>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="dotori-import-preview-card">
+              <div className="dotori-import-preview-detail-header">
+                <p className="dotori-import-preview-section-title">변경 상세</p>
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary btn-sm"
+                  onClick={() => setIsDotoriImportDetailOpen((current) => !current)}
+                >
+                  {isDotoriImportDetailOpen ? "상세 닫기" : "상세보기"}
+                </button>
+              </div>
+
+              {isDotoriImportDetailOpen ? (
+                <div className="dotori-import-preview-detail-grid">
+                  {([
+                    ["명세서", dotoriImportPreview.comparison.details.imports],
+                    ["사용자", dotoriImportPreview.comparison.details.people],
+                    ["계좌", dotoriImportPreview.comparison.details.accounts],
+                    ["카드", dotoriImportPreview.comparison.details.cards],
+                    ["카테고리 그룹", dotoriImportPreview.comparison.details.categoryGroups],
+                    ["카테고리", dotoriImportPreview.comparison.details.categories],
+                  ] as const).map(([label, items]) => (
+                    <div key={label} className="dotori-import-preview-detail-card">
+                      <strong>{label}</strong>
+                      {items.added.length || items.removed.length ? (
+                        <div className="dotori-import-preview-chips">
+                          {items.added.map((item) => (
+                            <span key={`add-${item}`} className="dotori-import-preview-chip dotori-import-preview-chip--added">
+                              {item}
+                            </span>
+                          ))}
+                          {items.removed.map((item) => (
+                            <span key={`remove-${item}`} className="dotori-import-preview-chip dotori-import-preview-chip--removed">
+                              {item}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="dotori-import-preview-empty">변경 없음</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="dotori-import-preview-empty">상세보기를 열면 현재 로컬과 비교한 추가·제외 항목을 확인할 수 있습니다.</p>
+              )}
+            </div>
+          </div>
+        ) : null}
       </AppModal>
     </div>
   );

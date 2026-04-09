@@ -1741,8 +1741,47 @@ label,
   gap: 0.55rem;
 }
 
+.app-sidebar-header-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
 .app-sidebar-brand {
   width: 100%;
+}
+
+.app-sidebar-dotori-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
+.app-sidebar-dotori-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.36rem 0.62rem;
+  border-radius: 999px;
+  background: rgba(96, 125, 96, 0.11);
+  border: 1px solid rgba(96, 125, 96, 0.18);
+  color: #5f714d;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.app-sidebar-dotori-badge.is-syncing {
+  background: rgba(92, 119, 182, 0.1);
+  border-color: rgba(92, 119, 182, 0.18);
+  color: #4e6799;
+}
+
+.app-sidebar-dotori-badge.is-syncing.is-running {
+  background: rgba(92, 119, 182, 0.16);
+  box-shadow: 0 8px 18px rgba(92, 119, 182, 0.14);
 }
 
 .app-sidebar-copy {
@@ -9895,6 +9934,18 @@ textarea:focus {
   .dotori-login-panel {
     padding: 1.6rem 1.15rem;
   }
+
+  .settings-dotori-preview-modal {
+    width: min(32rem, calc(100vw - 1rem));
+  }
+
+  .dotori-import-preview-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dotori-import-preview-detail-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .dotori-login-header {
@@ -9948,6 +9999,26 @@ textarea:focus {
 .dotori-connected-panel {
   display: grid;
   gap: 0.8rem;
+}
+
+.dotori-auto-sync-toggle {
+  justify-content: space-between;
+  min-height: 3.1rem;
+  border-color: rgba(139, 94, 60, 0.14);
+  background: rgba(255, 250, 244, 0.74);
+}
+
+.dotori-auto-sync-toggle .transaction-filter-toggle-label {
+  display: grid;
+  gap: 0.12rem;
+  font-size: 0.88rem;
+  color: #5b3d28;
+}
+
+.dotori-auto-sync-toggle .transaction-filter-toggle-label small {
+  color: #8d7763;
+  font-size: 0.72rem;
+  font-weight: 600;
 }
 
 .dotori-form-grid {
@@ -10066,6 +10137,189 @@ textarea:focus {
 
 .dotori-connected-actions > .btn {
   width: 100%;
+}
+
+.settings-dotori-preview-modal {
+  width: min(36rem, calc(100vw - 2rem));
+}
+
+.dotori-import-preview {
+  display: grid;
+  gap: 0.95rem;
+}
+
+.dotori-import-preview-card {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem 1.05rem;
+  border-radius: 1rem;
+  border: 1px solid color-mix(in srgb, var(--app-line) 78%, white 22%);
+  background: color-mix(in srgb, var(--app-panel) 94%, white 6%);
+}
+
+.dotori-import-preview-heading {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.dotori-import-preview-heading strong {
+  font-size: 1rem;
+  color: var(--app-text);
+}
+
+.dotori-import-preview-heading span {
+  color: var(--app-muted);
+  font-size: 0.83rem;
+}
+
+.dotori-import-preview-grid {
+  display: grid;
+  gap: 0.7rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dotori-import-preview-grid > div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.dotori-import-preview-grid span {
+  color: var(--app-muted);
+  font-size: 0.78rem;
+}
+
+.dotori-import-preview-grid strong {
+  color: var(--app-text);
+  font-size: 0.96rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.dotori-import-preview-diff {
+  color: var(--app-muted);
+  font-size: 0.76rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.dotori-import-preview-diff.is-positive {
+  color: #2470ff;
+}
+
+.dotori-import-preview-diff.is-negative {
+  color: #d44545;
+}
+
+.dotori-import-preview-section-title {
+  margin: 0;
+  color: var(--app-text);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.dotori-import-preview-list {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.dotori-import-preview-list-item {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.85rem 0.9rem;
+  border-radius: 0.9rem;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(23, 32, 51, 0.06);
+}
+
+.dotori-import-preview-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.dotori-import-preview-list-head span {
+  color: var(--app-muted);
+  font-size: 0.77rem;
+  font-weight: 700;
+}
+
+.dotori-import-preview-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: flex-start;
+}
+
+.dotori-import-preview-chips span {
+  padding: 0.26rem 0.56rem;
+  border-radius: 999px;
+  background: rgba(var(--app-primary-rgb), 0.08);
+  color: color-mix(in srgb, var(--app-text) 86%, var(--app-muted) 14%);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.dotori-import-preview-chip {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  max-width: 100%;
+  min-height: 0;
+  padding: 0.14rem 0.56rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.dotori-import-preview-chips .dotori-import-preview-chip--added {
+  background: rgba(36, 112, 255, 0.12);
+  color: #2470ff;
+  border: 1px solid rgba(36, 112, 255, 0.22);
+}
+
+.dotori-import-preview-chips .dotori-import-preview-chip--removed {
+  background: rgba(212, 69, 69, 0.12);
+  color: #c53a3a;
+  border: 1px solid rgba(212, 69, 69, 0.2);
+}
+
+.dotori-import-preview-empty {
+  padding: 0.9rem 0.25rem 0.1rem;
+  color: var(--app-muted);
+  font-size: 0.84rem;
+}
+
+.dotori-import-preview-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.dotori-import-preview-detail-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dotori-import-preview-detail-card {
+  display: grid;
+  align-content: start;
+  gap: 0.55rem;
+  padding: 0.85rem 0.9rem;
+  border-radius: 0.9rem;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(23, 32, 51, 0.06);
+}
+
+.dotori-import-preview-detail-card strong {
+  color: var(--app-text);
+  font-size: 0.84rem;
 }
 
 .settings-tab-strip {

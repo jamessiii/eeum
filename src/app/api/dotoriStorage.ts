@@ -17,6 +17,7 @@ export type DotoriBackupMetadata = {
   exists?: boolean;
   fileName: string | null;
   savedAt?: string | null;
+  backupCommitId?: string | null;
 };
 
 type DotoriErrorResponse = {
