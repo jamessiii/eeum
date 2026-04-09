@@ -8,10 +8,12 @@ import {
 import { GUIDE_V1_RESET_EVENT, readGuideRuntime } from "../domain/guidance/guideRuntime";
 import { Link, useNavigate } from "react-router-dom";
 import {
+  clearDotoriPresence,
   createDotoriPresenceSocketUrl,
   healthCheckDotoriStorage,
   loadLatestDotoriBackup,
   saveDotoriBackup,
+  sendDotoriPresenceHeartbeat,
   type DotoriBackupMetadata,
   type DotoriPresenceSnapshot,
 } from "./api/dotoriStorage";
@@ -63,6 +65,7 @@ const DEVELOPER_MODE_KEY = "spending-diary.developer-mode";
 const ASSET_BASE = import.meta.env.BASE_URL;
 const DOTORI_AUTO_SYNC_DEBOUNCE_MS = 1200;
 const DOTORI_HEALTH_POLL_INTERVAL_MS = 20 * 1000;
+const DOTORI_PRESENCE_HEARTBEAT_INTERVAL_MS = 3 * 1000;
 
 type DotoriReachabilityState = "idle" | "online" | "offline";
 
@@ -773,13 +776,51 @@ function AppFrame() {
       return;
     }
 
+    const socketUrl = createDotoriPresenceSocketUrl(dotoriSession.form);
+    const shouldUsePollingFallback =
+      typeof window !== "undefined" && window.location.protocol === "https:" && socketUrl.startsWith("ws://");
+
+    if (shouldUsePollingFallback) {
+      let cancelled = false;
+      let intervalId = 0;
+
+      const sendHeartbeat = async () => {
+        try {
+          const snapshot = await sendDotoriPresenceHeartbeat(dotoriSession.form, dotoriPresencePayload);
+          if (!cancelled) {
+            setDotoriPresence({
+              ...snapshot,
+              connections: [...snapshot.connections],
+            });
+            setDotoriPresenceRenderTick((current) => current + 1);
+          }
+        } catch {
+          if (!cancelled) {
+            setDotoriPresence({ onlineCount: 0, connections: [] });
+            setDotoriPresenceRenderTick((current) => current + 1);
+          }
+        }
+      };
+
+      void sendHeartbeat();
+      intervalId = window.setInterval(() => {
+        void sendHeartbeat();
+      }, DOTORI_PRESENCE_HEARTBEAT_INTERVAL_MS);
+
+      return () => {
+        cancelled = true;
+        window.clearInterval(intervalId);
+        void clearDotoriPresence(dotoriSession.form, dotoriClientIdRef.current).catch(() => {});
+      };
+    }
+
     const connectPresenceSocket = () => {
       if (dotoriPresenceReconnectTimeoutRef.current) {
         window.clearTimeout(dotoriPresenceReconnectTimeoutRef.current);
         dotoriPresenceReconnectTimeoutRef.current = null;
       }
 
-      const socket = new WebSocket(createDotoriPresenceSocketUrl(dotoriSession.form));
+      const socket = new WebSocket(socketUrl);
       dotoriPresenceIntentionalCloseRef.current = false;
       dotoriPresenceSocketRef.current = socket;
 
@@ -857,7 +898,7 @@ function AppFrame() {
         dotoriPresenceSocketRef.current = null;
       }
     };
-  }, [dotoriReachability, dotoriSession.connected, dotoriSession.form]);
+  }, [dotoriPresencePayload, dotoriReachability, dotoriSession.connected, dotoriSession.form]);
 
   useEffect(() => {
     const socket = dotoriPresenceSocketRef.current;
