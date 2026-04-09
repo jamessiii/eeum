@@ -1,4 +1,6 @@
 ﻿import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
+import { Component } from "react";
+import type { ErrorInfo, ReactNode } from "react";
 import { HashRouter, Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import {
   createBackupContent,
@@ -72,6 +74,10 @@ type NavItem = {
   end?: boolean;
 };
 
+type AppErrorBoundaryState = {
+  error: Error | null;
+};
+
 const baseNavItems: NavItem[] = [
   { to: "/dashboard", label: "첫장" },
   { to: "/connections/assets", label: "자산" },
@@ -106,6 +112,36 @@ const navIconKeyMap: Record<string, string> = {
   "/dev": "lab",
   "/settings": "settings",
 };
+
+class AppErrorBoundary extends Component<{ children: ReactNode }, AppErrorBoundaryState> {
+  state: AppErrorBoundaryState = {
+    error: null,
+  };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("SpendingDiary runtime error", error, info);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="app-runtime-error-shell">
+          <div className="app-runtime-error-card">
+            <strong>소비일기 화면 실행 중 오류가 발생했습니다.</strong>
+            <p>{this.state.error.message || "알 수 없는 오류"}</p>
+            <pre>{this.state.error.stack || this.state.error.name}</pre>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 function getDesktopHeaderTitle(pathname: string) {
   if (pathname === "/dashboard" || pathname.startsWith("/records/moon")) {
@@ -1212,7 +1248,9 @@ function AppFrame() {
 function AppShell() {
   return (
     <HashRouter>
-      <AppFrame />
+      <AppErrorBoundary>
+        <AppFrame />
+      </AppErrorBoundary>
     </HashRouter>
   );
 }
