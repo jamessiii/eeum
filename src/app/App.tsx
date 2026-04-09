@@ -447,21 +447,19 @@ function DotoriStatusPanel({
   connectionStatusLabel,
   autoSyncStatusLabel,
   concurrentStatusLabel,
-  reachabilityState,
   otherConnections,
 }: {
   vpnStatusLabel: string;
   connectionStatusLabel: string;
   autoSyncStatusLabel: string;
   concurrentStatusLabel: string;
-  reachabilityState: DotoriReachabilityState;
   otherConnections: DotoriPresenceSnapshot["connections"];
 }) {
   return (
     <div className="app-sidebar-status-panel">
       <div className="app-sidebar-status-row">
         <strong>VPN</strong>
-        <span className={`app-sidebar-status-pill${reachabilityState === "online" ? " is-online" : reachabilityState === "offline" ? " is-offline" : ""}`}>
+        <span className={`app-sidebar-status-pill${vpnStatusLabel === "ON" ? " is-online" : " is-offline"}`}>
           {vpnStatusLabel}
         </span>
       </div>
@@ -1115,7 +1113,6 @@ function AppFrame() {
               connectionStatusLabel={connectionStatusLabel}
               autoSyncStatusLabel={autoSyncStatusLabel}
               concurrentStatusLabel={concurrentStatusLabel}
-              reachabilityState={dotoriReachability}
               otherConnections={otherPresenceConnections}
             />
           </div>
@@ -1208,7 +1205,6 @@ function AppFrame() {
             connectionStatusLabel={connectionStatusLabel}
             autoSyncStatusLabel={autoSyncStatusLabel}
             concurrentStatusLabel={concurrentStatusLabel}
-            reachabilityState={dotoriReachability}
             otherConnections={otherPresenceConnections}
           />
         </div>

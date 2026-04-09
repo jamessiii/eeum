@@ -11,6 +11,7 @@ import { getMotionStyle } from "../../shared/utils/motion";
 import type { Category } from "../../shared/types/models";
 import { getPresenceAccent } from "../dotoriPresenceVisuals";
 import { useDotoriPresenceContext } from "../presence/DotoriPresenceContext";
+import { useToast } from "../toast/ToastProvider";
 
 type CategoryDraftState = {
   name: string;
@@ -67,6 +68,7 @@ function getTransparentDragImage() {
 export function CategoriesPage({ embedded = false }: { embedded?: boolean }) {
   const { addCategory, deleteCategory, moveCategory, resetCategoriesToDefaults, state, updateCategory } = useAppState();
   const { presenceConnections, setCurrentTarget } = useDotoriPresenceContext();
+  const { showToast } = useToast();
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const categoryMap = useMemo(() => new Map(scope.categories.map((category) => [category.id, category])), [scope.categories]);
@@ -162,6 +164,17 @@ export function CategoriesPage({ embedded = false }: { embedded?: boolean }) {
   const getPresenceForTarget = (targetKind: "category-group" | "category", targetId: string) =>
     categoryPresenceConnections.filter((connection) => connection.targetKind === targetKind && connection.targetId === targetId);
 
+  const getTargetEditors = (targetKind: "category-group" | "category", targetId: string) =>
+    getPresenceForTarget(targetKind, targetId);
+
+  const showLockedTargetToast = (targetKind: "category-group" | "category", targetId: string, fallbackLabel: string) => {
+    const editors = getTargetEditors(targetKind, targetId);
+    if (!editors.length) return false;
+    const editorNames = Array.from(new Set(editors.map((connection) => connection.username))).join(", ");
+    showToast(`${editorNames || "다른 사용자"}가 ${fallbackLabel} 편집 중이라 지금은 수정할 수 없습니다.`, "info");
+    return true;
+  };
+
   useEffect(() => {
     if (dragItem) {
       if (dragOverlayTimeoutRef.current) {
@@ -225,6 +238,7 @@ export function CategoriesPage({ embedded = false }: { embedded?: boolean }) {
   };
 
   const startInlineGroupEdit = (group: Category) => {
+    if (showLockedTargetToast("category-group", group.id, group.name)) return;
     setInlineEditingGroupId(group.id);
     setInlineGroupName(group.name);
   };
@@ -257,12 +271,14 @@ export function CategoriesPage({ embedded = false }: { embedded?: boolean }) {
   }, [groups, pendingInlineGroupName]);
 
   const openCreateChildModal = (group: Category) => {
+    if (showLockedTargetToast("category-group", group.id, group.name)) return;
     setCategoryDraft(EMPTY_CATEGORY_DRAFT);
     setCreateChildGroupId(group.id);
   };
 
   const openEditCategoryModal = (category: Category) => {
     if (suppressClickRef.current) return;
+    if (showLockedTargetToast("category", category.id, category.name)) return;
     setCategoryDraft(createCategoryDraft(category));
     setEditingCategoryId(category.id);
   };
@@ -300,11 +316,19 @@ export function CategoriesPage({ embedded = false }: { embedded?: boolean }) {
   };
 
   const applyHiddenState = (categoryId: string, isHidden: boolean) => {
+    const targetCategory = categoryMap.get(categoryId);
+    if (!targetCategory) return;
+    const targetKind = targetCategory.categoryType === "group" ? "category-group" : "category";
+    if (showLockedTargetToast(targetKind, categoryId, targetCategory.name)) return;
     const targetIds = getCategoryTreeIds(categoryId);
     targetIds.forEach((id) => updateCategory(workspaceId, id, { isHidden }));
   };
 
   const requestDeleteCategory = (categoryId: string) => {
+    const targetCategory = categoryMap.get(categoryId);
+    if (!targetCategory) return;
+    const targetKind = targetCategory.categoryType === "group" ? "category-group" : "category";
+    if (showLockedTargetToast(targetKind, categoryId, targetCategory.name)) return;
     const usageCount = getCategoryUsageCount(categoryId);
     if (usageCount > 0) {
       setPendingDeleteCategoryId(categoryId);
@@ -314,6 +338,12 @@ export function CategoriesPage({ embedded = false }: { embedded?: boolean }) {
   };
 
   const startDrag = (item: DragItem, event: React.DragEvent<HTMLElement>) => {
+    const targetKind = item.categoryType === "group" ? "category-group" : "category";
+    const targetLabel = categoryMap.get(item.categoryId)?.name ?? "이 항목";
+    if (showLockedTargetToast(targetKind, item.categoryId, targetLabel)) {
+      event.preventDefault();
+      return;
+    }
     suppressClickRef.current = true;
     event.stopPropagation();
     event.dataTransfer.effectAllowed = "move";
