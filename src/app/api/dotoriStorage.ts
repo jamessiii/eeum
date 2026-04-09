@@ -58,7 +58,14 @@ function normalizeBaseUrl(form: DotoriConnectionForm) {
     throw new Error("도토리창고 호스트를 입력해주세요.");
   }
 
-  const withProtocol = /^https?:\/\//i.test(host) ? host : `http://${host}`;
+  const normalizedHostForDetection = host.replace(/:\d+$/, "");
+  const isIpv4Host = /^\d{1,3}(?:\.\d{1,3}){3}$/.test(normalizedHostForDetection);
+  const isIpv6Host =
+    normalizedHostForDetection.startsWith("[") && normalizedHostForDetection.endsWith("]");
+  const isLocalHost = /^(localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0)$/i.test(normalizedHostForDetection);
+  const inferredProtocol =
+    port === "443" || (!isIpv4Host && !isIpv6Host && !isLocalHost) ? "https://" : "http://";
+  const withProtocol = /^https?:\/\//i.test(host) ? host : `${inferredProtocol}${host}`;
   const normalizedHost = withProtocol.replace(/\/+$/, "");
   if (!port) {
     return normalizedHost;
