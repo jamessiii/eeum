@@ -10,8 +10,7 @@ import { getCategoryGroups, getChildCategories, getHiddenCategories } from "../.
 import { getMotionStyle } from "../../shared/utils/motion";
 import type { Category } from "../../shared/types/models";
 import { getPresenceAccent } from "../dotoriPresenceVisuals";
-import { useDotoriPresenceContext } from "../presence/DotoriPresenceContext";
-import { useToast } from "../toast/ToastProvider";
+import { useDotoriPresenceLocks, useSyncDotoriPresenceTarget } from "../presence/useDotoriPresenceLocks";
 
 type CategoryDraftState = {
   name: string;
@@ -67,8 +66,6 @@ function getTransparentDragImage() {
 
 export function CategoriesPage({ embedded = false }: { embedded?: boolean }) {
   const { addCategory, deleteCategory, moveCategory, resetCategoriesToDefaults, state, updateCategory } = useAppState();
-  const { presenceConnections, setCurrentTarget } = useDotoriPresenceContext();
-  const { showToast } = useToast();
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const categoryMap = useMemo(() => new Map(scope.categories.map((category) => [category.id, category])), [scope.categories]);
@@ -93,87 +90,55 @@ export function CategoriesPage({ embedded = false }: { embedded?: boolean }) {
   const [isHiddenPanelOpen, setIsHiddenPanelOpen] = useState(false);
   const [pendingDeleteCategoryId, setPendingDeleteCategoryId] = useState<string | null>(null);
   const [isResetDefaultsModalOpen, setIsResetDefaultsModalOpen] = useState(false);
-  const lastPresenceTargetRef = useRef<string>("");
 
   const editingCategory = editingCategoryId ? categoryMap.get(editingCategoryId) ?? null : null;
   const createChildGroup = createChildGroupId ? categoryMap.get(createChildGroupId) ?? null : null;
   const pendingDeleteCategory = pendingDeleteCategoryId ? categoryMap.get(pendingDeleteCategoryId) ?? null : null;
-  const categoryPresenceConnections = useMemo(
-    () => presenceConnections.filter((connection) => connection.page === "카테고리"),
-    [presenceConnections],
-  );
+  const { getPresenceForTarget, showLockedTargetToast } = useDotoriPresenceLocks("카테고리");
 
-  useEffect(() => {
-    let nextTarget = { kind: null, id: null, label: null } as {
-      kind: string | null;
-      id: string | null;
-      label: string | null;
-    };
-
+  const nextPresenceTarget = useMemo(() => {
     if (dragItem) {
-      nextTarget = {
+      return {
         kind: dragItem.categoryType === "group" ? "category-group" : "category",
         id: dragItem.categoryId,
         label: categoryMap.get(dragItem.categoryId)?.name ?? null,
       };
-    } else if (editingCategory) {
-      nextTarget = {
+    }
+    if (editingCategory) {
+      return {
         kind: "category",
         id: editingCategory.id,
         label: editingCategory.name,
       };
-    } else if (pendingDeleteCategory) {
-      nextTarget = {
+    }
+    if (pendingDeleteCategory) {
+      return {
         kind: pendingDeleteCategory.categoryType === "group" ? "category-group" : "category",
         id: pendingDeleteCategory.id,
         label: pendingDeleteCategory.name,
       };
-    } else if (createChildGroup) {
-      nextTarget = {
+    }
+    if (createChildGroup) {
+      return {
         kind: "category-group",
         id: createChildGroup.id,
         label: createChildGroup.name,
       };
-    } else {
-      const inlineEditingGroup = inlineEditingGroupId ? categoryMap.get(inlineEditingGroupId) ?? null : null;
-      if (inlineEditingGroup) {
-        nextTarget = {
-          kind: "category-group",
-          id: inlineEditingGroup.id,
-          label: inlineEditingGroup.name,
-        };
-      }
     }
 
-    const nextTargetKey = `${nextTarget.kind ?? ""}|${nextTarget.id ?? ""}|${nextTarget.label ?? ""}`;
-    if (lastPresenceTargetRef.current === nextTargetKey) {
-      return;
+    const inlineEditingGroup = inlineEditingGroupId ? categoryMap.get(inlineEditingGroupId) ?? null : null;
+    if (inlineEditingGroup) {
+      return {
+        kind: "category-group",
+        id: inlineEditingGroup.id,
+        label: inlineEditingGroup.name,
+      };
     }
-    lastPresenceTargetRef.current = nextTargetKey;
-    setCurrentTarget(nextTarget);
-  }, [
-    categoryMap,
-    createChildGroup,
-    dragItem,
-    editingCategory,
-    inlineEditingGroupId,
-    pendingDeleteCategory,
-    setCurrentTarget,
-  ]);
 
-  const getPresenceForTarget = (targetKind: "category-group" | "category", targetId: string) =>
-    categoryPresenceConnections.filter((connection) => connection.targetKind === targetKind && connection.targetId === targetId);
+    return { kind: null, id: null, label: null };
+  }, [categoryMap, createChildGroup, dragItem, editingCategory, inlineEditingGroupId, pendingDeleteCategory]);
 
-  const getTargetEditors = (targetKind: "category-group" | "category", targetId: string) =>
-    getPresenceForTarget(targetKind, targetId);
-
-  const showLockedTargetToast = (targetKind: "category-group" | "category", targetId: string, fallbackLabel: string) => {
-    const editors = getTargetEditors(targetKind, targetId);
-    if (!editors.length) return false;
-    const editorNames = Array.from(new Set(editors.map((connection) => connection.username))).join(", ");
-    showToast(`${editorNames || "다른 사용자"}가 ${fallbackLabel} 편집 중이라 지금은 수정할 수 없습니다.`, "info");
-    return true;
-  };
+  useSyncDotoriPresenceTarget(nextPresenceTarget);
 
   useEffect(() => {
     if (dragItem) {
