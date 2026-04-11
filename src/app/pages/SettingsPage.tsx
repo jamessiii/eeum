@@ -15,6 +15,8 @@ import {
   type DotoriBackupMetadata,
   type DotoriConnectionForm,
 } from "../api/dotoriStorage";
+import { migrateFoundationData, type FoundationMigrationSummary } from "../api/foundationMigration";
+import { clearAuthSession, readAuthSession } from "../authSession";
 import { AppModal } from "../components/AppModal";
 import {
   clearDotoriSyncSession,
@@ -120,6 +122,8 @@ export function SettingsPage() {
   } | null>(null);
   const [isDotoriImportDetailOpen, setIsDotoriImportDetailOpen] = useState(false);
   const [isDotoriSaveDetailOpen, setIsDotoriSaveDetailOpen] = useState(false);
+  const [isFoundationMigrationRunning, setIsFoundationMigrationRunning] = useState(false);
+  const [foundationMigrationSummary, setFoundationMigrationSummary] = useState<FoundationMigrationSummary | null>(null);
   const backupImportInputRef = useRef<HTMLInputElement | null>(null);
   const transactionPackageImportInputRef = useRef<HTMLInputElement | null>(null);
   const foundationPackageImportInputRef = useRef<HTMLInputElement | null>(null);
@@ -450,6 +454,46 @@ export function SettingsPage() {
     showToast("도토리창고 연결을 종료했습니다.", "info");
   };
 
+  const handleFoundationMigration = async () => {
+    const authSession = readAuthSession();
+    if (!authSession) {
+      showToast("먼저 서버 로그인부터 완료해주세요.", "error");
+      return;
+    }
+
+    if (!scope.people.length && !scope.accounts.length && !scope.cards.length && !scope.categories.length) {
+      showToast("옮길 기초 데이터가 없습니다.", "info");
+      return;
+    }
+
+    setIsFoundationMigrationRunning(true);
+
+    try {
+      const summary = await migrateFoundationData({
+        apiBaseUrl: authSession.apiBaseUrl,
+        spaceId: authSession.spaceId,
+        sessionKey: authSession.sessionKey,
+        people: scope.people,
+        accounts: scope.accounts,
+        cards: scope.cards,
+        categories: scope.categories,
+      });
+
+      setFoundationMigrationSummary(summary);
+      showToast("사용자, 카드·계좌, 카테고리를 서버로 옮겼습니다.", "success");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "기초 데이터 이전 중 오류가 발생했습니다.";
+      showToast(message, "error");
+    } finally {
+      setIsFoundationMigrationRunning(false);
+    }
+  };
+
+  const handleLogout = () => {
+    clearAuthSession();
+    showToast("로그아웃되었습니다.", "info");
+  };
+
   return (
     <div className="page-stack">
       <section className="settings-shell-card page-section" data-guide-target="settings-page-overview">
@@ -639,6 +683,46 @@ export function SettingsPage() {
                     event.currentTarget.value = "";
                   }}
                 />
+                  </div>
+                </section>
+                <section className="settings-backup-group">
+                  <div className="settings-backup-group-copy">
+                    <span className="settings-backup-group-label">서버 초기 이전</span>
+                    <p className="settings-backup-group-description">
+                      현재 브라우저의 사용자, 계좌, 카드, 카테고리만 빈 서버 공간으로 한 번 옮깁니다.
+                    </p>
+                    <div className="settings-foundation-migration-summary">
+                      <span>사용자 {scope.people.length}명</span>
+                      <span>계좌 {scope.accounts.length}개</span>
+                      <span>카드 {scope.cards.length}개</span>
+                      <span>
+                        카테고리 그룹 {scope.categories.filter((category) => category.categoryType === "group").length}개 / 전체{" "}
+                        {scope.categories.length}개
+                      </span>
+                      {foundationMigrationSummary ? (
+                        <strong>
+                          이전 완료: 사용자 {foundationMigrationSummary.peopleCount}명, 계좌 {foundationMigrationSummary.accountCount}개, 카드{" "}
+                          {foundationMigrationSummary.cardCount}개, 카테고리 그룹 {foundationMigrationSummary.categoryGroupCount}개, 카테고리{" "}
+                          {foundationMigrationSummary.categoryCount}개
+                        </strong>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="settings-panel-actions settings-backup-action-row">
+                    <button type="button" className="btn btn-primary" onClick={() => void handleFoundationMigration()} disabled={isFoundationMigrationRunning}>
+                      {isFoundationMigrationRunning ? "옮기는 중..." : "서버로 옮기기"}
+                    </button>
+                  </div>
+                </section>
+                <section className="settings-backup-group">
+                  <div className="settings-backup-group-copy">
+                    <span className="settings-backup-group-label">세션</span>
+                    <p className="settings-backup-group-description">현재 로그인된 사용자 세션을 종료하고 로그인 화면으로 돌아갑니다.</p>
+                  </div>
+                  <div className="settings-panel-actions settings-backup-action-row">
+                    <button type="button" className="btn btn-outline-primary" onClick={handleLogout}>
+                      로그아웃
+                    </button>
                   </div>
                 </section>
               </div>

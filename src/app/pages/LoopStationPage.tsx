@@ -1,5 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { getCategoryLabel } from "../../domain/categories/meta";
+import { fetchLoopRecommendations, type AnalysisLoopRecommendationResponse } from "../api/analysis";
+import { isAnalysisApiConfigured } from "../api/analysisConfig";
 import { Link } from "react-router-dom";
 import { createId } from "../../shared/utils/id";
 import { formatCurrency } from "../../shared/utils/format";
@@ -60,6 +62,18 @@ function getRecommendationFamilyKey(value: string) {
     .trim();
 }
 
+function mapRemoteLoopRecommendation(item: AnalysisLoopRecommendationResponse) {
+  return {
+    merchantKey: item.merchantKey,
+    merchantName: item.merchantName,
+    matchedTransactionIds: item.matchedTransactionIds.map(String),
+    latestAmount: item.latestAmount,
+    previousAmount: item.previousAmount,
+    reason: item.reason,
+    categoryId: item.categoryId === null ? null : String(item.categoryId),
+  };
+}
+
 export function LoopStationPage() {
   const {
     setFinancialProfile,
@@ -87,11 +101,33 @@ export function LoopStationPage() {
   const [managedLoopNameDraft, setManagedLoopNameDraft] = useState("");
   const [isSplitNameEditing, setIsSplitNameEditing] = useState(false);
   const [isDetailNameEditing, setIsDetailNameEditing] = useState(false);
+  const [remoteLoopRecommendations, setRemoteLoopRecommendations] = useState<ReturnType<typeof mapRemoteLoopRecommendation>[] | null>(null);
 
   const loopData = workspaceLoopDataByWorkspaceId.get(workspaceId);
   const managedLoops = loopData?.managedLoops ?? [];
   const loopInsights = loopData?.loopInsights ?? [];
-  const loopRecommendations = loopData?.loopRecommendations ?? [];
+  const localLoopRecommendations = loopData?.loopRecommendations ?? [];
+  const loopRecommendations = remoteLoopRecommendations ?? localLoopRecommendations;
+
+  useEffect(() => {
+    if (!isAnalysisApiConfigured()) {
+      setRemoteLoopRecommendations(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    void fetchLoopRecommendations(controller.signal)
+      .then((response) => {
+        setRemoteLoopRecommendations(response.map(mapRemoteLoopRecommendation));
+      })
+      .catch((error) => {
+        if (controller.signal.aborted) return;
+        console.warn("loop recommendations fetch failed", error);
+        setRemoteLoopRecommendations(null);
+      });
+
+    return () => controller.abort();
+  }, []);
 
   const insightByGroupKey = useMemo(() => new Map(loopInsights.map((item) => [item.groupKey, item])), [loopInsights]);
   const managedLoopByKey = useMemo(() => new Map(managedLoops.map((item) => [item.key, item])), [managedLoops]);

@@ -3,13 +3,15 @@ import { Link, useNavigate } from "react-router-dom";
 import type { DragEvent, PointerEvent } from "react";
 import { useRef } from "react";
 import { Fragment } from "react";
+import { fetchWorkspaceInsights, type AnalysisWorkspaceInsightsResponse } from "../api/analysis";
+import { isAnalysisApiConfigured } from "../api/analysisConfig";
 import { monthKey } from "../../shared/utils/date";
 import { getCategoryLabel } from "../../domain/categories/meta";
 import { getLoopCandidateGroup } from "../../domain/loops/loopCandidates";
 import type { ReviewItem } from "../../shared/types/models";
 import type { Account, Card, Category, ImportRecord, Person, Transaction, WorkspaceBundle } from "../../shared/types/models";
 import type { ManagedLoopGroup } from "../../domain/loops/managedLoops";
-import { getWorkspaceInsights, type WorkspaceInsightBasis } from "../../domain/insights/workspaceInsights";
+import { getWorkspaceInsights, type WorkspaceInsightBasis, type WorkspaceInsights } from "../../domain/insights/workspaceInsights";
 import { getMonthlySharedSettlementSummary, getSettlementBalanceSummary } from "../../domain/settlements/summary";
 import { getOpenTransactionWorkflowReviews, getTransactionWorkflowTransactionIds } from "../../domain/reviews/transactionWorkflow";
 import { getExpenseImpactStats } from "../../domain/transactions/expenseImpactStats";
@@ -30,6 +32,36 @@ import { getWorkspaceScope } from "../state/selectors";
 
 function toneClass(tone: "stable" | "caution" | "warning") {
   return tone === "warning" ? "warning" : tone === "caution" ? "caution" : "stable";
+}
+
+function mergeWorkspaceInsights(base: WorkspaceInsights, remote: AnalysisWorkspaceInsightsResponse | null): WorkspaceInsights {
+  if (!remote) return base;
+
+  return {
+    ...base,
+    transactionCount: remote.transactionCount,
+    income: remote.income,
+    expense: remote.expense,
+    savings: remote.savings,
+    spendRate: remote.spendRate,
+    savingsRate: remote.savingsRate,
+    fixedExpense: remote.fixedExpense,
+    fixedExpenseRate: remote.fixedExpenseRate,
+    reviewCount: remote.reviewCount,
+    internalTransferCount: remote.internalTransferCount,
+    uncategorizedCount: remote.uncategorizedCount,
+    recurringSuggestionCount: remote.recurringSuggestionCount,
+    isFinancialProfileReady: remote.financialProfileReady,
+    isDiagnosisReady: remote.diagnosisReady,
+    topCategories: remote.topCategories.map((item) => ({
+      categoryName: item.categoryName,
+      amount: item.amount,
+    })),
+    sourceBreakdown: remote.sourceBreakdown,
+    spendTone: remote.spendTone,
+    savingsTone: remote.savingsTone,
+    fixedTone: remote.fixedTone,
+  };
 }
 
 type UsageStat = {
@@ -1400,6 +1432,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const currentMonth = monthKey(new Date());
+  const [remoteDashboardInsightsByMonth, setRemoteDashboardInsightsByMonth] = useState<Record<string, AnalysisWorkspaceInsightsResponse>>({});
   const monthOptions = useMemo(
     () =>
       Array.from(new Set(scope.transactions.map((transaction) => transaction.occurredAt.slice(0, 7)).filter(Boolean))).sort((a, b) =>
@@ -1917,12 +1950,20 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
     [selectedDashboardExpenseTransactions],
   );
 
-  const insights = getWorkspaceInsights(state, workspaceId, {
+  const localInsights = getWorkspaceInsights(state, workspaceId, {
     basis: selectedDashboardBasis,
     label: selectedDashboardScopeLabel,
     transactions: selectedDashboardTransactions,
     incomeEntries: selectedDashboardIncomeEntries,
   });
+  const selectedDashboardRemoteMonthKey =
+    selectedDashboardBasis === "statement" ? selectedDashboardStatement : selectedDashboardMonth;
+  const insights = mergeWorkspaceInsights(
+    localInsights,
+    selectedDashboardRemoteMonthKey && selectedDashboardRemoteMonthKey !== UNSPECIFIED_STATEMENT_KEY
+      ? remoteDashboardInsightsByMonth[selectedDashboardRemoteMonthKey] ?? null
+      : null,
+  );
   const currentMonthTransactions = useMemo(
     () => scope.transactions.filter((transaction) => monthKey(transaction.occurredAt) === currentMonth),
     [currentMonth, scope.transactions],
@@ -1967,18 +2008,26 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
       ),
     [scope.incomeEntries, selectedCalendarOwnerId, selectedCalendarPreviousMonth],
   );
-  const selectedCalendarInsights = getWorkspaceInsights(state, workspaceId, {
+  const localSelectedCalendarInsights = getWorkspaceInsights(state, workspaceId, {
     basis: "month",
     label: formatMonthLabel(selectedCalendarMonth),
     transactions: selectedCalendarSummaryTransactions,
     incomeEntries: selectedCalendarSummaryIncomeEntries,
   });
-  const selectedCalendarPreviousInsights = getWorkspaceInsights(state, workspaceId, {
+  const selectedCalendarInsights = mergeWorkspaceInsights(
+    localSelectedCalendarInsights,
+    remoteDashboardInsightsByMonth[selectedCalendarMonth] ?? null,
+  );
+  const localSelectedCalendarPreviousInsights = getWorkspaceInsights(state, workspaceId, {
     basis: "month",
     label: formatMonthLabel(selectedCalendarPreviousMonth),
     transactions: selectedCalendarPreviousTransactions,
     incomeEntries: selectedCalendarPreviousIncomeEntries,
   });
+  const selectedCalendarPreviousInsights = mergeWorkspaceInsights(
+    localSelectedCalendarPreviousInsights,
+    remoteDashboardInsightsByMonth[selectedCalendarPreviousMonth] ?? null,
+  );
   const selectedCalendarExpenseTotal = useMemo(
     () => getExpenseImpactStats(selectedCalendarSummaryTransactions).activeExpenseTransactions.reduce((sum, transaction) => sum + transaction.amount, 0),
     [selectedCalendarSummaryTransactions],
@@ -2017,6 +2066,53 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
 
     return getPreviousMonthKey(selectedDashboardMonth);
   }, [selectedDashboardBasis, selectedDashboardMonth, selectedDashboardStatement]);
+  useEffect(() => {
+    if (!isAnalysisApiConfigured()) return;
+
+    const requestedMonths = Array.from(
+      new Set(
+        [
+          selectedDashboardBasis === "statement" ? selectedDashboardStatement : selectedDashboardMonth,
+          previousDashboardScopeMonth,
+          selectedCalendarMonth,
+          selectedCalendarPreviousMonth,
+        ].filter((value) => Boolean(value) && value !== UNSPECIFIED_STATEMENT_KEY),
+      ),
+    );
+
+    if (!requestedMonths.length) return;
+
+    const controller = new AbortController();
+
+    void Promise.all(
+      requestedMonths.map(async (value) => {
+        const response = await fetchWorkspaceInsights(value, controller.signal);
+        return [value, response] as const;
+      }),
+    )
+      .then((entries) => {
+        setRemoteDashboardInsightsByMonth((current) => {
+          const next = { ...current };
+          entries.forEach(([monthValue, response]) => {
+            next[monthValue] = response;
+          });
+          return next;
+        });
+      })
+      .catch((error) => {
+        if (controller.signal.aborted) return;
+        console.warn("dashboard analysis fetch failed", error);
+      });
+
+    return () => controller.abort();
+  }, [
+    previousDashboardScopeMonth,
+    selectedCalendarMonth,
+    selectedCalendarPreviousMonth,
+    selectedDashboardBasis,
+    selectedDashboardMonth,
+    selectedDashboardStatement,
+  ]);
   const previousDashboardTransactions = useMemo(() => {
     if (!previousDashboardScopeMonth) return [];
 
@@ -2033,7 +2129,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
     if (!previousDashboardScopeMonth) return [];
     return scope.incomeEntries.filter((entry) => monthKey(entry.occurredAt) === previousDashboardScopeMonth);
   }, [previousDashboardScopeMonth, scope.incomeEntries]);
-  const previousDashboardInsights = getWorkspaceInsights(state, workspaceId, {
+  const localPreviousDashboardInsights = getWorkspaceInsights(state, workspaceId, {
     basis: selectedDashboardBasis,
     label:
       selectedDashboardBasis === "statement"
@@ -2042,6 +2138,10 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
     transactions: previousDashboardTransactions,
     incomeEntries: previousDashboardIncomeEntries,
   });
+  const previousDashboardInsights = mergeWorkspaceInsights(
+    localPreviousDashboardInsights,
+    previousDashboardScopeMonth ? remoteDashboardInsightsByMonth[previousDashboardScopeMonth] ?? null : null,
+  );
   const previousDashboardExpenseTotal = useMemo(
     () =>
       getExpenseImpactStats(previousDashboardTransactions).activeExpenseTransactions.reduce(

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { fetchSettlementSummary, type AnalysisSettlementSummaryResponse } from "../api/analysis";
+import { isAnalysisApiConfigured } from "../api/analysisConfig";
 import { completeGuideStepAction } from "../../domain/guidance/guideRuntime";
 import { getFlowStatusSummary, getMonthlyFlowSummary } from "../../domain/settlements/summary";
 import type { ImportRecord } from "../../shared/types/models";
@@ -46,11 +48,90 @@ function formatAccountMeta(account?: { institutionName: string; accountNumberMas
   return parts.length ? ` (${parts.join(" · ")})` : "";
 }
 
+function mapRemoteSettlementSummary(response: AnalysisSettlementSummaryResponse, workspaceId: string) {
+  return {
+    flowSummary: {
+      rows: response.rows.map((row) => ({
+        transferKey: row.transferKey,
+        fromAccountId: row.fromAssetId === null ? "" : String(row.fromAssetId),
+        toAccountId: row.toAssetId === null ? "" : String(row.toAssetId),
+        fromAccountName: row.fromAssetName,
+        toAccountName: row.toAssetName,
+        amount: row.amount,
+        transactionCount: row.transactionCount,
+        categoryAmounts: row.categoryAmounts.map((item) => ({
+          categoryId: item.categoryId === null ? "" : String(item.categoryId),
+          name: item.name,
+          amount: item.amount,
+        })),
+        cardAmounts: row.cardAmounts.map((item) => ({
+          cardId: item.cardAssetId === null ? "" : String(item.cardAssetId),
+          name: item.name,
+          amount: item.amount,
+          transactionCount: item.transactionCount,
+        })),
+      })),
+      totalAmount: response.totalAmount,
+      totalTransactionCount: response.totalTransactionCount,
+    },
+    flowStatus: {
+      rows: response.rows.map((row) => ({
+        transferKey: row.transferKey,
+        fromAccountId: row.fromAssetId === null ? "" : String(row.fromAssetId),
+        toAccountId: row.toAssetId === null ? "" : String(row.toAssetId),
+        fromAccountName: row.fromAssetName,
+        toAccountName: row.toAssetName,
+        amount: row.amount,
+        transactionCount: row.transactionCount,
+        categoryAmounts: row.categoryAmounts.map((item) => ({
+          categoryId: item.categoryId === null ? "" : String(item.categoryId),
+          name: item.name,
+          amount: item.amount,
+        })),
+        cardAmounts: row.cardAmounts.map((item) => ({
+          cardId: item.cardAssetId === null ? "" : String(item.cardAssetId),
+          name: item.name,
+          amount: item.amount,
+          transactionCount: item.transactionCount,
+        })),
+        confirmationRecord: row.confirmationRecord
+          ? {
+              id: String(row.confirmationRecord.settlementId),
+              workspaceId,
+              month: response.monthKey,
+              transferKey: row.confirmationRecord.transferKey,
+              fromAccountId: row.fromAssetId === null ? null : String(row.fromAssetId),
+              toAccountId: row.toAssetId === null ? null : String(row.toAssetId),
+              amount: row.confirmationRecord.amount,
+              note: row.confirmationRecord.note,
+              completedAt: row.confirmationRecord.completedAt,
+            }
+          : null,
+        isConfirmed: row.confirmed,
+      })),
+      confirmationHistory: response.confirmationHistory.map((item) => ({
+        id: String(item.settlementId),
+        workspaceId,
+        month: response.monthKey,
+        transferKey: item.transferKey,
+        fromAccountId: null,
+        toAccountId: null,
+        amount: item.amount,
+        note: item.note,
+        completedAt: item.completedAt,
+      })),
+      confirmedAmount: response.confirmedAmount,
+      confirmedCount: response.confirmedCount,
+    },
+  };
+}
+
 export function SettlementsPage() {
   const { addSettlement, removeSettlement, state } = useAppState();
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const currentMonth = monthKey(new Date());
+  const [remoteSettlementSummary, setRemoteSettlementSummary] = useState<ReturnType<typeof mapRemoteSettlementSummary> | null>(null);
   const statementMonthOptions = useMemo(() => getStatementMonthOptions(scope.imports), [scope.imports]);
   const [selectedStatementMonth, setSelectedStatementMonth] = useState(
     statementMonthOptions.includes(currentMonth) ? currentMonth : statementMonthOptions[0] ?? currentMonth,
@@ -100,9 +181,31 @@ export function SettlementsPage() {
     () => getFlowStatusSummary(flowSummary.rows, scope.settlements, selectedStatementMonth),
     [flowSummary.rows, scope.settlements, selectedStatementMonth],
   );
+  const effectiveFlowSummary = remoteSettlementSummary?.flowSummary ?? flowSummary;
+  const effectiveFlowStatus = remoteSettlementSummary?.flowStatus ?? flowStatus;
 
-  const unconfirmedRows = flowStatus.rows.filter((row) => !row.isConfirmed);
-  const allConfirmed = flowStatus.rows.length > 0 && unconfirmedRows.length === 0;
+  useEffect(() => {
+    if (!isAnalysisApiConfigured()) {
+      setRemoteSettlementSummary(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    void fetchSettlementSummary(selectedStatementMonth, controller.signal)
+      .then((response) => {
+        setRemoteSettlementSummary(mapRemoteSettlementSummary(response, workspaceId));
+      })
+      .catch((error) => {
+        if (controller.signal.aborted) return;
+        console.warn("settlement summary fetch failed", error);
+        setRemoteSettlementSummary(null);
+      });
+
+    return () => controller.abort();
+  }, [selectedStatementMonth, workspaceId]);
+
+  const unconfirmedRows = effectiveFlowStatus.rows.filter((row) => !row.isConfirmed);
+  const allConfirmed = effectiveFlowStatus.rows.length > 0 && unconfirmedRows.length === 0;
 
   const selectedStatementExpenseTotal = useMemo(
     () =>
@@ -149,19 +252,19 @@ export function SettlementsPage() {
           </article>
           <article className="stat-card">
             <span className="stat-label">확인할 이체</span>
-            <strong>{flowStatus.rows.length}건</strong>
+            <strong>{effectiveFlowStatus.rows.length}건</strong>
           </article>
           <article className="stat-card">
             <span className="stat-label">확인 완료</span>
-            <strong>{flowStatus.confirmedCount}건</strong>
+            <strong>{effectiveFlowStatus.confirmedCount}건</strong>
           </article>
           <article className="stat-card">
             <span className="stat-label">이체 필요 금액</span>
-            <strong>{formatCurrency(flowSummary.totalAmount)}</strong>
+            <strong>{formatCurrency(effectiveFlowSummary.totalAmount)}</strong>
           </article>
           <article className="stat-card">
             <span className="stat-label">확인 완료 금액</span>
-            <strong>{formatCurrency(flowStatus.confirmedAmount)}</strong>
+            <strong>{formatCurrency(effectiveFlowStatus.confirmedAmount)}</strong>
           </article>
         </div>
 
@@ -197,7 +300,7 @@ export function SettlementsPage() {
             }
           />
         </section>
-      ) : !flowStatus.rows.length ? (
+      ) : !effectiveFlowStatus.rows.length ? (
         <section className="page-section" style={getMotionStyle(1)}>
           <EmptyStateCallout
             kicker="흐름 준비 중"
@@ -230,9 +333,9 @@ export function SettlementsPage() {
           <div className="review-list settlement-flow-list" data-guide-target="settlements-transfer-list">
             {(() => {
               const firstPendingTransferKey =
-                flowStatus.rows.find((candidate) => !candidate.isConfirmed)?.transferKey ?? flowStatus.rows[0]?.transferKey;
+                effectiveFlowStatus.rows.find((candidate) => !candidate.isConfirmed)?.transferKey ?? effectiveFlowStatus.rows[0]?.transferKey;
 
-              return flowStatus.rows.map((row, index) => {
+              return effectiveFlowStatus.rows.map((row, index) => {
               const isExpanded = expandedTransferKeys.has(row.transferKey);
               const confirmationRecord = row.confirmationRecord;
               const toAccount = scope.accounts.find((account) => account.id === row.toAccountId);

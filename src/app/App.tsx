@@ -16,12 +16,14 @@ import { MotionProvider } from "./motion/MotionProvider";
 import { DotoriPresenceProvider, type DotoriPresenceTarget } from "./presence/DotoriPresenceContext";
 import { AppModal } from "./components/AppModal";
 import { AppGuidePanel } from "./components/AppGuidePanel";
+import { AUTH_SESSION_EVENT, readAuthSession, type AuthSession } from "./authSession";
 import {
   DOTORI_SYNC_SESSION_EVENT,
   getDotoriClientId,
   readDotoriSyncSession,
   type DotoriSyncSession,
 } from "./dotoriSync";
+import { AuthGateScreen } from "./pages/AuthGateScreen";
 import { EmptyWorkspaceScreen, ONBOARDING_COMPLETE_KEY, WORKSPACE_SETUP_KEY } from "./pages/EmptyWorkspaceScreen";
 import { LoadingScreen } from "./pages/LoadingScreen";
 import { AppStateProvider, useAppState } from "./state/AppStateProvider";
@@ -491,6 +493,7 @@ function AppFrame() {
   const { showToast } = useToast();
   const { isDeveloperModeUnlocked, registerUnlockTap, lockDeveloperMode } = useDeveloperMode();
   useThemeMode();
+  const [authSession, setAuthSession] = useState<AuthSession | null>(() => readAuthSession());
   const [isCreateWorkspaceOpen, setIsCreateWorkspaceOpen] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [dotoriSession, setDotoriSession] = useState<DotoriSyncSession>(() => readDotoriSyncSession());
@@ -732,8 +735,16 @@ function AppFrame() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
+    const syncAuthSession = () => {
+      setAuthSession(readAuthSession());
+    };
+
     const syncSession = () => {
       setDotoriSession(readDotoriSyncSession());
+    };
+
+    const handleAuthSync = () => {
+      syncAuthSession();
     };
 
     const handleCustomSync = () => {
@@ -741,13 +752,19 @@ function AppFrame() {
     };
 
     const handleStorage = (event: StorageEvent) => {
+      if (event.key === "spending-diary.auth-session") {
+        syncAuthSession();
+        return;
+      }
       if (event.key && event.key !== "spending-diary.dotori-sync-session") return;
       syncSession();
     };
 
+    window.addEventListener(AUTH_SESSION_EVENT, handleAuthSync as EventListener);
     window.addEventListener(DOTORI_SYNC_SESSION_EVENT, handleCustomSync as EventListener);
     window.addEventListener("storage", handleStorage);
     return () => {
+      window.removeEventListener(AUTH_SESSION_EVENT, handleAuthSync as EventListener);
       window.removeEventListener(DOTORI_SYNC_SESSION_EVENT, handleCustomSync as EventListener);
       window.removeEventListener("storage", handleStorage);
     };
@@ -973,6 +990,16 @@ function AppFrame() {
   });
 
   if (!isReady) return <LoadingScreen />;
+  if (!authSession) {
+    return (
+      <AuthGateScreen
+        onSignedIn={() => {
+          setAuthSession(readAuthSession());
+          navigate("/dashboard", { replace: true });
+        }}
+      />
+    );
+  }
   if (!state.workspaces.length) return <EmptyWorkspaceScreen />;
 
   const activeWorkspace = getActiveWorkspace(state);
