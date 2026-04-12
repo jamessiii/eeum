@@ -315,6 +315,7 @@ type Action =
           transactionIds: string[];
           loopGroupOverrideKey: string | null;
           isLoop?: boolean;
+          loopDisplayName?: string | null;
         };
       }
     | {
@@ -2532,6 +2533,10 @@ function reducer(state: AppState, action: Action): AppState {
                 loopGroupOverrideKey: action.payload.loopGroupOverrideKey,
                 isLoop: action.payload.isLoop ?? transaction.isLoop ?? false,
                 isLoopIgnored: action.payload.isLoop ?? transaction.isLoop ? false : transaction.isLoopIgnored ?? false,
+                loopDisplayName:
+                  action.payload.loopDisplayName !== undefined
+                    ? action.payload.loopDisplayName
+                    : transaction.loopDisplayName ?? null,
               }
             : transaction,
         ),
@@ -2657,6 +2662,8 @@ interface AppStateContextValue {
     transactionIds: string[],
     loopGroupOverrideKey: string | null,
     isLoop?: boolean,
+    loopDisplayName?: string | null,
+    successMessage?: string,
   ) => void;
   setTransactionLoopDisplayNameBatch: (workspaceId: string, transactionIds: string[], loopDisplayName: string | null) => void;
 }
@@ -4615,16 +4622,23 @@ export function AppStateProvider({ children }: PropsWithChildren) {
           }
         })();
       },
-      setTransactionLoopGroupOverrideBatch(workspaceId, transactionIds, loopGroupOverrideKey, isLoop = true) {
+      setTransactionLoopGroupOverrideBatch(
+        workspaceId,
+        transactionIds,
+        loopGroupOverrideKey,
+        isLoop = true,
+        loopDisplayName,
+        successMessage,
+      ) {
         void (async () => {
           try {
             const nextState = reducer(stateRef.current, {
               type: "setTransactionLoopGroupOverrideBatch",
-              payload: { workspaceId, transactionIds, loopGroupOverrideKey, isLoop },
+              payload: { workspaceId, transactionIds, loopGroupOverrideKey, isLoop, loopDisplayName },
             });
             const updated = nextState.transactions.filter((item) => transactionIds.includes(item.id));
             await Promise.all(updated.map((transaction) => saveTransactionToServer(transaction)));
-            showToast("추천 루프를 하나로 합쳤습니다.", "success");
+            showToast(successMessage ?? "추천 루프를 하나로 합쳤습니다.", "success");
           } catch (error) {
             handleServerMutationError(error);
           }

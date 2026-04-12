@@ -111,7 +111,7 @@ export function LoopStationPage() {
   const managedLoops = loopData?.managedLoops ?? [];
   const loopInsights = loopData?.loopInsights ?? [];
   const localLoopRecommendations = loopData?.loopRecommendations ?? [];
-  const loopRecommendations = remoteLoopRecommendations ?? localLoopRecommendations;
+  const baseLoopRecommendations = remoteLoopRecommendations ?? localLoopRecommendations;
 
   useEffect(() => {
     if (!isAnalysisApiConfigured()) {
@@ -135,7 +135,6 @@ export function LoopStationPage() {
 
   const insightByGroupKey = useMemo(() => new Map(loopInsights.map((item) => [item.groupKey, item])), [loopInsights]);
   const managedLoopByKey = useMemo(() => new Map(managedLoops.map((item) => [item.key, item])), [managedLoops]);
-  const recommendationByKey = useMemo(() => new Map(loopRecommendations.map((item) => [item.merchantKey, item])), [loopRecommendations]);
   const categoryMap = useMemo(() => new Map(scope.categories.map((category) => [category.id, category])), [scope.categories]);
   const categoryNameMap = useMemo(() => new Map(scope.categories.map((category) => [category.id, category.name])), [scope.categories]);
   const loopPriorityOptions = useMemo(
@@ -152,6 +151,26 @@ export function LoopStationPage() {
   const selectedLoopPriorityCategoryIds = scope.financialProfile?.loopPriorityCategoryIds ?? [];
   const ownerNameMap = useMemo(() => new Map(scope.people.map((person) => [person.id, getPersonDisplayLabel(person)])), [scope.people]);
   const transactionMap = useMemo(() => new Map(scope.transactions.map((transaction) => [transaction.id, transaction])), [scope.transactions]);
+  const selectedLoopPriorityCategoryIdSet = useMemo(() => new Set(selectedLoopPriorityCategoryIds), [selectedLoopPriorityCategoryIds]);
+  const loopRecommendations = useMemo(
+    () =>
+      baseLoopRecommendations.filter((item) => {
+        const visibleTransactions = item.matchedTransactionIds
+          .map((transactionId) => transactionMap.get(transactionId))
+          .filter((transaction): transaction is NonNullable<typeof transaction> => Boolean(transaction))
+          .filter((transaction) => !transaction.isLoop && !transaction.isLoopIgnored);
+
+        if (visibleTransactions.length < 2) return false;
+        if (!selectedLoopPriorityCategoryIdSet.size) return true;
+
+        return visibleTransactions.some((transaction) => {
+          if (!transaction.categoryId) return false;
+          return selectedLoopPriorityCategoryIdSet.has(transaction.categoryId);
+        });
+      }),
+    [baseLoopRecommendations, selectedLoopPriorityCategoryIdSet, transactionMap],
+  );
+  const recommendationByKey = useMemo(() => new Map(loopRecommendations.map((item) => [item.merchantKey, item])), [loopRecommendations]);
   const { getPresenceForTarget, showLockedTargetToast } = useDotoriPresenceLocks("고정비");
   const nextPresenceTarget = useMemo(() => {
     if (detailState) {
@@ -371,8 +390,14 @@ export function LoopStationPage() {
   const confirmManagedLoopSplit = () => {
     if (!managedLoopSplitState?.transactionIds.length) return;
     const nextLoopKey = createId("loop");
-    setTransactionLoopGroupOverrideBatch(workspaceId, managedLoopSplitState.transactionIds, nextLoopKey, true);
-    setTransactionLoopDisplayNameBatch(workspaceId, managedLoopSplitState.transactionIds, managedLoopSplitState.displayName.trim() || null);
+    setTransactionLoopGroupOverrideBatch(
+      workspaceId,
+      managedLoopSplitState.transactionIds,
+      nextLoopKey,
+      true,
+      managedLoopSplitState.displayName.trim() || null,
+      "선택한 루프를 따로 나눴습니다.",
+    );
     setManagedLoopSplitState(null);
     setSelectedManagedTransactionIds([]);
     setDetailState(null);

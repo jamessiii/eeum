@@ -1540,8 +1540,11 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
     useState<DashboardCalendarProcessingMode>(null);
   const [pendingDashboardCalendarProcessingMode, setPendingDashboardCalendarProcessingMode] =
     useState<DashboardCalendarProcessingMode>(null);
+  const [completedDashboardCalendarProcessingMode, setCompletedDashboardCalendarProcessingMode] =
+    useState<DashboardCalendarProcessingMode>(null);
   const [dashboardReviewWorkflow, setDashboardReviewWorkflow] = useState<DashboardReviewWorkflowState | null>(null);
   const [dashboardUncategorizedFocusTransactionId, setDashboardUncategorizedFocusTransactionId] = useState<string | null>(null);
+  const [dashboardUncategorizedCommittedTransactionIds, setDashboardUncategorizedCommittedTransactionIds] = useState<string[]>([]);
   const [dashboardCalendarFocusedField, setDashboardCalendarFocusedField] = useState<DashboardCalendarFocusedField>(null);
   const [loopConfirmState, setLoopConfirmState] = useState<LoopConfirmState | null>(null);
   const [loopConfirmDragMode, setLoopConfirmDragMode] = useState<boolean | null>(null);
@@ -2689,12 +2692,21 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
   const displayedCalendarTransactions = useMemo(
     () =>
       dashboardCalendarBaseTransactions.filter((transaction) => {
-        if (isDashboardCalendarUncategorizedOnly && transaction.categoryId) return false;
+        const isCategoryCommitted =
+          Boolean(transaction.categoryId) || dashboardUncategorizedCommittedTransactionIds.includes(transaction.id);
+        if (isDashboardCalendarUncategorizedOnly && isCategoryCommitted) {
+          const isActiveUncategorizedEditingTarget =
+            dashboardCalendarProcessingMode === "uncategorized" && dashboardUncategorizedFocusTransactionId === transaction.id;
+          if (!isActiveUncategorizedEditingTarget) return false;
+        }
         if (isDashboardCalendarAutoReviewOnly && !dashboardCalendarReviewTransactionIdSet.has(transaction.id)) return false;
         return true;
       }),
     [
+      dashboardCalendarProcessingMode,
       dashboardCalendarBaseTransactions,
+      dashboardUncategorizedCommittedTransactionIds,
+      dashboardUncategorizedFocusTransactionId,
       dashboardCalendarReviewTransactionIdSet,
       isDashboardCalendarAutoReviewOnly,
       isDashboardCalendarUncategorizedOnly,
@@ -3034,7 +3046,11 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
 
     if (dashboardCalendarProcessingMode === "uncategorized") {
       if (selectedCalendarHasUncategorizedTransactions) return;
-      if (!calendarUncategorizedDateKeys.length) return;
+      if (!calendarUncategorizedDateKeys.length) {
+        setCompletedDashboardCalendarProcessingMode("uncategorized");
+        handleStopDashboardCalendarProcessing();
+        return;
+      }
 
       const nextDateKey =
         calendarUncategorizedDateKeys.find((dateKey) => dateKey > selectedCalendarDate) ??
@@ -3056,6 +3072,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
 
     const availableReviewIds = dashboardTransactionWorkflowReviews.map((review) => review.id);
     if (!availableReviewIds.length) {
+      setCompletedDashboardCalendarProcessingMode("review");
       handleStopDashboardCalendarProcessing();
       return;
     }
@@ -3165,6 +3182,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
     setIsDashboardCalendarUncategorizedOnly(mode === "uncategorized");
     setSelectedCalendarDate(nextDateKey);
     setDashboardUncategorizedFocusTransactionId(null);
+    setDashboardUncategorizedCommittedTransactionIds([]);
     if (mode === "review") {
       setDashboardReviewWorkflow({
         activeReviewId: sortedDashboardCalendarOpenReviews[0]?.id ?? null,
@@ -3180,6 +3198,27 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
     setIsDashboardCalendarUncategorizedOnly(false);
     setDashboardReviewWorkflow(null);
     setDashboardUncategorizedFocusTransactionId(null);
+    setDashboardUncategorizedCommittedTransactionIds([]);
+  };
+  const handleSkipDashboardUncategorizedFocus = () => {
+    if (dashboardCalendarProcessingMode !== "uncategorized") return;
+
+    const nextUncategorizedTransactionId =
+      displayedCalendarTransactions.find(
+        (transaction) => transaction.id !== dashboardUncategorizedFocusTransactionId && !transaction.categoryId,
+      )?.id ?? null;
+
+    if (nextUncategorizedTransactionId) {
+      setDashboardUncategorizedFocusTransactionId(nextUncategorizedTransactionId);
+      return;
+    }
+
+    const nextDateKey = calendarUncategorizedDateKeys.find((dateKey) => dateKey > selectedCalendarDate) ?? null;
+    if (!nextDateKey) return;
+
+    shouldScrollCalendarTransactionsRef.current = true;
+    setDashboardUncategorizedFocusTransactionId(null);
+    setSelectedCalendarDate(nextDateKey);
   };
   const handleDashboardActiveReviewDecision = (decision: "apply" | "resolve") => {
     if (!dashboardReviewWorkflow || !activeDashboardWorkflowReview) return;
@@ -4180,9 +4219,14 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
               </button>
             ) : null}
             {dashboardCalendarProcessingMode === "uncategorized" ? (
-              <button type="button" className="btn btn-outline-secondary btn-sm" onClick={handleStopDashboardCalendarProcessing}>
-                분류작업 종료
-              </button>
+              <>
+                <button type="button" className="btn btn-outline-secondary btn-sm" onClick={handleSkipDashboardUncategorizedFocus}>
+                  넘어가기
+                </button>
+                <button type="button" className="btn btn-outline-secondary btn-sm" onClick={handleStopDashboardCalendarProcessing}>
+                  분류작업 종료
+                </button>
+              </>
             ) : null}
           </div>
         </div>
@@ -4321,6 +4365,16 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
                               }
                               assignCategory(workspaceId, transaction.id, nextCategoryId);
                             }}
+                            onCategoryCommit={(nextCategoryId) => {
+                              if (dashboardCalendarProcessingMode !== "uncategorized") return;
+                              setDashboardUncategorizedCommittedTransactionIds((current) =>
+                                nextCategoryId
+                                  ? current.includes(transaction.id)
+                                    ? current
+                                    : [...current, transaction.id]
+                                  : current.filter((item) => item !== transaction.id),
+                              );
+                            }}
                           />
                         </td>
                         <td className={`dashboard-calendar-grid-cell${hasNotePresence ? " is-presence-target" : ""}`}>
@@ -4330,6 +4384,26 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
                             className="form-control form-control-sm dashboard-calendar-note-input"
                             defaultValue={transaction.description}
                             placeholder="비고 입력"
+                            data-transaction-grid-editor="true"
+                            onKeyDown={(event) => {
+                              if (event.key !== "Tab") return;
+                              event.preventDefault();
+                              const editors = Array.from(document.querySelectorAll<HTMLElement>('[data-transaction-grid-editor="true"]'));
+                              const currentIndex = editors.findIndex((item) => item === event.currentTarget);
+                              if (currentIndex < 0) return;
+                              const target = event.shiftKey ? editors[currentIndex - 1] : editors[currentIndex + 1];
+                              if (!target) {
+                                event.currentTarget.blur();
+                                if (dashboardCalendarProcessingMode === "uncategorized") {
+                                  setDashboardUncategorizedFocusTransactionId(null);
+                                }
+                                return;
+                              }
+                              target.focus();
+                              if (target instanceof HTMLInputElement) {
+                                target.select();
+                              }
+                            }}
                             onFocus={() => {
                               setDashboardCalendarFocusedField({ transactionId: transaction.id, field: "note" });
                               if (dashboardCalendarProcessingMode === "uncategorized") {
@@ -4340,6 +4414,12 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
                               setDashboardCalendarFocusedField((current) =>
                                 current?.transactionId === transaction.id && current.field === "note" ? null : current,
                               );
+                              if (
+                                dashboardCalendarProcessingMode === "uncategorized" &&
+                                (transaction.categoryId || dashboardUncategorizedCommittedTransactionIds.includes(transaction.id))
+                              ) {
+                                setDashboardUncategorizedFocusTransactionId((current) => (current === transaction.id ? null : current));
+                              }
                               const nextDescription = event.currentTarget.value.trim();
                               if (nextDescription === (transaction.description ?? "")) return;
                               updateTransactionDetails(workspaceId, transaction.id, { description: nextDescription });
@@ -5530,6 +5610,30 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
       </AppModal>
 
       <AppModal
+        open={completedDashboardCalendarProcessingMode !== null}
+        title={completedDashboardCalendarProcessingMode === "review" ? "자동검토 완료" : "분류작업 완료"}
+        dialogClassName="dashboard-processing-confirm-modal"
+        description={
+          completedDashboardCalendarProcessingMode === "review"
+            ? "자동추천을 모두 처리했습니다."
+            : completedDashboardCalendarProcessingMode === "uncategorized"
+              ? "분류 작업을 마쳤습니다."
+              : ""
+        }
+        onClose={() => setCompletedDashboardCalendarProcessingMode(null)}
+      >
+        <div className="d-flex justify-content-end gap-2">
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => setCompletedDashboardCalendarProcessingMode(null)}
+          >
+            확인
+          </button>
+        </div>
+      </AppModal>
+
+      <AppModal
         open={Boolean(loopConfirmState)}
         title="루프 후보 확인"
         description="이번 거래를 기준으로 과거 소비를 함께 보여드릴게요. 같은 반복 소비가 맞는지 보고 묶어서 등록해 주세요."
@@ -6164,6 +6268,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
                         className="form-control form-control-sm"
                         defaultValue={transaction.description}
                         placeholder="비고 입력"
+                        data-transaction-grid-editor="true"
                         onBlur={(event) => {
                           const nextDescription = event.currentTarget.value.trim();
                           if (nextDescription === (transaction.description ?? "")) return;

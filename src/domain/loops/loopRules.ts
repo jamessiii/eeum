@@ -84,6 +84,9 @@ export function matchTransactionToLoopRule(rule: LoopRule, transaction: Transact
   if (transaction.loopGroupOverrideKey?.trim()) {
     return `manual::${transaction.loopGroupOverrideKey.trim()}` === rule.key;
   }
+  if (rule.key.startsWith("manual::")) {
+    return false;
+  }
 
   const merchantMatches = normalizeLoopText(transaction.merchantName) === rule.merchantKey;
   if (!merchantMatches) return false;
