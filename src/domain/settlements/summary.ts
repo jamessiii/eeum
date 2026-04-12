@@ -1,5 +1,6 @@
 import { monthKey } from "../../shared/utils/date";
 import type { Account, Card, Category, SettlementRecord, Transaction } from "../../shared/types/models";
+import { getCategoryLinkedAccountId } from "../categories/meta";
 import { isActiveExpenseTransaction } from "../transactions/meta";
 
 export interface FlowTransferCategoryAmount {
@@ -100,10 +101,12 @@ export function getMonthlyFlowSummary(
 
     const card = cardMap.get(transaction.cardId);
     const category = categoryMap.get(transaction.categoryId);
-    if (!card?.linkedAccountId || !category?.linkedAccountId) continue;
-    if (card.linkedAccountId === category.linkedAccountId) continue;
+    if (!card || !category) continue;
+    const categoryLinkedAccountId = getCategoryLinkedAccountId(category, transaction.ownerPersonId);
+    if (!card.linkedAccountId || !categoryLinkedAccountId) continue;
+    if (card.linkedAccountId === categoryLinkedAccountId) continue;
 
-    const fromAccount = accountMap.get(category.linkedAccountId);
+    const fromAccount = accountMap.get(categoryLinkedAccountId);
     const toAccount = accountMap.get(card.linkedAccountId);
     if (!fromAccount || !toAccount) continue;
 

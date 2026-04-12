@@ -1,8 +1,10 @@
 ﻿import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { Link } from "react-router-dom";
+import { AppButton } from "../components/AppButton";
 import { AppModal } from "../components/AppModal";
 import type { Account, Card, ImportRecord, WorkspaceBundle } from "../../shared/types/models";
 import { getMotionStyle } from "../../shared/utils/motion";
+import { getPersonDisplayLabel } from "../../shared/utils/person";
 import { AppSelect } from "../components/AppSelect";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
@@ -16,6 +18,9 @@ function getVisibleCardIdentifier(cardNumberMasked: string) {
   if (!trimmed) return "";
   return /\d/.test(trimmed) ? trimmed : "";
 }
+
+const IMPORT_CARD_MATCH_AUTO = "__auto__";
+const IMPORT_CARD_MATCH_NEW = "__new__";
 
 function isWorkbookFile(file: File) {
   return /\.xlsx?$/.test(file.name.toLowerCase());
@@ -43,6 +48,16 @@ function findMatchedCard(existingCards: Card[], previewCard: Card, ownerPersonId
   const unownedCards = existingCards.filter((existing) => (existing.ownerPersonId ?? null) === null);
 
   return findMatchedCardInCandidates(ownedCards, previewCard) ?? findMatchedCardInCandidates(unownedCards, previewCard) ?? null;
+}
+
+function buildCardMatchCandidates(existingCards: Card[], ownerPersonId: string | null) {
+  if (!ownerPersonId) return [];
+
+  const visibleCards = existingCards.filter(
+    (card) => (card.ownerPersonId ?? null) === ownerPersonId || (card.ownerPersonId ?? null) === null,
+  );
+
+  return [...visibleCards].sort((left, right) => left.name.localeCompare(right.name, "ko"));
 }
 
 function isCardPaymentAccount(account: Pick<Account, "usageType" | "name" | "alias">) {
@@ -197,9 +212,12 @@ export function ImportsPage() {
   const [previewBundle, setPreviewBundle] = useState<WorkspaceBundle | null>(null);
   const [previewFileName, setPreviewFileName] = useState("");
   const [isPreparingPreview, setIsPreparingPreview] = useState(false);
+  const [isCommittingPreview, setIsCommittingPreview] = useState(false);
+  const [pendingDeleteImportRecordId, setPendingDeleteImportRecordId] = useState<string | null>(null);
   const [selectedImportOwnerId, setSelectedImportOwnerId] = useState("");
   const [selectedStatementMonth, setSelectedStatementMonth] = useState("");
   const [importCardNameDrafts, setImportCardNameDrafts] = useState<Record<string, string>>({});
+  const [importCardMatchDrafts, setImportCardMatchDrafts] = useState<Record<string, string>>({});
   const [importCardLinkedAccountDrafts, setImportCardLinkedAccountDrafts] = useState<Record<string, string>>({});
   const [isImportHistoryOpen, setIsImportHistoryOpen] = useState(false);
   const [isLinkedAccountModalOpen, setIsLinkedAccountModalOpen] = useState(false);
@@ -218,17 +236,28 @@ export function ImportsPage() {
     [scope.transactions],
   );
 
+  const cardMatchCandidates = useMemo(
+    () => buildCardMatchCandidates(scope.cards, selectedImportOwnerId || null),
+    [scope.cards, selectedImportOwnerId],
+  );
   const previewCardMatches = useMemo(
     () =>
       (previewBundle?.cards ?? []).map((card) => {
-        const matchedCard = findMatchedCard(scope.cards, card, selectedImportOwnerId || null);
+        const autoMatchedCard = findMatchedCard(scope.cards, card, selectedImportOwnerId || null);
+        const selectedMatchId = importCardMatchDrafts[card.id] ?? IMPORT_CARD_MATCH_AUTO;
+        const matchedCard =
+          selectedMatchId === IMPORT_CARD_MATCH_NEW
+            ? null
+            : selectedMatchId !== IMPORT_CARD_MATCH_AUTO
+              ? scope.cards.find((existing) => existing.id === selectedMatchId) ?? autoMatchedCard
+              : autoMatchedCard;
         return {
           card,
           matchedCard,
           draftName: importCardNameDrafts[card.id] ?? card.name,
         };
       }),
-    [importCardNameDrafts, previewBundle, scope.cards, selectedImportOwnerId],
+    [importCardMatchDrafts, importCardNameDrafts, previewBundle, scope.cards, selectedImportOwnerId],
   );
   const previewCardMatchMap = useMemo(() => new Map(previewCardMatches.map((entry) => [entry.card.id, entry])), [previewCardMatches]);
   const newCreditPreviewCards = useMemo(
@@ -247,6 +276,7 @@ export function ImportsPage() {
   useEffect(() => {
     if (!previewBundle) {
       setSelectedImportOwnerId("");
+      setImportCardMatchDrafts({});
       return;
     }
 
@@ -271,6 +301,42 @@ export function ImportsPage() {
     if (selectedStatementMonth && previewStatementMonthOptions.includes(selectedStatementMonth)) return;
     setSelectedStatementMonth(defaultPreviewStatementMonth);
   }, [defaultPreviewStatementMonth, previewBundle, previewStatementMonthOptions, selectedStatementMonth]);
+
+  useEffect(() => {
+    if (!previewBundle) {
+      setImportCardMatchDrafts({});
+      return;
+    }
+
+    const validCardIds = new Set((previewBundle.cards ?? []).map((card) => card.id));
+    const validCandidateIds = new Set(cardMatchCandidates.map((card) => card.id));
+
+    setImportCardMatchDrafts((current) => {
+      let changed = false;
+      const next: Record<string, string> = {};
+
+      for (const previewCard of previewBundle.cards ?? []) {
+        const currentValue = current[previewCard.id] ?? IMPORT_CARD_MATCH_AUTO;
+        const nextValue =
+          currentValue === IMPORT_CARD_MATCH_AUTO ||
+          currentValue === IMPORT_CARD_MATCH_NEW ||
+          validCandidateIds.has(currentValue)
+            ? currentValue
+            : IMPORT_CARD_MATCH_AUTO;
+        next[previewCard.id] = nextValue;
+        if (nextValue !== currentValue) changed = true;
+      }
+
+      Object.keys(current).forEach((cardId) => {
+        if (!validCardIds.has(cardId)) changed = true;
+      });
+
+      if (!changed && Object.keys(current).length === Object.keys(next).length) {
+        return current;
+      }
+      return next;
+    });
+  }, [cardMatchCandidates, previewBundle]);
 
   useEffect(() => {
     if (!previewBundle || !shouldPromptLinkedAccounts) {
@@ -331,12 +397,14 @@ export function ImportsPage() {
     setSelectedImportOwnerId("");
     setSelectedStatementMonth("");
     setImportCardNameDrafts({});
+    setImportCardMatchDrafts({});
     setImportCardLinkedAccountDrafts({});
     setIsLinkedAccountModalOpen(false);
     resetFileInput();
   };
 
   const preparePreview = async (file: File) => {
+    if (isPreparingPreview || isCommittingPreview) return;
     setIsPreparingPreview(true);
     resetDropzoneState();
     try {
@@ -346,6 +414,7 @@ export function ImportsPage() {
       setSelectedImportOwnerId("");
       setSelectedStatementMonth("");
       setImportCardNameDrafts(Object.fromEntries(bundle.cards.map((card) => [card.id, card.name])));
+      setImportCardMatchDrafts({});
       setImportCardLinkedAccountDrafts({});
       setIsLinkedAccountModalOpen(false);
     } finally {
@@ -354,6 +423,7 @@ export function ImportsPage() {
   };
 
   const handlePickedFile = async (file: File | null | undefined) => {
+    if (isPreparingPreview || isCommittingPreview) return;
     if (!file) return;
     if (!isWorkbookFile(file)) {
       setIsDropzoneInvalid(true);
@@ -395,7 +465,9 @@ export function ImportsPage() {
   };
 
   const commitPreview = async () => {
+    if (isCommittingPreview) return;
     if (!previewBundle || !selectedImportOwnerId || !selectedStatementMonth) return;
+    setIsCommittingPreview(true);
     const renamedCards = previewBundle.cards.map((card) => {
       const matchedCard = previewCardMatchMap.get(card.id)?.matchedCard ?? null;
       const selectedLinkedAccountId = importCardLinkedAccountDrafts[card.id] || null;
@@ -407,6 +479,29 @@ export function ImportsPage() {
       };
     });
     const linkedAccountIdByPreviewCardId = new Map(renamedCards.map((card) => [card.id, card.linkedAccountId ?? null]));
+    const previewAccountIds = new Set(previewBundle.accounts.map((account) => account.id));
+    const retainedPreviewAccountIds = new Set<string>();
+
+    renamedCards.forEach((card) => {
+      if (card.linkedAccountId && previewAccountIds.has(card.linkedAccountId)) {
+        retainedPreviewAccountIds.add(card.linkedAccountId);
+      }
+    });
+
+    previewBundle.transactions.forEach((transaction) => {
+      const resolvedAccountId = transaction.cardId
+        ? linkedAccountIdByPreviewCardId.get(transaction.cardId) ?? transaction.accountId
+        : transaction.accountId;
+      if (resolvedAccountId && previewAccountIds.has(resolvedAccountId)) {
+        retainedPreviewAccountIds.add(resolvedAccountId);
+      }
+      if (transaction.fromAccountId && previewAccountIds.has(transaction.fromAccountId)) {
+        retainedPreviewAccountIds.add(transaction.fromAccountId);
+      }
+      if (transaction.toAccountId && previewAccountIds.has(transaction.toAccountId)) {
+        retainedPreviewAccountIds.add(transaction.toAccountId);
+      }
+    });
 
     const normalizedBundle: WorkspaceBundle = {
       ...previewBundle,
@@ -419,10 +514,12 @@ export function ImportsPage() {
             }
           : record,
       ),
-      accounts: previewBundle.accounts.map((account) => ({
-        ...account,
-        ownerPersonId: account.isShared ? null : selectedImportOwnerId,
-      })),
+      accounts: previewBundle.accounts
+        .filter((account) => retainedPreviewAccountIds.has(account.id))
+        .map((account) => ({
+          ...account,
+          ownerPersonId: account.isShared ? null : selectedImportOwnerId,
+        })),
       cards: renamedCards.map((card) => ({
         ...card,
         ownerPersonId: selectedImportOwnerId,
@@ -430,12 +527,15 @@ export function ImportsPage() {
       transactions: previewBundle.transactions.map((transaction) => ({
         ...transaction,
         ownerPersonId: selectedImportOwnerId,
-        accountId: transaction.cardId ? linkedAccountIdByPreviewCardId.get(transaction.cardId) ?? transaction.accountId : transaction.accountId,
       })),
     };
 
-    await commitImportedBundle(normalizedBundle, previewFileName);
-    clearPreview();
+    try {
+      await commitImportedBundle(normalizedBundle, previewFileName);
+      clearPreview();
+    } finally {
+      setIsCommittingPreview(false);
+    }
   };
 
   const handleCommitPreview = () => {
@@ -447,20 +547,32 @@ export function ImportsPage() {
     void commitPreview();
   };
 
-  const handleDeleteImportRecord = (record: ImportRecord) => {
+  const handleDeleteImportRecord = async (record: ImportRecord) => {
+    if (pendingDeleteImportRecordId) return;
     if (!linkedImportRecordIds.has(record.id)) return;
     const confirmed = window.confirm(`${getStatementRecordLabel(record)} 명세서를 삭제할까요?\n관련 결제내역과 검토 기록도 함께 삭제됩니다.`);
     if (!confirmed) return;
-    deleteImportRecord(workspaceId, record.id);
+    setPendingDeleteImportRecordId(record.id);
+    try {
+      await deleteImportRecord(workspaceId, record.id);
+    } finally {
+      setPendingDeleteImportRecordId(null);
+    }
   };
 
-  const dropzoneTitle = isDropzoneInvalid
+  const dropzoneTitle = isPreparingPreview
+    ? "업로드 미리보기를 준비하고 있습니다"
+    : isCommittingPreview
+      ? "가져오기를 처리하고 있습니다"
+      : isDropzoneInvalid
     ? "엑셀 파일만 업로드할 수 있어요"
     : isDropzoneActive
       ? "여기에 파일을 놓으면 미리보기를 준비합니다"
       : "클릭하거나 파일을 끌어놓으세요";
 
-  const dropzoneDescription = isDropzoneInvalid
+  const dropzoneDescription = isPreparingPreview || isCommittingPreview
+    ? "처리가 끝날 때까지 잠시만 기다려주세요. 같은 요청은 다시 받지 않습니다."
+    : isDropzoneInvalid
     ? "지원 형식: .xlsx, .xls"
     : "미리보기에서 거래 수, 검토 수, 자산 정보를 먼저 확인합니다.";
 
@@ -487,7 +599,9 @@ export function ImportsPage() {
           </p>
 
           <label
-            className={`upload-dropzone${isDropzoneActive ? " is-active" : ""}${isDropzoneInvalid ? " is-invalid" : ""}`}
+            className={`upload-dropzone${isDropzoneActive ? " is-active" : ""}${isDropzoneInvalid ? " is-invalid" : ""}${
+              isPreparingPreview || isCommittingPreview ? " is-disabled" : ""
+            }`}
             data-guide-target="transactions-upload-action"
             onDragEnter={handleDropzoneDragEnter}
             onDragOver={handleDropzoneDragOver}
@@ -509,6 +623,7 @@ export function ImportsPage() {
               hidden
               type="file"
               accept=".xlsx,.xls"
+              disabled={isPreparingPreview || isCommittingPreview}
               onClick={(event) => {
                 event.currentTarget.value = "";
               }}
@@ -559,7 +674,7 @@ export function ImportsPage() {
                   disabled={!scope.people.length}
                   options={[
                     { value: "", label: "누구의 명세서인지 선택" },
-                    ...scope.people.map((person) => ({ value: person.id, label: person.displayName || person.name })),
+                  ...scope.people.map((person) => ({ value: person.id, label: getPersonDisplayLabel(person) })),
                   ]}
                   ariaLabel="가져올 카드 소유자 선택"
                 />
@@ -626,6 +741,26 @@ export function ImportsPage() {
                               {card.cardNumberMasked ? ` (${card.cardNumberMasked})` : ""}
                             </span>
                           )}
+                          {selectedImportOwnerId ? (
+                            <AppSelect
+                              value={importCardMatchDrafts[card.id] ?? IMPORT_CARD_MATCH_AUTO}
+                              onChange={(value) =>
+                                setImportCardMatchDrafts((current) => ({
+                                  ...current,
+                                  [card.id]: value,
+                                }))
+                              }
+                              options={[
+                                { value: IMPORT_CARD_MATCH_AUTO, label: matchedCard ? "자동 인식된 카드 사용" : "자동 인식 사용" },
+                                { value: IMPORT_CARD_MATCH_NEW, label: "새 카드로 추가" },
+                                ...cardMatchCandidates.map((existing) => ({
+                                  value: existing.id,
+                                  label: `${existing.name}${existing.cardNumberMasked ? ` (${existing.cardNumberMasked})` : ""}`,
+                                })),
+                              ]}
+                              ariaLabel="가져올 카드 연결 대상 선택"
+                            />
+                          ) : null}
                           {!selectedImportOwnerId ? <span>사용자를 선택하면 해당 사용자의 카드인지 확인합니다.</span> : null}
                         </div>
                         <div className="import-preview-card-footer">
@@ -649,18 +784,19 @@ export function ImportsPage() {
               ) : null}
 
               <div className="action-row mt-4">
-                <button
-                  className="btn btn-primary"
-                  type="button"
+                <AppButton
+                  variant="primary"
                   data-guide-target="transactions-upload-commit"
                   onClick={handleCommitPreview}
-                  disabled={!selectedImportOwnerId || !selectedStatementMonth || !scope.people.length}
+                  disabled={!selectedImportOwnerId || !selectedStatementMonth || !scope.people.length || isPreparingPreview}
+                  busy={isCommittingPreview}
+                  busyLabel="가져오는 중..."
                 >
                   {getPostImportLabel(previewBundle)}
-                </button>
-                <button className="btn btn-outline-secondary" type="button" onClick={clearPreview}>
+                </AppButton>
+                <AppButton variant="secondary" onClick={clearPreview} disabled={isPreparingPreview || isCommittingPreview}>
                   미리보기 닫기
-                </button>
+                </AppButton>
               </div>
             </div>
           ) : null}
@@ -706,13 +842,16 @@ export function ImportsPage() {
                       결제내역 보기
                     </Link>
                   ) : null}
-                  <button
-                    type="button"
-                    className="btn btn-outline-danger btn-sm"
-                    onClick={() => handleDeleteImportRecord(item)}
+                  <AppButton
+                    variant="outlineDanger"
+                    size="sm"
+                    onClick={() => void handleDeleteImportRecord(item)}
+                    busy={pendingDeleteImportRecordId === item.id}
+                    busyLabel="삭제 중..."
+                    disabled={Boolean(pendingDeleteImportRecordId) && pendingDeleteImportRecordId !== item.id}
                   >
                     삭제
-                  </button>
+                  </AppButton>
                 </div>
               </article>
             ))}
@@ -727,9 +866,9 @@ export function ImportsPage() {
         onClose={() => setIsLinkedAccountModalOpen(false)}
         footer={
           <div className="import-linked-account-footer-actions">
-            <button type="button" className="btn btn-primary" onClick={commitPreview}>
+            <AppButton variant="primary" onClick={() => void commitPreview()} busy={isCommittingPreview} busyLabel="가져오는 중...">
               선택 반영 후 가져오기
-            </button>
+            </AppButton>
           </div>
         }
       >

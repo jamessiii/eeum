@@ -291,6 +291,10 @@ export async function migrateFoundationData(input: FoundationMigrationInput): Pr
         budgetable: category.budgetable,
         reportable: category.reportable,
         linkedAssetId: category.linkedAccountId ? accountIdMap.get(category.linkedAccountId) ?? null : null,
+        linkedPersonAssets: Object.entries(category.linkedAccountIdsByPersonId ?? {}).map(([personId, accountId]) => ({
+          personId: personIdMap.get(personId) ?? Number(personId),
+          assetId: accountIdMap.get(accountId) ?? null,
+        })).filter((item) => item.assetId !== null),
         sortOrder: category.sortOrder ?? 0,
         hidden: category.isHidden,
       }),

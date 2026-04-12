@@ -10,8 +10,9 @@ import {
 import { getFilteredTransactions, type TransactionFilters } from "../../domain/transactions/filters";
 import { getSourceTypeLabel } from "../../domain/transactions/sourceTypes";
 import type { ImportRecord, ReviewItem, Transaction } from "../../shared/types/models";
-import { formatCurrency } from "../../shared/utils/format";
+import { formatAmount, formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
+import { getPersonDisplayLabel } from "../../shared/utils/person";
 import { AppModal } from "../components/AppModal";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { AppSelect } from "../components/AppSelect";
@@ -131,7 +132,7 @@ export function TransactionsPage() {
   const [categoryFilterInput, setCategoryFilterInput] = useState("");
   const [isCategoryFilterFocused, setIsCategoryFilterFocused] = useState(false);
   const people = scope.people;
-  const peopleMap = new Map(people.map((person) => [person.id, person.displayName || person.name]));
+  const peopleMap = new Map(people.map((person) => [person.id, getPersonDisplayLabel(person)]));
   const accountMap = new Map(scope.accounts.map((account) => [account.id, account.alias || account.name]));
   const cardMap = new Map(scope.cards.map((card) => [card.id, card.name]));
   const transactionMap = useMemo(() => new Map(scope.transactions.map((transaction) => [transaction.id, transaction])), [scope.transactions]);
@@ -593,7 +594,7 @@ export function TransactionsPage() {
               value={filters.ownerPersonId}
               disabled={Boolean(reviewWorkflow)}
               onChange={(nextValue) => setFilters((current) => ({ ...current, ownerPersonId: nextValue }))}
-              options={[{ value: "all", label: "전체 사용자" }, ...people.map((person) => ({ value: person.id, label: person.displayName || person.name }))]}
+              options={[{ value: "all", label: "전체 사용자" }, ...people.map((person) => ({ value: person.id, label: getPersonDisplayLabel(person) }))]}
               ariaLabel="사용자 필터"
             />
             <div className="transaction-category-filter-field">
@@ -705,7 +706,8 @@ export function TransactionsPage() {
                   <th>사용일</th>
                   <th>가맹점</th>
                   <th className="text-end">원금액</th>
-                  <th className="text-end">할인</th>
+                  <th className="text-end">혜택</th>
+                  <th className="text-end">입금/취소</th>
                   <th className="text-end">결제금액</th>
                   <th>사용자</th>
                   <th>루프</th>
@@ -737,13 +739,20 @@ export function TransactionsPage() {
                           />
                         </td>
                         <td className="text-end transaction-amount-cell">
-                          <strong>{formatCurrency(transaction.originalAmount ?? transaction.amount)}</strong>
+                          <strong>{formatAmount(transaction.originalAmount ?? transaction.amount)}</strong>
                         </td>
                         <td className="text-end transaction-amount-cell">
-                          <strong>{transaction.discountAmount ? formatCurrency(transaction.discountAmount) : "-"}</strong>
+                          <strong>{transaction.benefitAmount != null ? formatAmount(transaction.benefitAmount) : "-"}</strong>
                         </td>
                         <td className="text-end transaction-amount-cell">
-                          <strong>{formatCurrency(transaction.amount)}</strong>
+                          <strong>
+                            {transaction.settlementAdjustmentAmount != null
+                              ? formatAmount(transaction.settlementAdjustmentAmount)
+                              : "-"}
+                          </strong>
+                        </td>
+                        <td className="text-end transaction-amount-cell">
+                          <strong>{formatAmount(transaction.amount)}</strong>
                         </td>
                         <td className="transaction-owner-cell">{getTransactionOwnerLabel(transaction)}</td>
                         <td className="transaction-loop-cell">

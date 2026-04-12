@@ -5,6 +5,7 @@ import { REVIEW_ACTION_LABELS, REVIEW_DISMISS_LABELS, REVIEW_TYPE_LABELS, type R
 import { getReviewSummary, getReviewTypeCounts } from "../../domain/reviews/summary";
 import { getSourceTypeLabel, SOURCE_TYPE_OPTIONS } from "../../domain/transactions/sourceTypes";
 import { getMotionStyle } from "../../shared/utils/motion";
+import { getPersonDisplayLabel } from "../../shared/utils/person";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { AppSelect } from "../components/AppSelect";
 import { ReviewTypeFilterBar } from "../components/ReviewTypeFilterBar";
@@ -18,7 +19,7 @@ export function ReviewsPage() {
   const workspaceId = state.activeWorkspaceId!;
   const scope = getWorkspaceScope(state, workspaceId);
   const transactions = useMemo(() => new Map(scope.transactions.map((item) => [item.id, item])), [scope.transactions]);
-  const peopleMap = useMemo(() => new Map(scope.people.map((person) => [person.id, person.displayName || person.name])), [scope.people]);
+  const peopleMap = useMemo(() => new Map(scope.people.map((person) => [person.id, getPersonDisplayLabel(person)])), [scope.people]);
   const accountMap = useMemo(() => new Map(scope.accounts.map((account) => [account.id, account.alias || account.name])), [scope.accounts]);
   const cardMap = useMemo(() => new Map(scope.cards.map((card) => [card.id, card.name])), [scope.cards]);
   const categoryLabelMap = useMemo(() => {

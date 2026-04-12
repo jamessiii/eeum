@@ -7,6 +7,8 @@ type AppButtonSize = "md" | "sm" | "s";
 type AppButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: AppButtonVariant;
   size?: AppButtonSize;
+  busy?: boolean;
+  busyLabel?: string;
 };
 
 const variantClassNameMap: Record<AppButtonVariant, string> = {
@@ -19,15 +21,26 @@ const variantClassNameMap: Record<AppButtonVariant, string> = {
 };
 
 export const AppButton = forwardRef<HTMLButtonElement, AppButtonProps>(function AppButton(
-  { className, type = "button", variant = "primary", size = "md", ...props },
+  { children, className, type = "button", variant = "primary", size = "md", busy = false, busyLabel, disabled, ...props },
   ref,
 ) {
   return (
     <button
       ref={ref}
       type={type}
-      className={clsx("btn", variantClassNameMap[variant], size === "sm" && "btn-sm", size === "s" && "btn-s", className)}
+      className={clsx("btn", variantClassNameMap[variant], size === "sm" && "btn-sm", size === "s" && "btn-s", busy && "is-busy", className)}
+      disabled={disabled || busy}
+      aria-busy={busy || undefined}
       {...props}
-    />
+    >
+      {busy ? (
+        <>
+          <span className="app-button-spinner" aria-hidden="true" />
+          <span>{busyLabel ?? children}</span>
+        </>
+      ) : (
+        children
+      )}
+    </button>
   );
 });

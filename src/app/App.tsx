@@ -441,14 +441,10 @@ function AppBrandMark({ size = "compact" }: { size?: "compact" | "expanded" }) {
 
 function DotoriStatusPanel({
   vpnStatusLabel,
-  connectionStatusLabel,
-  autoSyncStatusLabel,
   concurrentStatusLabel,
   otherConnections,
 }: {
   vpnStatusLabel: string;
-  connectionStatusLabel: string;
-  autoSyncStatusLabel: string;
   concurrentStatusLabel: string;
   otherConnections: AppPresenceSnapshot["connections"];
 }) {
@@ -458,18 +454,6 @@ function DotoriStatusPanel({
         <strong>VPN</strong>
         <span className={`app-sidebar-status-pill${vpnStatusLabel === "ON" ? " is-online" : " is-offline"}`}>
           {vpnStatusLabel}
-        </span>
-      </div>
-      <div className="app-sidebar-status-row">
-        <strong>도토리창고</strong>
-        <span className={`app-sidebar-status-pill${connectionStatusLabel === "ON" ? " is-online" : " is-offline"}`}>
-          {connectionStatusLabel}
-        </span>
-      </div>
-      <div className="app-sidebar-status-row">
-        <strong>자동동기화</strong>
-        <span className={`app-sidebar-status-pill${autoSyncStatusLabel === "ON" ? " is-online" : " is-offline"}`}>
-          {autoSyncStatusLabel}
         </span>
       </div>
       <div className="app-sidebar-status-row app-sidebar-status-row--full">
@@ -1002,10 +986,6 @@ function AppFrame() {
       : dotoriReachability === "offline"
         ? "OFF"
         : "OFF";
-  const connectionStatusLabel = dotoriSession.connected ? "ON" : "OFF";
-  const autoSyncStatusLabel = dotoriSession.autoSyncEnabled
-    ? "ON"
-    : "OFF";
   const concurrentStatusLabel = otherPresenceConnections.length ? `${otherPresenceConnections.length}명 함께 접속 중` : "나만 접속 중";
 
   const closeCreateWorkspaceModal = () => {
@@ -1048,8 +1028,6 @@ function AppFrame() {
           <div className="app-sidebar-footer">
             <DotoriStatusPanel
               vpnStatusLabel={vpnStatusLabel}
-              connectionStatusLabel={connectionStatusLabel}
-              autoSyncStatusLabel={autoSyncStatusLabel}
               concurrentStatusLabel={concurrentStatusLabel}
               otherConnections={otherPresenceConnections}
             />
@@ -1140,8 +1118,6 @@ function AppFrame() {
         <div className="app-mobile-drawer-footer">
           <DotoriStatusPanel
             vpnStatusLabel={vpnStatusLabel}
-            connectionStatusLabel={connectionStatusLabel}
-            autoSyncStatusLabel={autoSyncStatusLabel}
             concurrentStatusLabel={concurrentStatusLabel}
             otherConnections={otherPresenceConnections}
           />

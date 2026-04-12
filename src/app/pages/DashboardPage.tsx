@@ -16,12 +16,14 @@ import { getMonthlySharedSettlementSummary, getSettlementBalanceSummary } from "
 import { getOpenTransactionWorkflowReviews, getTransactionWorkflowTransactionIds } from "../../domain/reviews/transactionWorkflow";
 import { getExpenseImpactStats } from "../../domain/transactions/expenseImpactStats";
 import { getSourceTypeLabel } from "../../domain/transactions/sourceTypes";
-import { formatCurrency, formatPercent } from "../../shared/utils/format";
+import { formatAmount, formatCurrency, formatPercent } from "../../shared/utils/format";
 import { completeGuideStepAction } from "../../domain/guidance/guideRuntime";
 import { getMotionStyle } from "../../shared/utils/motion";
+import { getPersonDisplayLabel } from "../../shared/utils/person";
 import { getPresenceAccent } from "../dotoriPresenceVisuals";
 import { useAppState } from "../state/AppStateProvider";
 import { AppModal } from "../components/AppModal";
+import { AppButton } from "../components/AppButton";
 import { BoardCaseSection } from "../components/BoardCase";
 import { CompletionBanner } from "../components/CompletionBanner";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
@@ -198,7 +200,7 @@ function getOrderedChildCategories(categories: Category[], groupId: string) {
 }
 
 function getPersonLabel(person: Person) {
-  return person.displayName || person.name;
+  return getPersonDisplayLabel(person);
 }
 
 function getCardTypeLabel(cardType: Card["cardType"]) {
@@ -235,6 +237,9 @@ function getVisibleCardIdentifier(cardNumberMasked: string) {
   return /\d/.test(trimmed) ? trimmed : "";
 }
 
+const IMPORT_CARD_MATCH_AUTO = "__auto__";
+const IMPORT_CARD_MATCH_NEW = "__new__";
+
 function isWorkbookFile(file: File) {
   return /\.xlsx?$/.test(file.name.toLowerCase());
 }
@@ -261,6 +266,16 @@ function findMatchedCard(existingCards: Card[], previewCard: Card, ownerPersonId
   const unownedCards = existingCards.filter((existing) => (existing.ownerPersonId ?? null) === null);
 
   return findMatchedCardInCandidates(ownedCards, previewCard) ?? findMatchedCardInCandidates(unownedCards, previewCard) ?? null;
+}
+
+function buildCardMatchCandidates(existingCards: Card[], ownerPersonId: string | null) {
+  if (!ownerPersonId) return [];
+
+  const visibleCards = existingCards.filter(
+    (card) => (card.ownerPersonId ?? null) === ownerPersonId || (card.ownerPersonId ?? null) === null,
+  );
+
+  return [...visibleCards].sort((left, right) => left.name.localeCompare(right.name, "ko"));
 }
 
 function isCardPaymentAccount(account: Pick<Account, "usageType" | "name" | "alias">) {
@@ -1541,9 +1556,12 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
   const [previewBundle, setPreviewBundle] = useState<WorkspaceBundle | null>(null);
   const [previewFileName, setPreviewFileName] = useState("");
   const [isPreparingPreview, setIsPreparingPreview] = useState(false);
+  const [isCommittingPreview, setIsCommittingPreview] = useState(false);
+  const [pendingDeleteImportRecordId, setPendingDeleteImportRecordId] = useState<string | null>(null);
   const [selectedImportOwnerId, setSelectedImportOwnerId] = useState("");
   const [selectedStatementMonth, setSelectedStatementMonth] = useState("");
   const [importCardNameDrafts, setImportCardNameDrafts] = useState<Record<string, string>>({});
+  const [importCardMatchDrafts, setImportCardMatchDrafts] = useState<Record<string, string>>({});
   const [importCardLinkedAccountDrafts, setImportCardLinkedAccountDrafts] = useState<Record<string, string>>({});
   const [isLinkedAccountModalOpen, setIsLinkedAccountModalOpen] = useState(false);
   const [isDropzoneActive, setIsDropzoneActive] = useState(false);
@@ -1579,17 +1597,28 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
   const shouldScrollCalendarTransactionsRef = useRef(false);
   const previewStatementMonthOptions = useMemo(() => getPreviewStatementMonthOptions(previewBundle), [previewBundle]);
   const defaultPreviewStatementMonth = previewStatementMonthOptions.at(-1) ?? "";
+  const cardMatchCandidates = useMemo(
+    () => buildCardMatchCandidates(scope.cards, selectedImportOwnerId || null),
+    [scope.cards, selectedImportOwnerId],
+  );
   const previewCardMatches = useMemo(
     () =>
       (previewBundle?.cards ?? []).map((card) => {
-        const matchedCard = findMatchedCard(scope.cards, card, selectedImportOwnerId || null);
+        const autoMatchedCard = findMatchedCard(scope.cards, card, selectedImportOwnerId || null);
+        const selectedMatchId = importCardMatchDrafts[card.id] ?? IMPORT_CARD_MATCH_AUTO;
+        const matchedCard =
+          selectedMatchId === IMPORT_CARD_MATCH_NEW
+            ? null
+            : selectedMatchId !== IMPORT_CARD_MATCH_AUTO
+              ? scope.cards.find((existing) => existing.id === selectedMatchId) ?? autoMatchedCard
+              : autoMatchedCard;
         return {
           card,
           matchedCard,
           draftName: importCardNameDrafts[card.id] ?? card.name,
         };
       }),
-    [importCardNameDrafts, previewBundle, scope.cards, selectedImportOwnerId],
+    [importCardMatchDrafts, importCardNameDrafts, previewBundle, scope.cards, selectedImportOwnerId],
   );
   const previewCardMatchMap = useMemo(() => new Map(previewCardMatches.map((entry) => [entry.card.id, entry])), [previewCardMatches]);
   const newCreditPreviewCards = useMemo(
@@ -1711,6 +1740,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
   useEffect(() => {
     if (!previewBundle) {
       setSelectedImportOwnerId((current) => (current === "" ? current : ""));
+      setImportCardMatchDrafts((current) => (Object.keys(current).length === 0 ? current : {}));
       return;
     }
 
@@ -1725,6 +1755,42 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
     if (selectedImportOwnerId && scope.people.some((person) => person.id === selectedImportOwnerId)) return;
     setSelectedImportOwnerId((current) => (current === "" ? current : ""));
   }, [previewBundle, scope.people, selectedImportOwnerId]);
+
+  useEffect(() => {
+    if (!previewBundle) {
+      setImportCardMatchDrafts((current) => (Object.keys(current).length === 0 ? current : {}));
+      return;
+    }
+
+    const validCardIds = new Set((previewBundle.cards ?? []).map((card) => card.id));
+    const validCandidateIds = new Set(cardMatchCandidates.map((card) => card.id));
+
+    setImportCardMatchDrafts((current) => {
+      let changed = false;
+      const next: Record<string, string> = {};
+
+      for (const previewCard of previewBundle.cards ?? []) {
+        const currentValue = current[previewCard.id] ?? IMPORT_CARD_MATCH_AUTO;
+        const nextValue =
+          currentValue === IMPORT_CARD_MATCH_AUTO ||
+          currentValue === IMPORT_CARD_MATCH_NEW ||
+          validCandidateIds.has(currentValue)
+            ? currentValue
+            : IMPORT_CARD_MATCH_AUTO;
+        next[previewCard.id] = nextValue;
+        if (nextValue !== currentValue) changed = true;
+      }
+
+      Object.keys(current).forEach((cardId) => {
+        if (!validCardIds.has(cardId)) changed = true;
+      });
+
+      if (!changed && Object.keys(current).length === Object.keys(next).length) {
+        return current;
+      }
+      return next;
+    });
+  }, [cardMatchCandidates, previewBundle]);
 
   useEffect(() => {
     if (!previewBundle) {
@@ -1789,12 +1855,14 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
     setSelectedImportOwnerId("");
     setSelectedStatementMonth("");
     setImportCardNameDrafts({});
+    setImportCardMatchDrafts({});
     setImportCardLinkedAccountDrafts({});
     setIsLinkedAccountModalOpen(false);
     resetFileInput();
   };
 
   const preparePreview = async (file: File) => {
+    if (isPreparingPreview || isCommittingPreview) return;
     setIsPreparingPreview(true);
     resetDropzoneState();
     try {
@@ -1804,6 +1872,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
       setSelectedImportOwnerId("");
       setSelectedStatementMonth("");
       setImportCardNameDrafts(Object.fromEntries(bundle.cards.map((card) => [card.id, card.name])));
+      setImportCardMatchDrafts({});
       setImportCardLinkedAccountDrafts({});
       setIsLinkedAccountModalOpen(false);
     } finally {
@@ -1812,6 +1881,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
   };
 
   const handlePickedFile = async (file: File | null | undefined) => {
+    if (isPreparingPreview || isCommittingPreview) return;
     if (!file) return;
     if (!isWorkbookFile(file)) {
       setIsDropzoneInvalid(true);
@@ -1853,7 +1923,9 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
   };
 
   const commitPreview = async () => {
+    if (isCommittingPreview) return;
     if (!previewBundle || !selectedImportOwnerId || !selectedStatementMonth) return;
+    setIsCommittingPreview(true);
 
     const renamedCards = previewBundle.cards.map((card) => {
       const matchedCard = previewCardMatchMap.get(card.id)?.matchedCard ?? null;
@@ -1866,6 +1938,29 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
       };
     });
     const linkedAccountIdByPreviewCardId = new Map(renamedCards.map((card) => [card.id, card.linkedAccountId ?? null]));
+    const previewAccountIds = new Set(previewBundle.accounts.map((account) => account.id));
+    const retainedPreviewAccountIds = new Set<string>();
+
+    renamedCards.forEach((card) => {
+      if (card.linkedAccountId && previewAccountIds.has(card.linkedAccountId)) {
+        retainedPreviewAccountIds.add(card.linkedAccountId);
+      }
+    });
+
+    previewBundle.transactions.forEach((transaction) => {
+      const resolvedAccountId = transaction.cardId
+        ? linkedAccountIdByPreviewCardId.get(transaction.cardId) ?? transaction.accountId
+        : transaction.accountId;
+      if (resolvedAccountId && previewAccountIds.has(resolvedAccountId)) {
+        retainedPreviewAccountIds.add(resolvedAccountId);
+      }
+      if (transaction.fromAccountId && previewAccountIds.has(transaction.fromAccountId)) {
+        retainedPreviewAccountIds.add(transaction.fromAccountId);
+      }
+      if (transaction.toAccountId && previewAccountIds.has(transaction.toAccountId)) {
+        retainedPreviewAccountIds.add(transaction.toAccountId);
+      }
+    });
 
     const normalizedBundle: WorkspaceBundle = {
       ...previewBundle,
@@ -1878,10 +1973,12 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
             }
           : record,
       ),
-      accounts: previewBundle.accounts.map((account) => ({
-        ...account,
-        ownerPersonId: account.isShared ? null : selectedImportOwnerId,
-      })),
+      accounts: previewBundle.accounts
+        .filter((account) => retainedPreviewAccountIds.has(account.id))
+        .map((account) => ({
+          ...account,
+          ownerPersonId: account.isShared ? null : selectedImportOwnerId,
+        })),
       cards: renamedCards.map((card) => ({
         ...card,
         ownerPersonId: selectedImportOwnerId,
@@ -1889,12 +1986,15 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
       transactions: previewBundle.transactions.map((transaction) => ({
         ...transaction,
         ownerPersonId: selectedImportOwnerId,
-        accountId: transaction.cardId ? linkedAccountIdByPreviewCardId.get(transaction.cardId) ?? transaction.accountId : transaction.accountId,
       })),
     };
 
-    await commitImportedBundle(normalizedBundle, previewFileName);
-    clearPreview();
+    try {
+      await commitImportedBundle(normalizedBundle, previewFileName);
+      clearPreview();
+    } finally {
+      setIsCommittingPreview(false);
+    }
   };
 
   const handleCommitPreview = () => {
@@ -1906,11 +2006,17 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
     void commitPreview();
   };
 
-  const handleDeleteImportRecord = (record: ImportRecord) => {
+  const handleDeleteImportRecord = async (record: ImportRecord) => {
+    if (pendingDeleteImportRecordId) return;
     if (!linkedImportRecordIds.has(record.id)) return;
     const confirmed = window.confirm(`${getStatementRecordLabel(record)} 명세서를 삭제할까요?\n관련 결제내역과 검토 기록도 함께 삭제됩니다.`);
     if (!confirmed) return;
-    deleteImportRecord(workspaceId, record.id);
+    setPendingDeleteImportRecordId(record.id);
+    try {
+      await deleteImportRecord(workspaceId, record.id);
+    } finally {
+      setPendingDeleteImportRecordId(null);
+    }
   };
 
   const handleOpenStatementUploadModal = () => {
@@ -1918,18 +2024,25 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
   };
 
   const handleCloseStatementUploadModal = () => {
+    if (isPreparingPreview || isCommittingPreview || pendingDeleteImportRecordId) return;
     setIsStatementUploadModalOpen(false);
     setIsLinkedAccountModalOpen(false);
     resetDropzoneState();
   };
 
-  const dropzoneTitle = isDropzoneInvalid
+  const dropzoneTitle = isPreparingPreview
+    ? "업로드 미리보기를 준비하고 있습니다"
+    : isCommittingPreview
+      ? "가져오기를 처리하고 있습니다"
+      : isDropzoneInvalid
     ? "엑셀 파일만 업로드할 수 있어요"
     : isDropzoneActive
       ? "여기에 파일을 놓으면 미리보기를 준비합니다"
       : "클릭하거나 파일을 끌어놓으세요";
 
-  const dropzoneDescription = isDropzoneInvalid
+  const dropzoneDescription = isPreparingPreview || isCommittingPreview
+    ? "처리가 끝날 때까지 잠시만 기다려주세요. 같은 요청은 다시 받지 않습니다."
+    : isDropzoneInvalid
     ? "지원 형식: .xlsx, .xls"
     : "미리보기에서 거래 수, 검토 수, 자산 정보를 먼저 확인합니다.";
 
@@ -3514,42 +3627,12 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
     setCategoryUsageModal({ personId, personName, categoryId, categoryName });
   };
 
-  const openCategoryUsageInTransactions = () => {
-    if (!categoryUsageModal) return;
-
-    const nextParams = new URLSearchParams();
-    nextParams.set("openFromCategoryUsage", "1");
-    if (categoryUsageModal.personId !== UNASSIGNED_PERSON_KEY) {
-      nextParams.set("ownerPersonId", categoryUsageModal.personId);
-    }
-    if (categoryUsageModal.categoryId !== UNCATEGORIZED_CATEGORY_KEY) {
-      nextParams.set("categoryId", categoryUsageModal.categoryId);
-    } else {
-      nextParams.set("nature", "uncategorized");
-    }
-    if (selectedDashboardBasis === "statement" && selectedDashboardStatement) {
-      nextParams.set("statementId", selectedDashboardStatement);
-    }
-
-    setPendingCategoryUsageNavigation(`/collections/card?${nextParams.toString()}`);
-    if (typeof document !== "undefined") {
-      delete document.body.dataset.appModalCount;
-      document.body.classList.remove("app-modal-open");
-      document.documentElement.classList.remove("app-modal-open");
-    }
-    setCategoryUsageModal(null);
-  };
-
   const getDashboardTransactionOwnerLabel = (transaction: Transaction) => {
     if (!transaction.ownerPersonId) return "-";
     const owner = visiblePeople.find((person) => person.id === transaction.ownerPersonId);
     return owner ? getPersonLabel(owner) : "-";
   };
 
-  const getDashboardTransactionCategoryLabel = (transaction: Transaction) => {
-    if (!transaction.categoryId) return "미분류";
-    return categoryNameMap.get(transaction.categoryId) ?? "알 수 없는 카테고리";
-  };
   const getDashboardTransactionConnectionMeta = (transaction: Transaction) => {
     const parts = [
       getSourceTypeLabel(transaction.sourceType),
@@ -4107,8 +4190,10 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
           <div className="table-responsive dashboard-calendar-transactions-table-wrap">
             <table className="table align-middle transaction-grid-table">
               <colgroup>
-                <col className="transaction-grid-col-date" />
                 <col className="transaction-grid-col-merchant dashboard-calendar-col-merchant" />
+                <col className="transaction-grid-col-original-amount" />
+                <col className="transaction-grid-col-discount" />
+                <col className="transaction-grid-col-paid-amount" />
                 <col className="transaction-grid-col-paid-amount" />
                 <col className="transaction-grid-col-owner" />
                 <col className="transaction-grid-col-loop" />
@@ -4117,8 +4202,10 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
               </colgroup>
               <thead>
                 <tr>
-                  <th>사용일</th>
                   <th>가맹점</th>
+                  <th className="text-end">원금액</th>
+                  <th className="text-end">혜택</th>
+                  <th className="text-end">입금/취소</th>
                   <th className="text-end">결제금액</th>
                   <th>사용자</th>
                   <th>루프</th>
@@ -4151,7 +4238,6 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
                         data-dashboard-calendar-row="true"
                         className={`${isWorkflowMatch || isUncategorizedFocus ? " transaction-review-row" : ""}${isWorkflowPrimary || isUncategorizedFocus ? " is-review-focus" : ""}${isWorkflowPrimary ? " is-review-primary" : ""}`}
                       >
-                        <td className="transaction-date-cell">{transaction.occurredAt.slice(0, 10)}</td>
                         <td>
                           <TransactionRowHeader
                             merchantName={transaction.merchantName}
@@ -4160,7 +4246,20 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
                           />
                         </td>
                         <td className="text-end transaction-amount-cell">
-                          <strong>{formatCurrency(transaction.amount)}</strong>
+                          <strong>{formatAmount(transaction.originalAmount ?? transaction.amount)}</strong>
+                        </td>
+                        <td className="text-end transaction-amount-cell">
+                          <strong>{transaction.benefitAmount != null ? formatAmount(transaction.benefitAmount) : "-"}</strong>
+                        </td>
+                        <td className="text-end transaction-amount-cell">
+                          <strong>
+                            {transaction.settlementAdjustmentAmount != null
+                              ? formatAmount(transaction.settlementAdjustmentAmount)
+                              : "-"}
+                          </strong>
+                        </td>
+                        <td className="text-end transaction-amount-cell">
+                          <strong>{formatAmount(transaction.amount)}</strong>
                         </td>
                         <td className="transaction-owner-cell">{getDashboardTransactionOwnerLabel(transaction)}</td>
                         <td className={`transaction-loop-cell dashboard-calendar-grid-cell${hasLoopPresence ? " is-presence-target" : ""}`}>
@@ -4250,7 +4349,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
                       </tr>
                       {inlineReview ? (
                         <tr className="transaction-review-inline-row">
-                          <td colSpan={7} className="transaction-review-inline-cell">
+                          <td colSpan={9} className="transaction-review-inline-cell">
                             <div className="transaction-review-inline-panel">
                               <div className="transaction-review-inline-meta">
                                 <span className="transaction-review-inline-badge">
@@ -5605,7 +5704,9 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
             <section className="dashboard-statement-upload-section" data-guide-target="transactions-upload">
 
             <label
-              className={`upload-dropzone${isDropzoneActive ? " is-active" : ""}${isDropzoneInvalid ? " is-invalid" : ""}`}
+              className={`upload-dropzone${isDropzoneActive ? " is-active" : ""}${isDropzoneInvalid ? " is-invalid" : ""}${
+                isPreparingPreview || isCommittingPreview ? " is-disabled" : ""
+              }`}
               data-guide-target="transactions-upload-action"
               onDragEnter={handleDropzoneDragEnter}
               onDragOver={handleDropzoneDragOver}
@@ -5627,6 +5728,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
                 hidden
                 type="file"
                 accept=".xlsx,.xls"
+                disabled={isPreparingPreview || isCommittingPreview}
                 onClick={(event) => {
                   event.currentTarget.value = "";
                 }}
@@ -5737,6 +5839,26 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
                                   {card.cardNumberMasked ? ` (${card.cardNumberMasked})` : ""}
                                 </span>
                               )}
+                              {selectedImportOwnerId ? (
+                                <AppSelect
+                                  value={importCardMatchDrafts[card.id] ?? IMPORT_CARD_MATCH_AUTO}
+                                  onChange={(value) =>
+                                    setImportCardMatchDrafts((current) => ({
+                                      ...current,
+                                      [card.id]: value,
+                                    }))
+                                  }
+                                  options={[
+                                    { value: IMPORT_CARD_MATCH_AUTO, label: matchedCard ? "자동 인식된 카드 사용" : "자동 인식 사용" },
+                                    { value: IMPORT_CARD_MATCH_NEW, label: "새 카드로 추가" },
+                                    ...cardMatchCandidates.map((existing) => ({
+                                      value: existing.id,
+                                      label: `${existing.name}${existing.cardNumberMasked ? ` (${existing.cardNumberMasked})` : ""}`,
+                                    })),
+                                  ]}
+                                  ariaLabel="가져올 카드 연결 대상 선택"
+                                />
+                              ) : null}
                               {!selectedImportOwnerId ? <span>사용자를 선택하면 해당 사용자의 카드인지 확인합니다.</span> : null}
                             </div>
                             <div className="import-preview-card-footer">
@@ -5756,18 +5878,19 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
                 ) : null}
 
                 <div className="action-row mt-4">
-                  <button
-                    className="btn btn-primary"
-                    type="button"
+                  <AppButton
+                    variant="primary"
                     data-guide-target="transactions-upload-commit"
                     onClick={handleCommitPreview}
-                    disabled={!selectedImportOwnerId || !selectedStatementMonth || !scope.people.length}
+                    disabled={!selectedImportOwnerId || !selectedStatementMonth || !scope.people.length || isPreparingPreview}
+                    busy={isCommittingPreview}
+                    busyLabel="가져오는 중..."
                   >
                     {getPostImportLabel(previewBundle)}
-                  </button>
-                  <button className="btn btn-outline-secondary" type="button" onClick={clearPreview}>
+                  </AppButton>
+                  <AppButton variant="secondary" onClick={clearPreview} disabled={isPreparingPreview || isCommittingPreview}>
                     미리보기 닫기
-                  </button>
+                  </AppButton>
                 </div>
               </div>
             ) : null}
@@ -5833,13 +5956,16 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
                                   결제내역 보기
                                 </button>
                               ) : null}
-                              <button
-                                type="button"
-                                className="btn btn-outline-danger btn-sm"
-                                onClick={() => handleDeleteImportRecord(record)}
+                              <AppButton
+                                variant="outlineDanger"
+                                size="sm"
+                                onClick={() => void handleDeleteImportRecord(record)}
+                                busy={pendingDeleteImportRecordId === record.id}
+                                busyLabel="삭제 중..."
+                                disabled={Boolean(pendingDeleteImportRecordId) && pendingDeleteImportRecordId !== record.id}
                               >
                                 삭제
-                              </button>
+                              </AppButton>
                             </div>
                           </article>
                         ))}
@@ -5860,9 +5986,9 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
         onClose={() => setIsLinkedAccountModalOpen(false)}
         footer={
           <div className="import-linked-account-footer-actions">
-            <button type="button" className="btn btn-primary" onClick={commitPreview}>
+            <AppButton variant="primary" onClick={() => void commitPreview()} busy={isCommittingPreview} busyLabel="가져오는 중...">
               선택 반영 후 가져오기
-            </button>
+            </AppButton>
           </div>
         }
       >
@@ -5962,14 +6088,9 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
         onClose={() => setCategoryUsageModal(null)}
         dialogClassName="dashboard-category-usage-modal"
         footer={
-          <>
-            <button type="button" className="btn btn-outline-secondary" onClick={() => setCategoryUsageModal(null)}>
-              닫기
-            </button>
-            <button type="button" className="btn btn-primary" onClick={openCategoryUsageInTransactions}>
-              결제내역에서 보기
-            </button>
-          </>
+          <button type="button" className="btn btn-outline-secondary" onClick={() => setCategoryUsageModal(null)}>
+            닫기
+          </button>
         }
       >
         {categoryUsageModalTransactions.length ? (
@@ -5981,6 +6102,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
                 <col className="transaction-grid-col-original-amount" />
                 <col className="transaction-grid-col-discount" />
                 <col className="transaction-grid-col-paid-amount" />
+                <col className="transaction-grid-col-paid-amount" />
                 <col className="transaction-grid-col-owner" />
                 <col className="transaction-grid-col-category" />
                 <col className="transaction-grid-col-note" />
@@ -5990,7 +6112,8 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
                   <th>사용일</th>
                   <th>가맹점</th>
                   <th className="text-end">원금액</th>
-                  <th className="text-end">할인</th>
+                  <th className="text-end">혜택</th>
+                  <th className="text-end">입금/취소</th>
                   <th className="text-end">결제금액</th>
                   <th>사용자</th>
                   <th>카테고리</th>
@@ -6000,22 +6123,54 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
               <tbody>
                 {categoryUsageModalTransactions.map((transaction, index) => (
                   <tr key={transaction.id} style={getMotionStyle(index)}>
-                    <td>{transaction.occurredAt.slice(0, 10)}</td>
+                    <td className="transaction-date-cell">{transaction.occurredAt.slice(0, 10)}</td>
                     <td>
                       <TransactionRowHeader merchantName={transaction.merchantName} />
                     </td>
                     <td className="text-end transaction-amount-cell">
-                      <strong>{formatCurrency(transaction.originalAmount ?? transaction.amount)}</strong>
+                      <strong>{formatAmount(transaction.originalAmount ?? transaction.amount)}</strong>
                     </td>
                     <td className="text-end transaction-amount-cell">
-                      <strong>{transaction.discountAmount ? formatCurrency(transaction.discountAmount) : "-"}</strong>
+                      <strong>{transaction.benefitAmount != null ? formatAmount(transaction.benefitAmount) : "-"}</strong>
                     </td>
                     <td className="text-end transaction-amount-cell">
-                      <strong>{formatCurrency(transaction.amount)}</strong>
+                      <strong>
+                        {transaction.settlementAdjustmentAmount != null
+                          ? formatAmount(transaction.settlementAdjustmentAmount)
+                          : "-"}
+                      </strong>
                     </td>
-                    <td>{getDashboardTransactionOwnerLabel(transaction)}</td>
-                    <td>{getDashboardTransactionCategoryLabel(transaction)}</td>
-                    <td>{transaction.description || "-"}</td>
+                    <td className="text-end transaction-amount-cell">
+                      <strong>{formatAmount(transaction.amount)}</strong>
+                    </td>
+                    <td className="transaction-owner-cell">{getDashboardTransactionOwnerLabel(transaction)}</td>
+                    <td>
+                      <TransactionCategoryEditor
+                        transaction={transaction}
+                        categories={scope.categories}
+                        categoryName={transaction.categoryId ? categoryLabelMap.get(transaction.categoryId) ?? null : null}
+                        onCategoryChange={(nextCategoryId) => {
+                          if (!nextCategoryId) {
+                            clearCategory(workspaceId, transaction.id);
+                            return;
+                          }
+                          assignCategory(workspaceId, transaction.id, nextCategoryId);
+                        }}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="text"
+                        className="form-control form-control-sm"
+                        defaultValue={transaction.description}
+                        placeholder="비고 입력"
+                        onBlur={(event) => {
+                          const nextDescription = event.currentTarget.value.trim();
+                          if (nextDescription === (transaction.description ?? "")) return;
+                          updateTransactionDetails(workspaceId, transaction.id, { description: nextDescription });
+                        }}
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>

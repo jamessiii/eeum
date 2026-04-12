@@ -5876,6 +5876,10 @@ label,
   text-align: center;
 }
 
+.transaction-grid-table thead th.text-end {
+  text-align: center !important;
+}
+
 .transaction-grid-table th:first-child,
 .transaction-grid-table td:first-child,
 .transaction-grid-table th:nth-child(3),
@@ -6361,6 +6365,12 @@ label,
   transform: none !important;
   box-shadow: none !important;
   filter: none !important;
+}
+
+.upload-dropzone.is-disabled {
+  --upload-dropzone-stroke: rgba(148, 163, 184, 0.7);
+  cursor: wait;
+  opacity: 0.72;
 }
 
 .upload-dropzone-copy {
@@ -7971,6 +7981,10 @@ label,
   vertical-align: middle;
 }
 
+.dashboard-calendar-transactions .transaction-grid-table thead th.text-end {
+  text-align: center !important;
+}
+
 .dashboard-calendar-transactions .form-control,
 .dashboard-calendar-transactions .form-select,
 .dashboard-calendar-transactions .transaction-category-editor .form-control.form-control-sm,
@@ -8577,13 +8591,17 @@ label,
 
 .loop-station-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 19rem));
   gap: 1rem;
+  justify-content: start;
 }
 
 .loop-station-card {
   display: grid;
+  grid-template-rows: auto auto auto 1fr auto;
+  align-content: start;
   gap: 0.9rem;
+  min-height: 14.5rem;
   padding: 1.05rem 1.1rem;
   border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 1.05rem;
@@ -9273,6 +9291,27 @@ label,
 .btn:hover,
 .btn:focus-visible {
   transform: translateY(-1px);
+}
+
+.btn.is-busy {
+  pointer-events: none;
+}
+
+.app-button-spinner {
+  width: 0.9rem;
+  height: 0.9rem;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 999px;
+  display: inline-block;
+  flex: 0 0 auto;
+  animation: app-button-spin 0.72s linear infinite;
+}
+
+@keyframes app-button-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .form-control,
@@ -11128,7 +11167,7 @@ textarea:focus {
 }
 
 .app-modal-dialog.dashboard-category-usage-modal {
-  width: min(78rem, calc(100vw - 2rem));
+  width: min(92rem, calc(100vw - 1.5rem));
   max-height: min(44rem, calc(100vh - 2.5rem));
   overflow: hidden;
 }
@@ -11147,6 +11186,18 @@ textarea:focus {
 
 .app-modal-dialog.dashboard-processing-confirm-modal {
   width: min(28rem, calc(100vw - 2rem));
+}
+
+.app-modal-dialog.loop-station-priority-modal {
+  width: min(88rem, calc(100vw - 2rem));
+  max-height: min(42rem, calc(100vh - 2rem));
+}
+
+.app-modal-dialog.loop-station-priority-modal .app-modal-body {
+  display: grid;
+  gap: 1rem;
+  max-height: min(32rem, calc(100vh - 10rem));
+  overflow: auto;
 }
 
 @media (max-width: 960px) {
@@ -11173,9 +11224,97 @@ textarea:focus {
 
 .dashboard-category-usage-table-wrap {
   max-height: min(32rem, calc(100vh - 13rem));
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   scrollbar-gutter: stable;
   border-radius: 1.2rem;
+}
+
+.app-modal-dialog.dashboard-category-usage-modal .transaction-grid-col-date {
+  width: 7.25rem;
+}
+
+.app-modal-dialog.dashboard-category-usage-modal .transaction-grid-col-merchant {
+  width: 14.5rem;
+}
+
+.app-modal-dialog.dashboard-category-usage-modal .transaction-grid-col-original-amount,
+.app-modal-dialog.dashboard-category-usage-modal .transaction-grid-col-discount,
+.app-modal-dialog.dashboard-category-usage-modal .transaction-grid-col-paid-amount {
+  width: 6.35rem;
+}
+
+.app-modal-dialog.dashboard-category-usage-modal .transaction-grid-col-owner {
+  width: 3.6rem;
+}
+
+.app-modal-dialog.dashboard-category-usage-modal .transaction-grid-col-category {
+  width: 14.5rem;
+}
+
+.app-modal-dialog.dashboard-category-usage-modal .transaction-grid-col-note {
+  width: 10.5rem;
+}
+
+.app-modal-dialog.dashboard-category-usage-modal .transaction-grid-table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.app-modal-dialog.dashboard-category-usage-modal .transaction-grid-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 255, 0.98)),
+    rgba(255, 255, 255, 0.97);
+  box-shadow: 0 1px 0 rgba(23, 32, 51, 0.08);
+}
+
+.app-modal-dialog.dashboard-category-usage-modal .table-responsive .table tbody td {
+  font-family: var(--app-handwriting-font);
+  letter-spacing: var(--app-grid-body-letter-spacing);
+  line-height: var(--app-grid-body-line-height);
+  font-size: var(--app-grid-body-font-size);
+}
+
+.app-modal-dialog.dashboard-category-usage-modal .table-responsive .table thead th,
+.app-modal-dialog.dashboard-category-usage-modal .table-responsive .table tbody td :is(
+  button,
+  input,
+  textarea,
+  select,
+  .btn,
+  .badge,
+  .form-control,
+  .form-select,
+  .app-select-trigger,
+  .transaction-row-header-badge,
+  .transaction-category-editor,
+  .transaction-review-inline-panel
+) {
+  font-family: "Pretendard", "Noto Sans KR", Arial, sans-serif;
+  letter-spacing: 0;
+}
+
+.app-modal-dialog.dashboard-category-usage-modal .transaction-category-editor .form-control.form-control-sm,
+.app-modal-dialog.dashboard-category-usage-modal .transaction-grid-table input.form-control.form-control-sm {
+  min-height: 2.15rem;
+  height: 2.15rem;
+  border-radius: 0.85rem;
+  font: 700 var(--app-grid-body-font-size) / var(--app-grid-body-line-height) var(--app-handwriting-font) !important;
+  color: var(--app-grid-body-color) !important;
+  letter-spacing: var(--app-grid-body-letter-spacing) !important;
+}
+
+.app-modal-dialog.dashboard-category-usage-modal .transaction-grid-table input.form-control.form-control-sm {
+  padding-inline: 0.9rem;
+}
+
+.app-modal-dialog.dashboard-category-usage-modal .transaction-grid-table input.form-control.form-control-sm::placeholder {
+  font: 700 var(--app-grid-body-font-size) / var(--app-grid-body-line-height) var(--app-handwriting-font);
+  letter-spacing: var(--app-grid-body-letter-spacing);
+  color: color-mix(in srgb, var(--app-grid-body-color) 38%, white);
 }
 
 .app-modal-header,
@@ -14322,6 +14461,35 @@ textarea:focus {
   box-shadow: var(--app-shadow);
 }
 
+.people-section-tool-button {
+  min-height: 2.25rem;
+  padding: 0.35rem 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--app-line) 84%, white 16%);
+  background: color-mix(in srgb, var(--app-panel-muted) 88%, white 12%);
+  color: var(--app-text);
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1;
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease, box-shadow 180ms ease;
+}
+
+.people-section-tool-button:hover,
+.people-section-tool-button:focus-visible {
+  transform: translateY(-1px);
+  border-color: var(--app-line-strong);
+  box-shadow: var(--app-shadow);
+}
+
+.people-section-tool-button.is-active {
+  border-color: rgba(var(--app-primary-rgb), 0.28);
+  background: linear-gradient(135deg, rgba(247, 244, 255, 0.96), rgba(var(--app-primary-soft-rgb), 0.96));
+  color: var(--app-primary-strong);
+}
+
 .board-case-section-body {
   display: grid;
   gap: 0.9rem;
@@ -14521,6 +14689,31 @@ textarea:focus {
 .people-subboard {
   display: grid;
   gap: 0.9rem;
+}
+
+.people-case-section .board-case-section-head {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 0.9rem;
+}
+
+.people-case-section .board-case-section-title-row {
+  grid-column: 1;
+  min-width: 0;
+}
+
+.people-case-section .board-case-section-action {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  align-self: start;
+}
+
+.people-case-section .board-case-section-head > p {
+  grid-column: 1;
 }
 
 .people-subboard + .people-subboard {

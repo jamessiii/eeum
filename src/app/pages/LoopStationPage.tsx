@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { createId } from "../../shared/utils/id";
 import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
+import { getPersonDisplayLabel } from "../../shared/utils/person";
 import { AppModal } from "../components/AppModal";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { TransactionRowHeader } from "../components/TransactionRowHeader";
@@ -104,6 +105,7 @@ export function LoopStationPage() {
   const [isSplitNameEditing, setIsSplitNameEditing] = useState(false);
   const [isDetailNameEditing, setIsDetailNameEditing] = useState(false);
   const [remoteLoopRecommendations, setRemoteLoopRecommendations] = useState<ReturnType<typeof mapRemoteLoopRecommendation>[] | null>(null);
+  const [isPriorityCategoryModalOpen, setIsPriorityCategoryModalOpen] = useState(false);
 
   const loopData = workspaceLoopDataByWorkspaceId.get(workspaceId);
   const managedLoops = loopData?.managedLoops ?? [];
@@ -148,7 +150,7 @@ export function LoopStationPage() {
     [categoryMap, scope.categories],
   );
   const selectedLoopPriorityCategoryIds = scope.financialProfile?.loopPriorityCategoryIds ?? [];
-  const ownerNameMap = useMemo(() => new Map(scope.people.map((person) => [person.id, person.displayName || person.name])), [scope.people]);
+  const ownerNameMap = useMemo(() => new Map(scope.people.map((person) => [person.id, getPersonDisplayLabel(person)])), [scope.people]);
   const transactionMap = useMemo(() => new Map(scope.transactions.map((transaction) => [transaction.id, transaction])), [scope.transactions]);
   const { getPresenceForTarget, showLockedTargetToast } = useDotoriPresenceLocks("고정비");
   const nextPresenceTarget = useMemo(() => {
@@ -394,35 +396,14 @@ export function LoopStationPage() {
             <h2 className="section-title">루프 제안</h2>
           </div>
           <div className="section-head-actions">
+            <button
+              type="button"
+              className="btn btn-outline-secondary btn-sm"
+              onClick={() => setIsPriorityCategoryModalOpen(true)}
+            >
+              루프추천 카테고리
+            </button>
             <span className="badge text-bg-light">{loopRecommendations.length}</span>
-          </div>
-        </div>
-        <div className="resource-card loop-station-filter-card">
-          <div className="loop-station-filter-copy">
-            <span className="section-kicker">추천 기준</span>
-            <h3>루프 추천 카테고리</h3>
-            <p>여기서 고른 카테고리 안에서만 루프 추천을 보여줍니다.</p>
-          </div>
-          <div className="settings-loop-priority-list">
-            {loopPriorityOptions.map((option) => {
-              const isSelected = selectedLoopPriorityCategoryIds.includes(option.id);
-              return (
-                <button
-                  key={option.id}
-                  type="button"
-                  className={`settings-loop-priority-chip${isSelected ? " is-selected" : ""}`}
-                  onClick={() =>
-                    updateLoopPriorityCategories(
-                      isSelected
-                        ? selectedLoopPriorityCategoryIds.filter((categoryId) => categoryId !== option.id)
-                        : [...selectedLoopPriorityCategoryIds, option.id],
-                    )
-                  }
-                >
-                  {option.label}
-                </button>
-              );
-            })}
           </div>
         </div>
         {loopRecommendations.length ? (
@@ -528,6 +509,39 @@ export function LoopStationPage() {
           />
         )}
       </section>
+
+      <AppModal
+        open={isPriorityCategoryModalOpen}
+        title="루프 추천 카테고리"
+        description="여기서 고른 카테고리 안에서만 루프 추천을 보여줍니다."
+        onClose={() => setIsPriorityCategoryModalOpen(false)}
+        dialogClassName="loop-station-priority-modal"
+      >
+        <div className="loop-station-filter-copy">
+          <span className="section-kicker">추천 기준</span>
+        </div>
+        <div className="settings-loop-priority-list">
+          {loopPriorityOptions.map((option) => {
+            const isSelected = selectedLoopPriorityCategoryIds.includes(option.id);
+            return (
+              <button
+                key={option.id}
+                type="button"
+                className={`settings-loop-priority-chip${isSelected ? " is-selected" : ""}`}
+                onClick={() =>
+                  updateLoopPriorityCategories(
+                    isSelected
+                      ? selectedLoopPriorityCategoryIds.filter((categoryId) => categoryId !== option.id)
+                      : [...selectedLoopPriorityCategoryIds, option.id],
+                  )
+                }
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+      </AppModal>
 
       <section className="page-section" style={getMotionStyle(1.2)}>
         <div className="section-head">

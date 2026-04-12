@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { monthKey } from "../../shared/utils/date";
 import { formatCurrency } from "../../shared/utils/format";
 import { getMotionStyle } from "../../shared/utils/motion";
+import { getPersonDisplayLabel } from "../../shared/utils/person";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
 import { AppModal } from "./AppModal";
@@ -65,7 +66,7 @@ export function IncomeManagementContent() {
   const selectablePeople = people.filter((person) => person.isActive !== false);
   const visiblePeople = selectablePeople.length ? selectablePeople : people;
   const peopleMap = useMemo(
-    () => new Map(scope.people.map((person) => [person.id, person.displayName || person.name])),
+    () => new Map(scope.people.map((person) => [person.id, getPersonDisplayLabel(person)])),
     [scope.people],
   );
   const allIncomeEntriesByRecency = useMemo(
@@ -264,7 +265,7 @@ export function IncomeManagementContent() {
                 <AppSelect
                   value={ownerPersonId}
                   onChange={setOwnerPersonId}
-                  options={visiblePeople.map((person) => ({ value: person.id, label: person.displayName || person.name }))}
+                  options={visiblePeople.map((person) => ({ value: person.id, label: getPersonDisplayLabel(person) }))}
                   ariaLabel="사용자 선택"
                 />
               </label>

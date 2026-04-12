@@ -117,8 +117,8 @@ type DragItem =
   | { id: string; itemType: "person"; ownerPersonId: null; isHidden: boolean }
   | { id: string; itemType: "account"; ownerPersonId: string | null; isHidden: boolean }
   | { id: string; itemType: "card"; ownerPersonId: string | null; isHidden: boolean }
-  | { id: string; itemType: "categoryLink"; ownerPersonId: null; isHidden: false }
-  | { id: string; itemType: "categoryGroupLink"; ownerPersonId: null; isHidden: false; categoryIds: string[] };
+  | { id: string; itemType: "categoryLink"; ownerPersonId: string | null; isHidden: false }
+  | { id: string; itemType: "categoryGroupLink"; ownerPersonId: string | null; isHidden: false; categoryIds: string[] };
 
 type CategoryGroup = Category & { categoryType: "group" };
 type LeafCategory = Category & { categoryType: "category" };
@@ -127,6 +127,25 @@ type CategoryLinkGroup = {
   group: CategoryGroup;
   categories: LeafCategory[];
 };
+
+function getCategoryLinkedAccountIds(category: Category) {
+  const linkedIds = new Set<string>();
+  if (category.linkedAccountId) linkedIds.add(category.linkedAccountId);
+  Object.values(category.linkedAccountIdsByPersonId ?? {}).forEach((accountId) => {
+    if (accountId) linkedIds.add(accountId);
+  });
+  return [...linkedIds];
+}
+
+function setCategoryLinkedAccountForPerson(category: Category, personId: string, accountId: string | null) {
+  const nextMap = { ...(category.linkedAccountIdsByPersonId ?? {}) };
+  if (accountId) {
+    nextMap[personId] = accountId;
+  } else {
+    delete nextMap[personId];
+  }
+  return nextMap;
+}
 
 type CategoryLinkPanelSize = {
   width: number;
@@ -446,6 +465,8 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   const [isDragOverlayActive, setIsDragOverlayActive] = useState(false);
   const [isHiddenPanelOpen, setIsHiddenPanelOpen] = useState(false);
   const [isCategoryLinkPanelOpen, setIsCategoryLinkPanelOpen] = useState(false);
+  const [selectedCategoryLinkPersonId, setSelectedCategoryLinkPersonId] = useState<string | null>(null);
+  const [selectedHiddenAssetsPersonId, setSelectedHiddenAssetsPersonId] = useState<string | null>(null);
   const [categoryLinkPanelSize, setCategoryLinkPanelSize] = useState<CategoryLinkPanelSize | null>(null);
   const [categoryLinkPanelPosition, setCategoryLinkPanelPosition] = useState<{ left: number; top: number } | null>(null);
   const [categoryLinkColumnCount, setCategoryLinkColumnCount] = useState(1);
@@ -487,7 +508,9 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   const scope = getWorkspaceScope(state, workspaceId);
   const currentGuideStep = useMemo(() => getWorkspaceGuide(state, workspaceId).currentStep, [state, workspaceId]);
   const isCategoryLinkGuideActive = currentGuideStep ? CATEGORY_LINK_GUIDE_STEP_IDS.has(currentGuideStep.id) : false;
-  const shouldRenderCategoryLinkPanel = isCategoryLinkPanelOpen || isCategoryLinkGuideActive;
+  const shouldRenderCategoryLinkPanel = (isCategoryLinkPanelOpen && selectedCategoryLinkPersonId !== null) || isCategoryLinkGuideActive;
+  const shouldRenderHiddenAssetsPanel = selectedHiddenAssetsPersonId !== null;
+  const shouldRenderFloatingPanel = shouldRenderCategoryLinkPanel || shouldRenderHiddenAssetsPanel;
   const people = scope.people.filter((person) => !person.isHidden);
   const hiddenPeople = scope.people.filter((person) => person.isHidden);
   const hiddenAccounts = scope.accounts.filter((account) => account.isHidden && !account.isShared);
@@ -559,7 +582,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
     () =>
       categoryLinkGroups
         .flatMap((entry) => entry.categories)
-        .find((category) => !category.linkedAccountId)?.id ??
+        .find((category) => getCategoryLinkedAccountIds(category).length === 0)?.id ??
       categoryLinkGroups.flatMap((entry) => entry.categories)[0]?.id ??
       null,
     [categoryLinkGroups],
@@ -567,10 +590,11 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   const linkedCategoriesByAccountId = useMemo(() => {
     const nextMap = new Map<string, LeafCategory[]>();
     allLeafCategories.forEach((category) => {
-      if (!category.linkedAccountId) return;
-      const current = nextMap.get(category.linkedAccountId) ?? [];
-      current.push(category);
-      nextMap.set(category.linkedAccountId, current);
+      getCategoryLinkedAccountIds(category).forEach((accountId) => {
+        const current = nextMap.get(accountId) ?? [];
+        current.push(category);
+        nextMap.set(accountId, current);
+      });
     });
     nextMap.forEach((categories) => {
       categories.sort((left, right) => left.sortOrder - right.sortOrder || left.name.localeCompare(right.name, "ko-KR"));
@@ -642,7 +666,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   }, [categoryLinkPanelPosition]);
 
   useEffect(() => {
-    if (!shouldRenderCategoryLinkPanel || typeof window === "undefined") {
+    if (!shouldRenderFloatingPanel || typeof window === "undefined") {
       setCategoryLinkColumnCount(1);
       return;
     }
@@ -690,7 +714,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
       window.removeEventListener("resize", queueColumnCountUpdate);
       resizeObserver?.disconnect();
     };
-  }, [shouldRenderCategoryLinkPanel, maxCategoryLinkGroupSize, categoryLinkPanelSize]);
+  }, [shouldRenderFloatingPanel, maxCategoryLinkGroupSize, categoryLinkPanelSize]);
 
   const accountsByPersonId = new Map(
     scope.people.map((person) => [
@@ -706,6 +730,21 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   );
   const cardsByPersonId = new Map(
     scope.people.map((person) => [person.id, scope.cards.filter((card) => card.ownerPersonId === person.id && !card.isHidden)]),
+  );
+  const hiddenAccountsByPersonId = new Map(
+    scope.people.map((person) => [
+      person.id,
+      scope.accounts.filter((account) => {
+        if (!account.isHidden) return false;
+        if (account.accountGroupType === "meeting") {
+          return (account.participantPersonIds ?? []).includes(person.id) || account.primaryPersonId === person.id;
+        }
+        return account.ownerPersonId === person.id;
+      }),
+    ]),
+  );
+  const hiddenCardsByPersonId = new Map(
+    scope.people.map((person) => [person.id, scope.cards.filter((card) => card.ownerPersonId === person.id && card.isHidden)]),
   );
   const activePeopleOptions = people.map((person) => ({
     value: person.id,
@@ -768,7 +807,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   }, [pendingInlinePersonName, people]);
 
   useEffect(() => {
-    if (!shouldRenderCategoryLinkPanel || typeof window === "undefined") {
+    if (!shouldRenderFloatingPanel || typeof window === "undefined") {
       categoryLinkPanelDragStateRef.current = null;
       categoryLinkPanelResizeStateRef.current = null;
       categoryLinkPanelGuideResizeStartRef.current = null;
@@ -918,7 +957,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
       setIsCategoryLinkPanelDragging(false);
       setIsCategoryLinkPanelResizing(false);
     };
-  }, [shouldRenderCategoryLinkPanel, workspaceId]);
+  }, [shouldRenderFloatingPanel, workspaceId]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1302,6 +1341,8 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
     event.stopPropagation();
     setIsCategoryLinkResetZoneActive(false);
     const targetCategories = getDraggedCategories(dragItem);
+    const targetAccount = scope.accounts.find((account) => account.id === accountId) ?? null;
+    const ownerPersonId = dragItem.ownerPersonId ?? targetAccount?.ownerPersonId ?? targetAccount?.primaryPersonId ?? null;
 
     if (!targetCategories.length) {
       resetDragState();
@@ -1309,7 +1350,12 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
     }
 
     targetCategories.forEach((category) => {
-      if (category.linkedAccountId !== accountId) {
+      if (ownerPersonId) {
+        const nextMap = setCategoryLinkedAccountForPerson(category, ownerPersonId, accountId);
+        if ((category.linkedAccountIdsByPersonId ?? {})[ownerPersonId] !== accountId) {
+          updateCategory(workspaceId, category.id, { linkedAccountIdsByPersonId: nextMap });
+        }
+      } else if (category.linkedAccountId !== accountId) {
         updateCategory(workspaceId, category.id, { linkedAccountId: accountId });
       }
     });
@@ -1317,15 +1363,22 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
     resetDragState();
   };
 
-  const handleCategoryLinkResetDrop = (event: React.DragEvent<HTMLElement>) => {
+  const handleCategoryLinkResetDrop = (event: React.DragEvent<HTMLElement>, ownerPersonId?: string | null) => {
     if (!dragItem || !isCategoryConnectionDragItem(dragItem)) return;
     event.preventDefault();
     event.stopPropagation();
     const targetCategories = getDraggedCategories(dragItem);
 
     targetCategories.forEach((category) => {
-      if (category.linkedAccountId) {
-        updateCategory(workspaceId, category.id, { linkedAccountId: null });
+      if (ownerPersonId) {
+        const nextMap = setCategoryLinkedAccountForPerson(category, ownerPersonId, null);
+        if ((category.linkedAccountIdsByPersonId ?? {})[ownerPersonId]) {
+          updateCategory(workspaceId, category.id, { linkedAccountIdsByPersonId: nextMap });
+        }
+        return;
+      }
+      if (category.linkedAccountId || getCategoryLinkedAccountIds(category).length > 0) {
+        updateCategory(workspaceId, category.id, { linkedAccountId: null, linkedAccountIdsByPersonId: {} });
       }
     });
 
@@ -1384,6 +1437,8 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
     usage: getPersonUsageSummary(transactions, person.id),
     linkedAccounts: accountsByPersonId.get(person.id) ?? [],
     linkedCards: cardsByPersonId.get(person.id) ?? [],
+    hiddenAccounts: hiddenAccountsByPersonId.get(person.id) ?? [],
+    hiddenCards: hiddenCardsByPersonId.get(person.id) ?? [],
   }));
   const embeddedPeopleSection = (
     <>
@@ -1393,29 +1448,19 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
           <p>사용자별 계좌와 카드를 같은 보드 형식에서 관리합니다.</p>
         </div>
         <div className="board-case-actions">
-          <button
-            type="button"
-            className={`board-case-action-button${isCategoryLinkPanelOpen ? " is-active is-strong" : ""}`}
-            data-guide-target="people-category-link-toggle"
-            onClick={() => {
-              setIsCategoryLinkPanelOpen(true);
-              setIsHiddenPanelOpen(false);
-              completeGuideStepAction(workspaceId, "people-category-link-toggle");
-            }}
-          >
-            카테고리 연결
-          </button>
-          <button
-            type="button"
-            className={`board-case-action-button${isHiddenPanelOpen ? " is-active" : ""}`}
-            data-guide-target="people-hidden-toggle"
-            onClick={() => {
-              setIsHiddenPanelOpen((current) => !current);
-              completeGuideStepAction(workspaceId, "people-hidden-assets");
-            }}
-          >
-            숨김 {hiddenPeople.length + hiddenAccounts.length + hiddenCards.length}
-          </button>
+          {hiddenPeople.length ? (
+            <button
+              type="button"
+              className={`board-case-action-button${isHiddenPanelOpen ? " is-active" : ""}`}
+              data-guide-target="people-hidden-toggle"
+              onClick={() => {
+                setIsHiddenPanelOpen((current) => !current);
+                completeGuideStepAction(workspaceId, "people-hidden-assets");
+              }}
+            >
+              숨긴 사용자 {hiddenPeople.length}
+            </button>
+          ) : null}
         </div>
       </div>
       {!embeddedSections.length ? (
@@ -1437,6 +1482,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
           {embeddedSections.map((section, index) => {
             const isInlineEditing = inlineEditingPersonId === section.person.id;
             const personPresenceConnections = getPresenceForTarget("person", section.person.id);
+            const hiddenAssetCount = section.hiddenAccounts.length + section.hiddenCards.length;
             return (
               <section
                 key={section.id}
@@ -1503,8 +1549,6 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                           })}
                         </span>
                       ) : null}
-                    </div>
-                    <div className="board-case-section-action">
                       <button
                         type="button"
                         className="board-case-edit-button"
@@ -1522,6 +1566,38 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                       </button>
                     </div>
                   </div>
+                  <div className="board-case-section-action">
+                    <button
+                      type="button"
+                      className={`btn btn-outline-secondary btn-sm${
+                        isCategoryLinkPanelOpen && selectedCategoryLinkPersonId === section.person.id ? " is-active" : ""
+                      }`}
+                      data-guide-target="people-category-link-toggle"
+                      onClick={() => {
+                        setSelectedCategoryLinkPersonId(section.person.id);
+                        setSelectedHiddenAssetsPersonId(null);
+                        setIsCategoryLinkPanelOpen(true);
+                        completeGuideStepAction(workspaceId, "people-category-link-toggle");
+                      }}
+                      aria-label={`${section.title} 카테고리 연결 모달 열기`}
+                    >
+                      카테고리 연결
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn btn-outline-secondary btn-sm${selectedHiddenAssetsPersonId === section.person.id ? " is-active" : ""}`}
+                      data-guide-target="people-hidden-toggle"
+                      onClick={() => {
+                        setSelectedHiddenAssetsPersonId(section.person.id);
+                        setIsCategoryLinkPanelOpen(false);
+                        setSelectedCategoryLinkPersonId(null);
+                        completeGuideStepAction(workspaceId, "people-hidden-assets");
+                      }}
+                      aria-label={`${section.title} 숨김 자산 모달 열기`}
+                    >
+                      숨김 {hiddenAssetCount}
+                    </button>
+                  </div>
                   <p>{`계좌 ${section.linkedAccounts.length}개 · 카드 ${section.linkedCards.length}개`}</p>
                 </div>
                 <div className="board-case-section-body">
@@ -1532,15 +1608,15 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                       <h4>계좌</h4>
                     </div>
                   </div>
-                  <div
-                    className="category-case-grid"
-                    onDragOver={(event) => {
-                      if (isCategoryConnectionDragItem(dragItem)) {
-                        event.preventDefault();
-                        setIsCategoryLinkResetZoneActive(false);
-                        if (event.target === event.currentTarget) setActiveCategoryLinkTargetId(null);
-                        return;
-                      }
+                    <div
+                      className="category-case-grid"
+                      onDragOver={(event) => {
+                        if (isCategoryConnectionDragItem(dragItem) && (dragItem.ownerPersonId === null || dragItem.ownerPersonId === section.person.id)) {
+                          event.preventDefault();
+                          setIsCategoryLinkResetZoneActive(false);
+                          if (event.target === event.currentTarget) setActiveCategoryLinkTargetId(null);
+                          return;
+                        }
                       if (dragItem?.itemType !== "account" || dragItem.ownerPersonId !== section.person.id) return;
                       event.preventDefault();
                     }}
@@ -1588,12 +1664,12 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                           }}
                           onDragEnd={resetDragState}
                           onDragEnter={() => {
-                            if (!isCategoryConnectionDragItem(dragItem)) return;
+                            if (!isCategoryConnectionDragItem(dragItem) || (dragItem.ownerPersonId !== null && dragItem.ownerPersonId !== section.person.id)) return;
                             setIsCategoryLinkResetZoneActive(false);
                             setActiveCategoryLinkTargetId(account.id);
                           }}
                           onDragOver={(event) => {
-                            if (isCategoryConnectionDragItem(dragItem)) {
+                            if (isCategoryConnectionDragItem(dragItem) && (dragItem.ownerPersonId === null || dragItem.ownerPersonId === section.person.id)) {
                               event.preventDefault();
                               event.stopPropagation();
                               setIsCategoryLinkResetZoneActive(false);
@@ -1820,9 +1896,9 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                     </article>
                   ) : null}
                 </div>
-              </div>
+                </div>
 
-                   {section.person.memo ? <div className="compact-note">{section.person.memo}</div> : null}
+                {section.person.memo ? <div className="compact-note">{section.person.memo}</div> : null}
                 </div>
               </section>
             );
@@ -1844,7 +1920,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
         <div className="category-hidden-panel-head">
           <div>
             <span className="section-kicker">숨김 보관함</span>
-            <h3>숨긴 사용자 자산</h3>
+            <h3>숨긴 사용자</h3>
           </div>
           <button type="button" className="board-case-edit-button" onClick={() => setIsHiddenPanelOpen(false)} aria-label="숨김 패널 닫기">
             ×
@@ -1873,51 +1949,106 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
           </div>
         ) : null}
 
-        {hiddenAccounts.length ? (
-          <div className="category-hidden-list mb-3">
-            {hiddenAccounts.map((account) => (
-              <article
-                key={account.id}
-                className={`category-hidden-card${getDragStateClassName(account.id)}`}
-                data-guide-target={account.id === guideHiddenRestoreCardId ? "people-hidden-guide-card" : "people-hidden-card"}
-                draggable
-                onDragStart={(event) => {
-                  startGuideDragTransaction("people-hidden-restore-pick");
-                  startDrag({ id: account.id, itemType: "account", ownerPersonId: account.ownerPersonId ?? null, isHidden: true }, event);
-                }}
-                onDragEnd={resetDragState}
-              >
-                <strong>{account.alias || account.name}</strong>
-                <span>계좌 · {account.ownerPersonId ? personNameMap.get(account.ownerPersonId) ?? "사용자 없음" : "소유자 없음"}</span>
-              </article>
-            ))}
-          </div>
-        ) : null}
-
-        {hiddenCards.length ? (
-          <div className="category-hidden-list">
-            {hiddenCards.map((card) => (
-              <article
-                key={card.id}
-                className={`category-hidden-card${getDragStateClassName(card.id)}`}
-                data-guide-target={card.id === guideHiddenRestoreCardId ? "people-hidden-guide-card" : "people-hidden-card"}
-                draggable
-                onDragStart={(event) => {
-                  startGuideDragTransaction("people-hidden-restore-pick");
-                  startDrag({ id: card.id, itemType: "card", ownerPersonId: card.ownerPersonId ?? null, isHidden: true }, event);
-                }}
-                onDragEnd={resetDragState}
-              >
-                <strong>{card.name}</strong>
-                <span>카드 · {card.ownerPersonId ? personNameMap.get(card.ownerPersonId) ?? "사용자 없음" : "소유자 없음"}</span>
-              </article>
-            ))}
-          </div>
-        ) : null}
-
-        {!hiddenPeople.length && !hiddenAccounts.length && !hiddenCards.length ? <p className="text-secondary mb-0">숨긴 항목이 없습니다.</p> : null}
+        {!hiddenPeople.length ? <p className="text-secondary mb-0">숨긴 사용자가 없습니다.</p> : null}
       </aside>
     ) : null}
+
+    {shouldRenderHiddenAssetsPanel && typeof document !== "undefined"
+      ? createPortal(
+          <aside
+            ref={categoryLinkPanelRef}
+            className="people-category-link-panel people-hidden-assets-panel"
+            data-guide-target="people-hidden-panel"
+            style={
+              categoryLinkPanelPosition || categoryLinkPanelSize
+                ? {
+                    left: `${(categoryLinkPanelPosition ?? getDefaultCategoryLinkPanelPosition(categoryLinkPanelSize ?? getDefaultCategoryLinkPanelSize())).left}px`,
+                    top: `${(categoryLinkPanelPosition ?? getDefaultCategoryLinkPanelPosition(categoryLinkPanelSize ?? getDefaultCategoryLinkPanelSize())).top}px`,
+                    right: "auto",
+                    width: categoryLinkPanelSize ? `${categoryLinkPanelSize.width}px` : undefined,
+                    height: categoryLinkPanelSize ? `${categoryLinkPanelSize.height}px` : undefined,
+                  }
+                : undefined
+            }
+            aria-labelledby="peopleHiddenAssetsTitle"
+          >
+            <div className="people-category-link-panel-head" onPointerDown={handleCategoryLinkPanelPointerDown}>
+              <div>
+                <span className="section-kicker">사용자별 숨김</span>
+                <h3 id="peopleHiddenAssetsTitle">
+                  {(scope.people.find((person) => person.id === selectedHiddenAssetsPersonId)?.displayName ||
+                    scope.people.find((person) => person.id === selectedHiddenAssetsPersonId)?.name ||
+                    "사용자")}
+                  {" · 숨긴 자산"}
+                </h3>
+                <span className="people-category-link-panel-drag-hint">헤더는 이동, 테두리와 모서리는 크기 조절</span>
+              </div>
+              <div className="people-category-link-panel-actions">
+                <button
+                  type="button"
+                  className="board-case-edit-button"
+                  onClick={() => setSelectedHiddenAssetsPersonId(null)}
+                  aria-label="숨김 자산 모달 닫기"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+            <div ref={categoryLinkPanelScrollRef} className="people-category-link-panel-scroll">
+              {(() => {
+                const hiddenAccountsForPerson = selectedHiddenAssetsPersonId ? hiddenAccountsByPersonId.get(selectedHiddenAssetsPersonId) ?? [] : [];
+                const hiddenCardsForPerson = selectedHiddenAssetsPersonId ? hiddenCardsByPersonId.get(selectedHiddenAssetsPersonId) ?? [] : [];
+                if (!hiddenAccountsForPerson.length && !hiddenCardsForPerson.length) {
+                  return <p className="text-secondary mb-0">숨긴 자산이 없습니다.</p>;
+                }
+                return (
+                  <div className="category-hidden-list">
+                    {hiddenAccountsForPerson.map((account) => (
+                      <article
+                        key={`hidden-account-${account.id}`}
+                        className={`category-hidden-card${getDragStateClassName(account.id)}`}
+                        draggable
+                        onDragStart={(event) => {
+                          startGuideDragTransaction("people-hidden-restore-pick");
+                          startDrag({ id: account.id, itemType: "account", ownerPersonId: account.ownerPersonId ?? null, isHidden: true }, event);
+                        }}
+                        onDragEnd={resetDragState}
+                      >
+                        <strong>{account.alias || account.name}</strong>
+                        <span>계좌 · 원래 보드로 드래그하면 복원됩니다.</span>
+                      </article>
+                    ))}
+                    {hiddenCardsForPerson.map((card) => (
+                      <article
+                        key={`hidden-card-${card.id}`}
+                        className={`category-hidden-card${getDragStateClassName(card.id)}`}
+                        draggable
+                        onDragStart={(event) => {
+                          startGuideDragTransaction("people-hidden-restore-pick");
+                          startDrag({ id: card.id, itemType: "card", ownerPersonId: card.ownerPersonId ?? null, isHidden: true }, event);
+                        }}
+                        onDragEnd={resetDragState}
+                      >
+                        <strong>{card.name}</strong>
+                        <span>카드 · 원래 보드로 드래그하면 복원됩니다.</span>
+                      </article>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+            {CATEGORY_LINK_PANEL_RESIZE_DIRECTIONS.map((direction) => (
+              <span
+                key={`hidden-${direction}`}
+                className={`people-category-link-resize-handle is-${direction}`}
+                onPointerDown={(event) => handleCategoryLinkPanelResizePointerDown(direction, event)}
+                aria-hidden="true"
+              />
+            ))}
+          </aside>,
+          document.body,
+        )
+      : null}
 
     {shouldRenderCategoryLinkPanel && typeof document !== "undefined"
       ? createPortal(
@@ -1947,8 +2078,13 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
               onPointerDown={handleCategoryLinkPanelPointerDown}
             >
               <div>
-                <span className="section-kicker">정산 소스 계좌</span>
-                <h3 id="peopleCategoryLinkTitle">카테고리 연결</h3>
+                <span className="section-kicker">사용자별 연결</span>
+                <h3 id="peopleCategoryLinkTitle">
+                  {(scope.people.find((person) => person.id === selectedCategoryLinkPersonId)?.displayName ||
+                    scope.people.find((person) => person.id === selectedCategoryLinkPersonId)?.name ||
+                    "사용자")}
+                  {" · 카테고리 연결"}
+                </h3>
                 <span className="people-category-link-panel-drag-hint">헤더는 이동, 테두리와 모서리는 크기 조절</span>
               </div>
               <div className="people-category-link-panel-actions">
@@ -1963,7 +2099,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                       setIsCategoryLinkResetZoneActive(true);
                     }}
                     onDragLeave={() => setIsCategoryLinkResetZoneActive(false)}
-                    onDrop={handleCategoryLinkResetDrop}
+                    onDrop={(event) => handleCategoryLinkResetDrop(event, selectedCategoryLinkPersonId)}
                   >
                     <span className="people-category-link-reset-label">
                       <span className="people-category-link-reset-icon" aria-hidden="true">
@@ -1976,7 +2112,10 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                 <button
                   type="button"
                   className="board-case-edit-button"
-                  onClick={() => setIsCategoryLinkPanelOpen(false)}
+                  onClick={() => {
+                    setIsCategoryLinkPanelOpen(false);
+                    setSelectedCategoryLinkPersonId(null);
+                  }}
                   aria-label="카테고리 연결 패널 닫기"
                 >
                   ×
@@ -1993,15 +2132,15 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                           dragItem?.itemType === "categoryGroupLink" && dragItem.id === entry.group.id ? " is-dragging" : ""
                         }`}
                         draggable
-                        onDragStart={(event) =>
-                          startDrag(
-                            {
-                              id: entry.group.id,
-                              itemType: "categoryGroupLink",
-                              ownerPersonId: null,
-                              isHidden: false,
-                              categoryIds: entry.categories.map((category) => category.id),
-                            },
+                          onDragStart={(event) =>
+                            startDrag(
+                              {
+                                id: entry.group.id,
+                                itemType: "categoryGroupLink",
+                                ownerPersonId: selectedCategoryLinkPersonId,
+                                isHidden: false,
+                                categoryIds: entry.categories.map((category) => category.id),
+                              },
                             event,
                           )
                         }
@@ -2015,19 +2154,30 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                           {entry.categories.map((category) => (
                             <article
                               key={category.id}
-                              className={`people-category-link-item${!category.linkedAccountId ? " is-unlinked" : ""}${
+                              className={`people-category-link-item${getCategoryLinkedAccountIds(category).length === 0 ? " is-unlinked" : ""}${
                                 dragItem?.itemType === "categoryLink" && dragItem.id === category.id ? " is-dragging" : ""
                               }`}
                               data-guide-target={category.id === guideCategoryLinkCategoryId ? "people-category-link-guide-item" : undefined}
                               draggable
                               onDragStart={(event) => {
                                 startGuideDragTransaction("people-category-link-pick");
-                                startDrag({ id: category.id, itemType: "categoryLink", ownerPersonId: null, isHidden: false }, event);
+                                startDrag(
+                                  { id: category.id, itemType: "categoryLink", ownerPersonId: selectedCategoryLinkPersonId, isHidden: false },
+                                  event,
+                                );
                               }}
                               onDragEnd={resetDragState}
                             >
                               <strong>{category.name}</strong>
-                              <span>{category.linkedAccountId ? accountNameMap.get(category.linkedAccountId) ?? "연결 계좌 없음" : "미연결"}</span>
+                              <span>
+                                {(() => {
+                                  const linkedAccountId = selectedCategoryLinkPersonId
+                                    ? (category.linkedAccountIdsByPersonId ?? {})[selectedCategoryLinkPersonId] ?? null
+                                    : null;
+                                  if (!linkedAccountId) return "미연결";
+                                  return accountNameMap.get(linkedAccountId) ?? "연결 계좌 없음";
+                                })()}
+                              </span>
                               <div className={`category-case-pill people-category-link-pill${category.fixedOrVariable === "fixed" ? " is-fixed" : ""}`}>
                                 {category.fixedOrVariable === "fixed" ? "고정" : "변동"}
                               </div>

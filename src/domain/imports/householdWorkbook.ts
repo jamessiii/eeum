@@ -74,6 +74,7 @@ function extractCardNumberMasked(value: string) {
 function guessIssuer(cardName: string) {
   const normalized = cardName.toUpperCase();
   if (normalized.includes("현대") || normalized.includes("HYUNDAI")) return "현대카드";
+  if (normalized.includes("삼성") || normalized.includes("SAMSUNG")) return "삼성카드";
   if (normalized.includes("우리") || normalized.includes("WOORI")) return "우리카드";
   if (normalized.includes("ZERO") || normalized.includes("Z ")) return "현대카드";
   return "미분류 카드사";
@@ -580,6 +581,12 @@ function parseStatementDate(value: unknown, fallbackYear = new Date().getFullYea
   const normalized = normalizeText(value);
   if (!normalized || normalized === "-") return null;
 
+  const compactMatch = normalized.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (compactMatch) {
+    const [, year, month, day] = compactMatch;
+    return createStableDateIso(Number(year), Number(month), Number(day));
+  }
+
   const fullMatch = normalized.match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
   if (fullMatch) {
     const [, year, month, day] = fullMatch;
@@ -734,6 +741,7 @@ const COLUMN_DRIVEN_STATEMENT_TEMPLATES: StatementTemplate[] = [
 function detectIssuerNameByWorkbook(fileName: string, sheetNames: string[]) {
   const searchPool = [fileName, ...sheetNames].join(" ").toUpperCase();
   if (searchPool.includes("HYUNDAI") || searchPool.includes("현대")) return "현대카드";
+  if (searchPool.includes("SAMSUNG") || searchPool.includes("삼성")) return "삼성카드";
   if (searchPool.includes("LOTTE") || searchPool.includes("롯데")) return "롯데카드";
   if (searchPool.includes("SHINHAN") || searchPool.includes("신한")) return "신한카드";
   if (searchPool.includes("KB") || searchPool.includes("KOOKMIN") || searchPool.includes("국민")) return "국민카드";
@@ -780,6 +788,15 @@ function resolveStatementTemplate(
   }
 
   return bestMatch;
+}
+
+function findStatementColumnIndex(row: (string | null)[], aliases: string[]) {
+  for (let index = 0; index < row.length; index += 1) {
+    if (headerMatchesAlias(row[index], aliases)) {
+      return index;
+    }
+  }
+  return null;
 }
 
 function sanitizeMerchantName(value: string) {
@@ -1287,7 +1304,8 @@ export async function parseHouseholdWorkbook(file: File, context?: ImportClassif
           description: "",
           amount: Math.abs(amount),
           originalAmount: Math.abs(amount),
-          discountAmount: 0,
+          benefitAmount: 0,
+          settlementAdjustmentAmount: 0,
           categoryId: (() => {
             const decision = inferCategoryDecision(categories, normalizeCancelledMerchantName(merchantName), historicalProfiles);
             return decision?.mode === "auto" ? decision.categoryId : null;
@@ -1363,12 +1381,12 @@ export async function parseHouseholdWorkbook(file: File, context?: ImportClassif
           }
 
           const originalAmount = previous.originalAmount ?? previous.amount;
-          const discountAmount = (previous.discountAmount ?? 0) + Math.abs(amount);
+          const benefitAmount = (previous.benefitAmount ?? 0) + Math.abs(amount);
           transactions[index] = {
             ...previous,
             originalAmount,
-            discountAmount,
-            amount: Math.max(0, originalAmount - discountAmount),
+            benefitAmount,
+            amount: Math.max(0, originalAmount - benefitAmount - (previous.settlementAdjustmentAmount ?? 0)),
           };
           break;
         }
@@ -1392,7 +1410,8 @@ export async function parseHouseholdWorkbook(file: File, context?: ImportClassif
           description: "",
           amount: Math.abs(amount),
           originalAmount: Math.abs(amount),
-          discountAmount: 0,
+          benefitAmount: 0,
+          settlementAdjustmentAmount: 0,
           categoryId: (() => {
             const decision = inferCategoryDecision(categories, merchantName, historicalProfiles);
             return decision?.mode === "auto" ? decision.categoryId : null;
@@ -1420,6 +1439,7 @@ export async function parseHouseholdWorkbook(file: File, context?: ImportClassif
   };
 
   const parseDomesticCardUsageLookupStatement = () => {
+    const issuerName = "삼성카드";
     const detailSheetName = workbook.SheetNames.find((name) => {
       const sheet = workbook.Sheets[name];
       if (!sheet) return false;
@@ -1456,7 +1476,6 @@ export async function parseHouseholdWorkbook(file: File, context?: ImportClassif
     );
     if (headerRowIndex < 0) return false;
 
-    const issuerName = "현대카드";
     const approvalTransactionIndex = new Map<string, number>();
 
     for (const row of rows.slice(headerRowIndex + 1)) {
@@ -1523,7 +1542,8 @@ export async function parseHouseholdWorkbook(file: File, context?: ImportClassif
         description: descriptionParts.join(" · "),
         amount: Math.abs(amount),
         originalAmount: Math.abs(amount),
-        discountAmount: 0,
+        benefitAmount: 0,
+        settlementAdjustmentAmount: 0,
         categoryId: (() => {
           const decision = inferCategoryDecision(categories, normalizedMerchantName, historicalProfiles);
           return !isCancelled && decision?.mode === "auto" ? decision.categoryId : null;
@@ -1569,12 +1589,22 @@ export async function parseHouseholdWorkbook(file: File, context?: ImportClassif
       if (!matchedTemplate?.resolved) continue;
 
       const { columnIndexByKey, headerRowIndex } = matchedTemplate.resolved;
+      const headerRow = rows[headerRowIndex] ?? [];
+      const scheduledPaymentColumnIndex = findStatementColumnIndex(headerRow, [
+        "결제예정금액",
+        "결제금액",
+        "청구금액",
+        "이번달청구금액",
+        "통합청구금액",
+      ]);
+      const depositedAmountColumnIndex = findStatementColumnIndex(headerRow, ["입금금액(취소금액)", "입금금액"]);
 
       for (const row of rows.slice(headerRowIndex + 1)) {
         const getCell = (key: StatementColumnKey) => {
           const index = columnIndexByKey[key];
           return typeof index === "number" ? row[index] : null;
         };
+        const getCellByIndex = (index: number | null) => (typeof index === "number" ? row[index] : null);
 
         const occurredAt = parseStatementDate(getCell("date"));
         const merchantName = normalizeText(getCell("merchant"));
@@ -1582,8 +1612,14 @@ export async function parseHouseholdWorkbook(file: File, context?: ImportClassif
         if (!occurredAt || !merchantName || approvedAmount === 0) continue;
 
         const benefitAmount = Math.abs(parseAmount(getCell("benefitAmount")));
-        const paymentAmountRaw = parseAmount(getCell("paymentAmount"));
+        const scheduledPaymentAmountRaw = parseAmount(getCellByIndex(scheduledPaymentColumnIndex));
+        const depositedAmountRaw = parseAmount(getCellByIndex(depositedAmountColumnIndex));
+        const paymentAmountRaw =
+          scheduledPaymentColumnIndex !== null
+            ? scheduledPaymentAmountRaw
+            : parseAmount(getCell("paymentAmount"));
         const paymentAmount = Math.abs(paymentAmountRaw);
+        const depositedAmount = Math.abs(depositedAmountRaw);
         const cancelStatus = normalizeText(getCell("cancelStatus"));
         const approvalNumber = normalizeText(getCell("approvalNumber"));
         const ownerType = normalizeText(getCell("ownerType"));
@@ -1593,7 +1629,8 @@ export async function parseHouseholdWorkbook(file: File, context?: ImportClassif
         const settledAt = parseStatementDate(getCell("settledDate")) ?? occurredAt;
         const isCancelled = cancelStatus.includes("취소") || approvedAmount < 0 || paymentAmountRaw < 0;
 
-        const ownerName = ownerType.includes("본인") ? "본인" : ownerType || "사용자";
+        const ownerSource = ownerType || cardValue;
+        const ownerName = ownerSource.includes("본인") ? "본인" : ownerSource.includes("가족") ? "가족" : ownerType || "사용자";
         const last4 = extractCardNumberMasked(cardValue);
         const cardName =
           cardValue && cardValue.length > 4 && !/^\d+$/.test(cardValue.replace(/\D+/g, ""))
@@ -1622,18 +1659,25 @@ export async function parseHouseholdWorkbook(file: File, context?: ImportClassif
         }
 
         const originalAmount = Math.abs(approvedAmount);
-        const inferredDiscountAmount =
-          benefitAmount > 0
-            ? benefitAmount
-            : paymentAmount > 0 && paymentAmount < originalAmount
-              ? originalAmount - paymentAmount
+        const inferredBenefitAmount = benefitAmount > 0 ? benefitAmount : 0;
+        const inferredSettlementAdjustmentAmount =
+          paymentAmount < Math.max(0, originalAmount - inferredBenefitAmount)
+            ? Math.max(0, originalAmount - inferredBenefitAmount) - paymentAmount
+            : depositedAmount > 0
+              ? depositedAmount
               : 0;
-        const netAmount = paymentAmount > 0 ? paymentAmount : Math.max(0, originalAmount - inferredDiscountAmount);
+        const inferredDiscountAmount = inferredSettlementAdjustmentAmount;
+        const netAmount =
+          paymentAmount > 0
+            ? paymentAmount
+            : Math.max(0, originalAmount - inferredBenefitAmount - inferredSettlementAdjustmentAmount);
         const descriptionParts = [
           installmentType || null,
           installmentMonths && installmentMonths !== "0" ? `${installmentMonths}개월` : null,
           approvalNumber ? `승인 ${approvalNumber}` : null,
-          inferredDiscountAmount > 0 ? `할인 ${inferredDiscountAmount}` : null,
+          benefitAmount > 0 ? `혜택 ${benefitAmount}` : null,
+          depositedAmount > 0 ? `입금 ${depositedAmount}` : null,
+          inferredDiscountAmount > 0 && benefitAmount === 0 && depositedAmount === 0 ? `조정 ${inferredDiscountAmount}` : null,
         ].filter((value): value is string => Boolean(value));
 
         const decision = inferCategoryDecision(categories, normalizedMerchantName, historicalProfiles);
@@ -1654,7 +1698,8 @@ export async function parseHouseholdWorkbook(file: File, context?: ImportClassif
             description: descriptionParts.join(" · "),
             amount: netAmount,
             originalAmount,
-            discountAmount: inferredDiscountAmount,
+            benefitAmount: inferredBenefitAmount,
+            settlementAdjustmentAmount: inferredSettlementAdjustmentAmount,
             categoryId: !isCancelled && decision?.mode === "auto" ? decision.categoryId : null,
             tagIds: [],
             isInternalTransfer: false,
@@ -1728,12 +1773,12 @@ export async function parseHouseholdWorkbook(file: File, context?: ImportClassif
           }
 
           const originalAmount = previous.originalAmount ?? previous.amount;
-          const discountAmount = (previous.discountAmount ?? 0) + Math.abs(amount);
+          const benefitAmount = (previous.benefitAmount ?? 0) + Math.abs(amount);
           transactions[index] = {
             ...previous,
             originalAmount,
-            discountAmount,
-            amount: Math.max(0, originalAmount - discountAmount),
+            benefitAmount,
+            amount: Math.max(0, originalAmount - benefitAmount - (previous.settlementAdjustmentAmount ?? 0)),
           };
           break;
         }
@@ -1757,7 +1802,8 @@ export async function parseHouseholdWorkbook(file: File, context?: ImportClassif
           description: "",
           amount: Math.abs(amount),
           originalAmount: Math.abs(amount),
-          discountAmount: 0,
+          benefitAmount: 0,
+          settlementAdjustmentAmount: 0,
           categoryId: (() => {
             const decision = inferCategoryDecision(categories, merchantName, historicalProfiles);
             return decision?.mode === "auto" ? decision.categoryId : null;
@@ -1831,13 +1877,16 @@ export async function parseHouseholdWorkbook(file: File, context?: ImportClassif
 
       const originalAmount = previous.originalAmount ?? previous.amount;
       const remainingAmount = Math.max(0, previous.amount - transaction.amount);
-      const discountAmount = Math.max(previous.discountAmount ?? 0, originalAmount - remainingAmount);
+      const settlementAdjustmentAmount = Math.max(
+        previous.settlementAdjustmentAmount ?? 0,
+        originalAmount - remainingAmount - (previous.benefitAmount ?? 0),
+      );
       const nextStatus = remainingAmount === 0 ? "cancelled" : "active";
       transactions[previousIndex] = {
         ...previous,
         merchantName: normalizedMerchantName,
         originalAmount,
-        discountAmount,
+        settlementAdjustmentAmount,
         amount: remainingAmount,
         status: nextStatus,
         isExpenseImpact: nextStatus === "active" && previous.isExpenseImpact,

@@ -74,6 +74,7 @@ export interface Category {
   categoryType: "group" | "category";
   parentCategoryId: ID | null;
   linkedAccountId?: ID | null;
+  linkedAccountIdsByPersonId?: Record<ID, ID>;
   sortOrder: number;
   isHidden: boolean;
   direction: "expense" | "income" | "transfer" | "mixed";
@@ -107,7 +108,8 @@ export interface Transaction {
   description: string;
   amount: number;
   originalAmount?: number;
-  discountAmount?: number;
+  benefitAmount?: number;
+  settlementAdjustmentAmount?: number;
   categoryId: ID | null;
   tagIds: ID[];
   isInternalTransfer: boolean;

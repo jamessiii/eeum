@@ -35,3 +35,19 @@ export function getCategoryLabel(category: Category, categoryMap: Map<string, Ca
   const parentName = categoryMap.get(category.parentCategoryId)?.name;
   return parentName ? `${parentName} > ${category.name}` : category.name;
 }
+
+export function getCategoryLinkedAccountId(category: Category, personId: string | null | undefined) {
+  if (personId && category.linkedAccountIdsByPersonId?.[personId]) {
+    return category.linkedAccountIdsByPersonId[personId] ?? null;
+  }
+  return category.linkedAccountId ?? null;
+}
+
+export function getCategoryLinkedAccountIds(category: Category) {
+  const linkedIds = new Set<string>();
+  if (category.linkedAccountId) linkedIds.add(category.linkedAccountId);
+  Object.values(category.linkedAccountIdsByPersonId ?? {}).forEach((accountId) => {
+    if (accountId) linkedIds.add(accountId);
+  });
+  return [...linkedIds];
+}

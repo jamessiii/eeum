@@ -118,6 +118,10 @@ type ServerCategoryResponse = {
   budgetable: boolean;
   reportable: boolean;
   linkedAssetId: number | null;
+  linkedPersonAssets: Array<{
+    personId: number;
+    assetId: number;
+  }>;
   sortOrder: number;
   hidden: boolean;
   revisionNumber: number;
@@ -159,7 +163,8 @@ type ServerTransactionResponse = {
   description: string;
   amount: number;
   originalAmount: number | null;
-  discountAmount: number | null;
+  benefitAmount: number | null;
+  settlementAdjustmentAmount: number | null;
   categoryId: number | null;
   tagIds: number[];
   internalTransfer: boolean;
@@ -249,6 +254,10 @@ function toId(value: number | string | null | undefined): ID | null {
 function toLowerCaseValue<T extends string>(value: string | null | undefined, fallback: T): T {
   if (!value) return fallback;
   return value.toLowerCase() as T;
+}
+
+function normalizeAssetKindCode(value: string | null | undefined) {
+  return (value ?? "").trim().toLowerCase();
 }
 
 async function readErrorMessage(response: Response) {
@@ -359,7 +368,7 @@ export async function loadServerAppState(session: AuthSession): Promise<{ state:
   }));
 
   const nextAccounts: Account[] = assets
-    .filter((asset) => asset.assetKindCode !== "card")
+    .filter((asset) => normalizeAssetKindCode(asset.assetKindCode) !== "card")
     .map((asset) => ({
       id: String(asset.id),
       workspaceId,
@@ -381,7 +390,7 @@ export async function loadServerAppState(session: AuthSession): Promise<{ state:
     }));
 
   const nextCards: Card[] = assets
-    .filter((asset) => asset.assetKindCode === "card")
+    .filter((asset) => normalizeAssetKindCode(asset.assetKindCode) === "card")
     .map((asset) => ({
       id: String(asset.id),
       workspaceId,
@@ -420,6 +429,9 @@ export async function loadServerAppState(session: AuthSession): Promise<{ state:
       categoryType: "category" as const,
       parentCategoryId: toId(item.groupId),
       linkedAccountId: toId(item.linkedAssetId),
+      linkedAccountIdsByPersonId: Object.fromEntries(
+        (item.linkedPersonAssets ?? []).map((entry) => [String(entry.personId), String(entry.assetId)]),
+      ),
       sortOrder: item.sortOrder,
       isHidden: item.hidden,
       direction: toLowerCaseValue(item.direction, "expense"),
@@ -454,7 +466,8 @@ export async function loadServerAppState(session: AuthSession): Promise<{ state:
     description: transaction.description,
     amount: transaction.amount,
     originalAmount: transaction.originalAmount ?? undefined,
-    discountAmount: transaction.discountAmount ?? undefined,
+    benefitAmount: transaction.benefitAmount ?? undefined,
+    settlementAdjustmentAmount: transaction.settlementAdjustmentAmount ?? undefined,
     categoryId: toId(transaction.categoryId),
     tagIds: transaction.tagIds.map(String),
     isInternalTransfer: transaction.internalTransfer,

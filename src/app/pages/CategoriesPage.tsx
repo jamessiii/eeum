@@ -401,7 +401,7 @@ export function CategoriesPage({ embedded = false }: { embedded?: boolean }) {
         <div className="board-case-actions">
           <button
             type="button"
-            className={`board-case-action-button${isHiddenPanelOpen ? " is-active" : ""}`}
+            className={`btn btn-outline-secondary btn-sm${isHiddenPanelOpen ? " is-active" : ""}`}
             data-guide-target="categories-hidden-toggle"
             onClick={() => setIsHiddenPanelOpen((current) => !current)}
           >
@@ -409,7 +409,7 @@ export function CategoriesPage({ embedded = false }: { embedded?: boolean }) {
           </button>
           <button
             type="button"
-            className="board-case-action-button"
+            className="btn btn-outline-secondary btn-sm"
             data-guide-target="categories-reset-defaults"
             onClick={() => setIsResetDefaultsModalOpen(true)}
           >

@@ -165,6 +165,7 @@ type CategoryDraft = Pick<
   | "categoryType"
   | "parentCategoryId"
   | "linkedAccountId"
+  | "linkedAccountIdsByPersonId"
   | "sortOrder"
   | "isHidden"
   | "direction"
@@ -438,6 +439,7 @@ function createCategoryDraft(input: string | Partial<CategoryDraft>, parentCateg
       categoryType: "category",
       parentCategoryId,
       linkedAccountId: null,
+      linkedAccountIdsByPersonId: {},
       sortOrder: 0,
       isHidden: false,
       direction: "expense",
@@ -453,6 +455,10 @@ function createCategoryDraft(input: string | Partial<CategoryDraft>, parentCateg
     categoryType: input.categoryType === "group" ? "group" : "category",
     parentCategoryId: input.categoryType === "group" ? null : input.parentCategoryId ?? null,
     linkedAccountId: input.categoryType === "group" ? null : input.linkedAccountId ?? null,
+    linkedAccountIdsByPersonId:
+      input.categoryType === "group"
+        ? {}
+        : Object.fromEntries(Object.entries(input.linkedAccountIdsByPersonId ?? {}).filter(([, accountId]) => Boolean(accountId))),
     sortOrder: input.sortOrder ?? 0,
     isHidden: input.isHidden ?? false,
     direction: input.direction ?? "expense",
@@ -461,6 +467,50 @@ function createCategoryDraft(input: string | Partial<CategoryDraft>, parentCateg
     budgetable: input.budgetable ?? true,
     reportable: input.reportable ?? true,
   };
+}
+
+function normalizeCategoryLinkedAccountMap(
+  workspaceId: string,
+  linkedAccountIdsByPersonId: Record<string, string> | null | undefined,
+  validAccountIds: Set<string>,
+) {
+  return Object.fromEntries(
+    Object.entries(linkedAccountIdsByPersonId ?? {}).filter(([, accountId]) => validAccountIds.has(`${workspaceId}:${accountId}`)),
+  );
+}
+
+function getCategoryLinkedAccountIds(category: Category) {
+  const linkedIds = new Set<string>();
+  if (category.linkedAccountId) linkedIds.add(category.linkedAccountId);
+  Object.values(category.linkedAccountIdsByPersonId ?? {}).forEach((accountId) => {
+    if (accountId) linkedIds.add(accountId);
+  });
+  return [...linkedIds];
+}
+
+function clearCategoryLinkedAccountsForPerson(category: Category, personId: string) {
+  if (!category.linkedAccountIdsByPersonId?.[personId]) return category;
+  const nextMap = { ...(category.linkedAccountIdsByPersonId ?? {}) };
+  delete nextMap[personId];
+  return { ...category, linkedAccountIdsByPersonId: nextMap };
+}
+
+function clearCategoryLinkedAccount(category: Category, accountId: string) {
+  const nextMap = Object.fromEntries(
+    Object.entries(category.linkedAccountIdsByPersonId ?? {}).filter(([, linkedAccountId]) => linkedAccountId !== accountId),
+  );
+  return {
+    ...category,
+    linkedAccountId: category.linkedAccountId === accountId ? null : category.linkedAccountId ?? null,
+    linkedAccountIdsByPersonId: nextMap,
+  };
+}
+
+function toServerCategoryLinkedPersonAssets(linkedAccountIdsByPersonId: Record<string, string> | null | undefined) {
+  return Object.entries(linkedAccountIdsByPersonId ?? {}).map(([personId, accountId]) => ({
+    personId: Number(personId),
+    assetId: Number(accountId),
+  }));
 }
 
 function normalizeAppState(rawState: AppState): AppState {
@@ -528,6 +578,11 @@ function normalizeAppState(rawState: AppState): AppState {
         category.linkedAccountId && validAccountIds.has(`${category.workspaceId}:${category.linkedAccountId}`)
           ? category.linkedAccountId
           : null,
+      linkedAccountIdsByPersonId: normalizeCategoryLinkedAccountMap(
+        category.workspaceId,
+        category.linkedAccountIdsByPersonId,
+        validAccountIds,
+      ),
       sortOrder: category.sortOrder ?? 0,
       isHidden: category.isHidden ?? false,
       direction: category.direction ?? "expense",
@@ -655,7 +710,12 @@ function autoLinkCategoriesToFirstDailyAccount(categories: Category[], workspace
   const categoryMap = new Map(workspaceCategories.map((category) => [category.id, category]));
 
   return categories.map((category) => {
-    if (category.workspaceId !== workspaceId || category.categoryType !== "category" || category.linkedAccountId) {
+    if (
+      category.workspaceId !== workspaceId ||
+      category.categoryType !== "category" ||
+      category.linkedAccountId ||
+      Object.keys(category.linkedAccountIdsByPersonId ?? {}).length > 0
+    ) {
       return category;
     }
 
@@ -675,7 +735,12 @@ function autoLinkCategoriesToFirstLoanAccount(categories: Category[], workspaceI
   const categoryMap = new Map(workspaceCategories.map((category) => [category.id, category]));
 
   return categories.map((category) => {
-    if (category.workspaceId !== workspaceId || category.categoryType !== "category" || category.linkedAccountId) {
+    if (
+      category.workspaceId !== workspaceId ||
+      category.categoryType !== "category" ||
+      category.linkedAccountId ||
+      Object.keys(category.linkedAccountIdsByPersonId ?? {}).length > 0
+    ) {
       return category;
     }
 
@@ -1355,7 +1420,7 @@ function deleteImportRecordFromState(state: AppState, workspaceId: string, impor
 
   const linkedCardAccountIds = new Set(nextCards.map((card) => card.linkedAccountId).filter((id): id is string => Boolean(id)));
   const categoryLinkedAccountIds = new Set(
-    state.categories.map((category) => category.linkedAccountId).filter((id): id is string => Boolean(id)),
+    state.categories.flatMap((category) => getCategoryLinkedAccountIds(category)).filter((id): id is string => Boolean(id)),
   );
 
   const nextAccounts = state.accounts.filter((account) => {
@@ -1875,8 +1940,13 @@ function reducer(state: AppState, action: Action): AppState {
           (card) => !(card.workspaceId === action.payload.workspaceId && card.ownerPersonId === action.payload.personId),
         ),
         categories: state.categories.map((category) =>
-          category.workspaceId === action.payload.workspaceId && category.linkedAccountId && removedPersonAccountIds.has(category.linkedAccountId)
-            ? { ...category, linkedAccountId: null }
+          category.workspaceId === action.payload.workspaceId
+            ? removedPersonAccountIds.size > 0
+              ? clearCategoryLinkedAccountsForPerson(
+                  removedPersonAccountIds.has(category.linkedAccountId ?? "") ? { ...category, linkedAccountId: null } : category,
+                  action.payload.personId,
+                )
+              : category
             : category,
         ),
         transactions: state.transactions.map((transaction) =>
@@ -1991,9 +2061,7 @@ function reducer(state: AppState, action: Action): AppState {
             : card,
         ),
         categories: state.categories.map((category) =>
-          category.workspaceId === action.payload.workspaceId && category.linkedAccountId === action.payload.accountId
-            ? { ...category, linkedAccountId: null }
-            : category,
+          category.workspaceId === action.payload.workspaceId ? clearCategoryLinkedAccount(category, action.payload.accountId) : category,
         ),
         transactions: state.transactions.map((transaction) =>
           transaction.workspaceId !== action.payload.workspaceId
@@ -2506,7 +2574,7 @@ interface AppStateContextValue {
   createDemoWorkspace: () => Promise<void>;
   previewWorkbookImport: (file: File) => Promise<WorkspaceBundle>;
   commitImportedBundle: (bundle: WorkspaceBundle, fileName: string) => Promise<void>;
-  deleteImportRecord: (workspaceId: string, importRecordId: string) => void;
+  deleteImportRecord: (workspaceId: string, importRecordId: string) => Promise<void>;
   loadGuideSampleData: () => void;
   clearGuideSampleData: () => void;
   snapshotGuideActionState: (workspaceId: string, stepId: string) => void;
@@ -2891,7 +2959,8 @@ export function AppStateProvider({ children }: PropsWithChildren) {
     description: transaction.description,
     amount: transaction.amount,
     originalAmount: transaction.originalAmount ?? null,
-    discountAmount: transaction.discountAmount ?? null,
+    benefitAmount: transaction.benefitAmount ?? null,
+    settlementAdjustmentAmount: transaction.settlementAdjustmentAmount ?? null,
     categoryId: resolveWorkspaceCategoryId(transaction.workspaceId, transaction.categoryId),
     tagIds: transaction.tagIds.map(Number),
     internalTransfer: transaction.isInternalTransfer ?? false,
@@ -3073,7 +3142,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
             method: "POST",
             body: JSON.stringify({
               spaceId: Number(workspaceId),
-              assetKindCode: "ACCOUNT",
+              assetKindCode: "account",
               ownerPersonId: toNullableNumber(personIdMap.get(account.ownerPersonId ?? "") ?? account.ownerPersonId),
               primaryPersonId: toNullableNumber(personIdMap.get(account.primaryPersonId ?? "") ?? account.primaryPersonId),
               providerId: null,
@@ -3111,7 +3180,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
             method: "POST",
             body: JSON.stringify({
               spaceId: Number(workspaceId),
-              assetKindCode: "CARD",
+              assetKindCode: "card",
               ownerPersonId: toNullableNumber(personIdMap.get(card.ownerPersonId ?? "") ?? card.ownerPersonId),
               primaryPersonId: toNullableNumber(personIdMap.get(card.ownerPersonId ?? "") ?? card.ownerPersonId),
               providerId: null,
@@ -3157,7 +3226,8 @@ export function AppStateProvider({ children }: PropsWithChildren) {
               description: transaction.description,
               amount: transaction.amount,
               originalAmount: transaction.originalAmount ?? null,
-              discountAmount: transaction.discountAmount ?? null,
+              benefitAmount: transaction.benefitAmount ?? null,
+              settlementAdjustmentAmount: transaction.settlementAdjustmentAmount ?? null,
               categoryId: resolveImportedCategoryId(transaction.categoryId),
               tagIds: transaction.tagIds
                 .map((tagId) => tagIdMap.get(tagId) ?? tagId)
@@ -3322,20 +3392,19 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         }
         showToast(`${fileName} 업로드를 완료했습니다.`, "success");
       },
-      deleteImportRecord(workspaceId, importRecordId) {
+      async deleteImportRecord(workspaceId, importRecordId) {
         void workspaceId;
-        void (async () => {
-          try {
-            const session = getRequiredSession();
-            await requestServerJson(session, `/api/import-records/${importRecordId}`, {
-              method: "DELETE",
-            });
-            await refreshStateFromServer(session);
-            showToast("명세서를 삭제했습니다.", "success");
-          } catch (error) {
-            handleServerMutationError(error);
-          }
-        })();
+        try {
+          const session = getRequiredSession();
+          await requestServerJson(session, `/api/import-records/${importRecordId}`, {
+            method: "DELETE",
+          });
+          await refreshStateFromServer(session);
+          showToast("명세서를 삭제했습니다.", "success");
+        } catch (error) {
+          handleServerMutationError(error);
+          throw error;
+        }
       },
       loadGuideSampleData() {
         const latestState = stateRef.current;
@@ -3598,7 +3667,8 @@ export function AppStateProvider({ children }: PropsWithChildren) {
                 description: transaction.description,
                 amount: transaction.amount,
                 originalAmount: transaction.originalAmount ?? null,
-                discountAmount: transaction.discountAmount ?? null,
+                benefitAmount: transaction.benefitAmount ?? null,
+                settlementAdjustmentAmount: transaction.settlementAdjustmentAmount ?? null,
                 categoryId: transactionSuggestedCategoryId,
                 tagIds: transaction.tagIds.map(Number),
                 internalTransfer: transaction.isInternalTransfer ?? false,
@@ -4067,6 +4137,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
                   budgetable: values.budgetable,
                   reportable: values.reportable,
                   linkedAssetId: toNullableNumber(values.linkedAccountId),
+                  linkedPersonAssets: toServerCategoryLinkedPersonAssets(values.linkedAccountIdsByPersonId),
                   sortOrder: values.sortOrder,
                   hidden: values.isHidden,
                 }),
@@ -4123,6 +4194,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
                   budgetable: values.budgetable,
                   reportable: values.reportable,
                   linkedAssetId: toNullableNumber(values.linkedAccountId),
+                  linkedPersonAssets: toServerCategoryLinkedPersonAssets(values.linkedAccountIdsByPersonId),
                   sortOrder: values.sortOrder,
                   hidden: values.isHidden,
                   expectedRevisionNumber: serverMetaRef.current.categoryRevisionById[categoryId] ?? null,
@@ -4198,6 +4270,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
                   budgetable: values.budgetable,
                   reportable: values.reportable,
                   linkedAssetId: toNullableNumber(values.linkedAccountId),
+                  linkedPersonAssets: toServerCategoryLinkedPersonAssets(values.linkedAccountIdsByPersonId),
                   sortOrder: targetIndex,
                   hidden: values.isHidden,
                   expectedRevisionNumber: serverMetaRef.current.categoryRevisionById[categoryId] ?? null,
@@ -4581,7 +4654,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
               body: JSON.stringify({
                 spaceId: Number(input.workspaceId),
                 ownerPersonId: toNullableNumber(input.ownerPersonId),
-                occurredAt: input.occurredAt,
+                occurredAt: new Date(`${input.occurredAt}T12:00:00.000Z`).toISOString(),
                 sourceName: input.sourceName,
                 amount: input.amount,
               }),

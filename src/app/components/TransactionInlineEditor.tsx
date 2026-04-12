@@ -1,6 +1,7 @@
 import { AppSelect } from "./AppSelect";
 import { SOURCE_TYPE_OPTIONS, getSourceTypeLabel } from "../../domain/transactions/sourceTypes";
 import type { Account, Card, Person, Transaction } from "../../shared/types/models";
+import { getPersonDisplayLabel } from "../../shared/utils/person";
 
 export interface TransactionEditDraft {
   sourceType: Transaction["sourceType"];
@@ -71,7 +72,7 @@ export function TransactionInlineEditor({
             disabled={ownerDisabled}
             onChange={(nextValue) => onDraftChange({ ownerPersonId: nextValue })}
             placeholder="사용자 선택 없음"
-            options={people.map((person) => ({ value: person.id, label: person.displayName || person.name }))}
+          options={people.map((person) => ({ value: person.id, label: getPersonDisplayLabel(person) }))}
             ariaLabel="거래 사용자"
           />
           <AppSelect
