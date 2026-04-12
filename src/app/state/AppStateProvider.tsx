@@ -1,5 +1,4 @@
-﻿import { createContext, useContext, useEffect, useMemo, useReducer, useRef, useState, type PropsWithChildren } from "react";
-import { clearAppState, loadAppState, saveAppState } from "../../data/db/appDb";
+﻿import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type PropsWithChildren } from "react";
 import {
   createEmptyState,
   createDefaultLoopPriorityCategoryIds,
@@ -24,12 +23,122 @@ import { clearGuideActionBackup, readGuideActionBackup, writeGuideActionBackup }
 import { createGuideSampleBundle, GUIDE_SAMPLE_MEMO, GUIDE_SAMPLE_PARSER_ID } from "../../domain/guidance/guideSampleBundle";
 import type { Account, AppState, Card, Category, FinancialProfile, Person, ReviewItem, Transaction, WorkspaceBundle } from "../../shared/types/models";
 import { createId } from "../../shared/utils/id";
+import { loadServerAppState, requestServerJson, type ServerStateMeta } from "../api/serverState";
+import { AUTH_SESSION_EVENT, clearAuthSession, readAuthSession, type AuthSession } from "../authSession";
+import { createStompFrame, parseStompMessageBodies } from "../realtime/stomp";
 import { useToast } from "../toast/ToastProvider";
 import { getWorkspaceScope } from "./selectors";
 import { getManagedLoopGroups, type ManagedLoopGroup } from "../../domain/loops/managedLoops";
 import { getLoopRecommendations, type LoopRecommendation } from "../../domain/loops/loopRecommendations";
 import { getLoopStationInsightsFromManagedLoops, type LoopStationInsight } from "../../domain/loops/loopStation";
 import { buildLoopRules, type LoopRule } from "../../domain/loops/loopRules";
+
+const EMPTY_SERVER_META: ServerStateMeta = {
+  categorySchemeIdByWorkspaceId: {},
+  tagSchemeIdByWorkspaceId: {},
+  personRevisionById: {},
+  assetRevisionById: {},
+  categoryRevisionById: {},
+  tagRevisionById: {},
+  transactionRevisionById: {},
+  reviewRevisionById: {},
+  importRevisionById: {},
+  settlementRevisionById: {},
+  incomeRevisionById: {},
+  financialProfileRevisionByWorkspaceId: {},
+};
+
+type SyncEventMessage = {
+  id: number;
+  spaceId: number;
+  aggregateKind: string;
+  aggregateId: string;
+  eventType: string;
+  revisionNumber: number;
+  payloadSummary: string;
+  sessionKey: string | null;
+  createdAt: string;
+};
+
+const PERSON_ROLE_TO_SERVER = {
+  owner: "OWNER",
+  member: "MEMBER",
+} as const;
+
+const ACCOUNT_GROUP_TYPE_TO_SERVER = {
+  personal: "PERSONAL",
+  meeting: "MEETING",
+} as const;
+
+const ACCOUNT_TYPE_TO_SERVER = {
+  checking: "CHECKING",
+  savings: "SAVINGS",
+  loan: "LOAN",
+  cash: "CASH",
+  other: "OTHER",
+} as const;
+
+const ASSET_USAGE_TYPE_TO_SERVER = {
+  daily: "DAILY",
+  salary: "SALARY",
+  shared: "SHARED",
+  card_payment: "CARD_PAYMENT",
+  savings: "SAVINGS",
+  investment: "INVESTMENT",
+  loan: "LOAN",
+  other: "OTHER",
+} as const;
+
+const CARD_TYPE_TO_SERVER = {
+  credit: "CREDIT",
+  check: "CHECK",
+  debit: "DEBIT",
+  prepaid: "PREPAID",
+  other: "OTHER",
+} as const;
+
+const CATEGORY_DIRECTION_TO_SERVER = {
+  expense: "EXPENSE",
+  income: "INCOME",
+  transfer: "TRANSFER",
+  mixed: "MIXED",
+} as const;
+
+const CATEGORY_CADENCE_TO_SERVER = {
+  fixed: "FIXED",
+  variable: "VARIABLE",
+} as const;
+
+const CATEGORY_NECESSITY_TO_SERVER = {
+  essential: "ESSENTIAL",
+  discretionary: "DISCRETIONARY",
+} as const;
+
+const REVIEW_TYPE_TO_SERVER = {
+  duplicate_candidate: "DUPLICATE_CANDIDATE",
+  refund_candidate: "REFUND_CANDIDATE",
+  category_suggestion: "CATEGORY_SUGGESTION",
+  uncategorized_transaction: "UNCATEGORIZED_TRANSACTION",
+  internal_transfer_candidate: "INTERNAL_TRANSFER_CANDIDATE",
+  shared_expense_candidate: "SHARED_EXPENSE_CANDIDATE",
+} as const;
+
+function toNullableNumber(value: string | null | undefined) {
+  if (!value) return null;
+  return Number(value);
+}
+
+function findRootCategoryGroupId(categories: Category[], categoryId: string | null): string | null {
+  let currentId = categoryId;
+  while (currentId) {
+    const current = categories.find((item) => item.id === currentId);
+    if (!current) return null;
+    if (current.categoryType === "group") return current.id;
+    currentId = current.parentCategoryId;
+  }
+
+  return null;
+}
 
 type PersonDraft = Pick<Person, "name" | "displayName" | "role" | "memo" | "isActive" | "sortOrder" | "isHidden">;
 type AccountDraft = Pick<
@@ -2465,24 +2574,272 @@ export function AppStateProvider({ children }: PropsWithChildren) {
   const { showToast } = useToast();
   const stateRef = useRef(state);
   const guideSampleRestoreLockRef = useRef<Set<string>>(new Set());
+  const authSessionRef = useRef<AuthSession | null>(readAuthSession());
+  const serverMetaRef = useRef<ServerStateMeta>(EMPTY_SERVER_META);
+  const syncSocketRef = useRef<WebSocket | null>(null);
+  const syncReconnectTimeoutRef = useRef<number | null>(null);
+  const syncIntentionalCloseRef = useRef(false);
+  const realtimeRefreshTimeoutRef = useRef<number | null>(null);
+  const realtimeRefreshInFlightRef = useRef(false);
+
+  const refreshStateFromServer = useCallback(async (session: AuthSession | null) => {
+    authSessionRef.current = session;
+
+    if (!session) {
+      serverMetaRef.current = EMPTY_SERVER_META;
+      const normalized = normalizeAppState(createEmptyState());
+      const { nextState } = restoreGuideSampleBackupsInState(normalized);
+      dispatch({ type: "hydrate", payload: nextState });
+      setIsReady(true);
+      return;
+    }
+
+    try {
+      const { state: serverState, meta } = await loadServerAppState(session);
+      serverMetaRef.current = meta;
+      const normalized = normalizeAppState(serverState);
+      const { nextState } = restoreGuideSampleBackupsInState(normalized);
+      dispatch({ type: "hydrate", payload: nextState });
+      setIsReady(true);
+    } catch (error) {
+      console.error(error);
+      serverMetaRef.current = EMPTY_SERVER_META;
+      setIsReady(true);
+      showToast(error instanceof Error ? error.message : "서버 데이터를 불러오지 못했습니다.", "error");
+    }
+  }, [showToast]);
 
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
 
   useEffect(() => {
-    void loadAppState(createEmptyState()).then((stored) => {
-      const normalized = normalizeAppState(stored);
-      const { nextState } = restoreGuideSampleBackupsInState(normalized);
-      dispatch({ type: "hydrate", payload: nextState });
-      setIsReady(true);
-    });
-  }, []);
+    void refreshStateFromServer(authSessionRef.current);
+  }, [refreshStateFromServer]);
 
   useEffect(() => {
-    if (!isReady) return;
-    void saveAppState(state);
-  }, [isReady, state]);
+    const handleAuthSessionChange = (event: Event) => {
+      const detail = (event as CustomEvent<AuthSession | null>).detail ?? readAuthSession();
+      void refreshStateFromServer(detail);
+    };
+
+    window.addEventListener(AUTH_SESSION_EVENT, handleAuthSessionChange);
+    return () => {
+      window.removeEventListener(AUTH_SESSION_EVENT, handleAuthSessionChange);
+    };
+  }, [refreshStateFromServer]);
+
+  const queueRealtimeRefresh = useCallback(() => {
+    if (realtimeRefreshTimeoutRef.current) {
+      window.clearTimeout(realtimeRefreshTimeoutRef.current);
+    }
+    realtimeRefreshTimeoutRef.current = window.setTimeout(() => {
+      realtimeRefreshTimeoutRef.current = null;
+      if (realtimeRefreshInFlightRef.current) {
+        queueRealtimeRefresh();
+        return;
+      }
+      const session = authSessionRef.current;
+      if (!session) {
+        return;
+      }
+      realtimeRefreshInFlightRef.current = true;
+      void refreshStateFromServer(session).finally(() => {
+        realtimeRefreshInFlightRef.current = false;
+      });
+    }, 120);
+  }, [refreshStateFromServer]);
+
+  useEffect(() => {
+    const authSession = authSessionRef.current;
+    if (!authSession) {
+      syncIntentionalCloseRef.current = true;
+      if (syncReconnectTimeoutRef.current) {
+        window.clearTimeout(syncReconnectTimeoutRef.current);
+        syncReconnectTimeoutRef.current = null;
+      }
+      if (realtimeRefreshTimeoutRef.current) {
+        window.clearTimeout(realtimeRefreshTimeoutRef.current);
+        realtimeRefreshTimeoutRef.current = null;
+      }
+      if (syncSocketRef.current) {
+        syncSocketRef.current.close();
+        syncSocketRef.current = null;
+      }
+      return;
+    }
+
+    const socketUrl = authSession.apiBaseUrl.replace(/^http/i, "ws") + "/ws";
+    const subscriptionDestination = `/topic/spaces/${authSession.spaceId}/sync/events`;
+    const subscriptionId = `sync-events-${authSession.spaceId}`;
+
+    const connectSyncSocket = () => {
+      if (syncReconnectTimeoutRef.current) {
+        window.clearTimeout(syncReconnectTimeoutRef.current);
+        syncReconnectTimeoutRef.current = null;
+      }
+
+      const socket = new WebSocket(socketUrl);
+      syncIntentionalCloseRef.current = false;
+      syncSocketRef.current = socket;
+
+      socket.addEventListener("open", () => {
+        socket.send(
+          createStompFrame("CONNECT", {
+            "accept-version": "1.2",
+            host: window.location.hostname || "localhost",
+          }),
+        );
+      });
+
+      socket.addEventListener("message", (event) => {
+        try {
+          const frames = parseStompMessageBodies(String(event.data || ""));
+          frames.forEach((frame) => {
+            if (frame.command === "CONNECTED") {
+              socket.send(
+                createStompFrame("SUBSCRIBE", {
+                  id: subscriptionId,
+                  destination: subscriptionDestination,
+                }),
+              );
+              return;
+            }
+
+            if (frame.command !== "MESSAGE" || !frame.body) {
+              return;
+            }
+
+            const message = JSON.parse(frame.body) as SyncEventMessage;
+            const currentSession = authSessionRef.current;
+            if (!currentSession) {
+              return;
+            }
+            if (message.sessionKey && message.sessionKey === currentSession.sessionKey) {
+              return;
+            }
+            queueRealtimeRefresh();
+          });
+        } catch (error) {
+          console.warn("sync event parse failed", error);
+        }
+      });
+
+      socket.addEventListener("close", () => {
+        if (syncSocketRef.current === socket) {
+          syncSocketRef.current = null;
+        }
+        if (!syncIntentionalCloseRef.current) {
+          syncReconnectTimeoutRef.current = window.setTimeout(() => {
+            connectSyncSocket();
+          }, 1000);
+        }
+      });
+
+      socket.addEventListener("error", () => {
+        if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+          socket.close();
+        }
+      });
+    };
+
+    connectSyncSocket();
+
+    return () => {
+      syncIntentionalCloseRef.current = true;
+      if (syncReconnectTimeoutRef.current) {
+        window.clearTimeout(syncReconnectTimeoutRef.current);
+        syncReconnectTimeoutRef.current = null;
+      }
+      if (realtimeRefreshTimeoutRef.current) {
+        window.clearTimeout(realtimeRefreshTimeoutRef.current);
+        realtimeRefreshTimeoutRef.current = null;
+      }
+      if (syncSocketRef.current) {
+        syncSocketRef.current.close();
+        syncSocketRef.current = null;
+      }
+    };
+  }, [queueRealtimeRefresh, state.activeWorkspaceId]);
+
+  const getRequiredSession = useCallback(() => {
+    const session = authSessionRef.current;
+    if (!session) {
+      throw new Error("로그인이 필요합니다.");
+    }
+    return session;
+  }, []);
+
+  const handleServerMutationError = useCallback(
+    (error: unknown) => {
+      console.error(error);
+      showToast(error instanceof Error ? error.message : "서버 요청에 실패했습니다.", "error");
+    },
+    [showToast],
+  );
+
+  const getCategorySchemeId = useCallback((workspaceId: string) => {
+    const schemeId = serverMetaRef.current.categorySchemeIdByWorkspaceId[workspaceId];
+    if (!schemeId) {
+      throw new Error("카테고리 스킴을 찾지 못했습니다.");
+    }
+    return Number(schemeId);
+  }, []);
+
+  const getTagSchemeId = useCallback((workspaceId: string) => {
+    const schemeId = serverMetaRef.current.tagSchemeIdByWorkspaceId[workspaceId];
+    if (!schemeId) {
+      throw new Error("태그 스킴을 찾지 못했습니다.");
+    }
+    return Number(schemeId);
+  }, []);
+
+  const toTransactionRequest = useCallback((transaction: Transaction) => ({
+    spaceId: Number(transaction.workspaceId),
+    importRecordId: toNullableNumber(transaction.importRecordId),
+    occurredAt: transaction.occurredAt,
+    settledAt: transaction.settledAt,
+    transactionType: transaction.transactionType.toUpperCase(),
+    sourceType: transaction.sourceType.toUpperCase(),
+    ownerPersonId: toNullableNumber(transaction.ownerPersonId),
+    cardAssetId: toNullableNumber(transaction.cardId),
+    accountAssetId: toNullableNumber(transaction.accountId),
+    fromAssetId: toNullableNumber(transaction.fromAccountId),
+    toAssetId: toNullableNumber(transaction.toAccountId),
+    merchantName: transaction.merchantName,
+    description: transaction.description,
+    amount: transaction.amount,
+    originalAmount: transaction.originalAmount ?? null,
+    discountAmount: transaction.discountAmount ?? null,
+    categoryId: toNullableNumber(transaction.categoryId),
+    tagIds: transaction.tagIds.map(Number),
+    internalTransfer: transaction.isInternalTransfer ?? false,
+    expenseImpact: transaction.isExpenseImpact,
+    sharedExpense: transaction.isSharedExpense,
+    loop: transaction.isLoop ?? false,
+    loopIgnored: transaction.isLoopIgnored ?? false,
+    loopGroupOverrideKey: transaction.loopGroupOverrideKey ?? null,
+    loopDisplayName: transaction.loopDisplayName ?? null,
+    refundOfTransactionId: toNullableNumber(transaction.refundOfTransactionId),
+    status: (transaction.status ?? "active").toUpperCase(),
+    expectedRevisionNumber: serverMetaRef.current.transactionRevisionById[transaction.id] ?? null,
+  }), []);
+
+  const saveTransactionToServer = useCallback(
+    async (transaction: Transaction) => {
+      const session = getRequiredSession();
+      const path = serverMetaRef.current.transactionRevisionById[transaction.id]
+        ? `/api/transactions/${transaction.id}`
+        : "/api/transactions";
+      const method = serverMetaRef.current.transactionRevisionById[transaction.id] ? "PUT" : "POST";
+      await requestServerJson(session, path, {
+        method,
+        body: JSON.stringify(toTransactionRequest(transaction)),
+      });
+      await refreshStateFromServer(session);
+    },
+    [getRequiredSession, refreshStateFromServer, toTransactionRequest],
+  );
 
   const workspaceLoopDataByWorkspaceId = useMemo(() => {
     const nextMap = new Map<
@@ -2582,8 +2939,19 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         showToast(`${fileName} 업로드를 완료했습니다.`, "success");
       },
       deleteImportRecord(workspaceId, importRecordId) {
-        dispatch({ type: "deleteImportRecord", payload: { workspaceId, importRecordId } });
-        showToast("명세서를 삭제했습니다.", "success");
+        void workspaceId;
+        void (async () => {
+          try {
+            const session = getRequiredSession();
+            await requestServerJson(session, `/api/import-records/${importRecordId}`, {
+              method: "DELETE",
+            });
+            await refreshStateFromServer(session);
+            showToast("명세서를 삭제했습니다.", "success");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       loadGuideSampleData() {
         const latestState = stateRef.current;
@@ -2686,9 +3054,10 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         showToast(`"${trimmedName}" 이름으로 변경했습니다.`, "success");
       },
       async resetApp() {
-        await clearAppState();
+        clearAuthSession();
+        serverMetaRef.current = EMPTY_SERVER_META;
         dispatch({ type: "reset" });
-        showToast("로컬 데이터를 초기화했습니다.", "success");
+        showToast("세션과 로컬 상태를 초기화했습니다.", "success");
       },
       exportState() {
         const blob = new Blob([createBackupContent(state)], { type: "application/json;charset=utf-8" });
@@ -2756,224 +3125,1098 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         );
       },
       resolveReview(reviewId) {
-        dispatch({ type: "resolveReview", payload: { reviewId, status: "resolved" } });
-        showToast("검토 항목을 확인 완료로 처리했습니다.", "success");
+        const current = state.reviews.find((item) => item.id === reviewId);
+        if (!current) return;
+        void (async () => {
+          try {
+            const session = getRequiredSession();
+            await requestServerJson(session, `/api/reviews/${reviewId}`, {
+              method: "PUT",
+              body: JSON.stringify({
+                spaceId: Number(current.workspaceId),
+                importRecordId: toNullableNumber(current.importRecordId),
+                reviewType: REVIEW_TYPE_TO_SERVER[current.reviewType],
+                status: "RESOLVED",
+                primaryTransactionId: Number(current.primaryTransactionId),
+                relatedTransactionIds: current.relatedTransactionIds.map(Number),
+                confidenceScore: current.confidenceScore,
+                summary: current.summary,
+                suggestedCategoryId: toNullableNumber(current.suggestedCategoryId),
+                expectedRevisionNumber: serverMetaRef.current.reviewRevisionById[reviewId] ?? null,
+              }),
+            });
+            await refreshStateFromServer(session);
+            showToast("검토 항목을 확인 완료로 처리했습니다.", "success");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       dismissReview(reviewId) {
-        dispatch({ type: "resolveReview", payload: { reviewId, status: "dismissed" } });
-        showToast("검토 항목을 보류 처리했습니다.", "info");
+        const current = state.reviews.find((item) => item.id === reviewId);
+        if (!current) return;
+        void (async () => {
+          try {
+            const session = getRequiredSession();
+            await requestServerJson(session, `/api/reviews/${reviewId}`, {
+              method: "PUT",
+              body: JSON.stringify({
+                spaceId: Number(current.workspaceId),
+                importRecordId: toNullableNumber(current.importRecordId),
+                reviewType: REVIEW_TYPE_TO_SERVER[current.reviewType],
+                status: "DISMISSED",
+                primaryTransactionId: Number(current.primaryTransactionId),
+                relatedTransactionIds: current.relatedTransactionIds.map(Number),
+                confidenceScore: current.confidenceScore,
+                summary: current.summary,
+                suggestedCategoryId: toNullableNumber(current.suggestedCategoryId),
+                expectedRevisionNumber: serverMetaRef.current.reviewRevisionById[reviewId] ?? null,
+              }),
+            });
+            await refreshStateFromServer(session);
+            showToast("검토 항목을 보류 처리했습니다.", "info");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       applyReviewSuggestion(reviewId) {
-        dispatch({ type: "applyReviewSuggestion", payload: { reviewId } });
-        showToast("검토 제안을 거래 데이터에 반영했습니다.", "success");
+        const review = state.reviews.find((item) => item.id === reviewId);
+        if (!review) return;
+        const transaction = state.transactions.find((item) => item.id === review.primaryTransactionId);
+        if (!transaction) return;
+
+        void (async () => {
+          try {
+            const session = getRequiredSession();
+            await requestServerJson(session, `/api/transactions/${transaction.id}`, {
+              method: "PUT",
+              body: JSON.stringify({
+                spaceId: Number(transaction.workspaceId),
+                importRecordId: toNullableNumber(transaction.importRecordId),
+                occurredAt: transaction.occurredAt,
+                settledAt: transaction.settledAt,
+                transactionType: transaction.transactionType.toUpperCase(),
+                sourceType: transaction.sourceType.toUpperCase(),
+                ownerPersonId: toNullableNumber(transaction.ownerPersonId),
+                cardAssetId: toNullableNumber(transaction.cardId),
+                accountAssetId: toNullableNumber(transaction.accountId),
+                fromAssetId: toNullableNumber(transaction.fromAccountId),
+                toAssetId: toNullableNumber(transaction.toAccountId),
+                merchantName: transaction.merchantName,
+                description: transaction.description,
+                amount: transaction.amount,
+                originalAmount: transaction.originalAmount ?? null,
+                discountAmount: transaction.discountAmount ?? null,
+                categoryId: toNullableNumber(review.suggestedCategoryId),
+                tagIds: transaction.tagIds.map(Number),
+                internalTransfer: transaction.isInternalTransfer ?? false,
+                expenseImpact: transaction.isExpenseImpact,
+                sharedExpense: transaction.isSharedExpense,
+                loop: transaction.isLoop ?? false,
+                loopIgnored: transaction.isLoopIgnored ?? false,
+                loopGroupOverrideKey: transaction.loopGroupOverrideKey ?? null,
+                loopDisplayName: transaction.loopDisplayName ?? null,
+                refundOfTransactionId: toNullableNumber(transaction.refundOfTransactionId),
+                status: (transaction.status ?? "posted").toUpperCase(),
+                expectedRevisionNumber: serverMetaRef.current.transactionRevisionById[transaction.id] ?? null,
+              }),
+            });
+            await requestServerJson(session, `/api/reviews/${reviewId}`, {
+              method: "PUT",
+              body: JSON.stringify({
+                spaceId: Number(review.workspaceId),
+                importRecordId: toNullableNumber(review.importRecordId),
+                reviewType: REVIEW_TYPE_TO_SERVER[review.reviewType],
+                status: "RESOLVED",
+                primaryTransactionId: Number(review.primaryTransactionId),
+                relatedTransactionIds: review.relatedTransactionIds.map(Number),
+                confidenceScore: review.confidenceScore,
+                summary: review.summary,
+                suggestedCategoryId: toNullableNumber(review.suggestedCategoryId),
+                expectedRevisionNumber: serverMetaRef.current.reviewRevisionById[reviewId] ?? null,
+              }),
+            });
+            await refreshStateFromServer(session);
+            showToast("검토 제안을 거래 데이터에 반영했습니다.", "success");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       addPerson(workspaceId, input) {
         const values = createPersonDraft(input);
-        dispatch({ type: "addPerson", payload: { workspaceId, values } });
-        showToast(`${values.displayName || values.name} 사용자를 추가했습니다.`, "success");
+        void (async () => {
+          try {
+            const session = getRequiredSession();
+            await requestServerJson(session, "/api/people", {
+              method: "POST",
+              body: JSON.stringify({
+                spaceId: Number(workspaceId),
+                name: values.name,
+                displayName: values.displayName,
+                role: PERSON_ROLE_TO_SERVER[values.role],
+                memo: values.memo,
+                active: values.isActive,
+                sortOrder: values.sortOrder ?? 0,
+                hidden: values.isHidden ?? false,
+              }),
+            });
+            await refreshStateFromServer(session);
+            showToast(`${values.displayName || values.name} 사용자를 추가했습니다.`, "success");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       updatePerson(workspaceId, personId, input) {
         const current = state.people.find((item) => item.workspaceId === workspaceId && item.id === personId);
         if (!current) return;
         const values = createPersonDraft({ ...current, ...input });
-        dispatch({ type: "updatePerson", payload: { workspaceId, personId, values } });
-        showToast(`${values.displayName || values.name} 정보를 저장했습니다.`, "success");
+        void (async () => {
+          try {
+            const session = getRequiredSession();
+            await requestServerJson(session, `/api/people/${personId}`, {
+              method: "PUT",
+              body: JSON.stringify({
+                spaceId: Number(workspaceId),
+                name: values.name,
+                displayName: values.displayName,
+                role: PERSON_ROLE_TO_SERVER[values.role],
+                memo: values.memo,
+                active: values.isActive,
+                sortOrder: values.sortOrder ?? 0,
+                hidden: values.isHidden ?? false,
+              }),
+            });
+            await refreshStateFromServer(session);
+            showToast(`${values.displayName || values.name} 정보를 저장했습니다.`, "success");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       deletePerson(workspaceId, personId) {
         const current = state.people.find((item) => item.workspaceId === workspaceId && item.id === personId);
         if (!current) return;
-        dispatch({ type: "deletePerson", payload: { workspaceId, personId } });
-        showToast(`${current.displayName || current.name} 사용자를 삭제했습니다.`, "success");
+        void (async () => {
+          try {
+            const session = getRequiredSession();
+            await requestServerJson(session, `/api/people/${personId}`, {
+              method: "DELETE",
+            });
+            await refreshStateFromServer(session);
+            showToast(`${current.displayName || current.name} 사용자를 삭제했습니다.`, "success");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       movePerson(workspaceId, personId, targetIndex) {
-        dispatch({ type: "movePerson", payload: { workspaceId, personId, targetIndex } });
+        const current = state.people.find((item) => item.workspaceId === workspaceId && item.id === personId);
+        if (!current) return;
+
+        const orderedPeople = state.people
+          .filter((item) => item.workspaceId === workspaceId && item.id !== personId)
+          .sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0));
+        orderedPeople.splice(targetIndex, 0, current);
+
+        void (async () => {
+          try {
+            const session = getRequiredSession();
+            await Promise.all(
+              orderedPeople.map((person, index) =>
+                requestServerJson(session, `/api/people/${person.id}`, {
+                  method: "PUT",
+                  body: JSON.stringify({
+                    spaceId: Number(workspaceId),
+                    name: person.name,
+                    displayName: person.displayName,
+                    role: PERSON_ROLE_TO_SERVER[person.role],
+                    memo: person.memo,
+                    active: person.isActive,
+                    sortOrder: index,
+                    hidden: person.isHidden ?? false,
+                  }),
+                }),
+              ),
+            );
+            await refreshStateFromServer(session);
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       addAccount(workspaceId, input, institutionName) {
         const values = createAccountDraft(input, institutionName);
-        dispatch({ type: "addAccount", payload: { workspaceId, values } });
-        showToast(`${values.alias || values.name} 계좌를 추가했습니다.`, "success");
+        void (async () => {
+          try {
+            const session = getRequiredSession();
+            await requestServerJson(session, "/api/assets", {
+              method: "POST",
+              body: JSON.stringify({
+                spaceId: Number(workspaceId),
+                assetKindCode: "ACCOUNT",
+                ownerPersonId: toNullableNumber(values.ownerPersonId),
+                primaryPersonId: toNullableNumber(values.primaryPersonId),
+                providerId: null,
+                name: values.name,
+                alias: values.alias,
+                groupType: ACCOUNT_GROUP_TYPE_TO_SERVER[values.accountGroupType ?? "personal"],
+                usageType: ASSET_USAGE_TYPE_TO_SERVER[values.usageType],
+                currencyCode: "KRW",
+                shared: values.isShared,
+                sortOrder: values.sortOrder ?? 0,
+                hidden: values.isHidden ?? false,
+                memo: values.memo,
+                createdImportRecordKey: null,
+                participantPersonIds: (values.participantPersonIds ?? []).map(Number),
+                accountDetail: {
+                  accountType: ACCOUNT_TYPE_TO_SERVER[values.accountType],
+                  institutionName: values.institutionName,
+                  accountNumberMasked: values.accountNumberMasked || "-",
+                },
+                cardDetail: null,
+              }),
+            });
+            await refreshStateFromServer(session);
+            showToast(`${values.alias || values.name} 계좌를 추가했습니다.`, "success");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       updateAccount(workspaceId, accountId, input) {
         const current = state.accounts.find((item) => item.workspaceId === workspaceId && item.id === accountId);
         if (!current) return;
         const values = createAccountDraft({ ...current, ...input });
-        dispatch({ type: "updateAccount", payload: { workspaceId, accountId, values } });
-        showToast(`${values.alias || values.name} 계좌 정보를 저장했습니다.`, "success");
+        void (async () => {
+          try {
+            const session = getRequiredSession();
+            await requestServerJson(session, `/api/assets/${accountId}`, {
+              method: "PUT",
+              body: JSON.stringify({
+                spaceId: Number(workspaceId),
+                assetKindCode: "ACCOUNT",
+                ownerPersonId: toNullableNumber(values.ownerPersonId),
+                primaryPersonId: toNullableNumber(values.primaryPersonId),
+                providerId: null,
+                name: values.name,
+                alias: values.alias,
+                groupType: ACCOUNT_GROUP_TYPE_TO_SERVER[values.accountGroupType ?? "personal"],
+                usageType: ASSET_USAGE_TYPE_TO_SERVER[values.usageType],
+                currencyCode: "KRW",
+                shared: values.isShared,
+                sortOrder: values.sortOrder ?? 0,
+                hidden: values.isHidden ?? false,
+                memo: values.memo,
+                createdImportRecordKey: null,
+                expectedRevisionNumber: serverMetaRef.current.assetRevisionById[accountId] ?? null,
+                participantPersonIds: (values.participantPersonIds ?? []).map(Number),
+                accountDetail: {
+                  accountType: ACCOUNT_TYPE_TO_SERVER[values.accountType],
+                  institutionName: values.institutionName,
+                  accountNumberMasked: values.accountNumberMasked || "-",
+                },
+                cardDetail: null,
+              }),
+            });
+            await refreshStateFromServer(session);
+            showToast(`${values.alias || values.name} 계좌 정보를 저장했습니다.`, "success");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       deleteAccount(workspaceId, accountId) {
         const current = state.accounts.find((item) => item.workspaceId === workspaceId && item.id === accountId);
         if (!current) return;
-        dispatch({ type: "deleteAccount", payload: { workspaceId, accountId } });
-        showToast(`${current.alias || current.name} 계좌를 삭제했습니다.`, "success");
+        void (async () => {
+          try {
+            const session = getRequiredSession();
+            await requestServerJson(session, `/api/assets/${accountId}`, {
+              method: "DELETE",
+            });
+            await refreshStateFromServer(session);
+            showToast(`${current.alias || current.name} 계좌를 삭제했습니다.`, "success");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       moveAccount(workspaceId, accountId, targetOwnerPersonId, targetIndex) {
-        dispatch({ type: "moveAccount", payload: { workspaceId, accountId, targetOwnerPersonId, targetIndex } });
+        const current = state.accounts.find((item) => item.workspaceId === workspaceId && item.id === accountId);
+        if (!current) return;
+        const values = createAccountDraft({
+          ...current,
+          ownerPersonId: targetOwnerPersonId,
+          sortOrder: targetIndex,
+        });
+
+        void (async () => {
+          try {
+            const session = getRequiredSession();
+            await requestServerJson(session, `/api/assets/${accountId}`, {
+              method: "PUT",
+              body: JSON.stringify({
+                spaceId: Number(workspaceId),
+                assetKindCode: "ACCOUNT",
+                ownerPersonId: toNullableNumber(values.ownerPersonId),
+                primaryPersonId: toNullableNumber(values.primaryPersonId),
+                providerId: null,
+                name: values.name,
+                alias: values.alias,
+                groupType: ACCOUNT_GROUP_TYPE_TO_SERVER[values.accountGroupType ?? "personal"],
+                usageType: ASSET_USAGE_TYPE_TO_SERVER[values.usageType],
+                currencyCode: "KRW",
+                shared: values.isShared,
+                sortOrder: targetIndex,
+                hidden: values.isHidden ?? false,
+                memo: values.memo,
+                createdImportRecordKey: null,
+                expectedRevisionNumber: serverMetaRef.current.assetRevisionById[accountId] ?? null,
+                participantPersonIds: (values.participantPersonIds ?? []).map(Number),
+                accountDetail: {
+                  accountType: ACCOUNT_TYPE_TO_SERVER[values.accountType],
+                  institutionName: values.institutionName,
+                  accountNumberMasked: values.accountNumberMasked || "-",
+                },
+                cardDetail: null,
+              }),
+            });
+            await refreshStateFromServer(session);
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       addCard(workspaceId, input, issuerName) {
         const values = createCardDraft(input, issuerName);
-        dispatch({ type: "addCard", payload: { workspaceId, values } });
-        showToast(`${values.name} 카드를 추가했습니다.`, "success");
+        void (async () => {
+          try {
+            const session = getRequiredSession();
+            await requestServerJson(session, "/api/assets", {
+              method: "POST",
+              body: JSON.stringify({
+                spaceId: Number(workspaceId),
+                assetKindCode: "CARD",
+                ownerPersonId: toNullableNumber(values.ownerPersonId),
+                primaryPersonId: toNullableNumber(values.ownerPersonId),
+                providerId: null,
+                name: values.name,
+                alias: "",
+                groupType: "PERSONAL",
+                usageType: "CARD_PAYMENT",
+                currencyCode: "KRW",
+                shared: false,
+                sortOrder: values.sortOrder ?? 0,
+                hidden: values.isHidden ?? false,
+                memo: values.memo,
+                createdImportRecordKey: null,
+                participantPersonIds: [],
+                accountDetail: null,
+                cardDetail: {
+                  cardType: CARD_TYPE_TO_SERVER[values.cardType],
+                  issuerName: values.issuerName,
+                  cardNumberMasked: values.cardNumberMasked || "-",
+                  settlementAccountAssetId: toNullableNumber(values.linkedAccountId),
+                },
+              }),
+            });
+            await refreshStateFromServer(session);
+            showToast(`${values.name} 카드를 추가했습니다.`, "success");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       updateCard(workspaceId, cardId, input) {
         const current = state.cards.find((item) => item.workspaceId === workspaceId && item.id === cardId);
         if (!current) return;
         const values = createCardDraft({ ...current, ...input });
-        dispatch({ type: "updateCard", payload: { workspaceId, cardId, values } });
-        showToast(`${values.name} 카드 정보를 저장했습니다.`, "success");
+        void (async () => {
+          try {
+            const session = getRequiredSession();
+            await requestServerJson(session, `/api/assets/${cardId}`, {
+              method: "PUT",
+              body: JSON.stringify({
+                spaceId: Number(workspaceId),
+                assetKindCode: "CARD",
+                ownerPersonId: toNullableNumber(values.ownerPersonId),
+                primaryPersonId: toNullableNumber(values.ownerPersonId),
+                providerId: null,
+                name: values.name,
+                alias: "",
+                groupType: "PERSONAL",
+                usageType: "CARD_PAYMENT",
+                currencyCode: "KRW",
+                shared: false,
+                sortOrder: values.sortOrder ?? 0,
+                hidden: values.isHidden ?? false,
+                memo: values.memo,
+                createdImportRecordKey: null,
+                expectedRevisionNumber: serverMetaRef.current.assetRevisionById[cardId] ?? null,
+                participantPersonIds: [],
+                accountDetail: null,
+                cardDetail: {
+                  cardType: CARD_TYPE_TO_SERVER[values.cardType],
+                  issuerName: values.issuerName,
+                  cardNumberMasked: values.cardNumberMasked || "-",
+                  settlementAccountAssetId: toNullableNumber(values.linkedAccountId),
+                },
+              }),
+            });
+            await refreshStateFromServer(session);
+            showToast(`${values.name} 카드 정보를 저장했습니다.`, "success");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       deleteCard(workspaceId, cardId) {
         const current = state.cards.find((item) => item.workspaceId === workspaceId && item.id === cardId);
         if (!current) return;
-        dispatch({ type: "deleteCard", payload: { workspaceId, cardId } });
-        showToast(`${current.name} 카드를 삭제했습니다.`, "success");
+        void (async () => {
+          try {
+            const session = getRequiredSession();
+            await requestServerJson(session, `/api/assets/${cardId}`, {
+              method: "DELETE",
+            });
+            await refreshStateFromServer(session);
+            showToast(`${current.name} 카드를 삭제했습니다.`, "success");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       moveCard(workspaceId, cardId, targetOwnerPersonId, targetIndex) {
-        dispatch({ type: "moveCard", payload: { workspaceId, cardId, targetOwnerPersonId, targetIndex } });
+        const current = state.cards.find((item) => item.workspaceId === workspaceId && item.id === cardId);
+        if (!current) return;
+        const values = createCardDraft({
+          ...current,
+          ownerPersonId: targetOwnerPersonId,
+          sortOrder: targetIndex,
+        });
+
+        void (async () => {
+          try {
+            const session = getRequiredSession();
+            await requestServerJson(session, `/api/assets/${cardId}`, {
+              method: "PUT",
+              body: JSON.stringify({
+                spaceId: Number(workspaceId),
+                assetKindCode: "CARD",
+                ownerPersonId: toNullableNumber(values.ownerPersonId),
+                primaryPersonId: toNullableNumber(values.ownerPersonId),
+                providerId: null,
+                name: values.name,
+                alias: "",
+                groupType: "PERSONAL",
+                usageType: "CARD_PAYMENT",
+                currencyCode: "KRW",
+                shared: false,
+                sortOrder: targetIndex,
+                hidden: values.isHidden ?? false,
+                memo: values.memo,
+                createdImportRecordKey: null,
+                expectedRevisionNumber: serverMetaRef.current.assetRevisionById[cardId] ?? null,
+                participantPersonIds: [],
+                accountDetail: null,
+                cardDetail: {
+                  cardType: CARD_TYPE_TO_SERVER[values.cardType],
+                  issuerName: values.issuerName,
+                  cardNumberMasked: values.cardNumberMasked || "-",
+                  settlementAccountAssetId: toNullableNumber(values.linkedAccountId),
+                },
+              }),
+            });
+            await refreshStateFromServer(session);
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       addCategory(workspaceId, input, parentCategoryId = null) {
         const values = createCategoryDraft(input, parentCategoryId);
         if (!values.name) return;
-        const name = values.name;
-        dispatch({ type: "addCategory", payload: { workspaceId, values } });
-        showToast(`${name} 카테고리를 추가했습니다.`, "success");
+        void (async () => {
+          try {
+            const session = getRequiredSession();
+            const schemeId = getCategorySchemeId(workspaceId);
+            if (values.categoryType === "group") {
+              await requestServerJson(session, "/api/category/groups", {
+                method: "POST",
+                body: JSON.stringify({
+                  schemeId,
+                  name: values.name,
+                  description: "",
+                  direction: CATEGORY_DIRECTION_TO_SERVER[values.direction],
+                  fixedOrVariable: CATEGORY_CADENCE_TO_SERVER[values.fixedOrVariable],
+                  necessity: CATEGORY_NECESSITY_TO_SERVER[values.necessity],
+                  budgetable: values.budgetable,
+                  reportable: values.reportable,
+                  linkedAssetId: null,
+                  sortOrder: values.sortOrder,
+                  hidden: values.isHidden,
+                }),
+              });
+            } else {
+              const groupId = findRootCategoryGroupId(stateRef.current.categories, values.parentCategoryId);
+              if (!groupId) throw new Error("상위 그룹을 찾지 못했습니다.");
+              await requestServerJson(session, "/api/category/items", {
+                method: "POST",
+                body: JSON.stringify({
+                  schemeId,
+                  groupId: Number(groupId),
+                  parentCategoryId: toNullableNumber(values.parentCategoryId),
+                  name: values.name,
+                  direction: CATEGORY_DIRECTION_TO_SERVER[values.direction],
+                  fixedOrVariable: CATEGORY_CADENCE_TO_SERVER[values.fixedOrVariable],
+                  necessity: CATEGORY_NECESSITY_TO_SERVER[values.necessity],
+                  budgetable: values.budgetable,
+                  reportable: values.reportable,
+                  linkedAssetId: toNullableNumber(values.linkedAccountId),
+                  sortOrder: values.sortOrder,
+                  hidden: values.isHidden,
+                }),
+              });
+            }
+            await refreshStateFromServer(session);
+            showToast(`${values.name} 카테고리를 추가했습니다.`, "success");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       updateCategory(workspaceId, categoryId, input) {
         const current = state.categories.find((item) => item.workspaceId === workspaceId && item.id === categoryId);
         if (!current) return;
         const values = createCategoryDraft({ ...current, ...input });
-        dispatch({ type: "updateCategory", payload: { workspaceId, categoryId, values } });
-        showToast(values.categoryType === "group" ? `${values.name} 그룹 정보를 수정했습니다.` : `${values.name} 카테고리 정보를 수정했습니다.`, "success");
+        void (async () => {
+          try {
+            const session = getRequiredSession();
+            const schemeId = getCategorySchemeId(workspaceId);
+            if (values.categoryType === "group") {
+              await requestServerJson(session, `/api/category/groups/${categoryId}`, {
+                method: "PUT",
+                body: JSON.stringify({
+                  schemeId,
+                  name: values.name,
+                  description: "",
+                  direction: CATEGORY_DIRECTION_TO_SERVER[values.direction],
+                  fixedOrVariable: CATEGORY_CADENCE_TO_SERVER[values.fixedOrVariable],
+                  necessity: CATEGORY_NECESSITY_TO_SERVER[values.necessity],
+                  budgetable: values.budgetable,
+                  reportable: values.reportable,
+                  linkedAssetId: null,
+                  sortOrder: values.sortOrder,
+                  hidden: values.isHidden,
+                  expectedRevisionNumber: serverMetaRef.current.categoryRevisionById[categoryId] ?? null,
+                }),
+              });
+            } else {
+              const groupId =
+                findRootCategoryGroupId(stateRef.current.categories, values.parentCategoryId) ??
+                findRootCategoryGroupId(stateRef.current.categories, current.parentCategoryId);
+              if (!groupId) throw new Error("상위 그룹을 찾지 못했습니다.");
+              await requestServerJson(session, `/api/category/items/${categoryId}`, {
+                method: "PUT",
+                body: JSON.stringify({
+                  schemeId,
+                  groupId: Number(groupId),
+                  parentCategoryId: toNullableNumber(values.parentCategoryId),
+                  name: values.name,
+                  direction: CATEGORY_DIRECTION_TO_SERVER[values.direction],
+                  fixedOrVariable: CATEGORY_CADENCE_TO_SERVER[values.fixedOrVariable],
+                  necessity: CATEGORY_NECESSITY_TO_SERVER[values.necessity],
+                  budgetable: values.budgetable,
+                  reportable: values.reportable,
+                  linkedAssetId: toNullableNumber(values.linkedAccountId),
+                  sortOrder: values.sortOrder,
+                  hidden: values.isHidden,
+                  expectedRevisionNumber: serverMetaRef.current.categoryRevisionById[categoryId] ?? null,
+                }),
+              });
+            }
+            await refreshStateFromServer(session);
+            showToast(values.categoryType === "group" ? `${values.name} 그룹 정보를 수정했습니다.` : `${values.name} 카테고리 정보를 수정했습니다.`, "success");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       deleteCategory(workspaceId, categoryId) {
         const current = state.categories.find((item) => item.workspaceId === workspaceId && item.id === categoryId);
         if (!current) return;
-        dispatch({ type: "deleteCategory", payload: { workspaceId, categoryId } });
-        showToast(current.categoryType === "group" ? `${current.name} 그룹과 하위 카테고리를 삭제했습니다.` : `${current.name} 카테고리를 삭제했습니다.`, "success");
+        void (async () => {
+          try {
+            const session = getRequiredSession();
+            await requestServerJson(
+              session,
+              current.categoryType === "group" ? `/api/category/groups/${categoryId}` : `/api/category/items/${categoryId}`,
+              { method: "DELETE" },
+            );
+            await refreshStateFromServer(session);
+            showToast(current.categoryType === "group" ? `${current.name} 그룹과 하위 카테고리를 삭제했습니다.` : `${current.name} 카테고리를 삭제했습니다.`, "success");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       moveCategory(workspaceId, categoryId, targetParentCategoryId, targetIndex) {
-        dispatch({ type: "moveCategory", payload: { workspaceId, categoryId, targetParentCategoryId, targetIndex } });
+        const current = state.categories.find((item) => item.workspaceId === workspaceId && item.id === categoryId);
+        if (!current) return;
+        const values = createCategoryDraft({ ...current, parentCategoryId: targetParentCategoryId, sortOrder: targetIndex });
+        void (async () => {
+          try {
+            const session = getRequiredSession();
+            const schemeId = getCategorySchemeId(workspaceId);
+            if (current.categoryType === "group") {
+              await requestServerJson(session, `/api/category/groups/${categoryId}`, {
+                method: "PUT",
+                body: JSON.stringify({
+                  schemeId,
+                  name: values.name,
+                  description: "",
+                  direction: CATEGORY_DIRECTION_TO_SERVER[values.direction],
+                  fixedOrVariable: CATEGORY_CADENCE_TO_SERVER[values.fixedOrVariable],
+                  necessity: CATEGORY_NECESSITY_TO_SERVER[values.necessity],
+                  budgetable: values.budgetable,
+                  reportable: values.reportable,
+                  linkedAssetId: null,
+                  sortOrder: targetIndex,
+                  hidden: values.isHidden,
+                  expectedRevisionNumber: serverMetaRef.current.categoryRevisionById[categoryId] ?? null,
+                }),
+              });
+            } else {
+              const groupId =
+                findRootCategoryGroupId(stateRef.current.categories, targetParentCategoryId) ??
+                findRootCategoryGroupId(stateRef.current.categories, current.parentCategoryId);
+              if (!groupId) throw new Error("상위 그룹을 찾지 못했습니다.");
+              await requestServerJson(session, `/api/category/items/${categoryId}`, {
+                method: "PUT",
+                body: JSON.stringify({
+                  schemeId,
+                  groupId: Number(groupId),
+                  parentCategoryId: toNullableNumber(targetParentCategoryId),
+                  name: values.name,
+                  direction: CATEGORY_DIRECTION_TO_SERVER[values.direction],
+                  fixedOrVariable: CATEGORY_CADENCE_TO_SERVER[values.fixedOrVariable],
+                  necessity: CATEGORY_NECESSITY_TO_SERVER[values.necessity],
+                  budgetable: values.budgetable,
+                  reportable: values.reportable,
+                  linkedAssetId: toNullableNumber(values.linkedAccountId),
+                  sortOrder: targetIndex,
+                  hidden: values.isHidden,
+                  expectedRevisionNumber: serverMetaRef.current.categoryRevisionById[categoryId] ?? null,
+                }),
+              });
+            }
+            await refreshStateFromServer(session);
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       resetCategoriesToDefaults(workspaceId) {
-        dispatch({ type: "resetCategoriesToDefaults", payload: { workspaceId } });
-        showToast("기본 카테고리 구조로 초기화했습니다.", "success");
+        void (async () => {
+          try {
+            const session = getRequiredSession();
+            await requestServerJson(session, `/api/category/reset-defaults?spaceId=${workspaceId}`, {
+              method: "POST",
+            });
+            await refreshStateFromServer(session);
+            showToast("기본 카테고리 구조로 초기화했습니다.", "success");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       addTag(workspaceId, name) {
-        dispatch({ type: "addTag", payload: { workspaceId, name } });
-        showToast(`${name} 태그를 추가했습니다.`, "success");
+        void (async () => {
+          try {
+            const session = getRequiredSession();
+            await requestServerJson(session, "/api/tags/items", {
+              method: "POST",
+              body: JSON.stringify({
+                schemeId: getTagSchemeId(workspaceId),
+                name,
+                color: "lavender",
+                sortOrder: state.tags.filter((item) => item.workspaceId === workspaceId).length,
+                hidden: false,
+              }),
+            });
+            await refreshStateFromServer(session);
+            showToast(`${name} 태그를 추가했습니다.`, "success");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       setFinancialProfile(workspaceId, values) {
-        dispatch({ type: "setFinancialProfile", payload: { workspaceId, values } });
-        showToast("재무 기준값을 저장했습니다.", "success");
+        void (async () => {
+          try {
+            const session = getRequiredSession();
+            await requestServerJson(session, `/api/financial-profile?spaceId=${workspaceId}`, {
+              method: "PUT",
+              body: JSON.stringify({
+                spaceId: Number(workspaceId),
+                monthlyNetIncome: values.monthlyNetIncome,
+                targetSavingsRate: values.targetSavingsRate,
+                warningSpendRate: values.warningSpendRate,
+                warningFixedCostRate: values.warningFixedCostRate,
+                loopPriorityCategoryIds: (values.loopPriorityCategoryIds ?? []).map(Number),
+                expectedRevisionNumber: serverMetaRef.current.financialProfileRevisionByWorkspaceId[workspaceId] ?? null,
+              }),
+            });
+            await refreshStateFromServer(session);
+            showToast("재무 기준값을 저장했습니다.", "success");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       addSettlement(input) {
-        dispatch({ type: "addSettlement", payload: input });
-        showToast("이체 확인 내역을 기록했습니다.", "success");
+        void (async () => {
+          try {
+            const session = getRequiredSession();
+            await requestServerJson(session, "/api/settlements", {
+              method: "POST",
+              body: JSON.stringify({
+                spaceId: Number(input.workspaceId),
+                monthKey: input.month,
+                transferKey: input.transferKey,
+                fromAssetId: toNullableNumber(input.fromAccountId),
+                toAssetId: toNullableNumber(input.toAccountId),
+                amount: input.amount,
+                note: input.note,
+                completedAt: new Date().toISOString(),
+              }),
+            });
+            await refreshStateFromServer(session);
+            showToast("이체 확인 내역을 기록했습니다.", "success");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       removeSettlement(workspaceId, month, transferKey) {
-        dispatch({ type: "removeSettlement", payload: { workspaceId, month, transferKey } });
-        showToast("이체 확인을 취소했습니다.", "info");
+        const current = state.settlements.find(
+          (item) => item.workspaceId === workspaceId && item.month === month && item.transferKey === transferKey,
+        );
+        if (!current) return;
+        void (async () => {
+          try {
+            const session = getRequiredSession();
+            await requestServerJson(session, `/api/settlements/${current.id}`, {
+              method: "DELETE",
+            });
+            await refreshStateFromServer(session);
+            showToast("이체 확인을 취소했습니다.", "info");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       addTransaction(input) {
-        dispatch({ type: "addTransaction", payload: input });
-        showToast(`${input.merchantName} 거래를 추가했습니다.`, "success");
+        void (async () => {
+          try {
+            const nextState = reducer(stateRef.current, { type: "addTransaction", payload: input });
+            const previousIds = new Set(stateRef.current.transactions.map((item) => item.id));
+            const created = nextState.transactions.find((item) => !previousIds.has(item.id));
+            if (!created) throw new Error("추가할 거래를 찾지 못했습니다.");
+            await saveTransactionToServer(created);
+            showToast(`${input.merchantName} 거래를 추가했습니다.`, "success");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       updateTransactionDetails(workspaceId, transactionId, patch) {
-        dispatch({ type: "updateTransactionDetails", payload: { workspaceId, transactionId, patch } });
-        showToast("거래 기본 정보를 수정했습니다.", "success");
+        void (async () => {
+          try {
+            const nextState = reducer(stateRef.current, {
+              type: "updateTransactionDetails",
+              payload: { workspaceId, transactionId, patch },
+            });
+            const updated = nextState.transactions.find((item) => item.id === transactionId);
+            if (!updated) throw new Error("수정할 거래를 찾지 못했습니다.");
+            await saveTransactionToServer(updated);
+            showToast("거래 기본 정보를 수정했습니다.", "success");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       assignCategory(workspaceId, transactionId, categoryId) {
-        dispatch({ type: "assignCategory", payload: { workspaceId, transactionId, categoryId } });
-        showToast("거래 카테고리를 지정했습니다.", "success");
+        void (async () => {
+          try {
+            const nextState = reducer(stateRef.current, {
+              type: "assignCategory",
+              payload: { workspaceId, transactionId, categoryId },
+            });
+            const updated = nextState.transactions.find((item) => item.id === transactionId);
+            if (!updated) throw new Error("수정할 거래를 찾지 못했습니다.");
+            await saveTransactionToServer(updated);
+            showToast("거래 카테고리를 지정했습니다.", "success");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       clearCategory(workspaceId, transactionId) {
-        dispatch({ type: "clearCategory", payload: { workspaceId, transactionId } });
-        showToast("거래 카테고리를 해제했습니다.", "success");
+        void (async () => {
+          try {
+            const nextState = reducer(stateRef.current, {
+              type: "clearCategory",
+              payload: { workspaceId, transactionId },
+            });
+            const updated = nextState.transactions.find((item) => item.id === transactionId);
+            if (!updated) throw new Error("수정할 거래를 찾지 못했습니다.");
+            await saveTransactionToServer(updated);
+            showToast("거래 카테고리를 해제했습니다.", "success");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       assignCategoryByMerchant(workspaceId, merchantName, categoryId) {
-        dispatch({ type: "assignCategoryByMerchant", payload: { workspaceId, merchantName, categoryId } });
-        showToast(`${merchantName} 반복 거래에 카테고리를 반영했습니다.`, "success");
+        void (async () => {
+          try {
+            const nextState = reducer(stateRef.current, {
+              type: "assignCategoryByMerchant",
+              payload: { workspaceId, merchantName, categoryId },
+            });
+            const updated = nextState.transactions.filter((item) => item.workspaceId === workspaceId && item.merchantName === merchantName);
+            await Promise.all(updated.map((transaction) => saveTransactionToServer(transaction)));
+            showToast(`${merchantName} 반복 거래에 카테고리를 반영했습니다.`, "success");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       assignCategoryBatch(workspaceId, transactionIds, categoryId) {
-        dispatch({ type: "assignCategoryBatch", payload: { workspaceId, transactionIds, categoryId } });
         const category = state.categories.find((item) => item.id === categoryId);
-        showToast(`${transactionIds.length}건 거래에 ${category?.name ?? "카테고리"}를 일괄 반영했습니다.`, "success");
+        void (async () => {
+          try {
+            const nextState = reducer(stateRef.current, {
+              type: "assignCategoryBatch",
+              payload: { workspaceId, transactionIds, categoryId },
+            });
+            const updated = nextState.transactions.filter((item) => transactionIds.includes(item.id));
+            await Promise.all(updated.map((transaction) => saveTransactionToServer(transaction)));
+            showToast(`${transactionIds.length}건 거래에 ${category?.name ?? "카테고리"}를 일괄 반영했습니다.`, "success");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       assignTag(workspaceId, transactionId, tagId) {
-        dispatch({ type: "assignTag", payload: { workspaceId, transactionId, tagId } });
         const tag = state.tags.find((item) => item.id === tagId);
-        showToast(`${tag?.name ?? "태그"} 태그를 거래에 추가했습니다.`, "success");
+        void (async () => {
+          try {
+            const nextState = reducer(stateRef.current, {
+              type: "assignTag",
+              payload: { workspaceId, transactionId, tagId },
+            });
+            const updated = nextState.transactions.find((item) => item.id === transactionId);
+            if (!updated) throw new Error("수정할 거래를 찾지 못했습니다.");
+            await saveTransactionToServer(updated);
+            showToast(`${tag?.name ?? "태그"} 태그를 거래에 추가했습니다.`, "success");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       removeTag(workspaceId, transactionId, tagId) {
-        dispatch({ type: "removeTag", payload: { workspaceId, transactionId, tagId } });
         const tag = state.tags.find((item) => item.id === tagId);
-        showToast(`${tag?.name ?? "태그"} 태그를 거래에서 제거했습니다.`, "success");
+        void (async () => {
+          try {
+            const nextState = reducer(stateRef.current, {
+              type: "removeTag",
+              payload: { workspaceId, transactionId, tagId },
+            });
+            const updated = nextState.transactions.find((item) => item.id === transactionId);
+            if (!updated) throw new Error("수정할 거래를 찾지 못했습니다.");
+            await saveTransactionToServer(updated);
+            showToast(`${tag?.name ?? "태그"} 태그를 거래에서 제거했습니다.`, "success");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       assignTagBatch(workspaceId, transactionIds, tagId) {
-        dispatch({ type: "assignTagBatch", payload: { workspaceId, transactionIds, tagId } });
         const tag = state.tags.find((item) => item.id === tagId);
-        showToast(`${transactionIds.length}건 거래에 ${tag?.name ?? "태그"}를 일괄 반영했습니다.`, "success");
+        void (async () => {
+          try {
+            const nextState = reducer(stateRef.current, {
+              type: "assignTagBatch",
+              payload: { workspaceId, transactionIds, tagId },
+            });
+            const updated = nextState.transactions.filter((item) => transactionIds.includes(item.id));
+            await Promise.all(updated.map((transaction) => saveTransactionToServer(transaction)));
+            showToast(`${transactionIds.length}건 거래에 ${tag?.name ?? "태그"}를 일괄 반영했습니다.`, "success");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       assignTagByMerchant(workspaceId, merchantName, tagId) {
-        dispatch({ type: "assignTagByMerchant", payload: { workspaceId, merchantName, tagId } });
         const tag = state.tags.find((item) => item.id === tagId);
-        showToast(`${merchantName} 반복 거래에 ${tag?.name ?? "태그"}를 반영했습니다.`, "success");
+        void (async () => {
+          try {
+            const nextState = reducer(stateRef.current, {
+              type: "assignTagByMerchant",
+              payload: { workspaceId, merchantName, tagId },
+            });
+            const updated = nextState.transactions.filter((item) => item.workspaceId === workspaceId && item.merchantName === merchantName);
+            await Promise.all(updated.map((transaction) => saveTransactionToServer(transaction)));
+            showToast(`${merchantName} 반복 거래에 ${tag?.name ?? "태그"}를 반영했습니다.`, "success");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       updateTransactionFlags(workspaceId, transactionId, patch) {
-        dispatch({ type: "updateTransactionFlags", payload: { workspaceId, transactionId, patch } });
-        if (typeof patch.isLoop === "boolean") {
-          showToast(patch.isLoop ? "루프에 추가했습니다." : "루프에서 제외했습니다.", "success");
-          return;
-        }
-        if (typeof patch.isLoopIgnored === "boolean") {
-          showToast(patch.isLoopIgnored ? "이 추천은 숨겼습니다." : "숨긴 추천을 다시 보이게 했습니다.", "success");
-          return;
-        }
-        if (typeof patch.isSharedExpense === "boolean") {
-          showToast(
-            patch.isSharedExpense ? "거래 흐름 표시를 바꿨습니다." : "거래 흐름 표시를 해제했습니다.",
-            "success",
-          );
-          return;
-        }
-        if (typeof patch.isInternalTransfer === "boolean") {
-          showToast(
-            patch.isInternalTransfer ? "거래를 내부이체로 표시했습니다." : "거래의 내부이체 표시를 해제했습니다.",
-            "success",
-          );
-          return;
-        }
-        if (typeof patch.isExpenseImpact === "boolean") {
-          showToast(
-            patch.isExpenseImpact ? "거래를 다시 통계에 반영합니다." : "거래를 통계 제외 흐름으로 변경했습니다.",
-            "success",
-          );
-        }
+        void (async () => {
+          try {
+            const nextState = reducer(stateRef.current, {
+              type: "updateTransactionFlags",
+              payload: { workspaceId, transactionId, patch },
+            });
+            const updated = nextState.transactions.find((item) => item.id === transactionId);
+            if (!updated) throw new Error("수정할 거래를 찾지 못했습니다.");
+            await saveTransactionToServer(updated);
+            if (typeof patch.isLoop === "boolean") {
+              showToast(patch.isLoop ? "루프에 추가했습니다." : "루프에서 제외했습니다.", "success");
+              return;
+            }
+            if (typeof patch.isLoopIgnored === "boolean") {
+              showToast(patch.isLoopIgnored ? "이 추천은 숨겼습니다." : "숨긴 추천을 다시 보이게 했습니다.", "success");
+              return;
+            }
+            if (typeof patch.isSharedExpense === "boolean") {
+              showToast(
+                patch.isSharedExpense ? "거래 흐름 표시를 바꿨습니다." : "거래 흐름 표시를 해제했습니다.",
+                "success",
+              );
+              return;
+            }
+            if (typeof patch.isInternalTransfer === "boolean") {
+              showToast(
+                patch.isInternalTransfer ? "거래를 내부이체로 표시했습니다." : "거래의 내부이체 표시를 해제했습니다.",
+                "success",
+              );
+              return;
+            }
+            if (typeof patch.isExpenseImpact === "boolean") {
+              showToast(
+                patch.isExpenseImpact ? "거래를 다시 통계에 반영합니다." : "거래를 통계 제외 흐름으로 변경했습니다.",
+                "success",
+              );
+            }
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       setTransactionLoopFlagBatch(workspaceId, transactionIds, isLoop) {
-        dispatch({ type: "setTransactionLoopFlagBatch", payload: { workspaceId, transactionIds, isLoop } });
-        showToast(isLoop ? "선택한 거래를 루프로 묶었습니다." : "선택한 루프를 지웠습니다.", "success");
+        void (async () => {
+          try {
+            const nextState = reducer(stateRef.current, {
+              type: "setTransactionLoopFlagBatch",
+              payload: { workspaceId, transactionIds, isLoop },
+            });
+            const updated = nextState.transactions.filter((item) => transactionIds.includes(item.id));
+            await Promise.all(updated.map((transaction) => saveTransactionToServer(transaction)));
+            showToast(isLoop ? "선택한 거래를 루프로 묶었습니다." : "선택한 루프를 지웠습니다.", "success");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       setTransactionLoopIgnoredBatch(workspaceId, transactionIds, isLoopIgnored) {
-        dispatch({ type: "setTransactionLoopIgnoredBatch", payload: { workspaceId, transactionIds, isLoopIgnored } });
-        showToast(isLoopIgnored ? "추천을 숨겼습니다." : "추천을 다시 보이게 했습니다.", "success");
+        void (async () => {
+          try {
+            const nextState = reducer(stateRef.current, {
+              type: "setTransactionLoopIgnoredBatch",
+              payload: { workspaceId, transactionIds, isLoopIgnored },
+            });
+            const updated = nextState.transactions.filter((item) => transactionIds.includes(item.id));
+            await Promise.all(updated.map((transaction) => saveTransactionToServer(transaction)));
+            showToast(isLoopIgnored ? "추천을 숨겼습니다." : "추천을 다시 보이게 했습니다.", "success");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       setTransactionLoopGroupOverrideBatch(workspaceId, transactionIds, loopGroupOverrideKey, isLoop = true) {
-        dispatch({ type: "setTransactionLoopGroupOverrideBatch", payload: { workspaceId, transactionIds, loopGroupOverrideKey, isLoop } });
-        showToast("추천 루프를 하나로 합쳤습니다.", "success");
+        void (async () => {
+          try {
+            const nextState = reducer(stateRef.current, {
+              type: "setTransactionLoopGroupOverrideBatch",
+              payload: { workspaceId, transactionIds, loopGroupOverrideKey, isLoop },
+            });
+            const updated = nextState.transactions.filter((item) => transactionIds.includes(item.id));
+            await Promise.all(updated.map((transaction) => saveTransactionToServer(transaction)));
+            showToast("추천 루프를 하나로 합쳤습니다.", "success");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       setTransactionLoopDisplayNameBatch(workspaceId, transactionIds, loopDisplayName) {
-        dispatch({ type: "setTransactionLoopDisplayNameBatch", payload: { workspaceId, transactionIds, loopDisplayName } });
-        showToast(loopDisplayName?.trim() ? "루프 이름을 바꿨습니다." : "루프 이름을 기본값으로 되돌렸습니다.", "success");
+        void (async () => {
+          try {
+            const nextState = reducer(stateRef.current, {
+              type: "setTransactionLoopDisplayNameBatch",
+              payload: { workspaceId, transactionIds, loopDisplayName },
+            });
+            const updated = nextState.transactions.filter((item) => transactionIds.includes(item.id));
+            await Promise.all(updated.map((transaction) => saveTransactionToServer(transaction)));
+            showToast(loopDisplayName?.trim() ? "루프 이름을 바꿨습니다." : "루프 이름을 기본값으로 되돌렸습니다.", "success");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       addIncomeEntry(input) {
-        dispatch({ type: "addIncomeEntry", payload: input });
-        showToast(`${input.sourceName} 수입을 추가했습니다.`, "success");
+        void (async () => {
+          try {
+            const session = getRequiredSession();
+            await requestServerJson(session, "/api/income-entries", {
+              method: "POST",
+              body: JSON.stringify({
+                spaceId: Number(input.workspaceId),
+                ownerPersonId: toNullableNumber(input.ownerPersonId),
+                occurredAt: input.occurredAt,
+                sourceName: input.sourceName,
+                amount: input.amount,
+              }),
+            });
+            await refreshStateFromServer(session);
+            showToast(`${input.sourceName} 수입을 추가했습니다.`, "success");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
       deleteIncomeEntry(workspaceId, incomeEntryId) {
         const current = state.incomeEntries.find((item) => item.workspaceId === workspaceId && item.id === incomeEntryId);
         if (!current) return;
-        dispatch({ type: "deleteIncomeEntry", payload: { workspaceId, incomeEntryId } });
-        showToast(`${current.sourceName} 수입을 삭제했습니다.`, "success");
+        void (async () => {
+          try {
+            const session = getRequiredSession();
+            await requestServerJson(session, `/api/income-entries/${incomeEntryId}`, {
+              method: "DELETE",
+            });
+            await refreshStateFromServer(session);
+            showToast(`${current.sourceName} 수입을 삭제했습니다.`, "success");
+          } catch (error) {
+            handleServerMutationError(error);
+          }
+        })();
       },
     }),
     [isReady, showToast, state, workspaceLoopDataByWorkspaceId],
@@ -2987,3 +4230,5 @@ export function useAppState() {
   if (!context) throw new Error("useAppState must be used within AppStateProvider");
   return context;
 }
+
+

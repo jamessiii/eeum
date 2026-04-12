@@ -1,5 +1,6 @@
 import {
   clearAnalysisApiConfiguration,
+  getAnalysisApiBaseUrl,
   setAnalysisApiBaseUrl,
   setAnalysisSpaceId,
 } from "./api/analysisConfig";
@@ -15,6 +16,12 @@ export type AuthSession = {
   spaceId: number;
   spaceName: string;
   sessionKey: string;
+  availableSpaces: Array<{
+    spaceId: number;
+    spaceName: string;
+    inviteCode: string;
+    role: string;
+  }>;
 };
 
 function normalizeSession(value: Partial<AuthSession> | null | undefined): AuthSession | null {
@@ -22,13 +29,16 @@ function normalizeSession(value: Partial<AuthSession> | null | undefined): AuthS
   if (!value.apiBaseUrl || !value.displayName || !value.spaceName || !value.sessionKey) return null;
   if (!value.userId || !value.spaceId) return null;
 
+  const resolvedApiBaseUrl = getAnalysisApiBaseUrl() ?? value.apiBaseUrl;
+
   return {
-    apiBaseUrl: value.apiBaseUrl,
+    apiBaseUrl: resolvedApiBaseUrl,
     userId: value.userId,
     displayName: value.displayName,
     spaceId: value.spaceId,
     spaceName: value.spaceName,
     sessionKey: value.sessionKey,
+    availableSpaces: Array.isArray(value.availableSpaces) ? value.availableSpaces : [],
   };
 }
 
@@ -67,5 +77,6 @@ export function createAuthSession(baseUrl: string, response: PinSignInResponse):
     spaceId: response.space.id,
     spaceName: response.space.name,
     sessionKey: response.session.sessionKey,
+    availableSpaces: response.availableSpaces ?? [],
   };
 }

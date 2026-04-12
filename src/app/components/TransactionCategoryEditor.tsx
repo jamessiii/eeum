@@ -9,6 +9,7 @@ interface TransactionCategoryEditorProps {
   onCategoryChange: (categoryId: string) => void;
   onCategoryCommit?: (categoryId: string) => void;
   onFocus?: () => void;
+  onBlur?: () => void;
   guideTarget?: string;
   reviewSuggestionLabel?: string | null;
   isReviewFocused?: boolean;
@@ -29,6 +30,7 @@ export function TransactionCategoryEditor({
   onCategoryChange,
   onCategoryCommit,
   onFocus,
+  onBlur,
   guideTarget,
   reviewSuggestionLabel,
   isReviewFocused = false,
@@ -264,6 +266,7 @@ export function TransactionCategoryEditor({
         onBlur={() => {
           setIsFocused(false);
           setActiveSuggestionIndex(-1);
+          onBlur?.();
           if (skipNextBlurCommitRef.current) {
             skipNextBlurCommitRef.current = false;
             return;

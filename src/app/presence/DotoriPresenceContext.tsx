@@ -1,15 +1,16 @@
 import { createContext, useContext } from "react";
 import type { ReactNode } from "react";
-import type { DotoriPresenceConnection } from "../api/dotoriStorage";
+import type { AppPresenceConnection } from "../api/presence";
 
 export type DotoriPresenceTarget = {
   kind: string | null;
   id: string | null;
   label: string | null;
+  activityLabel?: string | null;
 };
 
 type DotoriPresenceContextValue = {
-  presenceConnections: DotoriPresenceConnection[];
+  presenceConnections: AppPresenceConnection[];
   currentTarget: DotoriPresenceTarget;
   setCurrentTarget: (target: DotoriPresenceTarget) => void;
 };

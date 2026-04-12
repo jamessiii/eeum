@@ -21,6 +21,8 @@ export interface FinancialProfile {
 export interface Person {
   id: ID;
   workspaceId: ID;
+  linkedUserId?: ID | null;
+  linkedUserDisplayName?: string | null;
   name: string;
   displayName: string;
   role: "owner" | "member";

@@ -7,7 +7,7 @@ export function useSyncDotoriPresenceTarget(target: DotoriPresenceTarget) {
   const lastPresenceTargetRef = useRef<string>("");
 
   useEffect(() => {
-    const nextTargetKey = `${target.kind ?? ""}|${target.id ?? ""}|${target.label ?? ""}`;
+    const nextTargetKey = `${target.kind ?? ""}|${target.id ?? ""}|${target.label ?? ""}|${target.activityLabel ?? ""}`;
     if (lastPresenceTargetRef.current === nextTargetKey) {
       return;
     }

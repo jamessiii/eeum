@@ -38,6 +38,8 @@ type ServerFinancialProfileResponse = {
 type ServerPersonResponse = {
   id: number;
   spaceId: number;
+  userId: number | null;
+  linkedUserDisplayName: string | null;
   name: string;
   displayName: string;
   role: string;
@@ -344,6 +346,8 @@ export async function loadServerAppState(session: AuthSession): Promise<{ state:
   const nextPeople: Person[] = people.map((person) => ({
     id: String(person.id),
     workspaceId,
+    linkedUserId: toId(person.userId),
+    linkedUserDisplayName: person.linkedUserDisplayName,
     name: person.name,
     displayName: person.displayName,
     role: person.role === "OWNER" ? "owner" : "member",

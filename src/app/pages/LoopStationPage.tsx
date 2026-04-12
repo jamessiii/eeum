@@ -9,6 +9,8 @@ import { getMotionStyle } from "../../shared/utils/motion";
 import { AppModal } from "../components/AppModal";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { TransactionRowHeader } from "../components/TransactionRowHeader";
+import { getPresenceAccent } from "../dotoriPresenceVisuals";
+import { useDotoriPresenceLocks, useSyncDotoriPresenceTarget } from "../presence/useDotoriPresenceLocks";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
 
@@ -148,6 +150,74 @@ export function LoopStationPage() {
   const selectedLoopPriorityCategoryIds = scope.financialProfile?.loopPriorityCategoryIds ?? [];
   const ownerNameMap = useMemo(() => new Map(scope.people.map((person) => [person.id, person.displayName || person.name])), [scope.people]);
   const transactionMap = useMemo(() => new Map(scope.transactions.map((transaction) => [transaction.id, transaction])), [scope.transactions]);
+  const { getPresenceForTarget, showLockedTargetToast } = useDotoriPresenceLocks("고정비");
+  const nextPresenceTarget = useMemo(() => {
+    if (detailState) {
+      return {
+        kind: detailState.kind === "managed" ? "managed-loop" : "loop-recommendation",
+        id: detailState.key,
+        label:
+          detailState.kind === "managed"
+            ? managedLoopByKey.get(detailState.key)?.merchantName ?? null
+            : recommendationByKey.get(detailState.key)?.merchantName ?? null,
+      };
+    }
+    if (editingManagedLoopKey) {
+      return {
+        kind: "managed-loop",
+        id: editingManagedLoopKey,
+        label: managedLoopByKey.get(editingManagedLoopKey)?.merchantName ?? null,
+      };
+    }
+    if (managedLoopMergeState) {
+      return {
+        kind: "managed-loop",
+        id: managedLoopMergeState.targetKey,
+        label: managedLoopByKey.get(managedLoopMergeState.targetKey)?.merchantName ?? null,
+      };
+    }
+    if (recommendationMergeState) {
+      return {
+        kind: "loop-recommendation",
+        id: recommendationMergeState.targetKey,
+        label: recommendationByKey.get(recommendationMergeState.targetKey)?.merchantName ?? null,
+      };
+    }
+    if (managedLoopSplitState) {
+      return {
+        kind: "managed-loop",
+        id: managedLoopSplitState.sourceKey,
+        label: managedLoopByKey.get(managedLoopSplitState.sourceKey)?.merchantName ?? managedLoopSplitState.displayName,
+      };
+    }
+    if (draggingManagedLoopKey) {
+      return {
+        kind: "managed-loop",
+        id: draggingManagedLoopKey,
+        label: managedLoopByKey.get(draggingManagedLoopKey)?.merchantName ?? null,
+      };
+    }
+    if (draggingRecommendationKey) {
+      return {
+        kind: "loop-recommendation",
+        id: draggingRecommendationKey,
+        label: recommendationByKey.get(draggingRecommendationKey)?.merchantName ?? null,
+      };
+    }
+    return { kind: null, id: null, label: null };
+  }, [
+    detailState,
+    draggingManagedLoopKey,
+    draggingRecommendationKey,
+    editingManagedLoopKey,
+    managedLoopByKey,
+    managedLoopMergeState,
+    managedLoopSplitState,
+    recommendationByKey,
+    recommendationMergeState,
+  ]);
+
+  useSyncDotoriPresenceTarget(nextPresenceTarget);
 
   const updateLoopPriorityCategories = (nextCategoryIds: string[]) => {
     setFinancialProfile(workspaceId, {
@@ -362,7 +432,7 @@ export function LoopStationPage() {
                 key={item.merchantKey}
                 className={`loop-station-card loop-station-card--recommendation${draggingRecommendationKey === item.merchantKey ? " is-dragging" : ""}${
                   dropTargetRecommendationKey === item.merchantKey ? " is-drop-target" : ""
-                }`}
+                }${getPresenceForTarget("loop-recommendation", item.merchantKey).length ? " is-presence-target has-presence-badge" : ""}`}
                 style={getMotionStyle(index + 1.2)}
                 draggable
                 onDragStart={() => setDraggingRecommendationKey(item.merchantKey)}
@@ -384,6 +454,28 @@ export function LoopStationPage() {
                   openRecommendationMergeModal(draggingRecommendationKey, item.merchantKey);
                 }}
               >
+                {getPresenceForTarget("loop-recommendation", item.merchantKey).length ? (
+                  <span className="dotori-presence-target-badge-list is-floating" aria-hidden="true">
+                    {getPresenceForTarget("loop-recommendation", item.merchantKey).map((connection) => {
+                      const accent = getPresenceAccent(connection.username);
+                      return (
+                        <span
+                          key={`${item.merchantKey}-${connection.clientId}`}
+                          className="dotori-presence-target-badge"
+                          style={
+                            {
+                              "--presence-bg": accent.background,
+                              "--presence-border": accent.border,
+                              "--presence-text": accent.text,
+                            } as Record<string, string>
+                          }
+                        >
+                          {connection.username}
+                        </span>
+                      );
+                    })}
+                  </span>
+                ) : null}
                 <div className="loop-station-card-head">
                   <div>
                     <h3>{item.merchantName}</h3>
@@ -408,7 +500,14 @@ export function LoopStationPage() {
                   </div>
                 </div>
                 <div className="dashboard-summary-action loop-station-card-actions" style={{ marginLeft: 0 }}>
-                  <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setDetailState({ kind: "recommendation", key: item.merchantKey })}>
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary btn-sm"
+                    onClick={() => {
+                      if (showLockedTargetToast("loop-recommendation", item.merchantKey, item.merchantName)) return;
+                      setDetailState({ kind: "recommendation", key: item.merchantKey });
+                    }}
+                  >
                     상세보기
                   </button>
                   <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setTransactionLoopIgnoredBatch(workspaceId, item.matchedTransactionIds, true)}>
@@ -448,7 +547,7 @@ export function LoopStationPage() {
               return (
                 <article
                   key={loop.key}
-                  className={`loop-station-card${draggingManagedLoopKey === loop.key ? " is-dragging" : ""}${dropTargetManagedLoopKey === loop.key ? " is-drop-target" : ""}`}
+                  className={`loop-station-card${draggingManagedLoopKey === loop.key ? " is-dragging" : ""}${dropTargetManagedLoopKey === loop.key ? " is-drop-target" : ""}${getPresenceForTarget("managed-loop", loop.key).length ? " is-presence-target has-presence-badge" : ""}`}
                   style={getMotionStyle(index + 2)}
                   draggable
                   onDragStart={() => setDraggingManagedLoopKey(loop.key)}
@@ -470,6 +569,28 @@ export function LoopStationPage() {
                     openManagedLoopMergeModal(draggingManagedLoopKey, loop.key);
                   }}
                 >
+                  {getPresenceForTarget("managed-loop", loop.key).length ? (
+                    <span className="dotori-presence-target-badge-list is-floating" aria-hidden="true">
+                      {getPresenceForTarget("managed-loop", loop.key).map((connection) => {
+                        const accent = getPresenceAccent(connection.username);
+                        return (
+                          <span
+                            key={`${loop.key}-${connection.clientId}`}
+                            className="dotori-presence-target-badge"
+                            style={
+                              {
+                                "--presence-bg": accent.background,
+                                "--presence-border": accent.border,
+                                "--presence-text": accent.text,
+                              } as Record<string, string>
+                            }
+                          >
+                            {connection.username}
+                          </span>
+                        );
+                      })}
+                    </span>
+                  ) : null}
                   <div className="loop-station-card-head">
                     <div>
                       <span className="loop-station-card-kicker">{formatCadenceLabel(loop.averageIntervalDays)}</span>
@@ -498,7 +619,15 @@ export function LoopStationPage() {
                       ) : (
                         <div className="loop-station-name-row">
                           <h3>{loop.merchantName}</h3>
-                          <button type="button" className="board-case-edit-button" onClick={() => beginManagedLoopNameEdit(loop.key, loop.merchantName)} aria-label={`${loop.merchantName} 루프 이름 수정`}>
+                          <button
+                            type="button"
+                            className="board-case-edit-button"
+                            onClick={() => {
+                              if (showLockedTargetToast("managed-loop", loop.key, loop.merchantName)) return;
+                              beginManagedLoopNameEdit(loop.key, loop.merchantName);
+                            }}
+                            aria-label={`${loop.merchantName} 루프 이름 수정`}
+                          >
                             ✎
                           </button>
                         </div>
@@ -530,6 +659,7 @@ export function LoopStationPage() {
                       type="button"
                       className="btn btn-outline-secondary btn-sm"
                       onClick={() => {
+                        if (showLockedTargetToast("managed-loop", loop.key, loop.merchantName)) return;
                         setDetailState({ kind: "managed", key: loop.key });
                         setSelectedManagedTransactionIds([]);
                       }}

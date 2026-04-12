@@ -12,6 +12,8 @@ import { getMotionStyle } from "../../shared/utils/motion";
 import { AppModal } from "../components/AppModal";
 import { AppSelect } from "../components/AppSelect";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
+import { getPresenceAccent } from "../dotoriPresenceVisuals";
+import { useDotoriPresenceLocks, useSyncDotoriPresenceTarget } from "../presence/useDotoriPresenceLocks";
 import { useAppState } from "../state/AppStateProvider";
 import { getWorkspaceScope } from "../state/selectors";
 
@@ -584,6 +586,34 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
     [editingAccount, linkedCategoriesByAccountId],
   );
   const editingCard = useMemo(() => scope.cards.find((card) => card.id === editingCardId) ?? null, [scope.cards, editingCardId]);
+  const { getPresenceForTarget, showLockedTargetToast } = useDotoriPresenceLocks("카드/계좌");
+  const nextPresenceTarget = useMemo(() => {
+    if (editingCard) {
+      return { kind: "asset", id: editingCard.id, label: editingCard.name };
+    }
+    if (editingAccount) {
+      return { kind: "asset", id: editingAccount.id, label: editingAccount.alias || editingAccount.name };
+    }
+    if (inlineEditingPersonId) {
+      const person = scope.people.find((item) => item.id === inlineEditingPersonId) ?? null;
+      if (person) {
+        return { kind: "person", id: person.id, label: person.displayName || person.name };
+      }
+    }
+    if (dragItem) {
+      if (dragItem.itemType === "person") {
+        const person = scope.people.find((item) => item.id === dragItem.id) ?? null;
+        return { kind: "person", id: dragItem.id, label: person?.displayName || person?.name || null };
+      }
+      if (dragItem.itemType === "account" || dragItem.itemType === "card") {
+        const asset = [...scope.accounts, ...scope.cards].find((item) => item.id === dragItem.id) ?? null;
+        return { kind: "asset", id: dragItem.id, label: asset ? ("alias" in asset ? asset.alias || asset.name : asset.name) : null };
+      }
+    }
+    return { kind: null, id: null, label: null };
+  }, [dragItem, editingAccount, editingCard, inlineEditingPersonId, scope.accounts, scope.cards, scope.people]);
+
+  useSyncDotoriPresenceTarget(nextPresenceTarget);
   const activeCardLinkMessage = useMemo(() => {
     if (!activeCardLinkTargetId) return "";
     const targetCard = scope.cards.find((card) => card.id === activeCardLinkTargetId);
@@ -698,6 +728,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
   };
 
   const startInlinePersonEdit = (person: { id: string; name: string; displayName: string }) => {
+    if (showLockedTargetToast("person", person.id, person.displayName || person.name)) return;
     setInlineEditingPersonId(person.id);
     setInlinePersonName(person.displayName || person.name);
   };
@@ -1405,10 +1436,11 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
         >
           {embeddedSections.map((section, index) => {
             const isInlineEditing = inlineEditingPersonId === section.person.id;
+            const personPresenceConnections = getPresenceForTarget("person", section.person.id);
             return (
               <section
                 key={section.id}
-                className={`board-case-section category-case-section people-case-section${getDragStateClassName(section.id)}`}
+                className={`board-case-section category-case-section people-case-section${getDragStateClassName(section.id)}${personPresenceConnections.length ? " is-presence-target" : ""}`}
                 data-guide-target="people-visible-asset-card"
                 style={getMotionStyle(index + 2)}
                 draggable={!isInlineEditing}
@@ -1449,6 +1481,28 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                         <h3>{section.title}</h3>
                       )}
                       <span className="people-role-pill">{getPersonRoleLabel(section.person.role)}</span>
+                      {personPresenceConnections.length ? (
+                        <span className="dotori-presence-target-badge-list" aria-hidden="true">
+                          {personPresenceConnections.map((connection) => {
+                            const accent = getPresenceAccent(connection.username);
+                            return (
+                              <span
+                                key={`${section.person.id}-${connection.clientId}`}
+                                className="dotori-presence-target-badge"
+                                style={
+                                  {
+                                    "--presence-bg": accent.background,
+                                    "--presence-border": accent.border,
+                                    "--presence-text": accent.text,
+                                  } as Record<string, string>
+                                }
+                              >
+                                {connection.username}
+                              </span>
+                            );
+                          })}
+                        </span>
+                      ) : null}
                     </div>
                     <div className="board-case-section-action">
                       <button
@@ -1501,6 +1555,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                     }}
                   >
                     {section.linkedAccounts.map((account) => {
+                      const accountPresenceConnections = getPresenceForTarget("asset", account.id);
                       const usageLabel =
                         ACCOUNT_USAGE_OPTIONS.find((option) => option.value === getVisibleAccountUsageType(account.usageType, account.isShared))?.label ??
                         "기타";
@@ -1519,7 +1574,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                             isMeeting ? " is-meeting-account" : ""
                           }${
                             isCategoryConnectionDragItem(dragItem) ? " is-category-link-target" : ""
-                          }${isActiveCategoryLinkTarget ? " is-category-link-active" : ""}${getDragStateClassName(account.id)}`}
+                          }${isActiveCategoryLinkTarget ? " is-category-link-active" : ""}${getDragStateClassName(account.id)}${accountPresenceConnections.length ? " is-presence-target has-presence-badge" : ""}`}
                           data-guide-target={
                             account.id === guideCategoryLinkAccountId
                               ? "people-category-link-account-card"
@@ -1565,6 +1620,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                           type="button"
                           className="board-case-edit-button category-case-card-edit"
                           onClick={() => {
+                            if (showLockedTargetToast("asset", account.id, account.alias || account.name)) return;
                             setEditingAccountId(account.id);
                             setEditAccountDraft(createDraftFromAccount(account));
                           }}
@@ -1572,6 +1628,28 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                         >
                           ✎
                         </button>
+                        {accountPresenceConnections.length ? (
+                          <span className="dotori-presence-target-badge-list is-floating" aria-hidden="true">
+                            {accountPresenceConnections.map((connection) => {
+                              const accent = getPresenceAccent(connection.username);
+                              return (
+                                <span
+                                  key={`${account.id}-${connection.clientId}`}
+                                  className="dotori-presence-target-badge"
+                                  style={
+                                    {
+                                      "--presence-bg": accent.background,
+                                      "--presence-border": accent.border,
+                                      "--presence-text": accent.text,
+                                    } as Record<string, string>
+                                  }
+                                >
+                                  {connection.username}
+                                </span>
+                              );
+                            })}
+                          </span>
+                        ) : null}
                           <div className="category-case-card-copy people-board-card-copy">
                             <strong>{account.alias || account.name}</strong>
                             <span>{account.institutionName || "직접 입력"}</span>
@@ -1631,6 +1709,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                     onDrop={(event) => handleCardAppendDrop(event, section.person.id, section.linkedCards.length)}
                   >
                     {section.linkedCards.map((card) => {
+                      const cardPresenceConnections = getPresenceForTarget("asset", card.id);
                       const cardAccountLabel = getCardAccountLabel(card.cardType);
                       const linkedAccountName = card.linkedAccountId ? accountNameMap.get(card.linkedAccountId) ?? "없음" : "없음";
                       const cardIdentifier = getVisibleCardIdentifier(card.cardNumberMasked);
@@ -1642,7 +1721,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                           key={card.id}
                           className={`category-case-card people-board-card${
                             dragItem?.itemType === "account" && dragItem.ownerPersonId === section.person.id ? " is-account-link-target" : ""
-                          }${isActiveCardLinkTarget ? " is-account-link-active" : ""}${getDragStateClassName(card.id)}`}
+                          }${isActiveCardLinkTarget ? " is-account-link-active" : ""}${getDragStateClassName(card.id)}${cardPresenceConnections.length ? " is-presence-target has-presence-badge" : ""}`}
                           data-guide-target={card.id === guideHideTargetCardId ? "people-hide-guide-card" : "people-visible-asset-card"}
                           draggable
                           onDragStart={(event) => {
@@ -1684,6 +1763,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                           type="button"
                           className="board-case-edit-button category-case-card-edit"
                           onClick={() => {
+                            if (showLockedTargetToast("asset", card.id, card.name)) return;
                             setEditingCardId(card.id);
                             setEditCardDraft(createDraftFromCard(card));
                           }}
@@ -1691,6 +1771,28 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                         >
                           ✎
                         </button>
+                        {cardPresenceConnections.length ? (
+                          <span className="dotori-presence-target-badge-list is-floating" aria-hidden="true">
+                            {cardPresenceConnections.map((connection) => {
+                              const accent = getPresenceAccent(connection.username);
+                              return (
+                                <span
+                                  key={`${card.id}-${connection.clientId}`}
+                                  className="dotori-presence-target-badge"
+                                  style={
+                                    {
+                                      "--presence-bg": accent.background,
+                                      "--presence-border": accent.border,
+                                      "--presence-text": accent.text,
+                                    } as Record<string, string>
+                                  }
+                                >
+                                  {connection.username}
+                                </span>
+                              );
+                            })}
+                          </span>
+                        ) : null}
                         <div className="category-case-card-copy people-board-card-copy">
                           <strong>{card.name}</strong>
                           <span>{`${card.issuerName || "카드사 미확인"}${cardIdentifier ? ` (${cardIdentifier})` : ""}`}</span>

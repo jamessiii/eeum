@@ -1,6 +1,23 @@
 const API_BASE_URL_STORAGE_KEY = "spending-diary.analysis.api-base-url";
 const SPACE_ID_STORAGE_KEY = "spending-diary.analysis.space-id";
 
+function isLocalHostname(hostname: string) {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+}
+
+function isUnsafeStoredBaseUrl(value: string | null) {
+  if (!value) return false;
+
+  try {
+    const url = new URL(value);
+    if (isLocalHostname(url.hostname)) return true;
+    if (window.location.protocol === "https:" && url.protocol !== "https:") return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 function readStorageValue(key: string) {
   if (typeof window === "undefined") return null;
   const value = window.localStorage.getItem(key)?.trim();
@@ -21,10 +38,19 @@ function normalizeSpaceId(value: string | number | null | undefined) {
 }
 
 export function getAnalysisApiBaseUrl() {
-  return (
-    normalizeBaseUrl(readStorageValue(API_BASE_URL_STORAGE_KEY)) ??
-    normalizeBaseUrl(import.meta.env.VITE_DIARY_API_BASE_URL)
-  );
+  const storedValue = normalizeBaseUrl(readStorageValue(API_BASE_URL_STORAGE_KEY));
+  const envValue = normalizeBaseUrl(import.meta.env.VITE_DIARY_API_BASE_URL);
+
+  if (typeof window === "undefined") {
+    return storedValue ?? envValue;
+  }
+
+  const currentHostname = window.location.hostname;
+  if (!isLocalHostname(currentHostname) && isUnsafeStoredBaseUrl(storedValue)) {
+    return envValue ?? storedValue;
+  }
+
+  return storedValue ?? envValue;
 }
 
 export function getAnalysisSpaceId() {

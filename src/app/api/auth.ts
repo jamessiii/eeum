@@ -25,6 +25,7 @@ export type PinSignInResponse = {
     id: number;
     name: string;
     slug: string;
+    inviteCode: string;
     description: string;
     timezone: string;
     status: string;
@@ -68,6 +69,12 @@ export type PinSignInResponse = {
     createdAt: string;
     updatedAt: string;
   };
+  availableSpaces: Array<{
+    spaceId: number;
+    spaceName: string;
+    inviteCode: string;
+    role: string;
+  }>;
 };
 
 export type PinSignUpRequest = {
@@ -79,6 +86,18 @@ export type PinSignUpRequest = {
 export type PinSignUpResponse = {
   displayName: string;
   spaceName: string;
+};
+
+export type JoinByInviteRequest = {
+  apiBaseUrl?: string;
+  sessionKey: string;
+  inviteCode: string;
+};
+
+export type SwitchSpaceRequest = {
+  apiBaseUrl?: string;
+  sessionKey: string;
+  spaceId: number;
 };
 
 type ErrorResponse = {
@@ -152,5 +171,61 @@ export async function signUpWithPin(request: PinSignUpRequest) {
   return {
     baseUrl,
     data: (await response.json()) as PinSignUpResponse,
+  };
+}
+
+export async function joinByInviteCode(request: JoinByInviteRequest) {
+  const baseUrl = resolveAnalysisApiBaseUrl(request.apiBaseUrl);
+  if (!baseUrl) {
+    throw new Error("서버 주소를 입력해주세요.");
+  }
+
+  const response = await fetch(`${baseUrl}/api/auth/join-by-invite`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({
+      sessionKey: request.sessionKey,
+      inviteCode: request.inviteCode,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+
+  return {
+    baseUrl,
+    data: (await response.json()) as PinSignInResponse,
+  };
+}
+
+export async function switchSpace(request: SwitchSpaceRequest) {
+  const baseUrl = resolveAnalysisApiBaseUrl(request.apiBaseUrl);
+  if (!baseUrl) {
+    throw new Error("?쒕쾭 二쇱냼瑜??낅젰?댁＜?몄슂.");
+  }
+
+  const response = await fetch(`${baseUrl}/api/auth/switch-space`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({
+      sessionKey: request.sessionKey,
+      spaceId: request.spaceId,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+
+  return {
+    baseUrl,
+    data: (await response.json()) as PinSignInResponse,
   };
 }

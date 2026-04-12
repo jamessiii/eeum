@@ -19,6 +19,7 @@ import { getSourceTypeLabel } from "../../domain/transactions/sourceTypes";
 import { formatCurrency, formatPercent } from "../../shared/utils/format";
 import { completeGuideStepAction } from "../../domain/guidance/guideRuntime";
 import { getMotionStyle } from "../../shared/utils/motion";
+import { getPresenceAccent } from "../dotoriPresenceVisuals";
 import { useAppState } from "../state/AppStateProvider";
 import { AppModal } from "../components/AppModal";
 import { BoardCaseSection } from "../components/BoardCase";
@@ -26,6 +27,7 @@ import { CompletionBanner } from "../components/CompletionBanner";
 import { EmptyStateCallout } from "../components/EmptyStateCallout";
 import { AppSelect } from "../components/AppSelect";
 import { IncomeManagementContent } from "../components/IncomeManagementContent";
+import { useDotoriPresenceLocks, useSyncDotoriPresenceTarget } from "../presence/useDotoriPresenceLocks";
 import { TransactionCategoryEditor } from "../components/TransactionCategoryEditor";
 import { TransactionRowHeader } from "../components/TransactionRowHeader";
 import { getWorkspaceScope } from "../state/selectors";
@@ -158,6 +160,9 @@ type CalendarCell = {
 };
 
 type DashboardCalendarProcessingMode = "review" | "uncategorized" | null;
+type DashboardCalendarFocusedField =
+  | { transactionId: string; field: "loop" | "category" | "note" }
+  | null;
 
 type LoopConfirmState = {
   transactionId: string;
@@ -1512,6 +1517,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
     useState<DashboardCalendarProcessingMode>(null);
   const [dashboardReviewWorkflow, setDashboardReviewWorkflow] = useState<DashboardReviewWorkflowState | null>(null);
   const [dashboardUncategorizedFocusTransactionId, setDashboardUncategorizedFocusTransactionId] = useState<string | null>(null);
+  const [dashboardCalendarFocusedField, setDashboardCalendarFocusedField] = useState<DashboardCalendarFocusedField>(null);
   const [loopConfirmState, setLoopConfirmState] = useState<LoopConfirmState | null>(null);
   const [loopConfirmDragMode, setLoopConfirmDragMode] = useState<boolean | null>(null);
   const [selectedStatementHistoryYear, setSelectedStatementHistoryYear] = useState(String(new Date().getFullYear()));
@@ -1544,6 +1550,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
     peakAmount: number;
   } | null>(null);
   const [isAnnualTrendTooltipFading, setIsAnnualTrendTooltipFading] = useState(false);
+  const { getPresenceForTarget } = useDotoriPresenceLocks(mode === "dashboard" ? "첫장" : "돌아보기");
   const annualMonthFadeTimerRef = useRef<number | null>(null);
   const annualMonthHideTimerRef = useRef<number | null>(null);
   const annualTrendFadeTimerRef = useRef<number | null>(null);
@@ -1618,6 +1625,40 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
       .sort((left, right) => right[0].localeCompare(left[0], "ko"))
       .map(([month, records]) => ({ month, records }));
   }, [visibleStatementHistoryRecords]);
+  const nextPresenceTarget = useMemo(() => {
+    const processingActivityLabel =
+      dashboardCalendarProcessingMode === "review"
+        ? "자동검토 처리 중"
+        : dashboardCalendarProcessingMode === "uncategorized"
+          ? "분류 작업 중"
+          : null;
+
+    if (dashboardCalendarFocusedField && selectedCalendarDate) {
+      const fieldActivityLabel =
+        dashboardCalendarFocusedField.field === "category"
+          ? "카테고리 분류 중"
+          : dashboardCalendarFocusedField.field === "note"
+            ? "비고 입력 중"
+            : "루프 확인 중";
+      return {
+        kind: "calendar-cell",
+        id: `${selectedCalendarDate}|${dashboardCalendarFocusedField.transactionId}|${dashboardCalendarFocusedField.field}`,
+        label: `${selectedCalendarDate} ${dashboardCalendarFocusedField.field}`,
+        activityLabel: processingActivityLabel ?? fieldActivityLabel,
+      };
+    }
+    if (!selectedCalendarDate) {
+      return { kind: null, id: null, label: null };
+    }
+    return {
+      kind: "calendar-date",
+      id: selectedCalendarDate,
+      label: selectedCalendarDate,
+      activityLabel: processingActivityLabel ?? "날짜 확인 중",
+    };
+  }, [dashboardCalendarFocusedField, dashboardCalendarProcessingMode, selectedCalendarDate]);
+
+  useSyncDotoriPresenceTarget(nextPresenceTarget);
 
   useEffect(() => {
     const nextSelectedMonth = monthOptions.includes(selectedDashboardMonth)
@@ -2578,11 +2619,12 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
         {monthCells.map((cell) => {
           const isActiveMonth = monthValue === calendarMonthValue;
           const isSelected = isActiveMonth && selectedCalendarCell?.dateKey === cell.dateKey;
+          const cellPresenceConnections = getPresenceForTarget("calendar-date", cell.dateKey);
           return (
             <button
               key={`${monthValue}-${cell.dateKey}`}
               type="button"
-              className={`dashboard-calendar-cell${cell.isCurrentMonth ? "" : " is-outside"}${isSelected ? " is-selected" : ""}`}
+              className={`dashboard-calendar-cell${cell.isCurrentMonth ? "" : " is-outside"}${isSelected ? " is-selected" : ""}${cellPresenceConnections.length ? " is-presence-target" : ""}`}
               onClick={() => {
                 if (calendarSwipeIsDraggingRef.current || calendarSwipeSuppressClickRef.current) {
                   return;
@@ -2593,6 +2635,28 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
                 setSelectedCalendarDate(cell.dateKey);
               }}
             >
+              {cellPresenceConnections.length ? (
+                <span className="dotori-presence-target-badge-list is-floating dashboard-calendar-presence-badges" aria-hidden="true">
+                  {cellPresenceConnections.map((connection) => {
+                    const accent = getPresenceAccent(connection.username);
+                    return (
+                      <span
+                        key={`${cell.dateKey}-${connection.clientId}`}
+                        className="dotori-presence-target-badge"
+                        style={
+                          {
+                            "--presence-bg": accent.background,
+                            "--presence-border": accent.border,
+                            "--presence-text": accent.text,
+                          } as Record<string, string>
+                        }
+                      >
+                        {connection.activityLabel ? `${connection.username} · ${connection.activityLabel}` : connection.username}
+                      </span>
+                    );
+                  })}
+                </span>
+              ) : null}
               <div className="dashboard-calendar-cell-head">
                 <span
                   className={`dashboard-calendar-date${cell.dayOfWeek === 0 ? " is-sunday" : ""}${cell.dayOfWeek === 6 ? " is-saturday" : ""}`}
@@ -2614,6 +2678,34 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
       </div>
     </>
   );
+
+  const renderCalendarCellPresenceBadges = (targetId: string) => {
+    const connections = getPresenceForTarget("calendar-cell", targetId);
+    if (!connections.length) return null;
+
+    return (
+      <span className="dotori-presence-target-badge-list is-floating dashboard-calendar-cell-presence-badges" aria-hidden="true">
+        {connections.map((connection) => {
+          const accent = getPresenceAccent(connection.username);
+            return (
+              <span
+                key={`${targetId}-${connection.clientId}`}
+                className="dotori-presence-target-badge"
+              style={
+                {
+                  "--presence-bg": accent.background,
+                  "--presence-border": accent.border,
+                  "--presence-text": accent.text,
+                } as Record<string, string>
+              }
+              >
+                {connection.activityLabel ? `${connection.username} · ${connection.activityLabel}` : connection.username}
+              </span>
+            );
+          })}
+      </span>
+    );
+  };
 
   const handleCalendarSwipeStart = (event: PointerEvent<HTMLDivElement>) => {
     if (isCalendarSwipeAnimating) return;
@@ -4034,6 +4126,12 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
                     dashboardUncategorizedFocusTransactionId === transaction.id;
                   const categoryReviewHint = dashboardCategorySuggestionLabelsByTransactionId.get(transaction.id) ?? null;
                   const inlineReview = isWorkflowPrimary ? activeDashboardWorkflowReview : null;
+                  const loopCellTargetId = `${selectedCalendarDate}|${transaction.id}|loop`;
+                  const categoryCellTargetId = `${selectedCalendarDate}|${transaction.id}|category`;
+                  const noteCellTargetId = `${selectedCalendarDate}|${transaction.id}|note`;
+                  const hasLoopPresence = getPresenceForTarget("calendar-cell", loopCellTargetId).length > 0;
+                  const hasCategoryPresence = getPresenceForTarget("calendar-cell", categoryCellTargetId).length > 0;
+                  const hasNotePresence = getPresenceForTarget("calendar-cell", noteCellTargetId).length > 0;
 
                   return (
                     <Fragment key={transaction.id}>
@@ -4055,11 +4153,20 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
                           <strong>{formatCurrency(transaction.amount)}</strong>
                         </td>
                         <td className="transaction-owner-cell">{getDashboardTransactionOwnerLabel(transaction)}</td>
-                        <td className="transaction-loop-cell">
+                        <td className={`transaction-loop-cell dashboard-calendar-grid-cell${hasLoopPresence ? " is-presence-target" : ""}`}>
+                          {renderCalendarCellPresenceBadges(loopCellTargetId)}
                           <label className="transaction-loop-toggle">
                             <input
                               type="checkbox"
                               checked={transaction.isLoop ?? false}
+                              onFocus={() => {
+                                setDashboardCalendarFocusedField({ transactionId: transaction.id, field: "loop" });
+                              }}
+                              onBlur={() => {
+                                setDashboardCalendarFocusedField((current) =>
+                                  current?.transactionId === transaction.id && current.field === "loop" ? null : current,
+                                );
+                              }}
                               onChange={(event) => {
                                 if (!event.target.checked) {
                                   updateTransactionFlags(workspaceId, transaction.id, { isLoop: false });
@@ -4075,16 +4182,23 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
                             />
                           </label>
                         </td>
-                        <td className={`dashboard-calendar-grid-cell${inlineReview?.reviewType === "category_suggestion" ? " is-review-focus" : ""}`}>
+                        <td className={`dashboard-calendar-grid-cell${inlineReview?.reviewType === "category_suggestion" ? " is-review-focus" : ""}${hasCategoryPresence ? " is-presence-target" : ""}`}>
+                          {renderCalendarCellPresenceBadges(categoryCellTargetId)}
                           <TransactionCategoryEditor
                             transaction={transaction}
                             categories={scope.categories}
                             categoryName={transaction.categoryId ? categoryLabelMap.get(transaction.categoryId) ?? null : null}
                             reviewSuggestionLabel={categoryReviewHint}
                             onFocus={() => {
+                              setDashboardCalendarFocusedField({ transactionId: transaction.id, field: "category" });
                               if (dashboardCalendarProcessingMode === "uncategorized") {
                                 setDashboardUncategorizedFocusTransactionId(transaction.id);
                               }
+                            }}
+                            onBlur={() => {
+                              setDashboardCalendarFocusedField((current) =>
+                                current?.transactionId === transaction.id && current.field === "category" ? null : current,
+                              );
                             }}
                             isReviewFocused={Boolean(
                               activeDashboardWorkflowReview?.reviewType === "category_suggestion" &&
@@ -4100,18 +4214,23 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
                             }}
                           />
                         </td>
-                        <td className="dashboard-calendar-grid-cell">
+                        <td className={`dashboard-calendar-grid-cell${hasNotePresence ? " is-presence-target" : ""}`}>
+                          {renderCalendarCellPresenceBadges(noteCellTargetId)}
                           <input
                             type="text"
                             className="form-control form-control-sm dashboard-calendar-note-input"
                             defaultValue={transaction.description}
                             placeholder="비고 입력"
                             onFocus={() => {
+                              setDashboardCalendarFocusedField({ transactionId: transaction.id, field: "note" });
                               if (dashboardCalendarProcessingMode === "uncategorized") {
                                 setDashboardUncategorizedFocusTransactionId(transaction.id);
                               }
                             }}
                             onBlur={(event) => {
+                              setDashboardCalendarFocusedField((current) =>
+                                current?.transactionId === transaction.id && current.field === "note" ? null : current,
+                              );
                               const nextDescription = event.currentTarget.value.trim();
                               if (nextDescription === (transaction.description ?? "")) return;
                               updateTransactionDetails(workspaceId, transaction.id, { description: nextDescription });

@@ -16,7 +16,10 @@ import {
   type DotoriConnectionForm,
 } from "../api/dotoriStorage";
 import { migrateFoundationData, type FoundationMigrationSummary } from "../api/foundationMigration";
-import { clearAuthSession, readAuthSession } from "../authSession";
+import { switchSpace } from "../api/auth";
+import { requestServerJson } from "../api/serverState";
+import { AUTH_SESSION_EVENT, clearAuthSession, createAuthSession, readAuthSession, writeAuthSession } from "../authSession";
+import { AppSelect } from "../components/AppSelect";
 import { AppModal } from "../components/AppModal";
 import {
   clearDotoriSyncSession,
@@ -37,6 +40,29 @@ type ProfileDraftState = {
 };
 
 type EditableProfileField = keyof ProfileDraftState;
+
+type MembershipRoleValue = "OWNER" | "ADMIN" | "MEMBER" | "VIEWER";
+
+type SpaceMembershipSummary = {
+  id: number;
+  spaceId: number;
+  userId: number;
+  userDisplayName: string;
+  userEmail: string;
+  role: MembershipRoleValue;
+  status: "INVITED" | "ACTIVE" | "LEFT";
+};
+
+const MEMBERSHIP_ROLE_OPTIONS: Array<{ value: MembershipRoleValue; label: string }> = [
+  { value: "OWNER", label: "오너" },
+  { value: "ADMIN", label: "어드민" },
+  { value: "MEMBER", label: "멤버" },
+  { value: "VIEWER", label: "뷰어" },
+];
+
+function getMembershipRoleLabel(role: MembershipRoleValue | string) {
+  return MEMBERSHIP_ROLE_OPTIONS.find((option) => option.value === role)?.label ?? role;
+}
 
 const ASSET_BASE = import.meta.env.BASE_URL;
 const DOTORI_LOGIN_STORAGE_KEY = "spending-diary.dotori-login";
@@ -124,6 +150,13 @@ export function SettingsPage() {
   const [isDotoriSaveDetailOpen, setIsDotoriSaveDetailOpen] = useState(false);
   const [isFoundationMigrationRunning, setIsFoundationMigrationRunning] = useState(false);
   const [foundationMigrationSummary, setFoundationMigrationSummary] = useState<FoundationMigrationSummary | null>(null);
+  const [spaceInviteCode, setSpaceInviteCode] = useState<string | null>(null);
+  const [spaceMemberships, setSpaceMemberships] = useState<SpaceMembershipSummary[]>([]);
+  const [isMembershipsLoading, setIsMembershipsLoading] = useState(false);
+  const [membershipUpdatingId, setMembershipUpdatingId] = useState<number | null>(null);
+  const [personLinkSelections, setPersonLinkSelections] = useState<Record<string, string>>({});
+  const [personLinkUpdatingId, setPersonLinkUpdatingId] = useState<string | null>(null);
+  const [spaceSwitchingId, setSpaceSwitchingId] = useState<number | null>(null);
   const backupImportInputRef = useRef<HTMLInputElement | null>(null);
   const transactionPackageImportInputRef = useRef<HTMLInputElement | null>(null);
   const foundationPackageImportInputRef = useRef<HTMLInputElement | null>(null);
@@ -159,6 +192,91 @@ export function SettingsPage() {
       rememberCredentials: savedLogin.rememberCredentials !== false,
     }));
   }, []);
+
+  const authSession = readAuthSession();
+  const availableSpaces = [...(authSession?.availableSpaces ?? [])].sort((left, right) => left.spaceName.localeCompare(right.spaceName, "ko-KR"));
+
+  const loadSpaceMemberships = async (session: NonNullable<typeof authSession>) => {
+    setIsMembershipsLoading(true);
+    try {
+      const memberships = await requestServerJson<SpaceMembershipSummary[]>(session, `/api/memberships?spaceId=${session.spaceId}`);
+      setSpaceMemberships(memberships);
+    } finally {
+      setIsMembershipsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!authSession) {
+      setSpaceInviteCode(null);
+      setSpaceMemberships([]);
+      return;
+    }
+
+    void Promise.all([
+      requestServerJson<{
+        id: number;
+        name: string;
+        slug: string;
+        inviteCode: string;
+      }>(authSession, `/api/spaces/${authSession.spaceId}`, undefined, { withSessionHeader: false }),
+      requestServerJson<SpaceMembershipSummary[]>(authSession, `/api/memberships?spaceId=${authSession.spaceId}`),
+    ])
+      .then(([space, memberships]) => {
+        setSpaceInviteCode(space.inviteCode ?? null);
+        setSpaceMemberships(memberships);
+      })
+      .catch(() => {
+        setSpaceInviteCode(null);
+        setSpaceMemberships([]);
+      })
+      .finally(() => {
+        setIsMembershipsLoading(false);
+      });
+  }, [authSession?.apiBaseUrl, authSession?.spaceId, authSession?.sessionKey]);
+
+  const currentMembership = authSession
+    ? spaceMemberships.find((membership) => membership.userId === authSession.userId) ?? null
+    : null;
+  const canManageMembershipRoles = currentMembership?.role === "OWNER" && currentMembership.status === "ACTIVE";
+  const orderedMemberships = [...spaceMemberships].sort((left, right) => {
+    const roleWeight = (role: MembershipRoleValue) =>
+      role === "OWNER" ? 0 : role === "ADMIN" ? 1 : role === "MEMBER" ? 2 : 3;
+    return roleWeight(left.role) - roleWeight(right.role) || left.userDisplayName.localeCompare(right.userDisplayName, "ko-KR");
+  });
+  const activeMemberships = orderedMemberships.filter((membership) => membership.status === "ACTIVE");
+  const peopleSorted = [...scope.people].sort(
+    (left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0) || (left.displayName || left.name).localeCompare(right.displayName || right.name, "ko-KR"),
+  );
+
+  useEffect(() => {
+    setPersonLinkSelections((current) => {
+      const next = { ...current };
+      let changed = false;
+
+      for (const person of scope.people) {
+        const linkedUserId = person.linkedUserId ?? "";
+        if (!(person.id in next)) {
+          next[person.id] = linkedUserId;
+          changed = true;
+          continue;
+        }
+
+        if (current[person.id] === linkedUserId) {
+          next[person.id] = linkedUserId;
+        }
+      }
+
+      for (const personId of Object.keys(next)) {
+        if (!scope.people.some((person) => person.id === personId)) {
+          delete next[personId];
+          changed = true;
+        }
+      }
+
+      return changed ? next : current;
+    });
+  }, [scope.people]);
 
   const persistProfileDraft = (nextDraft: ProfileDraftState) => {
     setFinancialProfile(workspaceId, {
@@ -494,6 +612,126 @@ export function SettingsPage() {
     showToast("로그아웃되었습니다.", "info");
   };
 
+  const handleCopyInviteCode = async () => {
+    if (!spaceInviteCode) {
+      showToast("초대코드를 아직 불러오지 못했습니다.", "error");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(spaceInviteCode);
+      showToast("초대코드를 복사했습니다.", "success");
+    } catch {
+      showToast("초대코드 복사에 실패했습니다.", "error");
+    }
+  };
+
+  const handleMembershipRoleChange = async (membership: SpaceMembershipSummary, nextRole: MembershipRoleValue) => {
+    if (!authSession) {
+      showToast("먼저 서버 로그인부터 완료해주세요.", "error");
+      return;
+    }
+
+    setMembershipUpdatingId(membership.id);
+    try {
+      await requestServerJson(authSession, `/api/memberships/${membership.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          spaceId: membership.spaceId,
+          userId: membership.userId,
+          role: nextRole,
+          status: membership.status,
+        }),
+      });
+      await loadSpaceMemberships(authSession);
+      showToast(`${membership.userDisplayName} 권한을 ${MEMBERSHIP_ROLE_OPTIONS.find((option) => option.value === nextRole)?.label ?? nextRole}(으)로 변경했습니다.`, "success");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "멤버 권한 변경 중 오류가 발생했습니다.";
+      showToast(message, "error");
+    } finally {
+      setMembershipUpdatingId(null);
+    }
+  };
+
+  const handlePersonLinkConnect = async (personId: string) => {
+    if (!authSession) {
+      showToast("먼저 서버 로그인부터 완료해주세요.", "error");
+      return;
+    }
+
+    const selectedUserId = personLinkSelections[personId];
+    const person = peopleSorted.find((item) => item.id === personId);
+    if (!selectedUserId || !person) {
+      showToast("연결할 멤버를 먼저 선택해주세요.", "error");
+      return;
+    }
+
+    setPersonLinkUpdatingId(personId);
+    try {
+      await requestServerJson(authSession, `/api/people/${personId}/link-user`, {
+        method: "POST",
+        body: JSON.stringify({
+          spaceId: Number(workspaceId),
+          userId: Number(selectedUserId),
+        }),
+      });
+      window.dispatchEvent(new CustomEvent(AUTH_SESSION_EVENT, { detail: authSession }));
+      showToast(`${person.displayName || person.name} 사용자에 멤버를 연결했습니다.`, "success");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "사용자 연결 중 오류가 발생했습니다.";
+      showToast(message, "error");
+    } finally {
+      setPersonLinkUpdatingId(null);
+    }
+  };
+
+  const handlePersonLinkDisconnect = async (personId: string) => {
+    if (!authSession) {
+      showToast("먼저 서버 로그인부터 완료해주세요.", "error");
+      return;
+    }
+
+    const person = peopleSorted.find((item) => item.id === personId);
+    if (!person?.linkedUserId) return;
+
+    setPersonLinkUpdatingId(personId);
+    try {
+      await requestServerJson(authSession, `/api/people/${personId}/link-user?spaceId=${workspaceId}`, {
+        method: "DELETE",
+      });
+      window.dispatchEvent(new CustomEvent(AUTH_SESSION_EVENT, { detail: authSession }));
+      showToast(`${person.displayName || person.name} 사용자 연결을 해제했습니다.`, "info");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "사용자 연결 해제 중 오류가 발생했습니다.";
+      showToast(message, "error");
+    } finally {
+      setPersonLinkUpdatingId(null);
+    }
+  };
+
+  const handleSwitchSpace = async (spaceId: number) => {
+    if (!authSession) {
+      showToast("먼저 서버 로그인부터 완료해주세요.", "error");
+      return;
+    }
+
+    setSpaceSwitchingId(spaceId);
+    try {
+      const { baseUrl, data } = await switchSpace({
+        apiBaseUrl: authSession.apiBaseUrl,
+        sessionKey: authSession.sessionKey,
+        spaceId,
+      });
+      writeAuthSession(createAuthSession(baseUrl, data));
+      showToast(`${data.space.name} 공간으로 전환했습니다.`, "success");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "공간 전환에 실패했습니다.";
+      showToast(message, "error");
+    } finally {
+      setSpaceSwitchingId(null);
+    }
+  };
+
   return (
     <div className="page-stack">
       <section className="settings-shell-card page-section" data-guide-target="settings-page-overview">
@@ -712,6 +950,185 @@ export function SettingsPage() {
                     <button type="button" className="btn btn-primary" onClick={() => void handleFoundationMigration()} disabled={isFoundationMigrationRunning}>
                       {isFoundationMigrationRunning ? "옮기는 중..." : "서버로 옮기기"}
                     </button>
+                  </div>
+                </section>
+                <section className="settings-backup-group">
+                  <div className="settings-backup-group-copy">
+                    <span className="settings-backup-group-label">공간 초대코드</span>
+                    <p className="settings-backup-group-description">다른 사람이 이 코드를 입력하면 현재 공간에 참여할 수 있습니다.</p>
+                    <div className="settings-foundation-migration-summary">
+                      <strong>{spaceInviteCode ?? "불러오는 중..."}</strong>
+                    </div>
+                  </div>
+                  <div className="settings-panel-actions settings-backup-action-row">
+                    <button type="button" className="btn btn-outline-primary" onClick={() => void handleCopyInviteCode()} disabled={!spaceInviteCode}>
+                      복사하기
+                    </button>
+                  </div>
+                </section>
+                <section className="settings-backup-group">
+                  <div className="settings-backup-group-copy">
+                    <span className="settings-backup-group-label">공간 전환</span>
+                    <p className="settings-backup-group-description">이미 참여한 다른 공간이 있으면 여기서 바로 이동할 수 있습니다.</p>
+                    <div className="settings-membership-note">
+                      현재 공간: <strong>{authSession?.spaceName ?? "확인 중..."}</strong>
+                    </div>
+                  </div>
+                  <div className="settings-space-list">
+                    {availableSpaces.length ? (
+                      availableSpaces.map((space) => {
+                        const isCurrent = authSession?.spaceId === space.spaceId;
+                        const isSwitching = spaceSwitchingId === space.spaceId;
+                        return (
+                          <div key={space.spaceId} className={`settings-space-item${isCurrent ? " is-current" : ""}`}>
+                            <div className="settings-space-copy">
+                              <div className="settings-membership-name-row">
+                                <strong>{space.spaceName}</strong>
+                                <span className="settings-membership-status">{getMembershipRoleLabel(space.role)}</span>
+                              </div>
+                              <span>초대코드 {space.inviteCode}</span>
+                            </div>
+                            <button
+                              type="button"
+                              className={`btn ${isCurrent ? "btn-outline-secondary" : "btn-outline-primary"}`}
+                              disabled={isCurrent || isSwitching}
+                              onClick={() => void handleSwitchSpace(space.spaceId)}
+                            >
+                              {isCurrent ? "현재 공간" : isSwitching ? "이동 중..." : "들어가기"}
+                            </button>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="settings-membership-empty">참여 중인 다른 공간이 없습니다.</div>
+                    )}
+                  </div>
+                </section>
+                <section className="settings-backup-group">
+                  <div className="settings-backup-group-copy">
+                    <span className="settings-backup-group-label">공간 멤버 권한</span>
+                    <p className="settings-backup-group-description">현재 공간에 참여한 멤버 권한을 확인하고 조정합니다.</p>
+                    <div className="settings-membership-note">
+                      {canManageMembershipRoles
+                        ? "현재 로그인 계정은 OWNER입니다. 다른 멤버의 권한을 변경할 수 있습니다."
+                        : "현재 로그인 계정은 OWNER가 아니어서 권한을 변경할 수 없습니다."}
+                    </div>
+                  </div>
+                  <div className="settings-membership-list">
+                    {isMembershipsLoading ? (
+                      <div className="settings-membership-empty">불러오는 중...</div>
+                    ) : orderedMemberships.length ? (
+                      orderedMemberships.map((membership) => {
+                        const isMe = authSession?.userId === membership.userId;
+                        const isUpdating = membershipUpdatingId === membership.id;
+                        return (
+                          <div key={membership.id} className="settings-membership-item">
+                            <div className="settings-membership-copy">
+                              <div className="settings-membership-name-row">
+                                <strong>{membership.userDisplayName}</strong>
+                                {isMe ? <span className="settings-membership-me">나</span> : null}
+                                <span className="settings-membership-status">{membership.status}</span>
+                              </div>
+                              <span>{membership.userEmail}</span>
+                            </div>
+                            <div className="settings-membership-actions">
+                              <AppSelect
+                                value={membership.role}
+                                onChange={(nextValue) => void handleMembershipRoleChange(membership, nextValue as MembershipRoleValue)}
+                                options={MEMBERSHIP_ROLE_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
+                                ariaLabel={`${membership.userDisplayName} 권한`}
+                                disabled={!canManageMembershipRoles || isMe || isUpdating}
+                                size="sm"
+                              />
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="settings-membership-empty">아직 참여한 멤버가 없습니다.</div>
+                    )}
+                  </div>
+                </section>
+                <section className="settings-backup-group">
+                  <div className="settings-backup-group-copy">
+                    <span className="settings-backup-group-label">사용자 연결</span>
+                    <p className="settings-backup-group-description">수동으로 만든 사용자 항목과 실제 공간 멤버를 연결하거나 해제합니다.</p>
+                    <div className="settings-membership-note">
+                      {canManageMembershipRoles
+                        ? "연결이 필요한 멤버를 선택해 사용자 항목에 붙일 수 있습니다."
+                        : "현재 로그인 계정은 OWNER가 아니어서 사용자 연결을 변경할 수 없습니다."}
+                    </div>
+                  </div>
+                  <div className="settings-membership-list">
+                    {peopleSorted.length ? (
+                      peopleSorted.map((person) => {
+                        const selectedUserId = personLinkSelections[person.id] ?? "";
+                        const linkedUserId = person.linkedUserId ?? null;
+                        const isUpdating = personLinkUpdatingId === person.id;
+                        const availableMemberships = activeMemberships;
+
+                        return (
+                          <div key={person.id} className="settings-membership-item">
+                            <div className="settings-membership-copy">
+                              <div className="settings-membership-name-row">
+                                <strong>{person.displayName || person.name}</strong>
+                                <span className={`settings-membership-status${linkedUserId ? " is-linked" : " is-unlinked"}`}>
+                                  {linkedUserId ? "연결됨" : "미연결"}
+                                </span>
+                              </div>
+                              <span>
+                                {person.linkedUserDisplayName
+                                  ? `${person.linkedUserDisplayName} 멤버와 연결됨`
+                                  : activeMemberships.length
+                                    ? "연결할 공간 멤버를 선택해주세요."
+                                    : "아직 연결된 공간 멤버가 없습니다."}
+                              </span>
+                            </div>
+                            <div className="settings-person-link-actions">
+                              <AppSelect
+                                value={selectedUserId}
+                                onChange={(nextValue) =>
+                                  setPersonLinkSelections((current) => ({
+                                    ...current,
+                                    [person.id]: nextValue,
+                                  }))
+                                }
+                                options={[
+                                  { value: "", label: "멤버 선택" },
+                                  ...availableMemberships.map((membership) => ({
+                                    value: String(membership.userId),
+                                    label: membership.userDisplayName,
+                                  })),
+                                ]}
+                                ariaLabel={`${person.displayName || person.name} 연결 멤버 선택`}
+                                disabled={!canManageMembershipRoles || isUpdating}
+                                size="sm"
+                              />
+                              <div className="settings-person-link-button-row">
+                                <button
+                                  type="button"
+                                  className="btn btn-primary btn-sm"
+                                  onClick={() => void handlePersonLinkConnect(person.id)}
+                                  disabled={!canManageMembershipRoles || !selectedUserId || isUpdating}
+                                >
+                                  연결
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-outline-secondary btn-sm"
+                                  onClick={() => void handlePersonLinkDisconnect(person.id)}
+                                  disabled={!canManageMembershipRoles || !linkedUserId || isUpdating}
+                                >
+                                  해제
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="settings-membership-empty">연결할 사용자 항목이 아직 없습니다.</div>
+                    )}
                   </div>
                 </section>
                 <section className="settings-backup-group">

@@ -4,22 +4,26 @@ import { createBackupContent, summarizeBackupPayload } from "../domain/app/backu
 import { GUIDE_V1_RESET_EVENT, readGuideRuntime } from "../domain/guidance/guideRuntime";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  clearDotoriPresence,
-  createDotoriPresenceSocketUrl,
   healthCheckDotoriStorage,
-  sendDotoriPresenceHeartbeat,
   type DotoriBackupMetadata,
-  type DotoriPresenceSnapshot,
 } from "./api/dotoriStorage";
+import {
+  clearPresence,
+  createPresenceSocketUrl,
+  normalizePresenceSnapshot,
+  sendPresenceHeartbeat,
+  type AppPresenceSnapshot,
+  type PresenceSnapshotResponse,
+} from "./api/presence";
 import { getPresenceAccent } from "./dotoriPresenceVisuals";
 import { MotionProvider } from "./motion/MotionProvider";
 import { DotoriPresenceProvider, type DotoriPresenceTarget } from "./presence/DotoriPresenceContext";
+import { createStompFrame, parseStompMessageBodies } from "./realtime/stomp";
 import { AppModal } from "./components/AppModal";
 import { AppGuidePanel } from "./components/AppGuidePanel";
 import { AUTH_SESSION_EVENT, readAuthSession, type AuthSession } from "./authSession";
 import {
   DOTORI_SYNC_SESSION_EVENT,
-  getDotoriClientId,
   readDotoriSyncSession,
   type DotoriSyncSession,
 } from "./dotoriSync";
@@ -58,7 +62,7 @@ const DEVELOPER_MODE_KEY = "spending-diary.developer-mode";
 const ASSET_BASE = import.meta.env.BASE_URL;
 const DOTORI_AUTO_SYNC_DEBOUNCE_MS = 1200;
 const DOTORI_HEALTH_POLL_INTERVAL_MS = 20 * 1000;
-const DOTORI_PRESENCE_HEARTBEAT_INTERVAL_MS = 3 * 1000;
+const SERVER_PRESENCE_HEARTBEAT_INTERVAL_MS = 20 * 1000;
 
 type DotoriReachabilityState = "idle" | "online" | "offline";
 
@@ -207,7 +211,7 @@ function AppSidebarNav({
 }: {
   isDeveloperModeUnlocked: boolean;
   onNavigate?: () => void;
-  presenceConnections?: DotoriPresenceSnapshot["connections"];
+  presenceConnections?: AppPresenceSnapshot["connections"];
 }) {
   const location = useLocation();
   const navEntries = useMemo(
@@ -446,7 +450,7 @@ function DotoriStatusPanel({
   connectionStatusLabel: string;
   autoSyncStatusLabel: string;
   concurrentStatusLabel: string;
-  otherConnections: DotoriPresenceSnapshot["connections"];
+  otherConnections: AppPresenceSnapshot["connections"];
 }) {
   return (
     <div className="app-sidebar-status-panel">
@@ -499,7 +503,7 @@ function AppFrame() {
   const [dotoriSession, setDotoriSession] = useState<DotoriSyncSession>(() => readDotoriSyncSession());
   const [, setIsDotoriAutoSyncRunning] = useState(false);
   const [dotoriReachability, setDotoriReachability] = useState<DotoriReachabilityState>("idle");
-  const [dotoriPresence, setDotoriPresence] = useState<DotoriPresenceSnapshot>({ onlineCount: 0, connections: [] });
+  const [dotoriPresence, setDotoriPresence] = useState<AppPresenceSnapshot>({ onlineCount: 0, connections: [] });
   const [dotoriPresenceRenderTick, setDotoriPresenceRenderTick] = useState(0);
   const [dotoriRemoteSyncSignal, setDotoriRemoteSyncSignal] = useState(0);
   const [dotoriRemoteBackupHint, setDotoriRemoteBackupHint] = useState<DotoriBackupMetadata | null>(null);
@@ -516,21 +520,9 @@ function AppFrame() {
   const [isOnboardingEntering, setIsOnboardingEntering] = useState(false);
   const hasPlayedGuideBeaconIntroRef = useRef(false);
   const hasNormalizedInitialRouteRef = useRef(false);
-  const dotoriClientIdRef = useRef<string>(getDotoriClientId());
-  const dotoriPresenceSocketRef = useRef<WebSocket | null>(null);
-  const dotoriPresenceReconnectTimeoutRef = useRef<number | null>(null);
-  const dotoriPresenceIntentionalCloseRef = useRef(false);
-  const dotoriPresencePayloadRef = useRef<{
-    clientId: string;
-    page: string;
-    workspaceName: string | null;
-    targetKind: string | null;
-    targetId: string | null;
-    targetLabel: string | null;
-    autoSyncEnabled: boolean;
-    dotoriConnected: boolean;
-    vpnReachable: boolean;
-  } | null>(null);
+  const presenceSocketRef = useRef<WebSocket | null>(null);
+  const presenceReconnectTimeoutRef = useRef<number | null>(null);
+  const presenceIntentionalCloseRef = useRef(false);
 
   const localBackupContent = useMemo(() => createBackupContent(state), [state]);
   const localBackupSummary = useMemo(() => summarizeBackupPayload(localBackupContent), [localBackupContent]);
@@ -541,12 +533,12 @@ function AppFrame() {
 
   const dotoriPresencePayload = useMemo(
     () => ({
-      clientId: dotoriClientIdRef.current,
       page: getPresencePageLabel(location.pathname),
       workspaceName: activeWorkspaceName,
       targetKind: dotoriPresenceTarget.kind,
       targetId: dotoriPresenceTarget.id,
       targetLabel: dotoriPresenceTarget.label,
+      activityLabel: dotoriPresenceTarget.activityLabel ?? null,
       autoSyncEnabled: dotoriSession.autoSyncEnabled,
       dotoriConnected: dotoriSession.connected,
       vpnReachable: dotoriReachability === "online",
@@ -556,16 +548,13 @@ function AppFrame() {
       dotoriPresenceTarget.id,
       dotoriPresenceTarget.kind,
       dotoriPresenceTarget.label,
+      dotoriPresenceTarget.activityLabel,
       dotoriReachability,
       dotoriSession.autoSyncEnabled,
       dotoriSession.connected,
       location.pathname,
     ],
   );
-
-  useEffect(() => {
-    dotoriPresencePayloadRef.current = dotoriPresencePayload;
-  }, [dotoriPresencePayload]);
 
   useEffect(() => {
     let frameId = 0;
@@ -705,7 +694,7 @@ function AppFrame() {
   }, [location.pathname, location.search]);
 
   useEffect(() => {
-    setDotoriPresenceTarget({ kind: null, id: null, label: null });
+    setDotoriPresenceTarget({ kind: null, id: null, label: null, activityLabel: null });
   }, [location.pathname]);
 
   useEffect(() => {
@@ -804,119 +793,68 @@ function AppFrame() {
   }, [dotoriSession.form]);
 
   useEffect(() => {
-    const isConnectionReady =
-      dotoriSession.connected &&
-      dotoriReachability === "online" &&
-      Boolean(
-        dotoriSession.form.host.trim() &&
-          dotoriSession.form.port.trim() &&
-          dotoriSession.form.username.trim() &&
-          dotoriSession.form.password.trim(),
-      );
-
-    if (!isConnectionReady) {
-      dotoriPresenceIntentionalCloseRef.current = true;
-      if (dotoriPresenceReconnectTimeoutRef.current) {
-        window.clearTimeout(dotoriPresenceReconnectTimeoutRef.current);
-        dotoriPresenceReconnectTimeoutRef.current = null;
+    if (!authSession?.apiBaseUrl || !authSession.spaceId) {
+      presenceIntentionalCloseRef.current = true;
+      if (presenceReconnectTimeoutRef.current) {
+        window.clearTimeout(presenceReconnectTimeoutRef.current);
+        presenceReconnectTimeoutRef.current = null;
       }
-      if (dotoriPresenceSocketRef.current) {
-        dotoriPresenceSocketRef.current.close();
-        dotoriPresenceSocketRef.current = null;
+      if (presenceSocketRef.current) {
+        presenceSocketRef.current.close();
+        presenceSocketRef.current = null;
       }
       setDotoriPresence({ onlineCount: 0, connections: [] });
       return;
     }
 
-    const socketUrl = createDotoriPresenceSocketUrl(dotoriSession.form);
-    const shouldUsePollingFallback =
-      typeof window !== "undefined" && window.location.protocol === "https:" && socketUrl.startsWith("ws://");
-
-    if (shouldUsePollingFallback) {
-      let cancelled = false;
-      let intervalId = 0;
-
-      const sendHeartbeat = async () => {
-        try {
-          const snapshot = await sendDotoriPresenceHeartbeat(dotoriSession.form, dotoriPresencePayload);
-          if (!cancelled) {
-            setDotoriPresence({
-              ...snapshot,
-              connections: [...snapshot.connections],
-            });
-            setDotoriPresenceRenderTick((current) => current + 1);
-          }
-        } catch {
-          if (!cancelled) {
-            setDotoriPresence({ onlineCount: 0, connections: [] });
-            setDotoriPresenceRenderTick((current) => current + 1);
-          }
-        }
-      };
-
-      void sendHeartbeat();
-      intervalId = window.setInterval(() => {
-        void sendHeartbeat();
-      }, DOTORI_PRESENCE_HEARTBEAT_INTERVAL_MS);
-
-      return () => {
-        cancelled = true;
-        window.clearInterval(intervalId);
-        void clearDotoriPresence(dotoriSession.form, dotoriClientIdRef.current).catch(() => {});
-      };
-    }
+    const socketUrl = createPresenceSocketUrl(authSession.apiBaseUrl);
+    const subscriptionDestination = `/topic/spaces/${authSession.spaceId}/presence`;
+    const subscriptionId = `presence-${authSession.spaceId}`;
 
     const connectPresenceSocket = () => {
-      if (dotoriPresenceReconnectTimeoutRef.current) {
-        window.clearTimeout(dotoriPresenceReconnectTimeoutRef.current);
-        dotoriPresenceReconnectTimeoutRef.current = null;
+      if (presenceReconnectTimeoutRef.current) {
+        window.clearTimeout(presenceReconnectTimeoutRef.current);
+        presenceReconnectTimeoutRef.current = null;
       }
 
       const socket = new WebSocket(socketUrl);
-      dotoriPresenceIntentionalCloseRef.current = false;
-      dotoriPresenceSocketRef.current = socket;
+      presenceIntentionalCloseRef.current = false;
+      presenceSocketRef.current = socket;
 
       socket.addEventListener("open", () => {
         socket.send(
-          JSON.stringify({
-            type: "auth",
-            username: dotoriSession.form.username.trim(),
-            password: dotoriSession.form.password,
-            ...(dotoriPresencePayloadRef.current ?? {
-              clientId: dotoriClientIdRef.current,
-              page: "소비일기",
-              workspaceName: null,
-              targetKind: null,
-              targetId: null,
-              targetLabel: null,
-              autoSyncEnabled: false,
-              dotoriConnected: true,
-              vpnReachable: true,
-            }),
+          createStompFrame("CONNECT", {
+            "accept-version": "1.2",
+            host: window.location.hostname || "localhost",
           }),
         );
       });
 
       socket.addEventListener("message", (event) => {
         try {
-          const message = JSON.parse(String(event.data || "{}")) as {
-            type?: string;
-            snapshot?: DotoriPresenceSnapshot;
-            metadata?: DotoriBackupMetadata;
-            error?: string;
-          };
-          if (message.type === "presence-snapshot" && message.snapshot) {
+          const frames = parseStompMessageBodies(String(event.data || ""));
+          frames.forEach((frame) => {
+            if (frame.command === "CONNECTED") {
+              socket.send(
+                createStompFrame("SUBSCRIBE", {
+                  id: subscriptionId,
+                  destination: subscriptionDestination,
+                }),
+              );
+              return;
+            }
+
+            if (frame.command !== "MESSAGE" || !frame.body) {
+              return;
+            }
+
+            const snapshot = normalizePresenceSnapshot(JSON.parse(frame.body) as PresenceSnapshotResponse);
             setDotoriPresence({
-              ...message.snapshot,
-              connections: [...message.snapshot.connections],
+              ...snapshot,
+              connections: [...snapshot.connections],
             });
             setDotoriPresenceRenderTick((current) => current + 1);
-            return;
-          }
-          if (message.type === "backup-updated" && message.metadata?.fileName) {
-            setDotoriRemoteBackupHint(message.metadata);
-            setDotoriRemoteSyncSignal((current) => current + 1);
-          }
+          });
         } catch {
           setDotoriPresence({ onlineCount: 0, connections: [] });
           setDotoriPresenceRenderTick((current) => current + 1);
@@ -924,13 +862,11 @@ function AppFrame() {
       });
 
       socket.addEventListener("close", () => {
-        if (dotoriPresenceSocketRef.current === socket) {
-          dotoriPresenceSocketRef.current = null;
+        if (presenceSocketRef.current === socket) {
+          presenceSocketRef.current = null;
         }
-        setDotoriPresence({ onlineCount: 0, connections: [] });
-        setDotoriPresenceRenderTick((current) => current + 1);
-        if (!dotoriPresenceIntentionalCloseRef.current) {
-          dotoriPresenceReconnectTimeoutRef.current = window.setTimeout(() => {
+        if (!presenceIntentionalCloseRef.current) {
+          presenceReconnectTimeoutRef.current = window.setTimeout(() => {
             connectPresenceSocket();
           }, 1000);
         }
@@ -946,31 +882,84 @@ function AppFrame() {
     connectPresenceSocket();
 
     return () => {
-      dotoriPresenceIntentionalCloseRef.current = true;
-      if (dotoriPresenceReconnectTimeoutRef.current) {
-        window.clearTimeout(dotoriPresenceReconnectTimeoutRef.current);
-        dotoriPresenceReconnectTimeoutRef.current = null;
+      presenceIntentionalCloseRef.current = true;
+      if (presenceReconnectTimeoutRef.current) {
+        window.clearTimeout(presenceReconnectTimeoutRef.current);
+        presenceReconnectTimeoutRef.current = null;
       }
-      if (dotoriPresenceSocketRef.current) {
-        dotoriPresenceSocketRef.current.close();
-        dotoriPresenceSocketRef.current = null;
+      if (presenceSocketRef.current) {
+        presenceSocketRef.current.close();
+        presenceSocketRef.current = null;
       }
     };
-  }, [dotoriPresencePayload, dotoriReachability, dotoriSession.connected, dotoriSession.form]);
+  }, [authSession?.apiBaseUrl, authSession?.spaceId]);
 
   useEffect(() => {
-    const socket = dotoriPresenceSocketRef.current;
-    if (!socket || socket.readyState !== WebSocket.OPEN || !dotoriSession.connected || dotoriReachability !== "online") {
+    if (!authSession) {
+      setDotoriPresence({ onlineCount: 0, connections: [] });
       return;
     }
 
-    socket.send(
-      JSON.stringify({
-        type: "update",
-        ...dotoriPresencePayload,
-      }),
-    );
-  }, [dotoriPresencePayload, dotoriReachability, dotoriSession.connected]);
+    let cancelled = false;
+    let intervalId = 0;
+
+    const sendHeartbeat = async () => {
+      try {
+        const snapshot = await sendPresenceHeartbeat({
+          apiBaseUrl: authSession.apiBaseUrl,
+          sessionKey: authSession.sessionKey,
+          userId: authSession.userId,
+          spaceId: authSession.spaceId,
+          deviceName: "Spending Diary",
+          clientType: "web",
+          activePageKey: dotoriPresencePayload.page,
+          workspaceName: dotoriPresencePayload.workspaceName,
+          targetKind: dotoriPresencePayload.targetKind,
+          targetId: dotoriPresencePayload.targetId,
+          targetLabel: dotoriPresencePayload.targetLabel,
+          activityLabel: dotoriPresencePayload.activityLabel,
+          autoSyncEnabled: dotoriPresencePayload.autoSyncEnabled,
+          dotoriConnected: dotoriPresencePayload.dotoriConnected,
+          vpnReachable: dotoriPresencePayload.vpnReachable,
+        });
+
+        if (!cancelled) {
+          setDotoriPresence({
+            ...snapshot,
+            connections: [...snapshot.connections],
+          });
+          setDotoriPresenceRenderTick((current) => current + 1);
+        }
+      } catch {
+        if (!cancelled) {
+          setDotoriPresence({ onlineCount: 0, connections: [] });
+          setDotoriPresenceRenderTick((current) => current + 1);
+        }
+      }
+    };
+
+    void sendHeartbeat();
+    intervalId = window.setInterval(() => {
+      void sendHeartbeat();
+    }, SERVER_PRESENCE_HEARTBEAT_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [authSession, dotoriPresencePayload]);
+
+  useEffect(() => {
+    if (!authSession) return;
+
+    return () => {
+      void clearPresence({
+        apiBaseUrl: authSession.apiBaseUrl,
+        sessionKey: authSession.sessionKey,
+        spaceId: authSession.spaceId,
+      }).catch(() => {});
+    };
+  }, [authSession?.apiBaseUrl, authSession?.sessionKey, authSession?.spaceId]);
 
   useDotoriAutoSync({
     debounceMs: DOTORI_AUTO_SYNC_DEBOUNCE_MS,
@@ -1006,7 +995,7 @@ function AppFrame() {
   if (!activeWorkspace) return <EmptyWorkspaceScreen />;
 
   const desktopHeaderTitle = getDesktopHeaderTitle(location.pathname);
-  const otherPresenceConnections = dotoriPresence.connections.filter((connection) => connection.clientId !== dotoriClientIdRef.current);
+  const otherPresenceConnections = dotoriPresence.connections.filter((connection) => connection.clientId !== authSession.sessionKey);
   const vpnStatusLabel =
     dotoriReachability === "online"
       ? "ON"
@@ -1017,12 +1006,7 @@ function AppFrame() {
   const autoSyncStatusLabel = dotoriSession.autoSyncEnabled
     ? "ON"
     : "OFF";
-  const concurrentStatusLabel =
-    dotoriReachability !== "online"
-      ? "접속 상태 확인 전"
-      : otherPresenceConnections.length
-        ? `${otherPresenceConnections.length}명 함께 접속 중`
-        : "나만 접속 중";
+  const concurrentStatusLabel = otherPresenceConnections.length ? `${otherPresenceConnections.length}명 함께 접속 중` : "나만 접속 중";
 
   const closeCreateWorkspaceModal = () => {
     setIsCreateWorkspaceOpen(false);

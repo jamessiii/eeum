@@ -281,6 +281,8 @@ export function AppSelect({
                     }}
                     onMouseDown={(event) => {
                       event.preventDefault();
+                    }}
+                    onClick={() => {
                       if (option.disabled) return;
                       commitValue(option.value);
                     }}

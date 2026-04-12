@@ -7637,6 +7637,26 @@ label,
   border-radius: 1rem;
 }
 
+.dashboard-calendar-cell.is-presence-target {
+  border-color: color-mix(in srgb, #4d87ff 58%, var(--app-line) 42%);
+  box-shadow:
+    0 0 0 1px rgba(77, 135, 255, 0.12),
+    0 18px 30px rgba(77, 135, 255, 0.08);
+}
+
+.dashboard-calendar-cell.is-selected.is-presence-target {
+  box-shadow:
+    inset 0 0 0 2px rgba(175, 163, 247, 0.5),
+    0 0 0 1px rgba(77, 135, 255, 0.12),
+    0 18px 30px rgba(77, 135, 255, 0.08);
+}
+
+.dashboard-calendar-presence-badges {
+  top: 0.4rem;
+  right: 0.4rem;
+  max-width: calc(100% - 0.8rem);
+}
+
 .dashboard-calendar-date {
   font-size: 0.8rem;
   font-weight: 800;
@@ -7964,6 +7984,7 @@ label,
 
 .dashboard-calendar-grid-cell {
   vertical-align: middle !important;
+  position: relative;
 }
 
 .transaction-grid-table .dashboard-calendar-col-merchant {
@@ -7976,6 +7997,18 @@ label,
 
 .dashboard-calendar-note-input {
   width: 100%;
+}
+
+.dashboard-calendar-grid-cell.is-presence-target {
+  background:
+    linear-gradient(180deg, rgba(77, 135, 255, 0.08), rgba(77, 135, 255, 0.03)),
+    color-mix(in srgb, var(--app-panel) 96%, rgba(15, 23, 42, 0.04) 4%);
+}
+
+.dashboard-calendar-cell-presence-badges {
+  top: 0.35rem;
+  right: 0.35rem;
+  max-width: calc(100% - 0.7rem);
 }
 
 .dashboard-calendar-transactions .transaction-loop-toggle input {
@@ -10020,6 +10053,168 @@ textarea:focus {
   color: var(--app-muted);
   font-size: 0.9rem;
   line-height: 1.45;
+}
+
+.settings-membership-note {
+  margin-top: 0.3rem;
+  color: var(--app-text-secondary);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.settings-membership-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.settings-membership-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  padding: 0.8rem 0.9rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(var(--app-primary-rgb), 0.12);
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.settings-membership-copy {
+  display: grid;
+  gap: 0.18rem;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.settings-membership-copy > span {
+  color: var(--app-muted);
+  font-size: 0.82rem;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.settings-membership-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.settings-membership-me,
+.settings-membership-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.55rem;
+  padding: 0.18rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.settings-membership-me {
+  background: rgba(143, 138, 245, 0.14);
+  color: #6b63d9;
+}
+
+.settings-membership-status {
+  background: rgba(207, 250, 254, 0.92);
+  color: #0f766e;
+}
+
+.settings-membership-status.is-linked {
+  background: rgba(207, 250, 254, 0.92);
+  color: #0f766e;
+}
+
+.settings-membership-status.is-unlinked {
+  background: rgba(241, 245, 249, 0.92);
+  color: #475569;
+}
+
+.settings-membership-actions {
+  width: 7.75rem;
+  flex-shrink: 0;
+}
+
+.settings-person-link-actions {
+  display: grid;
+  gap: 0.45rem;
+  width: min(16rem, 100%);
+  flex-shrink: 0;
+}
+
+.settings-person-link-button-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.settings-membership-empty {
+  color: var(--app-muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.settings-space-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.settings-space-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(var(--app-primary-rgb), 0.14);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(247, 248, 255, 0.88)),
+    rgba(255, 255, 255, 0.88);
+}
+
+.settings-space-item.is-current {
+  border-color: rgba(var(--app-primary-rgb), 0.26);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.88);
+}
+
+.settings-space-copy {
+  display: grid;
+  gap: 0.2rem;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.settings-space-copy > span {
+  color: var(--app-muted);
+  font-size: 0.82rem;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 720px) {
+  .settings-membership-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .settings-space-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .settings-membership-actions,
+  .settings-person-link-actions {
+    width: 100%;
+  }
+
+  .settings-person-link-button-row {
+    justify-content: stretch;
+  }
+
+  .settings-person-link-button-row > .btn {
+    flex: 1 1 0;
+  }
 }
 
 .settings-foundation-migration-summary {
@@ -14178,20 +14373,26 @@ textarea:focus {
 }
 
 .category-case-section.is-presence-target,
-.category-case-card.is-presence-target {
+.category-case-card.is-presence-target,
+.people-case-section.is-presence-target,
+.people-board-card.is-presence-target,
+.loop-station-card.is-presence-target {
   border-color: color-mix(in srgb, #4d87ff 54%, var(--app-line) 46%);
   box-shadow:
     0 0 0 1px rgba(77, 135, 255, 0.12),
     0 22px 40px rgba(77, 135, 255, 0.08);
 }
 
-.category-case-section.is-presence-target {
+.category-case-section.is-presence-target,
+.people-case-section.is-presence-target {
   background:
     linear-gradient(180deg, rgba(77, 135, 255, 0.06), rgba(77, 135, 255, 0.02)),
     color-mix(in srgb, var(--app-panel) 92%, rgba(15, 23, 42, 0.02) 8%);
 }
 
-.category-case-card.is-presence-target {
+.category-case-card.is-presence-target,
+.people-board-card.is-presence-target,
+.loop-station-card.is-presence-target {
   background:
     linear-gradient(180deg, rgba(77, 135, 255, 0.08), rgba(77, 135, 255, 0.03)),
     color-mix(in srgb, var(--app-panel) 96%, rgba(15, 23, 42, 0.04) 4%);
@@ -15648,6 +15849,65 @@ textarea:focus {
   gap: 0.85rem;
 }
 
+.auth-gate-space-list {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.auth-gate-space-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.9rem;
+  width: 100%;
+  padding: 0.95rem 1rem;
+  border: 1px solid rgba(157, 168, 214, 0.22);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.92);
+  color: #394063;
+  text-align: left;
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.auth-gate-space-card:hover {
+  border-color: rgba(130, 138, 220, 0.32);
+  box-shadow: 0 14px 28px rgba(100, 108, 159, 0.12);
+  transform: translateY(-1px);
+}
+
+.auth-gate-space-card.is-current {
+  border-color: rgba(130, 138, 220, 0.42);
+  background: linear-gradient(180deg, rgba(245, 246, 255, 0.98), rgba(255, 255, 255, 0.94));
+}
+
+.auth-gate-space-card-copy {
+  display: grid;
+  gap: 0.22rem;
+}
+
+.auth-gate-space-card-copy strong {
+  font-size: 1rem;
+}
+
+.auth-gate-space-card-copy span {
+  color: #737b9c;
+  font-size: 0.84rem;
+}
+
+.auth-gate-space-card-role {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.7rem;
+  padding: 0.22rem 0.66rem;
+  border-radius: 999px;
+  background: rgba(143, 138, 245, 0.14);
+  color: #6b63d9;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
 .auth-gate-field {
   display: grid;
   gap: 0.42rem;
@@ -15694,5 +15954,10 @@ textarea:focus {
 
   .auth-gate-brand-copy h1 {
     font-size: 1.45rem;
+  }
+
+  .auth-gate-space-card {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
