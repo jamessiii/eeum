@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { getCategoryLabel, getLeafCategories } from "../../domain/categories/meta";
 import type { Category, Transaction } from "../../shared/types/models";
 
@@ -23,6 +24,14 @@ type CategorySuggestionRow = {
   normalizedName: string;
 };
 
+type SuggestionListStyle = {
+  top: number;
+  left: number;
+  width: number;
+  maxHeight: number;
+  openUpward: boolean;
+};
+
 export function TransactionCategoryEditor({
   transaction,
   categories,
@@ -43,7 +52,7 @@ export function TransactionCategoryEditor({
   const [draftValue, setDraftValue] = useState(categoryName ?? "");
   const [isFocused, setIsFocused] = useState(false);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
-  const [suggestionDirection, setSuggestionDirection] = useState<"down" | "up">("down");
+  const [suggestionListStyle, setSuggestionListStyle] = useState<SuggestionListStyle | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const suggestionListRef = useRef<HTMLDivElement | null>(null);
   const skipNextBlurCommitRef = useRef(false);
@@ -161,17 +170,46 @@ export function TransactionCategoryEditor({
       : null;
 
   useEffect(() => {
-    if (!shouldShowSuggestions) return;
+    if (!shouldShowSuggestions) {
+      setSuggestionListStyle(null);
+      return;
+    }
 
-    const input = inputRef.current;
-    if (!input || typeof window === "undefined") return;
+    const updatePosition = () => {
+      const input = inputRef.current;
+      if (!input || typeof window === "undefined") return;
 
-    const rect = input.getBoundingClientRect();
-    const estimatedListHeight = Math.min(filteredCategories.length, 8) * 42 + 20;
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const spaceAbove = rect.top;
+      const rect = input.getBoundingClientRect();
+      const scrollX = window.scrollX || window.pageXOffset || 0;
+      const scrollY = window.scrollY || window.pageYOffset || 0;
+      const viewportPadding = 12;
+      const gap = 6;
+      const preferredHeight = Math.min(filteredCategories.length, 8) * 42 + 20;
+      const belowSpace = window.innerHeight - rect.bottom - viewportPadding;
+      const aboveSpace = rect.top - viewportPadding;
+      const openUpward = belowSpace < Math.min(preferredHeight, 180) && aboveSpace > belowSpace;
+      const availableHeight = Math.max(140, openUpward ? aboveSpace - gap : belowSpace - gap);
+      const maxHeight = Math.min(preferredHeight, availableHeight);
 
-    setSuggestionDirection(spaceBelow < estimatedListHeight && spaceAbove > spaceBelow ? "up" : "down");
+      setSuggestionListStyle({
+        top: openUpward
+          ? Math.max(scrollY + viewportPadding, scrollY + rect.top - maxHeight - gap)
+          : scrollY + rect.bottom + gap,
+        left: scrollX + rect.left,
+        width: rect.width,
+        maxHeight,
+        openUpward,
+      });
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
   }, [filteredCategories.length, shouldShowSuggestions]);
 
   const tone = isCategoryFilled
@@ -343,10 +381,18 @@ export function TransactionCategoryEditor({
           }
         }}
       />
-      {shouldShowSuggestions ? (
+      {shouldShowSuggestions && suggestionListStyle && typeof document !== "undefined"
+        ? createPortal(
         <div
           ref={suggestionListRef}
-          className={`transaction-category-suggestion-list${suggestionDirection === "up" ? " is-upward" : ""}${suggestionListClassName ? ` ${suggestionListClassName}` : ""}`}
+          className={`transaction-category-suggestion-list${suggestionListStyle.openUpward ? " is-upward" : ""}${suggestionListClassName ? ` ${suggestionListClassName}` : ""}`}
+          style={{
+            position: "absolute",
+            top: `${suggestionListStyle.top}px`,
+            left: `${suggestionListStyle.left}px`,
+            width: `${suggestionListStyle.width}px`,
+            maxHeight: `${suggestionListStyle.maxHeight}px`,
+          }}
           data-guide-target="transactions-uncategorized-category-suggestions"
           role="listbox"
           aria-label="카테고리 추천"
@@ -366,8 +412,10 @@ export function TransactionCategoryEditor({
               <span className="transaction-category-suggestion-name">{category.label}</span>
             </button>
           ))}
-        </div>
-      ) : null}
+        </div>,
+        document.body,
+      )
+        : null}
       {reviewSuggestionLabel ? (
         <div className={`transaction-category-review-hint${isReviewFocused ? " is-review-focused" : ""}`}>
           <strong>제안</strong>

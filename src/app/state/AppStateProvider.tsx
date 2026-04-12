@@ -1000,16 +1000,43 @@ function rebaseImportedBundleIntoWorkspace(state: AppState, workspaceId: string,
   const statementMonth = bundle.imports[0]?.statementMonth ?? null;
 
   const categoryIdMap = new Map<string, string>();
-  const categoriesToAdd = bundle.categories.flatMap((category) => {
-    const matched = scope.categories.find((item) => normalizeKey(item.name) === normalizeKey(category.name));
-    if (matched) {
-      categoryIdMap.set(category.id, matched.id);
-      return [];
-    }
-    const nextId = createId("category");
-    categoryIdMap.set(category.id, nextId);
-    return [{ ...category, id: nextId, workspaceId }];
-  });
+  const bundleGroups = bundle.categories.filter((category) => category.categoryType === "group");
+  const bundleLeafCategories = bundle.categories.filter((category) => category.categoryType === "category");
+  const scopeGroups = scope.categories.filter((category) => category.categoryType === "group");
+  const scopeLeafCategories = scope.categories.filter((category) => category.categoryType === "category");
+
+  const categoriesToAdd = [
+    ...bundleGroups.flatMap((category) => {
+      const matched = scopeGroups.find((item) => normalizeKey(item.name) === normalizeKey(category.name));
+      if (matched) {
+        categoryIdMap.set(category.id, matched.id);
+        return [];
+      }
+      const nextId = createId("category");
+      categoryIdMap.set(category.id, nextId);
+      return [{ ...category, id: nextId, workspaceId, parentCategoryId: null }];
+    }),
+    ...bundleLeafCategories.flatMap((category) => {
+      const sourceParentName = category.parentCategoryId
+        ? bundleGroups.find((item) => item.id === category.parentCategoryId)?.name ?? null
+        : null;
+      const matchedParentId = sourceParentName
+        ? scopeGroups.find((item) => normalizeKey(item.name) === normalizeKey(sourceParentName))?.id ?? null
+        : null;
+      const matched = scopeLeafCategories.find(
+        (item) =>
+          normalizeKey(item.name) === normalizeKey(category.name) &&
+          (item.parentCategoryId ?? null) === (matchedParentId ?? null),
+      );
+      if (matched) {
+        categoryIdMap.set(category.id, matched.id);
+        return [];
+      }
+      const nextId = createId("category");
+      categoryIdMap.set(category.id, nextId);
+      return [{ ...category, id: nextId, workspaceId }];
+    }),
+  ];
 
   const tagIdMap = new Map<string, string>();
   const tagsToAdd = bundle.tags.flatMap((tag) => {
@@ -2478,7 +2505,7 @@ interface AppStateContextValue {
   createEmptyWorkspace: (name?: string) => void;
   createDemoWorkspace: () => Promise<void>;
   previewWorkbookImport: (file: File) => Promise<WorkspaceBundle>;
-  commitImportedBundle: (bundle: WorkspaceBundle, fileName: string) => void;
+  commitImportedBundle: (bundle: WorkspaceBundle, fileName: string) => Promise<void>;
   deleteImportRecord: (workspaceId: string, importRecordId: string) => void;
   loadGuideSampleData: () => void;
   clearGuideSampleData: () => void;
@@ -2794,6 +2821,60 @@ export function AppStateProvider({ children }: PropsWithChildren) {
     return Number(schemeId);
   }, []);
 
+  const ensureTagSchemeId = useCallback(
+    async (workspaceId: string) => {
+      const existingSchemeId = serverMetaRef.current.tagSchemeIdByWorkspaceId[workspaceId];
+      if (existingSchemeId) {
+        return Number(existingSchemeId);
+      }
+
+      const session = getRequiredSession();
+      const created = await requestServerJson<{ id: number }>(session, "/api/tags/schemes", {
+        method: "POST",
+        body: JSON.stringify({
+          spaceId: Number(workspaceId),
+          code: `default-tags-${workspaceId}`,
+          name: "기본 태그",
+          description: "기본 태그 스킴",
+          defaultScheme: true,
+          active: true,
+          sortOrder: 0,
+        }),
+      });
+      serverMetaRef.current.tagSchemeIdByWorkspaceId[workspaceId] = String(created.id);
+      return created.id;
+    },
+    [getRequiredSession],
+  );
+
+  const resolveWorkspaceCategoryId = useCallback((workspaceId: string, categoryId: string | null | undefined) => {
+    if (!categoryId) return null;
+    const category = stateRef.current.categories.find(
+      (item) => item.workspaceId === workspaceId && item.id === categoryId,
+    );
+    if (category) return Number(category.id);
+
+    const sourceCategory = stateRef.current.categories.find((item) => item.id === categoryId);
+    if (!sourceCategory) return null;
+
+    const sourceParentName = sourceCategory.parentCategoryId
+      ? stateRef.current.categories.find((item) => item.id === sourceCategory.parentCategoryId)?.name ?? null
+      : null;
+
+    const targetCategories = stateRef.current.categories.filter((item) => item.workspaceId === workspaceId);
+    const targetParentId = sourceParentName
+      ? targetCategories.find((item) => item.categoryType === "group" && item.name === sourceParentName)?.id ?? null
+      : null;
+    const matchedCategory = targetCategories.find(
+      (item) =>
+        item.categoryType === sourceCategory.categoryType &&
+        item.name === sourceCategory.name &&
+        (item.parentCategoryId ?? null) === (targetParentId ?? null),
+    );
+
+    return matchedCategory ? Number(matchedCategory.id) : null;
+  }, []);
+
   const toTransactionRequest = useCallback((transaction: Transaction) => ({
     spaceId: Number(transaction.workspaceId),
     importRecordId: toNullableNumber(transaction.importRecordId),
@@ -2811,7 +2892,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
     amount: transaction.amount,
     originalAmount: transaction.originalAmount ?? null,
     discountAmount: transaction.discountAmount ?? null,
-    categoryId: toNullableNumber(transaction.categoryId),
+    categoryId: resolveWorkspaceCategoryId(transaction.workspaceId, transaction.categoryId),
     tagIds: transaction.tagIds.map(Number),
     internalTransfer: transaction.isInternalTransfer ?? false,
     expenseImpact: transaction.isExpenseImpact,
@@ -2823,7 +2904,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
     refundOfTransactionId: toNullableNumber(transaction.refundOfTransactionId),
     status: (transaction.status ?? "active").toUpperCase(),
     expectedRevisionNumber: serverMetaRef.current.transactionRevisionById[transaction.id] ?? null,
-  }), []);
+  }), [resolveWorkspaceCategoryId]);
 
   const saveTransactionToServer = useCallback(
     async (transaction: Transaction) => {
@@ -2839,6 +2920,300 @@ export function AppStateProvider({ children }: PropsWithChildren) {
       await refreshStateFromServer(session);
     },
     [getRequiredSession, refreshStateFromServer, toTransactionRequest],
+  );
+
+  const persistImportedBundleToServer = useCallback(
+    async (workspaceId: string, payload: WorkspaceBundle) => {
+      const session = getRequiredSession();
+      const latestState = stateRef.current;
+      const scope = getWorkspaceScope(latestState, workspaceId);
+
+      const personIdMap = new Map<string, string>();
+      const accountIdMap = new Map<string, string>();
+      const cardIdMap = new Map<string, string>();
+      const categoryIdMap = new Map<string, string>();
+      const tagIdMap = new Map<string, string>();
+      const transactionIdMap = new Map<string, string>();
+
+      scope.people.forEach((person) => personIdMap.set(person.id, person.id));
+      scope.accounts.forEach((account) => accountIdMap.set(account.id, account.id));
+      scope.cards.forEach((card) => cardIdMap.set(card.id, card.id));
+      scope.categories.forEach((category) => categoryIdMap.set(category.id, category.id));
+      scope.tags.forEach((tag) => tagIdMap.set(tag.id, tag.id));
+
+      const resolveImportedCategoryId = (categoryId: string | null | undefined) => {
+        if (!categoryId) return null;
+        const mappedCategoryId = categoryIdMap.get(categoryId) ?? categoryId;
+        if (scope.categories.some((category) => category.id === mappedCategoryId) || categoryIdMap.has(categoryId)) {
+          return Number(mappedCategoryId);
+        }
+        return resolveWorkspaceCategoryId(workspaceId, categoryId);
+      };
+
+      const createdReviewIds: string[] = [];
+      const createdTransactionIds: string[] = [];
+      let createdImportRecordId: string | null = null;
+
+      const importRecord = payload.imports[0];
+      if (!importRecord) {
+        throw new Error("업로드 명세서 정보가 없습니다.");
+      }
+
+      try {
+        const createdImport = await requestServerJson<{ id: number }>(session, "/api/import-records", {
+          method: "POST",
+          body: JSON.stringify({
+            spaceId: Number(workspaceId),
+            fileName: importRecord.fileName,
+            statementMonth: importRecord.statementMonth,
+            fileFingerprint: importRecord.fileFingerprint ?? null,
+            contentFingerprint: importRecord.contentFingerprint ?? null,
+            importedAt: importRecord.importedAt,
+            parserId: importRecord.parserId,
+            rowCount: payload.transactions.length,
+            reviewCount: payload.reviews.length,
+          }),
+        });
+        createdImportRecordId = String(createdImport.id);
+
+        for (const person of payload.people) {
+          const created = await requestServerJson<{ id: number }>(session, "/api/people", {
+            method: "POST",
+            body: JSON.stringify({
+              spaceId: Number(workspaceId),
+              name: person.name,
+              displayName: person.displayName,
+              role: PERSON_ROLE_TO_SERVER[person.role],
+              memo: person.memo,
+              active: person.isActive,
+              sortOrder: person.sortOrder ?? 0,
+              hidden: person.isHidden ?? false,
+            }),
+          });
+          personIdMap.set(person.id, String(created.id));
+        }
+
+        const pendingGroups = payload.categories.filter(
+          (category) => category.categoryType === "group" && !serverMetaRef.current.categoryRevisionById[category.id],
+        );
+        if (pendingGroups.length) {
+          const schemeId = getCategorySchemeId(workspaceId);
+          for (const group of pendingGroups) {
+            const created = await requestServerJson<{ id: number }>(session, "/api/category/groups", {
+              method: "POST",
+              body: JSON.stringify({
+                schemeId,
+                name: group.name,
+                description: "",
+                direction: CATEGORY_DIRECTION_TO_SERVER[group.direction],
+                fixedOrVariable: CATEGORY_CADENCE_TO_SERVER[group.fixedOrVariable],
+                necessity: CATEGORY_NECESSITY_TO_SERVER[group.necessity],
+                budgetable: group.budgetable,
+                reportable: group.reportable,
+                linkedAssetId: null,
+                sortOrder: group.sortOrder ?? 0,
+                hidden: group.isHidden ?? false,
+              }),
+            });
+            categoryIdMap.set(group.id, String(created.id));
+          }
+
+          for (const category of payload.categories.filter(
+            (item) => item.categoryType === "category" && !serverMetaRef.current.categoryRevisionById[item.id],
+          )) {
+            const rootGroupId = category.parentCategoryId ? categoryIdMap.get(category.parentCategoryId) ?? category.parentCategoryId : null;
+            if (!rootGroupId) {
+              throw new Error(`카테고리 "${category.name}"의 상위 그룹을 찾지 못했습니다.`);
+            }
+            const created = await requestServerJson<{ id: number }>(session, "/api/category/items", {
+              method: "POST",
+              body: JSON.stringify({
+                schemeId,
+                groupId: Number(rootGroupId),
+                parentCategoryId: null,
+                name: category.name,
+                direction: CATEGORY_DIRECTION_TO_SERVER[category.direction],
+                fixedOrVariable: CATEGORY_CADENCE_TO_SERVER[category.fixedOrVariable],
+                necessity: CATEGORY_NECESSITY_TO_SERVER[category.necessity],
+                budgetable: category.budgetable,
+                reportable: category.reportable,
+                linkedAssetId: null,
+                sortOrder: category.sortOrder ?? 0,
+                hidden: category.isHidden ?? false,
+              }),
+            });
+            categoryIdMap.set(category.id, String(created.id));
+          }
+        }
+
+        if (payload.tags.length) {
+          const schemeId = await ensureTagSchemeId(workspaceId);
+          for (const tag of payload.tags.filter((item) => !tagIdMap.has(item.id))) {
+            const created = await requestServerJson<{ id: number }>(session, "/api/tags/items", {
+              method: "POST",
+              body: JSON.stringify({
+                schemeId,
+                name: tag.name,
+                color: tag.color,
+                sortOrder: 0,
+                hidden: false,
+              }),
+            });
+            tagIdMap.set(tag.id, String(created.id));
+          }
+        }
+
+        for (const account of payload.accounts) {
+          const existingRevision = serverMetaRef.current.assetRevisionById[account.id];
+          if (existingRevision) {
+            accountIdMap.set(account.id, account.id);
+            continue;
+          }
+          const created = await requestServerJson<{ id: number }>(session, "/api/assets", {
+            method: "POST",
+            body: JSON.stringify({
+              spaceId: Number(workspaceId),
+              assetKindCode: "ACCOUNT",
+              ownerPersonId: toNullableNumber(personIdMap.get(account.ownerPersonId ?? "") ?? account.ownerPersonId),
+              primaryPersonId: toNullableNumber(personIdMap.get(account.primaryPersonId ?? "") ?? account.primaryPersonId),
+              providerId: null,
+              name: account.name,
+              alias: account.alias,
+              groupType: ACCOUNT_GROUP_TYPE_TO_SERVER[account.accountGroupType ?? "personal"],
+              usageType: ASSET_USAGE_TYPE_TO_SERVER[account.usageType],
+              currencyCode: "KRW",
+              shared: account.isShared,
+              sortOrder: account.sortOrder ?? 0,
+              hidden: account.isHidden ?? false,
+              memo: account.memo,
+              createdImportRecordKey: createdImportRecordId,
+              participantPersonIds: (account.participantPersonIds ?? [])
+                .map((personId) => personIdMap.get(personId) ?? personId)
+                .map((personId) => Number(personId)),
+              accountDetail: {
+                accountType: ACCOUNT_TYPE_TO_SERVER[account.accountType],
+                institutionName: account.institutionName,
+                accountNumberMasked: account.accountNumberMasked || "-",
+              },
+              cardDetail: null,
+            }),
+          });
+          accountIdMap.set(account.id, String(created.id));
+        }
+
+        for (const card of payload.cards) {
+          const existingRevision = serverMetaRef.current.assetRevisionById[card.id];
+          if (existingRevision) {
+            cardIdMap.set(card.id, card.id);
+            continue;
+          }
+          const created = await requestServerJson<{ id: number }>(session, "/api/assets", {
+            method: "POST",
+            body: JSON.stringify({
+              spaceId: Number(workspaceId),
+              assetKindCode: "CARD",
+              ownerPersonId: toNullableNumber(personIdMap.get(card.ownerPersonId ?? "") ?? card.ownerPersonId),
+              primaryPersonId: toNullableNumber(personIdMap.get(card.ownerPersonId ?? "") ?? card.ownerPersonId),
+              providerId: null,
+              name: card.name,
+              alias: "",
+              groupType: "PERSONAL",
+              usageType: "CARD_PAYMENT",
+              currencyCode: "KRW",
+              shared: false,
+              sortOrder: card.sortOrder ?? 0,
+              hidden: card.isHidden ?? false,
+              memo: card.memo,
+              createdImportRecordKey: createdImportRecordId,
+              participantPersonIds: [],
+              accountDetail: null,
+              cardDetail: {
+                cardType: CARD_TYPE_TO_SERVER[card.cardType],
+                issuerName: card.issuerName,
+                cardNumberMasked: card.cardNumberMasked || "-",
+                settlementAccountAssetId: toNullableNumber(accountIdMap.get(card.linkedAccountId ?? "") ?? card.linkedAccountId),
+              },
+            }),
+          });
+          cardIdMap.set(card.id, String(created.id));
+        }
+
+        for (const transaction of payload.transactions) {
+          const created = await requestServerJson<{ id: number }>(session, "/api/transactions", {
+            method: "POST",
+            body: JSON.stringify({
+              spaceId: Number(workspaceId),
+              importRecordId: Number(createdImportRecordId),
+              occurredAt: transaction.occurredAt,
+              settledAt: transaction.settledAt,
+              transactionType: transaction.transactionType.toUpperCase(),
+              sourceType: transaction.sourceType.toUpperCase(),
+              ownerPersonId: toNullableNumber(personIdMap.get(transaction.ownerPersonId ?? "") ?? transaction.ownerPersonId),
+              cardAssetId: toNullableNumber(cardIdMap.get(transaction.cardId ?? "") ?? transaction.cardId),
+              accountAssetId: toNullableNumber(accountIdMap.get(transaction.accountId ?? "") ?? transaction.accountId),
+              fromAssetId: toNullableNumber(accountIdMap.get(transaction.fromAccountId ?? "") ?? transaction.fromAccountId),
+              toAssetId: toNullableNumber(accountIdMap.get(transaction.toAccountId ?? "") ?? transaction.toAccountId),
+              merchantName: transaction.merchantName,
+              description: transaction.description,
+              amount: transaction.amount,
+              originalAmount: transaction.originalAmount ?? null,
+              discountAmount: transaction.discountAmount ?? null,
+              categoryId: resolveImportedCategoryId(transaction.categoryId),
+              tagIds: transaction.tagIds
+                .map((tagId) => tagIdMap.get(tagId) ?? tagId)
+                .map((tagId) => Number(tagId)),
+              internalTransfer: transaction.isInternalTransfer ?? false,
+              expenseImpact: transaction.isExpenseImpact,
+              sharedExpense: transaction.isSharedExpense,
+              loop: transaction.isLoop ?? false,
+              loopIgnored: transaction.isLoopIgnored ?? false,
+              loopGroupOverrideKey: transaction.loopGroupOverrideKey ?? null,
+              loopDisplayName: transaction.loopDisplayName ?? null,
+              refundOfTransactionId: null,
+              status: (transaction.status ?? "active").toUpperCase(),
+            }),
+          });
+          const createdTransactionId = String(created.id);
+          transactionIdMap.set(transaction.id, createdTransactionId);
+          createdTransactionIds.push(createdTransactionId);
+        }
+
+        for (const review of payload.reviews) {
+          const created = await requestServerJson<{ id: number }>(session, "/api/reviews", {
+            method: "POST",
+            body: JSON.stringify({
+              spaceId: Number(workspaceId),
+              importRecordId: Number(createdImportRecordId),
+              reviewType: REVIEW_TYPE_TO_SERVER[review.reviewType],
+              status: (review.status ?? "open").toUpperCase(),
+              primaryTransactionId: Number(transactionIdMap.get(review.primaryTransactionId) ?? review.primaryTransactionId),
+              relatedTransactionIds: review.relatedTransactionIds
+                .map((id) => transactionIdMap.get(id) ?? id)
+                .map((id) => Number(id)),
+              confidenceScore: review.confidenceScore,
+              summary: review.summary,
+              suggestedCategoryId: resolveImportedCategoryId(review.suggestedCategoryId),
+            }),
+          });
+          createdReviewIds.push(String(created.id));
+        }
+
+        await refreshStateFromServer(session);
+      } catch (error) {
+        for (const reviewId of [...createdReviewIds].reverse()) {
+          await requestServerJson(session, `/api/reviews/${reviewId}`, { method: "DELETE" }).catch(() => undefined);
+        }
+        for (const transactionId of [...createdTransactionIds].reverse()) {
+          await requestServerJson(session, `/api/transactions/${transactionId}`, { method: "DELETE" }).catch(() => undefined);
+        }
+        if (createdImportRecordId) {
+          await requestServerJson(session, `/api/import-records/${createdImportRecordId}`, { method: "DELETE" }).catch(() => undefined);
+        }
+        await refreshStateFromServer(session).catch(() => undefined);
+        throw error;
+      }
+    },
+    [ensureTagSchemeId, getCategorySchemeId, getRequiredSession, refreshStateFromServer, resolveWorkspaceCategoryId],
   );
 
   const workspaceLoopDataByWorkspaceId = useMemo(() => {
@@ -2907,7 +3282,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         const { parseHouseholdWorkbook } = await import("../../domain/imports/householdWorkbook");
         const latestState = stateRef.current;
         const activeWorkspaceId = latestState.activeWorkspaceId;
-        const classificationContext = activeWorkspaceId ? getWorkspaceScope(state, activeWorkspaceId) : null;
+        const classificationContext = activeWorkspaceId ? getWorkspaceScope(latestState, activeWorkspaceId) : null;
         const bundle = await parseHouseholdWorkbook(
           file,
           classificationContext
@@ -2920,7 +3295,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         showToast(`${file.name} 미리보기를 준비했습니다.`, "info");
         return bundle;
       },
-      commitImportedBundle(bundle, fileName) {
+      async commitImportedBundle(bundle, fileName) {
         const latestState = stateRef.current;
         const activeWorkspaceId = latestState.activeWorkspaceId;
         if (activeWorkspaceId) {
@@ -2934,8 +3309,17 @@ export function AppStateProvider({ children }: PropsWithChildren) {
           }
         }
 
-        const payload = activeWorkspaceId ? rebaseImportedBundleIntoWorkspace(state, activeWorkspaceId, bundle) : bundle;
-        dispatch({ type: "mergeBundle", payload });
+        const payload = activeWorkspaceId ? rebaseImportedBundleIntoWorkspace(latestState, activeWorkspaceId, bundle) : bundle;
+        if (activeWorkspaceId && authSessionRef.current) {
+          try {
+            await persistImportedBundleToServer(activeWorkspaceId, payload);
+          } catch (error) {
+            handleServerMutationError(error);
+            throw error;
+          }
+        } else {
+          dispatch({ type: "mergeBundle", payload });
+        }
         showToast(`${fileName} 업로드를 완료했습니다.`, "success");
       },
       deleteImportRecord(workspaceId, importRecordId) {
@@ -3127,6 +3511,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
       resolveReview(reviewId) {
         const current = state.reviews.find((item) => item.id === reviewId);
         if (!current) return;
+        const suggestedCategoryId = resolveWorkspaceCategoryId(current.workspaceId, current.suggestedCategoryId);
         void (async () => {
           try {
             const session = getRequiredSession();
@@ -3141,7 +3526,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
                 relatedTransactionIds: current.relatedTransactionIds.map(Number),
                 confidenceScore: current.confidenceScore,
                 summary: current.summary,
-                suggestedCategoryId: toNullableNumber(current.suggestedCategoryId),
+                suggestedCategoryId,
                 expectedRevisionNumber: serverMetaRef.current.reviewRevisionById[reviewId] ?? null,
               }),
             });
@@ -3155,6 +3540,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
       dismissReview(reviewId) {
         const current = state.reviews.find((item) => item.id === reviewId);
         if (!current) return;
+        const suggestedCategoryId = resolveWorkspaceCategoryId(current.workspaceId, current.suggestedCategoryId);
         void (async () => {
           try {
             const session = getRequiredSession();
@@ -3169,7 +3555,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
                 relatedTransactionIds: current.relatedTransactionIds.map(Number),
                 confidenceScore: current.confidenceScore,
                 summary: current.summary,
-                suggestedCategoryId: toNullableNumber(current.suggestedCategoryId),
+                suggestedCategoryId,
                 expectedRevisionNumber: serverMetaRef.current.reviewRevisionById[reviewId] ?? null,
               }),
             });
@@ -3185,6 +3571,11 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         if (!review) return;
         const transaction = state.transactions.find((item) => item.id === review.primaryTransactionId);
         if (!transaction) return;
+        const transactionSuggestedCategoryId = resolveWorkspaceCategoryId(
+          transaction.workspaceId,
+          review.suggestedCategoryId,
+        );
+        const reviewSuggestedCategoryId = resolveWorkspaceCategoryId(review.workspaceId, review.suggestedCategoryId);
 
         void (async () => {
           try {
@@ -3208,7 +3599,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
                 amount: transaction.amount,
                 originalAmount: transaction.originalAmount ?? null,
                 discountAmount: transaction.discountAmount ?? null,
-                categoryId: toNullableNumber(review.suggestedCategoryId),
+                categoryId: transactionSuggestedCategoryId,
                 tagIds: transaction.tagIds.map(Number),
                 internalTransfer: transaction.isInternalTransfer ?? false,
                 expenseImpact: transaction.isExpenseImpact,
@@ -3233,7 +3624,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
                 relatedTransactionIds: review.relatedTransactionIds.map(Number),
                 confidenceScore: review.confidenceScore,
                 summary: review.summary,
-                suggestedCategoryId: toNullableNumber(review.suggestedCategoryId),
+                suggestedCategoryId: reviewSuggestedCategoryId,
                 expectedRevisionNumber: serverMetaRef.current.reviewRevisionById[reviewId] ?? null,
               }),
             });

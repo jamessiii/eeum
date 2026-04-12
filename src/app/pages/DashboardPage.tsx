@@ -1438,12 +1438,16 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
   const scope = getWorkspaceScope(state, workspaceId);
   const currentMonth = monthKey(new Date());
   const [remoteDashboardInsightsByMonth, setRemoteDashboardInsightsByMonth] = useState<Record<string, AnalysisWorkspaceInsightsResponse>>({});
-  const monthOptions = useMemo(
+  const transactionMonthOptions = useMemo(
     () =>
       Array.from(new Set(scope.transactions.map((transaction) => transaction.occurredAt.slice(0, 7)).filter(Boolean))).sort((a, b) =>
         b.localeCompare(a),
       ),
     [scope.transactions],
+  );
+  const monthOptions = useMemo(
+    () => Array.from(new Set([currentMonth, ...transactionMonthOptions])).sort((a, b) => b.localeCompare(a)),
+    [currentMonth, transactionMonthOptions],
   );
   const latestStatementMonth = useMemo(() => getLatestStatementMonth(scope.imports), [scope.imports]);
   const forecastCalendarMonth = useMemo(
@@ -1456,10 +1460,16 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
   );
   const calendarMonthOptions = useMemo(
     () =>
-      Array.from(new Set([...monthOptions, ...(forecastCalendarMonth ? [forecastCalendarMonth] : [])]))
+      Array.from(
+        new Set([
+          ...monthOptions,
+          ...(latestStatementMonth ? [latestStatementMonth] : []),
+          ...(forecastCalendarMonth ? [forecastCalendarMonth] : []),
+        ]),
+      )
         .sort((a, b) => b.localeCompare(a))
         .map((month) => ({ value: month, label: formatMonthLabel(month) })),
-    [forecastCalendarMonth, monthOptions],
+    [forecastCalendarMonth, latestStatementMonth, monthOptions],
   );
   const linkedImportRecordIds = useMemo(
     () =>
@@ -1842,7 +1852,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
     await handlePickedFile(file);
   };
 
-  const commitPreview = () => {
+  const commitPreview = async () => {
     if (!previewBundle || !selectedImportOwnerId || !selectedStatementMonth) return;
 
     const renamedCards = previewBundle.cards.map((card) => {
@@ -1883,7 +1893,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
       })),
     };
 
-    commitImportedBundle(normalizedBundle, previewFileName);
+    await commitImportedBundle(normalizedBundle, previewFileName);
     clearPreview();
   };
 
@@ -1893,7 +1903,7 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
       setIsLinkedAccountModalOpen(true);
       return;
     }
-    commitPreview();
+    void commitPreview();
   };
 
   const handleDeleteImportRecord = (record: ImportRecord) => {
@@ -5799,7 +5809,9 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
                             <div className="dashboard-statement-history-card-copy">
                               <div className="dashboard-statement-history-card-title">
                                 <strong>{getStatementRecordLabel(record)}</strong>
-                                {!linkedImportRecordIds.has(record.id) ? <span className="badge text-bg-light">기존 기록</span> : null}
+                                {!linkedImportRecordIds.has(record.id) ? (
+                                  <span className="badge text-bg-danger-subtle text-danger-emphasis">업로드 실패</span>
+                                ) : null}
                               </div>
                               <p>{record.fileName}</p>
                               <div className="dashboard-statement-history-card-meta">
@@ -5824,7 +5836,6 @@ export function DashboardPage({ mode = "moon" }: { mode?: "dashboard" | "moon" |
                               <button
                                 type="button"
                                 className="btn btn-outline-danger btn-sm"
-                                disabled={!linkedImportRecordIds.has(record.id)}
                                 onClick={() => handleDeleteImportRecord(record)}
                               >
                                 삭제

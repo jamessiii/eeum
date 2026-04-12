@@ -253,8 +253,9 @@ function toLowerCaseValue<T extends string>(value: string | null | undefined, fa
 
 async function readErrorMessage(response: Response) {
   try {
-    const parsed = (await response.json()) as { message?: string; error?: string };
-    return parsed.message || parsed.error || `API request failed (${response.status})`;
+    const parsed = (await response.json()) as { message?: string; error?: string; path?: string };
+    const message = parsed.message || parsed.error || `API request failed (${response.status})`;
+    return parsed.path ? `${message} [${parsed.path}]` : message;
   } catch {
     return `API request failed (${response.status})`;
   }

@@ -188,6 +188,10 @@ function getStatementRecordLabel(record: Pick<ImportRecord, "statementMonth" | "
   return `${record.fileName} 기록`;
 }
 
+function getImportRecordStatusLabel(isLinked: boolean) {
+  return isLinked ? null : "업로드 실패";
+}
+
 export function ImportsPage() {
   const { commitImportedBundle, deleteImportRecord, previewWorkbookImport, state } = useAppState();
   const [previewBundle, setPreviewBundle] = useState<WorkspaceBundle | null>(null);
@@ -390,7 +394,7 @@ export function ImportsPage() {
     await handlePickedFile(file);
   };
 
-  const commitPreview = () => {
+  const commitPreview = async () => {
     if (!previewBundle || !selectedImportOwnerId || !selectedStatementMonth) return;
     const renamedCards = previewBundle.cards.map((card) => {
       const matchedCard = previewCardMatchMap.get(card.id)?.matchedCard ?? null;
@@ -430,7 +434,7 @@ export function ImportsPage() {
       })),
     };
 
-    commitImportedBundle(normalizedBundle, previewFileName);
+    await commitImportedBundle(normalizedBundle, previewFileName);
     clearPreview();
   };
 
@@ -440,7 +444,7 @@ export function ImportsPage() {
       setIsLinkedAccountModalOpen(true);
       return;
     }
-    commitPreview();
+    void commitPreview();
   };
 
   const handleDeleteImportRecord = (record: ImportRecord) => {
@@ -675,10 +679,13 @@ export function ImportsPage() {
           <div className="import-record-list" role="list">
             {recentImports.map((item) => (
               <article key={item.id} className="import-record-row" role="listitem">
+                {(() => {
+                  const statusLabel = getImportRecordStatusLabel(linkedImportRecordIds.has(item.id));
+                  return (
                 <div className="import-record-row-copy">
                   <div className="import-record-row-title">
                     <strong>{getStatementRecordLabel(item)}</strong>
-                    {!linkedImportRecordIds.has(item.id) ? <span className="badge text-bg-light">기존 기록</span> : null}
+                    {statusLabel ? <span className="badge text-bg-danger-subtle text-danger-emphasis">{statusLabel}</span> : null}
                   </div>
                   <p className="import-record-row-file">{item.fileName}</p>
                   <div className="import-record-row-meta">
@@ -687,6 +694,8 @@ export function ImportsPage() {
                     <span>검토 {item.reviewCount}건</span>
                   </div>
                 </div>
+                  );
+                })()}
                 <div className="import-record-row-actions">
                   {linkedImportRecordIds.has(item.id) ? (
                     <Link
@@ -700,7 +709,6 @@ export function ImportsPage() {
                   <button
                     type="button"
                     className="btn btn-outline-danger btn-sm"
-                    disabled={!linkedImportRecordIds.has(item.id)}
                     onClick={() => handleDeleteImportRecord(item)}
                   >
                     삭제
