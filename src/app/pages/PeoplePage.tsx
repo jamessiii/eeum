@@ -368,6 +368,21 @@ function getAccountUsageOptions(accountGroupType: PersonAccountDraftState["accou
   return accountGroupType === "meeting" ? MEETING_ACCOUNT_USAGE_OPTIONS : ACCOUNT_USAGE_FORM_OPTIONS;
 }
 
+function isSharedAccountDraft(draft: Pick<PersonAccountDraftState, "accountGroupType" | "isShared">) {
+  return draft.accountGroupType === "meeting" || draft.isShared;
+}
+
+function getSharedAccountParticipantNames(
+  account: Pick<Account, "participantPersonIds" | "primaryPersonId" | "ownerPersonId">,
+  personNameMap: Map<string, string>,
+) {
+  const primaryPersonId = account.primaryPersonId ?? account.ownerPersonId ?? null;
+  return (account.participantPersonIds ?? [])
+    .filter((personId) => personId !== primaryPersonId)
+    .map((personId) => personNameMap.get(personId) ?? null)
+    .filter((value): value is string => Boolean(value));
+}
+
 function createDraftFromCard(card?: {
   ownerPersonId: string | null;
   name: string;
@@ -425,6 +440,35 @@ function normalizeCardDraftValues(draft: PersonCardDraftState) {
     linkedAccountId: draft.linkedAccountId || null,
     cardType: draft.cardType,
     memo: draft.memo.trim(),
+  };
+}
+
+function applySharedAccountToggle(
+  nextShared: boolean,
+  current: PersonAccountDraftState,
+  fallbackOwnerPersonId?: string | null,
+): PersonAccountDraftState {
+  const fallbackPrimaryPersonId = current.primaryPersonId || current.ownerPersonId || fallbackOwnerPersonId || "";
+  if (nextShared) {
+    return {
+      ...current,
+      isShared: true,
+      accountGroupType: "meeting",
+      usageType: "shared",
+      primaryPersonId: fallbackPrimaryPersonId,
+      ownerPersonId: fallbackPrimaryPersonId,
+      participantPersonIds: Array.from(new Set([...current.participantPersonIds, ...(fallbackPrimaryPersonId ? [fallbackPrimaryPersonId] : [])])),
+    };
+  }
+
+  return {
+    ...current,
+    isShared: false,
+    accountGroupType: "personal",
+    usageType: current.usageType === "shared" ? "other" : current.usageType,
+    primaryPersonId: fallbackPrimaryPersonId,
+    ownerPersonId: fallbackPrimaryPersonId,
+    participantPersonIds: fallbackPrimaryPersonId ? [fallbackPrimaryPersonId] : [],
   };
 }
 
@@ -1638,10 +1682,12 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                       const linkedCategories = linkedCategoriesByAccountId.get(account.id) ?? [];
                       const isActiveCategoryLinkTarget = activeCategoryLinkTargetId === account.id && isCategoryConnectionDragItem(dragItem);
                       const isMeeting = isMeetingAccount(account);
+                      const primaryOwnerName =
+                        account.primaryPersonId || account.ownerPersonId
+                          ? personNameMap.get(account.primaryPersonId ?? account.ownerPersonId ?? "") ?? "사용자 없음"
+                          : "사용자 없음";
                       const isPrimaryMeetingOwner = isMeeting && (account.primaryPersonId ?? account.ownerPersonId) === section.person.id;
-                      const participantNames = (account.participantPersonIds ?? [])
-                        .map((personId) => personNameMap.get(personId) ?? null)
-                        .filter((value): value is string => Boolean(value));
+                      const participantNames = getSharedAccountParticipantNames(account, personNameMap);
                       const accountRoleLabel = isMeeting ? (isPrimaryMeetingOwner ? "메인 사용자" : "서브 사용자") : null;
                        return (
                         <article
@@ -1731,12 +1777,14 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                             <span>{account.institutionName || "직접 입력"}</span>
                             {isMeeting ? (
                               <span className="people-meeting-account-meta">
-                                참여 {participantNames.length}명{accountRoleLabel ? ` · ${accountRoleLabel}` : ""}
+                                메인 계좌주 {primaryOwnerName}{accountRoleLabel ? ` · ${accountRoleLabel}` : ""}
                               </span>
                             ) : null}
                             <span className="people-account-number-line">{account.accountNumberMasked || "계좌번호 미입력"}</span>
-                            {isMeeting && participantNames.length ? (
-                              <span className="people-meeting-account-participants">{participantNames.join(" · ")}</span>
+                            {isMeeting ? (
+                              <span className="people-meeting-account-participants">
+                                {participantNames.length ? `공동 사용자 ${participantNames.join(" · ")}` : "공동 사용자 없음"}
+                              </span>
                             ) : null}
                             <div className="people-linked-category-block">
                               <span className={`people-linked-category-count${linkedCategories.length ? "" : " is-empty"}`}>
@@ -1745,7 +1793,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                             </div>
                            </div>
                           <div className={`category-case-pill${isMeeting ? " people-meeting-account-pill" : ""}`}>
-                            {isMeeting ? "모임통장" : usageLabel}
+                            {isMeeting ? "공동계좌" : usageLabel}
                           </div>
                         </article>
                       );
@@ -2314,27 +2362,26 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
               계좌 이름
               <input className="form-control" value={accountDraft.alias} onChange={(event) => patchAccountDraft({ alias: event.target.value }, setAccountDraft, accountOwnerPersonId)} />
             </label>
-            <label>
-              계좌 구분
-              <AppSelect
-                value={accountDraft.accountGroupType}
-                onChange={(nextValue) =>
-                  patchAccountDraft({ accountGroupType: nextValue as PersonAccountDraftState["accountGroupType"] }, setAccountDraft, accountOwnerPersonId)
-                }
-                options={[
-                  { value: "personal", label: "개인 통장" },
-                  { value: "meeting", label: "모임통장" },
-                ]}
-                ariaLabel="계좌 구분 선택"
-              />
+            <label className="people-account-shared-toggle" style={{ gridColumn: "1 / -1" }}>
+              <span>계좌 설정</span>
+              <label className={`people-account-member-option${isSharedAccountDraft(accountDraft) ? " is-selected" : ""}`}>
+                <input
+                  type="checkbox"
+                  checked={isSharedAccountDraft(accountDraft)}
+                  onChange={(event) =>
+                    setAccountDraft((current) => applySharedAccountToggle(event.target.checked, current, accountOwnerPersonId))
+                  }
+                />
+                <span>공동계좌</span>
+              </label>
             </label>
             <label>
-              메인 사용자
+              {isSharedAccountDraft(accountDraft) ? "메인 계좌주" : "계좌 소유자"}
               <AppSelect
                 value={accountDraft.primaryPersonId}
                 onChange={(nextValue) => patchAccountDraft({ primaryPersonId: nextValue, ownerPersonId: nextValue }, setAccountDraft, accountOwnerPersonId)}
                 options={activePeopleOptions}
-                ariaLabel="메인 사용자 선택"
+                ariaLabel="메인 계좌주 선택"
               />
             </label>
             <label>
@@ -2382,9 +2429,9 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
               메모
               <textarea className="form-control" rows={3} value={accountDraft.memo} onChange={(event) => patchAccountDraft({ memo: event.target.value }, setAccountDraft, accountOwnerPersonId)} />
             </label>
-            {accountDraft.accountGroupType === "meeting" ? (
+            {isSharedAccountDraft(accountDraft) ? (
               <label style={{ gridColumn: "1 / -1" }}>
-                참여 사용자
+                함께 쓰는 사용자
                 <div className="people-account-member-grid">
                   {activePeopleOptions.map((person) => {
                     const checked = accountDraft.participantPersonIds.includes(person.value) || accountDraft.primaryPersonId === person.value;
@@ -2408,7 +2455,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                           }
                         />
                         <span>{person.label}</span>
-                        {locked ? <small>메인</small> : null}
+                        {locked ? <small>메인 계좌주</small> : null}
                       </label>
                     );
                   })}
@@ -2449,27 +2496,26 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
               계좌 이름
               <input className="form-control" value={editAccountDraft.alias} onChange={(event) => patchAccountDraft({ alias: event.target.value }, setEditAccountDraft, editingAccount.ownerPersonId)} />
             </label>
-            <label>
-              계좌 구분
-              <AppSelect
-                value={editAccountDraft.accountGroupType}
-                onChange={(nextValue) =>
-                  patchAccountDraft({ accountGroupType: nextValue as PersonAccountDraftState["accountGroupType"] }, setEditAccountDraft, editingAccount.ownerPersonId)
-                }
-                options={[
-                  { value: "personal", label: "개인 통장" },
-                  { value: "meeting", label: "모임통장" },
-                ]}
-                ariaLabel="계좌 구분 선택"
-              />
+            <label className="people-account-shared-toggle" style={{ gridColumn: "1 / -1" }}>
+              <span>계좌 설정</span>
+              <label className={`people-account-member-option${isSharedAccountDraft(editAccountDraft) ? " is-selected" : ""}`}>
+                <input
+                  type="checkbox"
+                  checked={isSharedAccountDraft(editAccountDraft)}
+                  onChange={(event) =>
+                    setEditAccountDraft((current) => applySharedAccountToggle(event.target.checked, current, editingAccount.ownerPersonId))
+                  }
+                />
+                <span>공동계좌</span>
+              </label>
             </label>
             <label>
-              메인 사용자
+              {isSharedAccountDraft(editAccountDraft) ? "메인 계좌주" : "계좌 소유자"}
               <AppSelect
                 value={editAccountDraft.primaryPersonId}
                 onChange={(nextValue) => patchAccountDraft({ primaryPersonId: nextValue, ownerPersonId: nextValue }, setEditAccountDraft, editingAccount.ownerPersonId)}
                 options={activePeopleOptions}
-                ariaLabel="메인 사용자 선택"
+                ariaLabel="메인 계좌주 선택"
               />
             </label>
             <label>
@@ -2517,9 +2563,9 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
               메모
               <textarea className="form-control" rows={3} value={editAccountDraft.memo} onChange={(event) => patchAccountDraft({ memo: event.target.value }, setEditAccountDraft, editingAccount.ownerPersonId)} />
             </label>
-            {editAccountDraft.accountGroupType === "meeting" ? (
+            {isSharedAccountDraft(editAccountDraft) ? (
               <label style={{ gridColumn: "1 / -1" }}>
-                참여 사용자
+                함께 쓰는 사용자
                 <div className="people-account-member-grid">
                   {activePeopleOptions.map((person) => {
                     const checked = editAccountDraft.participantPersonIds.includes(person.value) || editAccountDraft.primaryPersonId === person.value;
@@ -2543,7 +2589,7 @@ export function PeoplePage({ embedded = false }: { embedded?: boolean }) {
                           }
                         />
                         <span>{person.label}</span>
-                        {locked ? <small>메인</small> : null}
+                        {locked ? <small>메인 계좌주</small> : null}
                       </label>
                     );
                   })}

@@ -3824,7 +3824,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
               method: "POST",
               body: JSON.stringify({
                 spaceId: Number(workspaceId),
-                assetKindCode: "ACCOUNT",
+                assetKindCode: "account",
                 ownerPersonId: toNullableNumber(values.ownerPersonId),
                 primaryPersonId: toNullableNumber(values.primaryPersonId),
                 providerId: null,
@@ -3865,7 +3865,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
               method: "PUT",
               body: JSON.stringify({
                 spaceId: Number(workspaceId),
-                assetKindCode: "ACCOUNT",
+                assetKindCode: "account",
                 ownerPersonId: toNullableNumber(values.ownerPersonId),
                 primaryPersonId: toNullableNumber(values.primaryPersonId),
                 providerId: null,
@@ -3928,7 +3928,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
               method: "PUT",
               body: JSON.stringify({
                 spaceId: Number(workspaceId),
-                assetKindCode: "ACCOUNT",
+                assetKindCode: "account",
                 ownerPersonId: toNullableNumber(values.ownerPersonId),
                 primaryPersonId: toNullableNumber(values.primaryPersonId),
                 providerId: null,
@@ -3967,7 +3967,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
               method: "POST",
               body: JSON.stringify({
                 spaceId: Number(workspaceId),
-                assetKindCode: "CARD",
+                assetKindCode: "card",
                 ownerPersonId: toNullableNumber(values.ownerPersonId),
                 primaryPersonId: toNullableNumber(values.ownerPersonId),
                 providerId: null,
@@ -4009,7 +4009,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
               method: "PUT",
               body: JSON.stringify({
                 spaceId: Number(workspaceId),
-                assetKindCode: "CARD",
+                assetKindCode: "card",
                 ownerPersonId: toNullableNumber(values.ownerPersonId),
                 primaryPersonId: toNullableNumber(values.ownerPersonId),
                 providerId: null,
@@ -4073,7 +4073,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
               method: "PUT",
               body: JSON.stringify({
                 spaceId: Number(workspaceId),
-                assetKindCode: "CARD",
+                assetKindCode: "card",
                 ownerPersonId: toNullableNumber(values.ownerPersonId),
                 primaryPersonId: toNullableNumber(values.ownerPersonId),
                 providerId: null,

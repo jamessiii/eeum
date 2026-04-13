@@ -19,6 +19,10 @@ function formatMonthLabel(value: string) {
   return `${year}년 ${Number(month)}월`;
 }
 
+function formatMonthPillLabel(value: string) {
+  return `${formatMonthLabel(value)} 데이터`;
+}
+
 function getStatementMonthOptions(imports: ImportRecord[]) {
   return Array.from(
     new Set(
@@ -34,6 +38,12 @@ function getStatementImportIds(imports: ImportRecord[], statementMonth: string) 
     imports
       .filter((record) => record.statementMonth?.trim() === statementMonth)
       .map((record) => record.id),
+  );
+}
+
+function getUsageMonthOptions(occurredAtValues: string[]) {
+  return Array.from(new Set(occurredAtValues.map((value) => monthKey(value)).filter(Boolean))).sort((left, right) =>
+    left.localeCompare(right),
   );
 }
 
@@ -171,6 +181,10 @@ export function SettlementsPage() {
       ),
     [scope.transactions, selectedStatementImportIds],
   );
+  const selectedUsageMonths = useMemo(
+    () => getUsageMonthOptions(selectedStatementTransactions.map((transaction) => transaction.occurredAt)),
+    [selectedStatementTransactions],
+  );
 
   const flowSummary = useMemo(
     () => getMonthlyFlowSummary(selectedStatementTransactions, scope.categories, scope.cards, scope.accounts),
@@ -215,7 +229,11 @@ export function SettlementsPage() {
       }, 0),
     [selectedStatementTransactions],
   );
-  const selectedStatementLabel = `${formatMonthLabel(selectedStatementMonth)} 청구분`;
+  const selectedStatementLabel = `${formatMonthLabel(selectedStatementMonth)} 청구월`;
+  const selectedUsageMonthSummary =
+    selectedUsageMonths.length > 0
+      ? selectedUsageMonths.map((value) => formatMonthPillLabel(value)).join(", ")
+      : "연결된 사용 데이터가 아직 없습니다.";
 
   return (
     <div className="page-stack">
@@ -225,21 +243,32 @@ export function SettlementsPage() {
             <span className="section-kicker">이번달 자산 흐름</span>
             <h2 className="section-title">카드값 이체를 확인하는 마지막 단계</h2>
           </div>
-<AppSelect
+          <AppSelect
             className="settlements-month-select"
             dataGuideTarget="settlements-month-select"
             value={selectedStatementMonth}
             onChange={setSelectedStatementMonth}
             style={{ maxWidth: 180 }}
             options={statementMonthOptions.map((option) => ({ value: option, label: formatMonthLabel(option) }))}
-            ariaLabel="청구분 기준 연월"
+            ariaLabel="청구월 기준 연월"
           />
         </div>
 
         <p className="text-secondary mb-0">
-          {selectedStatementLabel} 명세서에 연결된 거래를 기준으로, 카테고리별 연결 계좌에서 카드값 계좌로 얼마를 이체해야 하는지
-          정리하고 이체 여부를 확인하는 곳입니다.
+          이 페이지는 사용월이 아니라 청구월 기준으로 정산을 보여줍니다. 선택한 청구월 명세서에 묶인 거래를 기준으로,
+          카테고리별 연결 계좌에서 카드값 계좌로 얼마를 이체해야 하는지 확인하는 단계입니다.
         </p>
+
+        <div className="settlement-month-context" aria-label="청구월 기준 안내">
+          <div className="settlement-month-context__row">
+            <span className="settlement-month-context__label">선택 기준</span>
+            <strong className="settlement-month-context__value">{selectedStatementLabel}</strong>
+          </div>
+          <div className="settlement-month-context__row">
+            <span className="settlement-month-context__label">포함된 사용 데이터</span>
+            <strong className="settlement-month-context__value">{selectedUsageMonthSummary}</strong>
+          </div>
+        </div>
 
         <div className="stats-grid mt-4">
           <article className="stat-card">
@@ -291,8 +320,8 @@ export function SettlementsPage() {
         <section className="page-section" style={getMotionStyle(2)}>
           <EmptyStateCallout
             kicker="흐름 준비 중"
-            title="먼저 청구분 명세서를 올려 주세요"
-            description="흐름 페이지는 청구분이 지정된 명세서 업로드를 기준으로 이체 금액과 확인 상태를 계산합니다."
+            title="먼저 청구월 명세서를 올려 주세요"
+            description="흐름 페이지는 청구월이 지정된 명세서 업로드를 기준으로 이체 금액과 확인 상태를 계산합니다."
             actions={
               <Link to="/collections/card" className="btn btn-outline-secondary btn-sm">
                 결제내역 보기
@@ -305,7 +334,7 @@ export function SettlementsPage() {
           <EmptyStateCallout
             kicker="흐름 준비 중"
             title={`${selectedStatementLabel}에 확인할 이체가 아직 없습니다`}
-            description="선택한 청구분 명세서를 아직 불러오지 않았거나, 카드와 카테고리 연결 기준으로 이체가 필요한 항목이 없습니다."
+            description="선택한 청구월 명세서를 아직 불러오지 않았거나, 카드와 카테고리 연결 기준으로 이체가 필요한 항목이 없습니다."
             actions={
               <>
                 <Link to="/connections/assets" className="btn btn-outline-secondary btn-sm">
